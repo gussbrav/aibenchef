@@ -1,50 +1,61 @@
-# ADR 002 — Auth provider: FastAPI-Users self-hosted
+# ADR 002 — Auth provider: Better Auth self-hosted en Next.js
 
-**Fecha:** 2026-05-21
+**Fecha:** 2026-05-21 (actualizado tras decision ADR 003 de single Next.js app)
 **Estado:** Aceptado
 **Decisor:** Gus (solo dev)
 
 ## Contexto
 
-Necesitamos auth multi-tenant con organizaciones, roles, MFA opcional, y sync a Postgres.
+Necesitamos auth multi-tenant con organizaciones, roles, MFA opcional, sync a Postgres.
 
-Gus ya paga Hetzner VPS (24 GB RAM) por otro proyecto (CRM Palma Rio). Quiere mantener
-costos a USD 0/mes hasta tener clientes pagantes. Esto descarta servicios externos pagos
-(Clerk USD 25/mes baseline, Supabase Pro USD 25/mes).
+Gus ya paga Hetzner VPS (24 GB RAM) — quiere costo USD 0/mes hasta tener pagantes.
+Esto descarta Clerk (USD 25/mes baseline) y Supabase Pro (USD 25/mes).
+
+Tras ADR 003, el stack es Next.js todo-en-uno (sin FastAPI separado). Eso descarta
+FastAPI-Users (que era para backend Python).
 
 ## Decision
 
-**FastAPI-Users** (https://fastapi-users.github.io/fastapi-users/) en el backend FastAPI,
-contra Postgres self-hosted en el mismo VPS.
+**Better Auth** (https://www.better-auth.com/) corriendo dentro del mismo Next.js,
+con adapter Drizzle contra el Postgres existente.
 
-## Por que
+## Por que Better Auth y no Auth.js (NextAuth)
 
-- **USD 0 forever** — solo es una libreria Python, sin SaaS externo.
-- **Dominio Python** — Gus maneja Python/SQL, no querra debuggear webhooks de Clerk.
-- **Self-hosted** — el JWT lo emite y firma nuestra propia API, no dependemos de uptime ajeno.
-- **Postgres en mismo VPS** — sync de usuarios sin webhooks, queries directas.
-- **Features cubiertas:** signup, login, password reset, email verification, JWT, OAuth (Google + Microsoft via `httpx-oauth`), backends multiples (cookie + bearer).
-- **Multi-tenant** — orgs y memberships los modelamos directo en `tenant.organizations` y `tenant.memberships`, no son de FastAPI-Users.
-- **MFA** — TOTP via `pyotp` cuando se necesite (Fase 3+).
+- **Orgs B2B nativas**: plugin `organization()` viene con teams, roles, invitations.
+  Auth.js no tiene esto out-of-the-box.
+- **Mas moderno**: arquitectura 2024+, tipos estrictos, edge-compatible.
+- **Mejor DX**: API consistente, configuracion menos magica.
+- **Mas adopcion** en el ecosistema TS desde 2025.
 
-## Alternativas descartadas
+## Por que no las otras alternativas
 
-- **Clerk** (USD 25/mes baseline tras free 10k MAU): vendor lock, costos crecen rapido.
-- **Supabase Auth** (Free pausa la DB tras 7d inactividad — inaceptable para produccion): ademas la DB free es 500 MB y nuestro DW son ~50 GB.
-- **Better Auth** (TS): excelente pero el auth quedaria en el frontend Next.js, fragmentando responsabilidades. Si despues queremos auth en mobile o CLI, vuelve a complicar.
-- **Auth0 / Cognito**: caros y overkill para B2B nicho de microfinanzas.
+- **Clerk** (USD 25/mes baseline tras 10k MAU): vendor lock + costo.
+- **Supabase Auth** (DB free se pausa tras 7d inactividad): inaceptable para prod.
+- **Lucia**: minimal pero requiere reimplementar orgs y MFA a mano.
+- **Auth0 / Cognito**: caros y overkill.
+- **FastAPI-Users**: descartado tras ADR 003 (no hay FastAPI).
+
+## Features cubiertas
+
+- Email + password con verification email (Resend cuando este integrado).
+- OAuth Google + Microsoft.
+- Sessions cookie + opcional JWT bearer para API.
+- Plugin organization: orgs, members, roles (`owner`, `admin`, `member`, `viewer`), invitations.
+- TOTP MFA disponible via plugin (activar en Fase 3+).
+- Rate limiting built-in.
 
 ## Consecuencias
 
-- Construir UI de login/signup/recovery en Next.js (no viene listo de un dashboard).
-- Manejar templates de email transaccional con Resend.
-- Configurar OAuth con Google/Microsoft manualmente (creando OAuth app en consoles respectivas).
+- Schemas Drizzle en `apps/web/lib/db/schema/auth.ts` mirror de Better Auth.
+- Endpoint catch-all `/api/auth/[...all]/route.ts` maneja todos los flows.
+- Cookie session firmada con `BETTER_AUTH_SECRET`.
+- Multi-tenancy: el GUC `app.tenant_id` se setea en cada request via `withTenant()` helper
+  en `lib/db/index.ts`, leyendo la org activa del usuario logueado.
 - Backups de `auth.*` schema parte del backup general de Postgres.
-- Responsabilidad de seguridad: rotar JWT secret, pen-test endpoints, rate limit signup.
 
 ## Cuando reconsiderar
 
 Migrar a Clerk si:
-- Llegamos a > 1000 orgs activas y necesitamos SSO/SCIM enterprise.
+- > 1000 orgs activas y necesitamos SSO/SCIM enterprise.
 - El equipo crece y queremos delegar la complejidad de auth.
-- Algun cliente Enterprise pide cumplimiento SOC2 que cuesta mas certificar self-hosted.
+- Cliente Enterprise pide compliance SOC2 que cuesta mas certificar self-hosted.

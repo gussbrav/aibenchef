@@ -4,7 +4,7 @@ SaaS multi-tenant para data publica de la SBS Peru. Suscripcion mensual / anual 
 
 **Dominio:** https://aibenchef.azoramind.com (proximamente)
 **Arquitectura:** ver [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) (en la raiz del proyecto SBS).
-**Stack:** Next.js 15 + FastAPI + PostgreSQL 16 + dbt + Cube.dev + Stripe + Clerk.
+**Stack:** Next.js 15 todo-en-uno (frontend + API Routes) + PostgreSQL 16 + Drizzle ORM + Better Auth + dbt + Stripe. Python (uv) solo en `data-platform/` para scrapers SBS.
 
 ---
 
@@ -32,17 +32,12 @@ docker compose up -d
 cd ../postgres
 ./apply-migrations.sh
 
-# 4. Backend (terminal nueva)
-cd apps/api
-uv sync
-uv run uvicorn app.main:app --reload --port 8000
-
-# 5. Frontend (terminal nueva)
+# 4. Next.js (frontend + API Routes)
 cd apps/web
 pnpm dev
 # abre http://localhost:3000
 
-# 6. dbt (cuando haya datos crudos)
+# 5. dbt (cuando haya datos crudos)
 cd data-platform/dbt
 uv run dbt deps
 uv run dbt run
@@ -55,8 +50,7 @@ uv run dbt run
 ```
 aibenchef/
 ├── apps/
-│   ├── web/                Next.js 15 frontend
-│   └── api/                FastAPI backend
+│   └── web/                Next.js 15 todo-en-uno (frontend + API Routes + auth + billing)
 ├── packages/
 │   ├── ui/                 Design system compartido
 │   ├── types/              Types TS compartidos
@@ -94,11 +88,13 @@ aibenchef/
 
 | Componente | Estado |
 |---|---|
-| Repo + CI base | en progreso |
-| Scrapers SBS | pendiente |
-| dbt models | pendiente |
-| Cube.dev | pendiente |
-| FastAPI | scaffold |
-| Next.js | scaffold |
-| Clerk/Stripe | pendiente |
-| Deploy Vercel + Railway | pendiente |
+| Repo + CI base | listo |
+| Next.js scaffold + API Routes (/api/health, /api/me, /api/auth) | listo |
+| Drizzle schemas (auth, tenant, billing) | listo |
+| Better Auth config | listo |
+| Migraciones SQL | listo (V001+V002 listas, V003+V004 para Fase 1) |
+| Scrapers SBS Playwright | pendiente — Fase 1 |
+| dbt models | pendiente — Fase 1 |
+| Dashboards UI | pendiente — Fase 4 |
+| Stripe billing | pendiente — Fase 5 |
+| Deploy EasyPanel | pendiente — siguiente paso |

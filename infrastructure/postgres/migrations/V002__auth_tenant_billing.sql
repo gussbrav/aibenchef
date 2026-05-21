@@ -1,22 +1,73 @@
 -- =========================================================================
--- V002: Tablas de auth, tenant y billing (sincronizadas desde Clerk + Stripe)
+-- V002: Tablas de auth, tenant y billing
+-- auth.*  : schema compatible con Better Auth (TS lib)
+-- tenant.*: orgs y memberships (gestionados por plugin organization de Better Auth)
+-- billing.*: subscriptions y entitlements (sincronizados desde Stripe webhooks)
 -- =========================================================================
 
--- ---------- auth.users ----------
+-- ---------- auth.users (Better Auth) ----------
 CREATE TABLE IF NOT EXISTS auth.users (
-  id              UUID PRIMARY KEY,                         -- mismo ID que Clerk
-  email           TEXT NOT NULL UNIQUE,
-  name            TEXT,
-  avatar_url      TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email             TEXT NOT NULL UNIQUE,
+  name              TEXT,
+  email_verified    BOOLEAN NOT NULL DEFAULT false,
+  image             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON auth.users (email);
 
+-- ---------- auth.sessions (Better Auth) ----------
+CREATE TABLE IF NOT EXISTS auth.sessions (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token             TEXT NOT NULL UNIQUE,
+  expires_at        TIMESTAMPTZ NOT NULL,
+  ip_address        TEXT,
+  user_agent        TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth.sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON auth.sessions (expires_at);
+
+-- ---------- auth.accounts (Better Auth OAuth + password) ----------
+CREATE TABLE IF NOT EXISTS auth.accounts (
+  id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider_id                 TEXT NOT NULL,
+  account_id                  TEXT NOT NULL,
+  access_token                TEXT,
+  refresh_token               TEXT,
+  access_token_expires_at     TIMESTAMPTZ,
+  refresh_token_expires_at    TIMESTAMPTZ,
+  scope                       TEXT,
+  id_token                    TEXT,
+  password                    TEXT,
+  created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_accounts_user ON auth.accounts (user_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_provider ON auth.accounts (provider_id, account_id);
+
+-- ---------- auth.verifications (Better Auth tokens magic-link / email verify) ----------
+CREATE TABLE IF NOT EXISTS auth.verifications (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  identifier    TEXT NOT NULL,
+  value         TEXT NOT NULL,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_verifications_identifier ON auth.verifications (identifier);
+
 -- ---------- tenant.organizations ----------
 CREATE TABLE IF NOT EXISTS tenant.organizations (
-  id              UUID PRIMARY KEY,                         -- mismo ID que Clerk org
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name            TEXT NOT NULL,
   slug            TEXT NOT NULL UNIQUE,
   plan            TEXT NOT NULL DEFAULT 'trial'
@@ -64,7 +115,7 @@ CREATE TABLE IF NOT EXISTS billing.entitlements (
   org_id              UUID PRIMARY KEY REFERENCES tenant.organizations(id) ON DELETE CASCADE,
   grupos_acceso       TEXT[] NOT NULL DEFAULT ARRAY['cmac']::TEXT[],
   topicos_acceso      TEXT[] NOT NULL DEFAULT ARRAY['eeff']::TEXT[],
-  meses_historico     INT NOT NULL DEFAULT 6,             -- -1 = todo
+  meses_historico     INT NOT NULL DEFAULT 6,
   max_users           INT NOT NULL DEFAULT 1,
   export_pdf          BOOLEAN NOT NULL DEFAULT false,
   export_excel        BOOLEAN NOT NULL DEFAULT false,
@@ -96,18 +147,23 @@ ALTER TABLE billing.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing.entitlements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit.event_log ENABLE ROW LEVEL SECURITY;
 
--- Policies basadas en GUC app.tenant_id (seteada por middleware FastAPI)
+-- Policies basadas en GUC app.tenant_id (seteada por lib/db/index.ts withTenant())
+DROP POLICY IF EXISTS tenant_isolation ON tenant.organizations;
 CREATE POLICY tenant_isolation ON tenant.organizations
   USING (id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation ON tenant.memberships;
 CREATE POLICY tenant_isolation ON tenant.memberships
   USING (org_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation ON billing.subscriptions;
 CREATE POLICY tenant_isolation ON billing.subscriptions
   USING (org_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation ON billing.entitlements;
 CREATE POLICY tenant_isolation ON billing.entitlements
   USING (org_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation ON audit.event_log;
 CREATE POLICY tenant_isolation ON audit.event_log
   USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);

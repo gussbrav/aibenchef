@@ -139,39 +139,7 @@ services:
       redis:
         condition: service_healthy
 
-  # ---------- FastAPI backend ----------
-  api:
-    build:
-      context: ../../apps/api
-      dockerfile: Dockerfile
-    container_name: aibenchef-api
-    restart: unless-stopped
-    environment:
-      APP_ENV: production
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aibenchef}:${POSTGRES_PASSWORD}@postgres:5432/aibenchef
-      REDIS_URL: redis://redis:6379
-      CUBEJS_API_URL: http://cube:4000/cubejs-api/v1
-      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
-      APP_URL: https://aibenchef.azoramind.com
-      API_URL: https://api.aibenchef.azoramind.com
-      SECRET_KEY: ${API_SECRET_KEY}
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      MINIO_BUCKET: aibenchef
-      MINIO_PUBLIC_URL: https://storage.aibenchef.azoramind.com
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      EMAIL_FROM: ${EMAIL_FROM:-Aibenchef <noreply@aibenchef.azoramind.com>}
-    networks:
-      - aibenchef
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  # ---------- Next.js web ----------
+  # ---------- Next.js todo-en-uno (frontend + API Routes) ----------
   web:
     build:
       context: ../..
@@ -180,13 +148,20 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: https://api.aibenchef.azoramind.com
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aibenchef}:${POSTGRES_PASSWORD}@postgres:5432/aibenchef
+      BETTER_AUTH_SECRET: ${API_SECRET_KEY}
+      BETTER_AUTH_URL: https://aibenchef.azoramind.com
       NEXT_PUBLIC_APP_URL: https://aibenchef.azoramind.com
       NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     networks:
       - aibenchef
     depends_on:
-      - api
+      postgres:
+        condition: service_healthy
 
   # ---------- Workers / scheduled tasks (futuro Fase 1) ----------
   # worker:

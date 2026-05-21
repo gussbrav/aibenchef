@@ -15,7 +15,7 @@
     }
 }
 
-# -------------------- Frontend --------------------
+# -------------------- App (Next.js todo-en-uno) --------------------
 aibenchef.azoramind.com {
     reverse_proxy web:3000
 
@@ -27,30 +27,6 @@ aibenchef.azoramind.com {
         X-Frame-Options "SAMEORIGIN"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    }
-
-    log {
-        output stdout
-        format json
-    }
-}
-
-# -------------------- API --------------------
-api.aibenchef.azoramind.com {
-    reverse_proxy api:8000 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-
-    encode zstd gzip
-
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        Access-Control-Allow-Origin "https://aibenchef.azoramind.com"
-        Access-Control-Allow-Credentials "true"
     }
 
     log {

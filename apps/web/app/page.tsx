@@ -22,10 +22,10 @@ export default function HomePage() {
             Unirme a la waitlist
           </Link>
           <Link
-            href="/pricing"
+            href="/api/health"
             className="px-8 py-3 border border-slate-300 hover:border-slate-400 text-slate-700 font-medium rounded-lg transition-colors"
           >
-            Ver planes
+            Estado del servicio
           </Link>
         </div>
         <p className="text-sm text-slate-500 pt-8">
