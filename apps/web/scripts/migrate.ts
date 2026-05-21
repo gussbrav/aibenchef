@@ -4,8 +4,7 @@
  * Mantiene tabla `public.schema_migrations` con las versiones aplicadas.
  * Idempotente: cada V*.sql debe ser idempotente por convencion.
  *
- * Corre al startup del container en EasyPanel:
- *   node scripts/migrate.js && node apps/web/server.js
+ * Se compila a CommonJS en el Dockerfile y corre antes de Next.js start.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -13,14 +12,8 @@ import { join } from "node:path";
 import postgres from "postgres";
 
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? "/app/migrations";
-const DATABASE_URL = process.env.DATABASE_URL;
 
-if (!DATABASE_URL) {
-  console.error("[migrator] ERROR: DATABASE_URL no definida");
-  process.exit(1);
-}
-
-const log = (msg: string) => console.log(`[migrator] ${msg}`);
+const log = (msg: string): void => console.log(`[migrator] ${msg}`);
 
 async function waitForDb(url: string, maxAttempts = 10): Promise<postgres.Sql> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -29,7 +22,7 @@ async function waitForDb(url: string, maxAttempts = 10): Promise<postgres.Sql> {
       await sql`SELECT 1`;
       log(`postgres ready (attempt ${attempt})`);
       return sql;
-    } catch (err) {
+    } catch {
       await sql.end({ timeout: 1 }).catch(() => {});
       const delay = Math.min(1000 * 2 ** (attempt - 1), 30_000);
       log(`postgres not ready (attempt ${attempt}/${maxAttempts}); retrying in ${delay}ms`);
@@ -54,9 +47,11 @@ async function appliedVersions(sql: postgres.Sql): Promise<Set<string>> {
 }
 
 function listMigrations(dir: string): { version: string; path: string }[] {
-  const files = readdirSync(dir).filter((f) => /^V\d+__.*\.sql$/.test(f)).sort();
+  const files = readdirSync(dir)
+    .filter((f) => /^V\d+__.*\.sql$/.test(f))
+    .sort();
   return files.map((f) => ({
-    version: f.split("__")[0],
+    version: f.split("__")[0] ?? f,
     path: join(dir, f),
   }));
 }
@@ -76,8 +71,12 @@ async function applyMigration(
 }
 
 async function main(): Promise<void> {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("DATABASE_URL no definida");
+  }
   log(`migrations dir: ${MIGRATIONS_DIR}`);
-  const sql = await waitForDb(DATABASE_URL);
+  const sql = await waitForDb(url);
   try {
     await ensureMigrationsTable(sql);
     const applied = await appliedVersions(sql);
