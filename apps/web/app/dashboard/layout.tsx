@@ -4,6 +4,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { Container } from "@/components/ui";
 import { DashboardUserMenu } from "./user-menu";
+import { NavLink } from "./nav-link";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +31,9 @@ export default async function DashboardLayout({
               <span className="font-bold text-slate-900">Aibenchef</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-6 text-sm text-slate-600">
-              <Link href="/dashboard" className="hover:text-slate-900 transition-colors">
-                Resumen
-              </Link>
-              <Link href="/dashboard/eeff" className="hover:text-slate-900 transition-colors">
-                Estados Financieros
-              </Link>
+            <nav className="hidden md:flex items-center gap-8 text-sm">
+              <NavLink href="/dashboard" label="Resumen" exact />
+              <NavLink href="/dashboard/eeff" label="Estados Financieros" />
             </nav>
 
             <DashboardUserMenu name={session.user.name} email={session.user.email} />
