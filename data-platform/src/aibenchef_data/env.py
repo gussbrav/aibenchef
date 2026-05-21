@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     )
 
     # --- SBS scraping ---
-    sbs_base_url: str = Field(default="https://www.sbs.gob.pe")
+    # IMPORTANTE: los .xls historicos viven en intranet2.sbs.gob.pe, NO en www.
+    # El sitio www redirige (302) pero ese path no existe ahi -> 404.
+    sbs_base_url: str = Field(default="https://intranet2.sbs.gob.pe")
     sbs_user_agent: str = Field(
         default="aibenchef-data-platform/0.1 (+https://aibenchef.azoramind.com)",
     )
