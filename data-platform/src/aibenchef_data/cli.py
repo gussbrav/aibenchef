@@ -53,6 +53,118 @@ def db() -> None:
     """Comandos de diagnostico y operacion de la base de datos."""
 
 
+def _resolve_migrations_dir() -> "Path":
+    """Resuelve el directorio de migraciones.
+
+    Prioridad:
+    1. env var MIGRATIONS_DIR (mismo nombre que usa el migrator de Node).
+    2. <repo_root>/infrastructure/postgres/migrations descubierto desde __file__.
+    """
+    import os
+    from pathlib import Path
+
+    env_dir = os.environ.get("MIGRATIONS_DIR")
+    if env_dir:
+        return Path(env_dir).resolve()
+
+    cur = Path(__file__).resolve()
+    for parent in cur.parents:
+        candidate = parent / "infrastructure" / "postgres" / "migrations"
+        if candidate.is_dir():
+            return candidate
+    msg = "No pude encontrar infrastructure/postgres/migrations. Pasa MIGRATIONS_DIR."
+    raise click.ClickException(msg)
+
+
+@db.command("migrate")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Solo lista pendientes, no aplica nada.",
+)
+@click.option(
+    "--migrations-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=str),
+    default=None,
+    help="Override del directorio de migraciones (sino se autodescubre).",
+)
+def db_migrate(dry_run: bool, migrations_dir: str | None) -> None:
+    """Aplicar migraciones V*.sql pendientes contra DATABASE_URL.
+
+    Espejo del migrator de Node (apps/web/scripts/migrate.ts):
+    - mismo tracking en public.schema_migrations
+    - mismo orden V<N>__<descripcion>.sql
+    - una transaccion por archivo, idempotente
+    - util cuando EasyPanel no rebuildea la imagen Docker y necesitas
+      empujar DDL al Postgres remoto desde tu maquina.
+    """
+    import re
+    from pathlib import Path
+
+    import psycopg
+
+    mig_dir = Path(migrations_dir).resolve() if migrations_dir else _resolve_migrations_dir()
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    pattern = re.compile(r"^V\d+__.*\.sql$")
+    all_files = sorted(f for f in mig_dir.iterdir() if pattern.match(f.name))
+    if not all_files:
+        raise click.ClickException(f"No hay archivos V*.sql en {mig_dir}")
+
+    click.echo(f"# Migraciones desde: {mig_dir}")
+    click.echo(f"# Archivos encontrados: {len(all_files)}")
+
+    try:
+        with psycopg.connect(url, connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.schema_migrations (
+                        version    TEXT PRIMARY KEY,
+                        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                conn.commit()
+                cur.execute("SELECT version FROM public.schema_migrations")
+                applied = {r[0] for r in cur.fetchall()}
+
+            pending = [f for f in all_files if f.name.split("__")[0] not in applied]
+            click.echo(f"# Aplicadas previas: {len(applied)}")
+            click.echo(f"# Pendientes:        {len(pending)}\n")
+
+            if not pending:
+                click.echo("# Nada que hacer. Base al dia.")
+                return
+
+            for f in pending:
+                version = f.name.split("__")[0]
+                if dry_run:
+                    click.echo(f"  [dry-run] {version}  ({f.name})")
+                    continue
+                ddl = f.read_text(encoding="utf-8")
+                click.echo(f"  applying {version}  ({f.name})")
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(ddl)
+                        cur.execute(
+                            "INSERT INTO public.schema_migrations (version) VALUES (%s)",
+                            (version,),
+                        )
+                    conn.commit()
+                    click.echo(f"  OK {version}")
+                except Exception as e:
+                    conn.rollback()
+                    click.echo(f"  FATAL {version}: {type(e).__name__}: {e}")
+                    raise click.Abort() from e
+
+            click.echo("\n# Done.")
+    except psycopg.OperationalError as e:
+        click.echo(f"# ERROR de conexion: {e}")
+        raise click.Abort() from e
+
+
 @db.command("ping")
 def db_ping() -> None:
     """Probar la conexion al Postgres configurado en DATABASE_URL.

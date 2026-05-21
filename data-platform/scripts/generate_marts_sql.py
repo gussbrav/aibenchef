@@ -56,7 +56,7 @@ def build_view_sql(
         nombre = safe_comment(cta["nombre"])
         case_lines.append(
             f"    MAX(CASE WHEN cuenta_codigo = '{cta['codigo']}' "
-            f"THEN valor END) AS {col}  -- {nombre}"
+            f"THEN valor END) AS {col}  /* {nombre} */"
         )
 
     case_sql = ",\n".join(case_lines)
