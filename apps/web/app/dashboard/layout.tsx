@@ -34,6 +34,7 @@ export default async function DashboardLayout({
             <nav className="hidden md:flex items-center gap-8 text-sm">
               <NavLink href="/dashboard" label="Resumen" exact />
               <NavLink href="/dashboard/eeff" label="Estados Financieros" />
+              <NavLink href="/dashboard/admin/archivos" label="Archivos SBS" />
             </nav>
 
             <DashboardUserMenu name={session.user.name} email={session.user.email} />

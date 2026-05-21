@@ -108,9 +108,20 @@ def _normalize_xlrd_cell(sheet: Any, r: int, c: int) -> Cell:
 
 
 def _read_xlsx(path: Path) -> list[XlsSheet]:
+    """Lee XLSX. Si el archivo tiene extension .xls (SBS publica algunos asi),
+    openpyxl lo rechaza por el nombre aunque internamente sea zip-based.
+    Workaround: pasarlo como BytesIO (sin nombre de archivo)."""
+    from io import BytesIO
+
     from openpyxl import load_workbook
 
-    wb = load_workbook(filename=str(path), read_only=True, data_only=True)
+    if path.suffix.lower() == ".xlsx":
+        wb = load_workbook(filename=str(path), read_only=True, data_only=True)
+    else:
+        # Cargar via BytesIO para que openpyxl no mire la extension
+        buf = BytesIO(path.read_bytes())
+        wb = load_workbook(filename=buf, read_only=True, data_only=True)
+
     try:
         sheets: list[XlsSheet] = []
         for ws in wb.worksheets:

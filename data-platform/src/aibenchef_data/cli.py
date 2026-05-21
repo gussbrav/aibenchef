@@ -76,6 +76,134 @@ def _resolve_migrations_dir() -> Path:
     raise click.ClickException(msg)
 
 
+@main.group("storage")
+def storage_grp() -> None:
+    """Comandos de gestion del storage local (archivos .xls descargados)."""
+
+
+@storage_grp.command("scan")
+@click.option(
+    "--root",
+    type=click.Path(exists=True, file_okay=False, path_type=str),
+    default="./local-data/raw",
+    help="Directorio raiz que contiene <grupo>/<topico>/<anio>/<mes>/<archivo>.xls",
+)
+@click.option("--dry-run", is_flag=True, default=False)
+def storage_scan(root: str, dry_run: bool) -> None:
+    """Escanea el storage local y registra archivos en raw.archivos_descargados.
+
+    Idempotente: si un path ya esta registrado, actualiza tamanio/hash; si es
+    nuevo, inserta con status='descargado'.
+    """
+    import hashlib
+    import re
+
+    import psycopg
+
+    from aibenchef_data.domains.parsing.value_objects.xls_format import detect_xls_format
+
+    root_path = Path(root).resolve()
+    files = sorted(root_path.rglob("*.xls"))
+    click.echo(f"# Scaneando {root_path}")
+    click.echo(f"# Archivos encontrados: {len(files)}")
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    pattern_path = re.compile(
+        r"(?P<grupo>[^/\\]+)[/\\](?P<topico>[^/\\]+)[/\\](?P<anio>\d{4})[/\\](?P<mes>\d{2})[/\\](?P<archivo>.+\.xls)$",
+        re.IGNORECASE,
+    )
+    # Para reconstruir el URL SBS necesitamos conocer el mapeo mes->NombreMes
+    meses_es = {
+        "01": "Enero",
+        "02": "Febrero",
+        "03": "Marzo",
+        "04": "Abril",
+        "05": "Mayo",
+        "06": "Junio",
+        "07": "Julio",
+        "08": "Agosto",
+        "09": "Septiembre",
+        "10": "Octubre",
+        "11": "Noviembre",
+        "12": "Diciembre",
+    }
+    sbs_base = "https://intranet2.sbs.gob.pe/estadistica/financiera"
+
+    inserted = 0
+    updated = 0
+    skipped = 0
+
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        for f in files:
+            rel = str(f.relative_to(root_path)).replace("\\", "/")
+            m = pattern_path.search(rel)
+            if not m:
+                skipped += 1
+                continue
+            grupo = m.group("grupo")
+            topico = m.group("topico")
+            anio = int(m.group("anio"))
+            mes = int(m.group("mes"))
+            archivo = m.group("archivo")
+            periodo = anio * 100 + mes
+
+            size = f.stat().st_size
+            with open(f, "rb") as fh:
+                md5 = hashlib.md5(fh.read()).hexdigest()
+            try:
+                fmt = detect_xls_format(f)
+            except Exception:
+                fmt = None
+
+            # Reconstruir source_url
+            url_sbs = f"{sbs_base}/{anio}/{meses_es[m.group('mes')]}/{archivo}"
+
+            if dry_run:
+                click.echo(f"  [dry] {rel}  size={size:,}B  fmt={fmt}")
+                continue
+
+            cur.execute(
+                """
+                INSERT INTO raw.archivos_descargados (
+                    grupo, topico, periodo, anio, mes,
+                    nombre_archivo, path_local, source_url,
+                    tamanio_bytes, md5_hash, formato
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (path_local) DO UPDATE SET
+                    tamanio_bytes  = EXCLUDED.tamanio_bytes,
+                    md5_hash       = EXCLUDED.md5_hash,
+                    formato        = EXCLUDED.formato,
+                    actualizado_en = now()
+                RETURNING (xmax = 0) AS inserted
+                """,
+                (
+                    grupo,
+                    topico,
+                    periodo,
+                    anio,
+                    mes,
+                    archivo,
+                    str(f),
+                    url_sbs,
+                    size,
+                    md5,
+                    fmt,
+                ),
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                inserted += 1
+            else:
+                updated += 1
+        conn.commit()
+
+    click.echo("")
+    click.echo(f"# Insertados: {inserted}")
+    click.echo(f"# Actualizados: {updated}")
+    click.echo(f"# Skipped (path no parseable): {skipped}")
+
+
 @db.command("migrate")
 @click.option(
     "--dry-run",
@@ -162,6 +290,57 @@ def db_migrate(dry_run: bool, migrations_dir: str | None) -> None:
     except psycopg.OperationalError as e:
         click.echo(f"# ERROR de conexion: {e}")
         raise click.Abort() from e
+
+
+@db.command("refresh-mvs")
+@click.option(
+    "--concurrently",
+    is_flag=True,
+    default=False,
+    help="REFRESH CONCURRENTLY (no bloquea lecturas pero requiere unique index).",
+)
+def db_refresh_mvs(concurrently: bool) -> None:
+    """Refresca las vistas materializadas EEFF tras una carga nueva.
+
+    Refresca en orden:
+      1. marts.mv_eeff_balance_ancho
+      2. marts.mv_eeff_resultados_ancho
+      3. marts.mv_eeff_ratios   (depende de las dos anteriores)
+
+    Usar --concurrently en produccion para no bloquear el dashboard mientras
+    se refresca (requiere que la MV tenga unique index, lo cual ya esta).
+    """
+    import time
+
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    mvs = [
+        "marts.mv_eeff_balance_ancho",
+        "marts.mv_eeff_resultados_ancho",
+        "marts.mv_eeff_ratios",
+    ]
+    keyword = (
+        "REFRESH MATERIALIZED VIEW CONCURRENTLY" if concurrently else "REFRESH MATERIALIZED VIEW"
+    )
+
+    with psycopg.connect(url, connect_timeout=10) as conn:
+        for mv in mvs:
+            click.echo(f"# {keyword} {mv} ...")
+            start = time.perf_counter()
+            with conn.cursor() as cur:
+                cur.execute(f"{keyword} {mv}")
+            conn.commit()
+            elapsed = time.perf_counter() - start
+
+            # Reportar conteo final
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) FROM {mv}")
+                count = cur.fetchone()[0]
+            click.echo(f"  -> OK en {elapsed:.1f}s ({count:,} filas)")
+
+    click.echo("")
+    click.echo("# Refresh completo. Dashboard ya ve la data nueva.")
 
 
 @db.command("ping")
@@ -324,6 +503,75 @@ def catalog_extract_canonical(base_eeff: str, out_dir: str, bg_sheet: str, er_sh
         click.echo(f"  {cat:<13} -> {p}")
 
 
+@catalog.command("extract-from-consolidado")
+@click.option(
+    "--balance",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    required=True,
+    help="Ruta al CONSOLIDADO BALANCE SBS.xlsx",
+)
+@click.option(
+    "--gyp",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    required=True,
+    help="Ruta al CONSOLIDADO GYP SBS.xlsx (Estado de Resultados)",
+)
+@click.option(
+    "--out-dir",
+    type=click.Path(file_okay=False, path_type=str),
+    default="./seeds",
+    help="Donde escribir los seeds JSON.",
+)
+def catalog_extract_from_consolidado(balance: str, gyp: str, out_dir: str) -> None:
+    """Extraer plan canonico MAESTRO desde CONSOLIDADO BALANCE/GYP SBS.
+
+    Estos son los archivos que Gus mantiene desde 2020 con las 5 columnas
+    paralelas (BANCOS / FINANCIERAS / CAJAS / CRACS / EDPYMES). El plan de
+    BANCOS es el super-set; los grupos menores estan alineados por fila.
+
+    Output: seeds/cuentas_balance.json y seeds/cuentas_resultados.json
+    listos para cargar via 'aibenchef catalog seed-dim-cuenta'.
+    """
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.catalog.repositories.consolidado_extractor import (
+        extract_from_consolidado,
+        write_seeds,
+    )
+
+    bal_path = _P(balance)
+    gyp_path = _P(gyp)
+    dest = _P(out_dir)
+
+    click.echo("# Extrayendo plan canonico maestro:")
+    click.echo(f"  balance: {bal_path}")
+    click.echo(f"  gyp:     {gyp_path}")
+    click.echo("")
+
+    cuentas_by_tipo = extract_from_consolidado(balance_path=bal_path, gyp_path=gyp_path)
+
+    for tipo, items in cuentas_by_tipo.items():
+        by_nivel: dict[int, int] = {}
+        by_grupo_count: dict[str, int] = {}
+        for c in items:
+            by_nivel[c.nivel] = by_nivel.get(c.nivel, 0) + 1
+            for g in c.aplica_a:
+                by_grupo_count[g] = by_grupo_count.get(g, 0) + 1
+        niveles_str = " ".join(f"L{lvl}={n}" for lvl, n in sorted(by_nivel.items()))
+        grupos_str = " ".join(f"{g}={n}" for g, n in sorted(by_grupo_count.items()))
+        click.echo(f"  {tipo:<13} {len(items):>4} cuentas  niveles: {niveles_str}")
+        click.echo(f"  {' ':<13}        aplica_a: {grupos_str}")
+
+    paths = write_seeds(cuentas_by_tipo, out_dir=dest)
+    click.echo("")
+    click.echo("# Escritos:")
+    for tipo, p in paths.items():
+        click.echo(f"  {tipo:<13} -> {p}")
+    click.echo("")
+    click.echo("# Siguiente paso:")
+    click.echo("  aibenchef catalog seed-dim-cuenta --seeds-dir " + str(dest))
+
+
 @catalog.command("seed-dim-cuenta")
 @click.option(
     "--seeds-dir",
@@ -375,7 +623,18 @@ def catalog_urls(periodo: str, grupo: str | None, topico: str | None) -> None:
 
 
 @main.command()
-@click.option("--periodo", type=str, default=None, help="YYYYMM. Vacio = mes anterior.")
+@click.option(
+    "--periodo",
+    type=str,
+    default=None,
+    help="YYYYMM. Vacio = mes anterior. Ignorado si pasas --desde/--hasta.",
+)
+@click.option(
+    "--desde", type=str, default=None, help="YYYYMM inicio de rango (inclusive). Requiere --hasta."
+)
+@click.option(
+    "--hasta", type=str, default=None, help="YYYYMM fin de rango (inclusive). Requiere --desde."
+)
 @click.option(
     "--grupo",
     type=click.Choice([g.value for g in Grupo]),
@@ -392,26 +651,68 @@ def catalog_urls(periodo: str, grupo: str | None, topico: str | None) -> None:
 @click.option("--force", is_flag=True, default=False, help="Re-bajar aun si ya existe.")
 def scrape(
     periodo: str | None,
+    desde: str | None,
+    hasta: str | None,
     grupo: str | None,
     topico: str | None,
     dry_run: bool,
     force: bool,
 ) -> None:
-    """Descargar .xls del SBS al storage local."""
-    p = Periodo.from_yyyymm(periodo) if periodo else Periodo.previous_month()
+    """Descargar .xls del SBS al storage local.
+
+    Modos:
+      - 1 mes: --periodo 202404 (o vacio = mes anterior)
+      - Rango: --desde 202304 --hasta 202604 (itera mes a mes)
+    """
+    if (desde and not hasta) or (hasta and not desde):
+        raise click.UsageError("--desde y --hasta deben pasarse juntos.")
+
+    if desde and hasta:
+        periodos = _periodo_range(desde, hasta)
+        click.echo(f"# Rango: {desde} -> {hasta} ({len(periodos)} meses)")
+    else:
+        p = Periodo.from_yyyymm(periodo) if periodo else Periodo.previous_month()
+        periodos = [p]
+
     grupos = [Grupo(grupo)] if grupo else None
     topicos = [Topico(topico)] if topico else None
 
     log = get_logger(__name__)
-    log.info(
-        "scrape.plan",
-        periodo=str(p),
-        grupo=grupo or "all",
-        topico=topico or "all",
-        dry_run=dry_run,
-        force=force,
-    )
-    asyncio.run(_run_scrape(p, grupos, topicos, dry_run=dry_run, force=force))
+    total_ok = 0
+    total_fail = 0
+    for i, p in enumerate(periodos, start=1):
+        log.info(
+            "scrape.plan",
+            periodo=str(p),
+            grupo=grupo or "all",
+            topico=topico or "all",
+            dry_run=dry_run,
+            force=force,
+            progreso=f"{i}/{len(periodos)}",
+        )
+        ok, fail = asyncio.run(_run_scrape(p, grupos, topicos, dry_run=dry_run, force=force))
+        total_ok += ok
+        total_fail += fail
+
+    if len(periodos) > 1:
+        click.echo("")
+        click.echo(
+            f"# TOTAL del rango: {total_ok} OK, {total_fail} fallidos sobre {len(periodos)} meses."
+        )
+
+
+def _periodo_range(desde: str, hasta: str) -> list[Periodo]:
+    """Genera lista de Periodos entre desde y hasta (inclusive)."""
+    start = Periodo.from_yyyymm(desde)
+    end = Periodo.from_yyyymm(hasta)
+    if end < start:
+        raise click.UsageError(f"--hasta ({hasta}) debe ser >= --desde ({desde})")
+    out: list[Periodo] = []
+    cur = start
+    while cur <= end:
+        out.append(cur)
+        cur = cur.next()
+    return out
 
 
 async def _run_scrape(
@@ -421,19 +722,20 @@ async def _run_scrape(
     *,
     dry_run: bool,
     force: bool,
-) -> None:
+) -> tuple[int, int]:
+    """Descarga los archivos del periodo. Devuelve (ok_count, fail_count)."""
     get_logger(__name__)
     cfg = settings()
     storage = RawStorage()
     discoverer = DiscoverTargets(storage=storage, base_url=cfg.sbs_base_url)
     targets = discoverer.for_periodo(periodo, grupos=grupos, topicos=topicos)
 
-    click.echo(f"# {len(targets)} archivos a procesar para {periodo}")
+    click.echo(f"# {periodo}: {len(targets)} archivos a procesar")
     if dry_run:
         for t in targets:
             click.echo(f"  - {t.url}")
             click.echo(f"      -> {t.dest}")
-        return
+        return 0, 0
 
     async with sbs_http_client() as client:
         downloader = HttpxDownloader(
@@ -446,9 +748,10 @@ async def _run_scrape(
 
     succeeded = DownloaderService.succeeded(results)
     failed = DownloaderService.failed(results)
-    click.echo(f"\nResumen: {len(succeeded)} OK, {len(failed)} fallidos.")
+    click.echo(f"  -> {len(succeeded)} OK, {len(failed)} fallidos.")
     for r in failed:
-        click.echo(f"  FALLO {r.target.url}: {r.error_message}")
+        click.echo(f"     FALLO {r.target.url}: {r.error_message}")
+    return len(succeeded), len(failed)
 
 
 # ============================================================================
@@ -513,6 +816,75 @@ def import_base_eeff(path: str, bg_sheet: str, er_sheet: str, batch_size: int) -
                     click.echo(f"  ERROR: {err}")
         finally:
             await close_pool()
+
+    asyncio.run(_run())
+
+
+@import_grp.command("monthly-eeff")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, path_type=str),
+)
+@click.option("--batch-size", type=int, default=10_000)
+def import_monthly_eeff(path: str, batch_size: int) -> None:
+    """Cargar .xls mensual SBS (un archivo o un directorio recursivo).
+
+    Si PATH es un archivo .xls: lo procesa.
+    Si PATH es un directorio: procesa todos los .xls recursivamente.
+    """
+    import asyncio
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.loading import MonthlyEeffImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    p = _P(path)
+    if p.is_file():
+        files = [p]
+    elif p.is_dir():
+        files = sorted(p.rglob("*.xls"))
+    else:
+        raise click.ClickException(f"Path no es archivo ni directorio: {path}")
+
+    if not files:
+        click.echo(f"# (no se encontraron .xls bajo {path})")
+        return
+
+    click.echo(f"# {len(files)} archivos a procesar")
+
+    async def _run() -> None:
+        await open_pool()
+        total_inserted = 0
+        total_errors = 0
+        try:
+            async with connection() as conn:
+                importer = MonthlyEeffImporter(conn, batch_size=batch_size)
+                for i, f in enumerate(files, start=1):
+                    try:
+                        result = await importer.import_file(f)
+                        await conn.commit()
+                        total_inserted += result.rows_inserted
+                        if result.errors:
+                            total_errors += len(result.errors)
+                        status = "OK" if not result.errors else f"ERR x{len(result.errors)}"
+                        click.echo(
+                            f"  [{i:>3}/{len(files)}] {f.name:<40} "
+                            f"rows={result.rows_inserted:>7,}  ({result.duration_seconds:.1f}s)  {status}"
+                        )
+                        for err in result.errors:
+                            click.echo(f"      ! {err}")
+                    except Exception as e:
+                        total_errors += 1
+                        click.echo(f"  [{i:>3}/{len(files)}] {f.name:<40} FATAL: {e}")
+                        with contextlib.suppress(Exception):
+                            await conn.rollback()
+        finally:
+            await close_pool()
+
+        click.echo("")
+        click.echo(f"# TOTAL: {total_inserted:,} filas insertadas, {total_errors} errores")
+
+    import contextlib
 
     asyncio.run(_run())
 
