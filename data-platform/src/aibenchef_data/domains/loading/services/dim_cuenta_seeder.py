@@ -1,7 +1,7 @@
 """DimCuentaSeeder — UPSERT del plan de cuentas en dw.dim_cuenta.
 
 Lee los seeds JSON generados por `aibenchef catalog extract-canonical` y
-los aplica a `dw.dim_cuenta` (idempotente, no destruye datos existentes).
+los aplica a `dw.dim_cuenta` (idempotente).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import psycopg
 
-from aibenchef_data.domains.shared import ValidationError, get_logger
+from aibenchef_data.domains.shared import get_logger
 
 log = get_logger(__name__)
 
@@ -25,22 +25,29 @@ class DimCuentaSeeder:
         """Carga cuentas_balance.json + cuentas_resultados.json a dw.dim_cuenta.
 
         Devuelve la cantidad de filas afectadas (insertadas + actualizadas).
+        Cada categoria se ejecuta en su propia transaccion para aislar fallas.
         """
         total = 0
         for category in ("balance", "resultados"):
             path = seeds_dir / f"cuentas_{category}.json"
             if not path.exists():
-                log.warning("seed.skip_missing_file", category=category, path=str(path))
+                log.warning(
+                    "seed.skip_missing_file", category=category, path=str(path)
+                )
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))
-            n = await self._upsert_batch(data, category)
-            total += n
-            log.info("seed.category_done", category=category, rows=n)
+            try:
+                n = await self._upsert_batch(data, category)
+                await self._conn.commit()
+                total += n
+                log.info("seed.category_done", category=category, rows=n)
+            except Exception:
+                await self._conn.rollback()
+                log.error("seed.category_failed", category=category)
+                raise
         return total
 
     async def _upsert_batch(self, items: Iterable[dict], category: str) -> int:
-        """Aplica los items via INSERT ... ON CONFLICT DO UPDATE."""
-        # Resolve tipo_estado from category if missing
         rows = []
         for it in items:
             tipo_estado = it.get("tipo_estado") or (

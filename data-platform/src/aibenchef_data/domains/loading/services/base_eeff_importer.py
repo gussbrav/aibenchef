@@ -88,6 +88,11 @@ class BaseEeffImporter:
             except Exception as e:
                 errors.append(f"sheet={sheet.name}: {e}")
                 log.error("import.sheet_failed", sheet=sheet.name, error=str(e))
+                # Rollback para que la siguiente hoja arranque limpia
+                try:
+                    await self._conn.rollback()
+                except Exception:
+                    pass
 
         return ImportResult(
             source="base_eeff",
@@ -143,12 +148,22 @@ class BaseEeffImporter:
         return inserted
 
     async def _copy_batch(self, batch: list[tuple]) -> int:
-        """Usa COPY FROM STDIN para insertar las observaciones eficientemente."""
-        # COPY no maneja ON CONFLICT directo. Usamos un staging temp + INSERT.
-        # Como el batch es grande, el approach es:
-        # 1. COPY a una tabla temporal
-        # 2. INSERT ... ON CONFLICT DO NOTHING desde la temporal a la real
+        """Usa COPY FROM STDIN para insertar las observaciones eficientemente.
+
+        COPY no maneja ON CONFLICT directo. El approach:
+        1. DROP + CREATE staging temp (sin ON COMMIT DROP — manejamos manualmente).
+        2. COPY a la temp.
+        3. INSERT ... ON CONFLICT DO UPDATE desde la temp a la real.
+        4. COMMIT al final del batch para liberar locks.
+        """
+        # Si una invocacion previa fallo dejando la temp creada, la limpiamos.
+        try:
+            await self._conn.rollback()
+        except Exception:
+            pass
+
         async with self._conn.cursor() as cur:
+            await cur.execute("DROP TABLE IF EXISTS _eeff_stage")
             await cur.execute(
                 """
                 CREATE TEMPORARY TABLE _eeff_stage (
@@ -157,7 +172,7 @@ class BaseEeffImporter:
                     microfinanciera TEXT, nacional TEXT,
                     moneda TEXT, cuenta_codigo TEXT, cuenta_nombre TEXT,
                     valor NUMERIC(20, 4), source_file TEXT
-                ) ON COMMIT DROP
+                )
                 """
             )
 
@@ -191,7 +206,10 @@ class BaseEeffImporter:
                 """
             )
             n = cur.rowcount
+            await cur.execute("DROP TABLE IF EXISTS _eeff_stage")
 
+        # Commit del batch para liberar locks y que el siguiente batch arranque limpio.
+        await self._conn.commit()
         return n
 
 
