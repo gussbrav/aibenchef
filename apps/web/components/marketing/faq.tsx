@@ -37,7 +37,7 @@ const faqs = [
 
 export function FAQ() {
   return (
-    <Section tone="muted">
+    <Section tone="muted" id="faq">
       <Container size="md">
         <SectionHeading
           eyebrow="Preguntas frecuentes"
