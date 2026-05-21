@@ -1,13 +1,74 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://aibenchef.azoramind.com";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(appUrl),
   title: {
-    default: "Aibenchef — Data SBS Peru, sin Excels",
-    template: "%s | Aibenchef",
+    default: "Aibenchef · Inteligencia financiera SBS Peru",
+    template: "%s · Aibenchef",
   },
   description:
-    "Plataforma de inteligencia para data publica de la SBS. Comparativos, ratios y dashboards de bancos, financieras, cajas municipales, rurales y EDPYMEs.",
+    "Toda la data publica de la SBS limpia, comparada y visualizada. Bancos, financieras, cajas municipales, rurales y EDPYMEs en una sola plataforma. Decisiones en minutos, no semanas.",
+  keywords: [
+    "SBS",
+    "banca peruana",
+    "microfinanzas Peru",
+    "estados financieros",
+    "Caja Arequipa",
+    "Banca Multiple",
+    "BI bancario",
+    "Aibenchef",
+  ],
+  authors: [{ name: "Azoramind" }],
+  creator: "Azoramind",
+  publisher: "Azoramind",
+  openGraph: {
+    type: "website",
+    locale: "es_PE",
+    url: appUrl,
+    siteName: "Aibenchef",
+    title: "Aibenchef · Inteligencia financiera SBS Peru",
+    description:
+      "Toda la data publica de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Aibenchef",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Aibenchef · Inteligencia financiera SBS Peru",
+    description:
+      "Toda la data publica de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+    images: ["/og.png"],
+  },
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -17,7 +78,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es-PE">
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased text-slate-900">{children}</body>
     </html>
   );
 }

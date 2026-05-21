@@ -1,31 +1,27 @@
-import Link from "next/link";
+import { Nav } from "@/components/marketing/nav";
+import { Hero } from "@/components/marketing/hero";
+import { ValueProps } from "@/components/marketing/value-props";
+import { Coverage } from "@/components/marketing/coverage";
+import { HowItWorks } from "@/components/marketing/how-it-works";
+import { Pricing } from "@/components/marketing/pricing";
+import { FAQ } from "@/components/marketing/faq";
+import { CTABanner } from "@/components/marketing/cta-banner";
+import { Footer } from "@/components/marketing/footer";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-slate-50 to-white">
-      <div className="max-w-3xl text-center space-y-8">
-        <span className="inline-block px-4 py-1.5 text-xs font-semibold tracking-widest text-brand-700 bg-brand-50 rounded-full uppercase">
-          En construccion · Beta privada
-        </span>
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-slate-900">
-          Aibenchef
-        </h1>
-        <p className="text-xl md:text-2xl text-slate-600 leading-relaxed">
-          Inteligencia financiera para el sistema bancario peruano. Toda la data publica
-          de la SBS, limpia, comparada y lista para decidir.
-        </p>
-        <div className="flex justify-center pt-4">
-          <Link
-            href="/waitlist"
-            className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors"
-          >
-            Unirme a la waitlist
-          </Link>
-        </div>
-        <p className="text-sm text-slate-500 pt-8">
-          Lanzamiento beta · {new Date().getFullYear()}
-        </p>
-      </div>
-    </main>
+    <>
+      <Nav />
+      <main>
+        <Hero />
+        <ValueProps />
+        <Coverage />
+        <HowItWorks />
+        <Pricing />
+        <FAQ />
+        <CTABanner />
+      </main>
+      <Footer />
+    </>
   );
 }
