@@ -6,18 +6,18 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://aibenchef.azoramind.c
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: "Aibenchef · Inteligencia financiera SBS Peru",
+    default: "Aibenchef · Inteligencia financiera SBS Perú",
     template: "%s · Aibenchef",
   },
   description:
-    "Toda la data publica de la SBS limpia, comparada y visualizada. Bancos, financieras, cajas municipales, rurales y EDPYMEs en una sola plataforma. Decisiones en minutos, no semanas.",
+    "Toda la data pública de la SBS limpia, comparada y visualizada. Bancos, financieras, cajas municipales, rurales y EDPYMEs en una sola plataforma. Decisiones en minutos, no semanas.",
   keywords: [
     "SBS",
     "banca peruana",
-    "microfinanzas Peru",
+    "microfinanzas Perú",
     "estados financieros",
     "Caja Arequipa",
-    "Banca Multiple",
+    "Banca Múltiple",
     "BI bancario",
     "Aibenchef",
   ],
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
     locale: "es_PE",
     url: appUrl,
     siteName: "Aibenchef",
-    title: "Aibenchef · Inteligencia financiera SBS Peru",
+    title: "Aibenchef · Inteligencia financiera SBS Perú",
     description:
-      "Toda la data publica de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+      "Toda la data pública de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
     images: [
       {
         url: "/og.png",
@@ -43,9 +43,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Aibenchef · Inteligencia financiera SBS Peru",
+    title: "Aibenchef · Inteligencia financiera SBS Perú",
     description:
-      "Toda la data publica de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+      "Toda la data pública de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
     images: ["/og.png"],
   },
   icons: {

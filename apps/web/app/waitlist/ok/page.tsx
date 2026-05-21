@@ -4,8 +4,8 @@ import { CheckCircle2 } from "lucide-react";
 import { Button, Container, Card } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Ya estas en la lista",
-  description: "Gracias por sumarte a la waitlist de Aibenchef. Te avisamos por email cuando este listo.",
+  title: "Ya estás en la lista",
+  description: "Gracias por sumarte a la waitlist de Aibenchef. Te avisamos por email cuando esté listo.",
 };
 
 export default function WaitlistOkPage() {
@@ -18,10 +18,10 @@ export default function WaitlistOkPage() {
           </div>
           <div className="space-y-3">
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
-              Ya estas en la lista
+              Ya estás en la lista
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed">
-              Te vamos a avisar por email apenas Aibenchef este disponible. Los
+              Te vamos a avisar por email apenas Aibenchef esté disponible. Los
               primeros en entrar al beta tienen <strong className="text-slate-900">50% off el primer trimestre</strong>.
             </p>
           </div>
@@ -33,7 +33,7 @@ export default function WaitlistOkPage() {
             </Link>
           </div>
           <p className="text-xs text-slate-500 pt-6 border-t border-slate-200">
-            ¿Conoces a alguien que tambien lo necesita? Compartile el link{" "}
+            ¿Conoces a alguien que también lo necesita? Compártele el link{" "}
             <span className="font-mono text-slate-700">aibenchef.azoramind.com</span>
           </p>
         </Card>

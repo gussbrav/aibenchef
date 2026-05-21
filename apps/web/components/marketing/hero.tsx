@@ -13,7 +13,7 @@ export function Hero() {
         <div className="mx-auto max-w-4xl text-center space-y-8">
           <Badge>
             <Sparkles className="w-3 h-3" />
-            Beta privada · Sumate antes que tu competencia
+            Beta privada · Súmate antes que tu competencia
           </Badge>
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.05]">
             Inteligencia financiera para
@@ -23,8 +23,8 @@ export function Hero() {
             </span>
           </h1>
           <p className="text-xl lg:text-2xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
-            Toda la data publica de la SBS limpia, comparada y visualizada. Sin
-            descargar Excels, sin armar tablas dinamicas. Decision lista en minutos,
+            Toda la data pública de la SBS limpia, comparada y visualizada. Sin
+            descargar Excels, sin armar tablas dinámicas. Decisión lista en minutos,
             no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">

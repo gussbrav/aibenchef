@@ -9,7 +9,7 @@ export function Footer() {
           <div className="space-y-3">
             <p className="text-2xl font-bold text-white">Aibenchef</p>
             <p className="text-sm max-w-xs">
-              Inteligencia financiera para el sistema bancario peruano. Hecho en Peru.
+              Inteligencia financiera para el sistema bancario peruano. Hecho en Perú.
             </p>
           </div>
           <div className="flex gap-12 text-sm">
@@ -33,7 +33,7 @@ export function Footer() {
               <ul className="space-y-2">
                 <li>
                   <Link href="/terminos" className="hover:text-white transition-colors">
-                    Terminos
+                    Términos
                   </Link>
                 </li>
                 <li>

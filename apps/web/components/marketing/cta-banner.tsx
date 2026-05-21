@@ -12,10 +12,10 @@ export function CTABanner() {
       <Container size="md" className="relative">
         <div className="text-center space-y-6">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white">
-            Empeza con 50% off el primer trimestre
+            Empieza con 50% off el primer trimestre
           </h2>
           <p className="text-lg text-slate-300 max-w-xl mx-auto">
-            Sumate a la waitlist y entras al beta privado. Cupo limitado para asegurar
+            Súmate a la waitlist y entra al beta privado. Cupo limitado para asegurar
             calidad de servicio.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">

@@ -11,7 +11,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Waitlist",
-  description: "Sumate a la waitlist y entra al beta privado de Aibenchef con 50% off el primer trimestre.",
+  description: "Súmate a la waitlist y entra al beta privado de Aibenchef con 50% off el primer trimestre.",
 };
 
 export default function WaitlistPage() {
@@ -32,10 +32,10 @@ export default function WaitlistPage() {
             Cupo limitado al beta
           </Badge>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 leading-tight">
-            Sumate a la waitlist
+            Súmate a la waitlist
           </h1>
           <p className="text-lg text-slate-600 leading-relaxed">
-            Te avisamos por email cuando Aibenchef este disponible. Los primeros en
+            Te avisamos por email cuando Aibenchef esté disponible. Los primeros en
             la lista entran al beta con{" "}
             <strong className="text-slate-900">50% off el primer trimestre</strong>.
           </p>
@@ -66,7 +66,7 @@ export default function WaitlistPage() {
                 htmlFor="organization"
                 className="block text-sm font-medium text-slate-700"
               >
-                Empresa o institucion <span className="text-slate-400 font-normal">(opcional)</span>
+                Empresa o institución <span className="text-slate-400 font-normal">(opcional)</span>
               </label>
               <Input
                 id="organization"
@@ -75,7 +75,7 @@ export default function WaitlistPage() {
                 placeholder="Ej: Caja Arequipa, MEF, consultora..."
               />
               <p className="text-xs text-slate-500">
-                Nos ayuda a priorizar a quien le abrimos el beta primero.
+                Nos ayuda a priorizar a quién le abrimos el beta primero.
               </p>
             </div>
 
@@ -86,13 +86,13 @@ export default function WaitlistPage() {
         </Card>
 
         <p className="text-xs text-slate-500 text-center mt-6">
-          Sin spam. Te avisamos solo cuando este listo. Al enviar aceptas nuestros{" "}
+          Sin spam. Te avisamos solo cuando esté listo. Al enviar aceptas nuestros{" "}
           <Link href="/terminos" className="underline">
-            terminos
+            términos
           </Link>{" "}
           y{" "}
           <Link href="/privacidad" className="underline">
-            politica de privacidad
+            política de privacidad
           </Link>
           .
         </p>

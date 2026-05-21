@@ -2,24 +2,24 @@ import { Container, Section, SectionHeading } from "@/components/ui";
 
 const faqs = [
   {
-    q: "¿De donde sacan los datos?",
+    q: "¿De dónde sacan los datos?",
     a: "Directo de las publicaciones mensuales de la Superintendencia de Banca, Seguros y AFP (SBS). Los archivos .xls oficiales que cualquiera puede bajar, pero limpios, tipados, conectados y comparables.",
   },
   {
-    q: "¿Cada cuanto se actualiza?",
-    a: "Cada mes, automaticamente al dia siguiente que la SBS publica el cierre (tipicamente entre el dia 30 y 45 despues de fin de mes). Recibis email cuando hay data nueva.",
+    q: "¿Cada cuánto se actualiza?",
+    a: "Cada mes, automáticamente al día siguiente que la SBS publica el cierre (típicamente entre el día 30 y 45 después de fin de mes). Recibes un email cuando hay data nueva.",
   },
   {
-    q: "¿Cuanto historico tienen?",
-    a: "Desde enero 2010 para todos los topicos en todas las entidades supervisadas. Mas de 200 entidades x 10 topicos x 180+ meses.",
+    q: "¿Cuánto histórico tienen?",
+    a: "Desde enero 2010 para todos los tópicos en todas las entidades supervisadas. Más de 200 entidades x 10 tópicos x 180+ meses.",
   },
   {
-    q: "¿Es legal disponibilizar esta data?",
-    a: "Si. La data SBS es publica por ley peruana. Aibenchef cobra por el procesamiento, la visualizacion y el acceso comodo, no por la data en si.",
+    q: "¿Es legal publicar esta data?",
+    a: "Sí. La data SBS es pública por ley peruana. Aibenchef cobra por el procesamiento, la visualización y el acceso cómodo, no por la data en sí.",
   },
   {
     q: "¿Tienen API?",
-    a: "Si, disponible en el plan Business+. REST con autenticacion JWT, paginacion cursor-based, rate limits documentados. SDK en proximas versiones.",
+    a: "Sí, disponible en el plan Business+. REST con autenticación JWT, paginación cursor-based, rate limits documentados. SDK en próximas versiones.",
   },
   {
     q: "¿Y si quiero data de mi propia entidad para combinar?",
@@ -27,11 +27,11 @@ const faqs = [
   },
   {
     q: "¿Puedo cancelar en cualquier momento?",
-    a: "Si. Sin permanencia. Cancelas y al final del periodo facturado dejas de pagar. Conservas acceso hasta entonces.",
+    a: "Sí. Sin permanencia. Cancelas y al final del período facturado dejas de pagar. Conservas acceso hasta entonces.",
   },
   {
-    q: "¿Aceptan factura electronica peruana?",
-    a: "Si. Emitimos factura electronica via Nubefact cuando registres tu RUC al pagar.",
+    q: "¿Aceptan factura electrónica peruana?",
+    a: "Sí. Emitimos factura electrónica vía Nubefact cuando registres tu RUC al pagar.",
   },
 ];
 

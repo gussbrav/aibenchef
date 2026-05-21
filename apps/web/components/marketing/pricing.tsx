@@ -8,28 +8,28 @@ const plans = [
     price: 49,
     description: "Para analistas individuales empezando a explorar el sistema.",
     features: [
-      "1 grupo de entidades (a eleccion)",
-      "24 meses de historico",
+      "1 grupo de entidades (a elección)",
+      "24 meses de histórico",
       "1 usuario",
       "Exportar a PDF",
       "Soporte por email",
     ],
-    cta: "Empezar trial",
+    cta: "Empezar prueba",
     highlighted: false,
   },
   {
     name: "Pro",
     price: 149,
-    description: "Para equipos de analisis con cobertura multi-segmento.",
+    description: "Para equipos de análisis con cobertura multi-segmento.",
     features: [
       "3 grupos de entidades",
-      "60 meses de historico",
+      "60 meses de histórico",
       "5 usuarios",
       "Exportar a PDF + Excel",
       "Comparador multi-entidad",
       "Soporte prioritario",
     ],
-    cta: "Empezar trial",
+    cta: "Empezar prueba",
     highlighted: true,
   },
   {
@@ -37,14 +37,14 @@ const plans = [
     price: 399,
     description: "Para gerencias y consultoras que necesitan TODA la data.",
     features: [
-      "Todos los grupos + historico completo",
+      "Todos los grupos + histórico completo",
       "15 usuarios",
-      "API metered (10k req/mes)",
-      "Alertas automaticas",
+      "API por uso (10k req/mes)",
+      "Alertas automáticas",
       "Reportes mensuales en PDF",
       "Soporte dedicado + SLA",
     ],
-    cta: "Empezar trial",
+    cta: "Empezar prueba",
     highlighted: false,
   },
 ];
@@ -56,7 +56,7 @@ export function Pricing() {
         <SectionHeading
           eyebrow="Planes"
           title="Pago mensual o anual, cancelas cuando quieras"
-          description="Pricing transparente. Sin contratos largos, sin contactanos."
+          description="Precios transparentes. Sin contratos largos, sin 'contáctanos'."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {plans.map((plan) => (
@@ -67,7 +67,7 @@ export function Pricing() {
             >
               {plan.highlighted && (
                 <p className="text-xs font-bold tracking-widest text-brand-600 uppercase mb-2">
-                  Mas popular
+                  Más popular
                 </p>
               )}
               <h3 className="text-2xl font-bold text-slate-900">{plan.name}</h3>
@@ -102,7 +102,7 @@ export function Pricing() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
-          ¿Necesitas mas usuarios, API ilimitada, white-label o SLA enterprise?{" "}
+          ¿Necesitas más usuarios, API ilimitada, white-label o SLA enterprise?{" "}
           <Link href="/waitlist?plan=enterprise" className="text-brand-600 hover:underline font-medium">
             Hablemos del plan Enterprise
           </Link>
