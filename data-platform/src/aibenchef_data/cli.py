@@ -23,6 +23,7 @@ from aibenchef_data.domains.catalog import (
     SbsUrlBuilder,
     Topico,
 )
+from aibenchef_data.domains.parsing import XlsInspector
 from aibenchef_data.domains.scraping import (
     DiscoverTargets,
     DownloaderService,
@@ -211,6 +212,50 @@ def ingest(periodo: str | None, grupo: str | None, topico: str | None) -> None:
     log.warning("ingest.partial", message="Por ahora solo corre scrape. Parser y loader en Fase 1.4/1.5.")
     ctx = click.get_current_context()
     ctx.invoke(scrape, periodo=periodo, grupo=grupo, topico=topico, dry_run=False, force=False)
+
+
+# ============================================================================
+# inspect — herramienta para entender la estructura de un .xls SBS
+# ============================================================================
+
+
+@main.group()
+def inspect() -> None:
+    """Herramientas para inspeccionar archivos descargados."""
+
+
+@inspect.command("xls")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--rows", type=int, default=20, help="Numero de filas a previsualizar.")
+@click.option("--cols", type=int, default=12, help="Numero de columnas a previsualizar.")
+def inspect_xls(path: str, rows: int, cols: int) -> None:
+    """Mostrar la estructura interna de un .xls SBS (hojas, dims, primeras filas)."""
+    from pathlib import Path as _P
+
+    inspector = XlsInspector(max_preview_rows=rows, max_preview_cols=cols)
+    click.echo(inspector.inspect(_P(path)))
+
+
+@inspect.command("xls-all")
+@click.argument(
+    "directory",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=str),
+)
+@click.option("--rows", type=int, default=10)
+@click.option("--cols", type=int, default=8)
+def inspect_xls_all(directory: str, rows: int, cols: int) -> None:
+    """Mostrar estructura de todos los .xls bajo un directorio (recursivo)."""
+    from pathlib import Path as _P
+
+    base = _P(directory)
+    files = sorted(base.rglob("*.xls"))
+    if not files:
+        click.echo(f"(sin .xls en {base})")
+        return
+    inspector = XlsInspector(max_preview_rows=rows, max_preview_cols=cols)
+    for f in files:
+        click.echo(inspector.inspect(f))
+        click.echo("\n" + "=" * 100 + "\n")
 
 
 if __name__ == "__main__":
