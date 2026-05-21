@@ -99,6 +99,48 @@ def catalog_periodo(periodo: str | None) -> None:
     click.echo(f"Siguiente:    {p.next()}")
 
 
+@catalog.command("extract-canonical")
+@click.option(
+    "--from-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=str),
+    required=True,
+    help="Directorio donde estan los CONSOLIDADO BALANCE / GYP y CABECERAS INDICADORES.",
+)
+@click.option(
+    "--out-dir",
+    type=click.Path(file_okay=False, path_type=str),
+    default="./seeds",
+    help="Donde escribir los seeds JSON (cuentas_balance.json, etc).",
+)
+def catalog_extract_canonical(from_dir: str, out_dir: str) -> None:
+    """Extraer plan de cuentas canonico desde los archivos consolidados de Gus."""
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.catalog.repositories.cuentas_canonicas_extractor import (
+        extract_all,
+        write_seeds,
+    )
+
+    src = _P(from_dir)
+    dest = _P(out_dir)
+
+    click.echo(f"# Extrayendo plan canonico desde {src}")
+    seeds = extract_all(knowledge_base_dir=src)
+
+    for categoria, items in seeds.items():
+        n_padres = sum(1 for c in items if c["nivel"] == 1)
+        n_hijas = sum(1 for c in items if c["nivel"] == 2)
+        click.echo(
+            f"  {categoria:<13} {len(items):>4} cuentas  "
+            f"({n_padres} padres + {n_hijas} hijas)"
+        )
+
+    paths = write_seeds(seeds, out_dir=dest)
+    click.echo("\n# Escritos:")
+    for cat, p in paths.items():
+        click.echo(f"  {cat:<13} -> {p}")
+
+
 @catalog.command("urls")
 @click.argument("periodo", type=str)
 @click.option("--grupo", type=click.Choice([g.value for g in Grupo]), default=None)
