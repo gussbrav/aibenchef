@@ -1,0 +1,45 @@
+name: Monthly SBS ingestion
+
+# Corre el dia 5 de cada mes a las 06:00 UTC = 01:00 Peru
+# La SBS publica el cierre del mes anterior ~dia 30-45 despues
+on:
+  schedule:
+    - cron: "0 6 5 * *"
+  workflow_dispatch:
+    inputs:
+      periodo:
+        description: "Periodo YYYYMM a procesar (vacio = mes anterior)"
+        required: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+        working-directory: data-platform
+      - run: uv run playwright install chromium
+        working-directory: data-platform
+      - name: Run scraper + parser + dbt
+        working-directory: data-platform
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          PERIODO: ${{ github.event.inputs.periodo }}
+        run: |
+          uv run python -m scrapers.sbs.cli ingest --periodo "${PERIODO:-}"
+          uv run dbt run --profiles-dir .
+          uv run dbt test --profiles-dir .
+      - name: Notify Slack on failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_INGESTION }}
+          SLACK_COLOR: danger
+          SLACK_MESSAGE: "Ingesta SBS fallida para periodo ${{ github.event.inputs.periodo || 'mes anterior' }}"

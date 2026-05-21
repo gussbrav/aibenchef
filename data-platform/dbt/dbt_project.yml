@@ -1,0 +1,29 @@
+name: aibenchef
+version: "1.0.0"
+config-version: 2
+
+profile: aibenchef
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  aibenchef:
+    +materialized: view
+    staging:
+      +materialized: view
+      +schema: raw
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      +materialized: table
+      +schema: marts
+    metrics:
+      +materialized: table
+      +schema: marts

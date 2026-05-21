@@ -1,0 +1,57 @@
+cubes:
+  - name: Eeff
+    sql_table: marts.mv_eeff_ancho
+
+    joins:
+      - name: Entidad
+        sql: "{CUBE}.entidad_id = {Entidad}.id"
+        relationship: many_to_one
+      - name: Tiempo
+        sql: "{CUBE}.periodo_id = {Tiempo}.id"
+        relationship: many_to_one
+
+    measures:
+      - name: total_activos
+        sql: total_activos
+        type: sum
+        format: currency
+      - name: total_pasivos
+        sql: total_pasivos
+        type: sum
+        format: currency
+      - name: patrimonio
+        sql: patrimonio
+        type: sum
+        format: currency
+      - name: utilidad_neta
+        sql: utilidad_neta
+        type: sum
+        format: currency
+      - name: roa
+        sql: "100 * SUM(utilidad_neta) / NULLIF(SUM(total_activos), 0)"
+        type: number
+        format: percent
+        meta: { description: "Retorno sobre activos (ROA)" }
+      - name: roe
+        sql: "100 * SUM(utilidad_neta) / NULLIF(SUM(patrimonio), 0)"
+        type: number
+        format: percent
+        meta: { description: "Retorno sobre patrimonio (ROE)" }
+
+    dimensions:
+      - name: entidad_id
+        sql: entidad_id
+        type: number
+        primary_key: true
+      - name: periodo_id
+        sql: periodo_id
+        type: number
+
+    pre_aggregations:
+      - name: por_entidad_mes
+        measures: [Eeff.total_activos, Eeff.utilidad_neta, Eeff.roa, Eeff.roe]
+        dimensions: [Entidad.grupo, Entidad.nombre, Tiempo.anio]
+        time_dimension: Tiempo.fecha_cierre
+        granularity: month
+        refresh_key:
+          every: 1 hour

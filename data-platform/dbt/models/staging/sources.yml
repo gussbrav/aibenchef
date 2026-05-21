@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: raw_sbs
+    database: aibenchef
+    schema: raw
+    description: Datos crudos descargados de la SBS antes de tipar y modelar.
+    tables:
+      - name: eeff
+      - name: colocaciones
+      - name: depositos
+      - name: castigos
+      - name: clientes_credito
+      - name: clientes_ahorro
+      - name: oficinas
+      - name: creditos_depositos_geo
+      - name: personal
+      - name: indicadores

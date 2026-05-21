@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.uv/
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+out/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+.doppler/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# dbt
+data-platform/dbt/target/
+data-platform/dbt/dbt_packages/
+data-platform/dbt/logs/
+
+# Prefect / cube cache
+.prefect/
+data-platform/cube/.cubestore/
+
+# Data local
+data-platform/local-data/
+*.xls.tmp
+*.duckdb
+
+# Docker volumes
+infrastructure/docker/volumes/
