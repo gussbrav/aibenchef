@@ -1,7 +1,11 @@
 """XlsReader — interfaz unificada para leer .xls SBS sin importar el formato real.
 
-Devuelve filas/celdas como tipos Python comunes (str | int | float | None).
-Resuelve internamente si usar xlrd (BIFF) o openpyxl (OOXML).
+SBS publica bajo extension .xls al menos 5 formatos distintos:
+- BIFF (xlrd)
+- XLSX (openpyxl)
+- XLSB (pyxlsb)
+- HTML disfrazado (BeautifulSoup + lxml)
+- SpreadsheetML XML 2003 (lxml)
 """
 
 from __future__ import annotations
@@ -38,17 +42,31 @@ class XlsReader(Protocol):
 
 
 def read_xls(path: Path) -> list[XlsSheet]:
-    """Lee cualquier .xls SBS (autodetecta BIFF vs OOXML)."""
+    """Lee cualquier .xls SBS detectando el formato y ruteando al lector correcto."""
     if not path.exists():
         raise ValidationError(f"Archivo no existe: {path}")
+
     fmt = detect_xls_format(path)
+
     if fmt == XlsFormat.BIFF:
         return _read_biff(path)
-    if fmt == XlsFormat.OOXML:
-        return _read_ooxml(path)
+    if fmt == XlsFormat.XLSX:
+        return _read_xlsx(path)
+    if fmt == XlsFormat.XLSB:
+        return _read_xlsb(path)
+    if fmt == XlsFormat.HTML:
+        return _read_html(path)
+    if fmt == XlsFormat.XML2003:
+        return _read_xml2003(path)
+
     raise ValidationError(
-        f"Formato desconocido para {path.name}", context={"format": fmt.value}
+        f"Formato no soportado para {path.name}", context={"format": fmt.value}
     )
+
+
+# ============================================================================
+# BIFF
+# ============================================================================
 
 
 def _read_biff(path: Path) -> list[XlsSheet]:
@@ -88,27 +106,169 @@ def _normalize_xlrd_cell(sheet: Any, r: int, c: int) -> Cell:
     return v
 
 
-def _read_ooxml(path: Path) -> list[XlsSheet]:
+# ============================================================================
+# XLSX (OOXML)
+# ============================================================================
+
+
+def _read_xlsx(path: Path) -> list[XlsSheet]:
     from openpyxl import load_workbook
 
     wb = load_workbook(filename=str(path), read_only=True, data_only=True)
+    try:
+        sheets: list[XlsSheet] = []
+        for ws in wb.worksheets:
+            rows: list[list[Cell]] = []
+            max_cols = 0
+            for row in ws.iter_rows(values_only=True):
+                row_cells: list[Cell] = [_normalize(v) for v in row]
+                rows.append(row_cells)
+                max_cols = max(max_cols, len(row_cells))
+            sheets.append(
+                XlsSheet(name=ws.title, n_rows=len(rows), n_cols=max_cols, rows=rows)
+            )
+        return sheets
+    finally:
+        wb.close()
+
+
+# ============================================================================
+# XLSB (Excel Binary)
+# ============================================================================
+
+
+def _read_xlsb(path: Path) -> list[XlsSheet]:
+    from pyxlsb import open_workbook
+
     sheets: list[XlsSheet] = []
-    for ws in wb.worksheets:
+    with open_workbook(str(path)) as wb:
+        for sheet_name in wb.sheets:
+            with wb.get_sheet(sheet_name) as ws:
+                rows: list[list[Cell]] = []
+                max_cols = 0
+                for row in ws.rows():
+                    cells: list[Cell] = [_normalize(cell.v) for cell in row]
+                    rows.append(cells)
+                    max_cols = max(max_cols, len(cells))
+                sheets.append(
+                    XlsSheet(
+                        name=str(sheet_name),
+                        n_rows=len(rows),
+                        n_cols=max_cols,
+                        rows=rows,
+                    )
+                )
+    return sheets
+
+
+# ============================================================================
+# HTML disfrazado de .xls
+# ============================================================================
+
+
+def _read_html(path: Path) -> list[XlsSheet]:
+    from bs4 import BeautifulSoup
+
+    raw = path.read_bytes()
+    text = _decode_html(raw)
+    soup = BeautifulSoup(text, "lxml")
+
+    sheets: list[XlsSheet] = []
+    for idx, table in enumerate(soup.find_all("table")):
         rows: list[list[Cell]] = []
         max_cols = 0
-        for row in ws.iter_rows(values_only=True):
-            row_cells: list[Cell] = []
-            for v in row:
-                if v is None or (isinstance(v, str) and not v.strip()):
-                    row_cells.append(None)
-                elif isinstance(v, str):
-                    row_cells.append(v.strip())
-                else:
-                    row_cells.append(v)
-            rows.append(row_cells)
-            max_cols = max(max_cols, len(row_cells))
+        for tr in table.find_all("tr"):
+            cells: list[Cell] = []
+            for td in tr.find_all(["td", "th"]):
+                txt = td.get_text(strip=True)
+                cells.append(_parse_html_cell(txt))
+            rows.append(cells)
+            max_cols = max(max_cols, len(cells))
         sheets.append(
-            XlsSheet(name=ws.title, n_rows=len(rows), n_cols=max_cols, rows=rows)
+            XlsSheet(name=f"table_{idx}", n_rows=len(rows), n_cols=max_cols, rows=rows)
         )
-    wb.close()
     return sheets
+
+
+def _decode_html(raw: bytes) -> str:
+    for enc in ("utf-8", "windows-1252", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("latin-1", errors="replace")
+
+
+def _parse_html_cell(txt: str) -> Cell:
+    if not txt:
+        return None
+    cleaned = txt.replace(",", "").replace("\xa0", "").strip()
+    if not cleaned:
+        return None
+    try:
+        if "." not in cleaned:
+            return int(cleaned)
+    except ValueError:
+        pass
+    try:
+        return float(cleaned)
+    except ValueError:
+        pass
+    return txt.strip()
+
+
+# ============================================================================
+# SpreadsheetML XML 2003
+# ============================================================================
+
+
+def _read_xml2003(path: Path) -> list[XlsSheet]:
+    from lxml import etree
+
+    root = etree.fromstring(path.read_bytes())
+    ns = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
+    sheets: list[XlsSheet] = []
+    for ws in root.findall(".//ss:Worksheet", ns):
+        name = ws.get(f"{{{ns['ss']}}}Name") or "Sheet"
+        rows: list[list[Cell]] = []
+        max_cols = 0
+        for row in ws.findall(".//ss:Row", ns):
+            cells: list[Cell] = []
+            for cell in row.findall("ss:Cell", ns):
+                data = cell.find("ss:Data", ns)
+                v: Cell = None
+                if data is not None and data.text is not None:
+                    raw_txt = data.text.strip()
+                    t = data.get(f"{{{ns['ss']}}}Type", "String")
+                    if t == "Number":
+                        try:
+                            v = float(raw_txt) if "." in raw_txt else int(raw_txt)
+                        except ValueError:
+                            v = raw_txt
+                    elif t == "Boolean":
+                        v = raw_txt in ("1", "true", "True")
+                    else:
+                        v = raw_txt or None
+                cells.append(v)
+            rows.append(cells)
+            max_cols = max(max_cols, len(cells))
+        sheets.append(XlsSheet(name=name, n_rows=len(rows), n_cols=max_cols, rows=rows))
+    return sheets
+
+
+# ============================================================================
+# Helper comun
+# ============================================================================
+
+
+def _normalize(v: Any) -> Cell:
+    if v is None:
+        return None
+    if isinstance(v, str):
+        s = v.strip()
+        return s or None
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v
+    return str(v).strip() or None
