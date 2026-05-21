@@ -48,6 +48,64 @@ def main() -> None:
     configure_logging()
 
 
+@main.group()
+def db() -> None:
+    """Comandos de diagnostico y operacion de la base de datos."""
+
+
+@db.command("ping")
+def db_ping() -> None:
+    """Probar la conexion al Postgres configurado en DATABASE_URL.
+
+    Usa el cliente psycopg sincrono (sin event loop) para diagnosticar.
+    Muestra el host/puerto/db/user que va a usar antes de conectar.
+    """
+    from urllib.parse import urlparse
+
+    import psycopg
+
+    url = settings().database_url
+    # Mascarar password en el output.
+    parsed = urlparse(url)
+    safe_url = url.replace(parsed.password or "", "***") if parsed.password else url
+
+    click.echo(f"# Conectando a:")
+    click.echo(f"  url:    {safe_url}")
+    click.echo(f"  host:   {parsed.hostname}")
+    click.echo(f"  port:   {parsed.port}")
+    click.echo(f"  db:     {parsed.path.lstrip('/')}")
+    click.echo(f"  user:   {parsed.username}")
+    click.echo("")
+
+    try:
+        # psycopg quiere postgres:// o postgresql://, NO postgresql+asyncpg://
+        clean = url.replace("postgresql+asyncpg://", "postgresql://")
+        with psycopg.connect(clean, connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT current_database(), version()")
+                row = cur.fetchone()
+                click.echo("# Conexion OK")
+                click.echo(f"  database: {row[0]}")
+                click.echo(f"  version:  {row[1]}")
+                cur.execute(
+                    "SELECT version FROM public.schema_migrations ORDER BY version"
+                )
+                versions = [r[0] for r in cur.fetchall()]
+                click.echo(f"  migrations applied ({len(versions)}): {versions}")
+    except psycopg.OperationalError as e:
+        click.echo(f"# ERROR de conexion: {e}")
+        click.echo("\n# Diagnostico rapido:")
+        click.echo(
+            f"  Test-NetConnection -ComputerName {parsed.hostname} -Port {parsed.port}"
+        )
+        click.echo("  Si TcpTestSucceeded:False -> puerto cerrado o firewall.")
+        click.echo("  Opciones: exponer puerto en EasyPanel o usar SSH tunnel.")
+        raise click.Abort()
+    except Exception as e:
+        click.echo(f"# ERROR: {type(e).__name__}: {e}")
+        raise click.Abort()
+
+
 # ============================================================================
 # catalog
 # ============================================================================
