@@ -8,6 +8,21 @@ Reemplaza el deploy manual con `docker-compose.production.yml` + `Caddyfile`
 
 ---
 
+## TL;DR — stack minimo para arrancar (MVP)
+
+Solo necesitas **2 servicios nuevos en EasyPanel** + **1 database nueva en el postgres existente**:
+
+1. Database `aibenchef` en el servicio `postgres` que ya tenes (proyecto azoramind).
+2. App `aibenchef-api` (FastAPI desde GitHub).
+3. App `aibenchef-web` (Next.js desde GitHub).
+
+En 30 min tenes `aibenchef.azoramind.com` con candado verde online.
+
+Los demas servicios (redis, minio, cube, worker, postgres dedicado) los agregamos
+**solo cuando los necesitamos**. Ver seccion "Cuando agregar mas servicios" al final.
+
+---
+
 ## Convencion de nombres en EasyPanel (importante)
 
 EasyPanel separa dos cosas:
@@ -63,58 +78,44 @@ Esto aisla los servicios de los demas proyectos (`azoramind`, `crm-azoramind`).
 
 ---
 
-## Paso 2: agregar servicios base (templates)
+## Paso 2: crear database `aibenchef` en el postgres existente
 
-Dentro del proyecto `aibenchef`, click **"+"** -> **Plantilla**.
+NO crear un nuevo servicio postgres. Reusamos el `postgres` del proyecto `azoramind`.
 
-### 2.1 Postgres
-- Tipo: PostgreSQL
-- Version: **16**
-- Nombre del servicio: `aibenchef-postgres`
-- Password: dejar autogenerar y copiar (la usaremos en API)
-- Volumen: persistente
-- Recursos: por defecto, ajustar despues si hace falta
+EasyPanel -> proyecto `azoramind` -> servicio `postgres` -> Consola (o conectarte con
+`pgadmin` que ya tenes):
 
-Hostname interno resultante: `aibenchef_aibenchef-postgres:5432`
+```sql
+CREATE DATABASE aibenchef;
+CREATE USER aibenchef_app WITH PASSWORD '<generar con openssl rand -hex 32>';
+GRANT ALL PRIVILEGES ON DATABASE aibenchef TO aibenchef_app;
+\c aibenchef
+GRANT ALL ON SCHEMA public TO aibenchef_app;
+```
 
-### 2.2 Redis
-- Tipo: Redis
-- Nombre del servicio: `aibenchef-redis`
+Anotar el password — lo vas a usar en `DATABASE_URL` de la API.
 
-Hostname interno: `aibenchef_aibenchef-redis:6379`
-
-### 2.3 MinIO
-- Tipo: MinIO (o si no esta como template, usar imagen `minio/minio:latest`)
-- Nombre del servicio: `aibenchef-minio`
-- Variables:
-  - `MINIO_ROOT_USER`: `aibenchef-admin`
-  - `MINIO_ROOT_PASSWORD`: generar fuerte (`openssl rand -hex 32`)
-- Comando: `server /data --console-address ":9001"`
-- Volumen: persistente en `/data`
-- Puertos: `9000` (API S3) y `9001` (console web)
-
-Hostname interno: `aibenchef_aibenchef-minio:9000` (S3) y `:9001` (console).
+Hostname interno desde otros servicios: `azoramind_postgres:5432` (asi se llama el postgres
+existente; verificar con `docker ps | grep postgres`).
 
 ---
 
 ## Paso 3: aplicar migraciones SQL
 
-EasyPanel -> proyecto `aibenchef` -> `aibenchef-postgres` -> Consola (o usar `pgadmin` que ya
-tenes corriendo y conectarte a `aibenchef_aibenchef-postgres`).
+Conectado a la database `aibenchef` (paso 2), aplicar las 4 migraciones en orden desde
+`infrastructure/postgres/migrations/V001..V004`:
 
-```sql
--- Crear DB (si EasyPanel no la creo)
-CREATE DATABASE aibenchef;
-\c aibenchef
-```
+- V001: schemas (auth, tenant, billing, raw, dw, marts, api, audit)
+- V002: tablas auth + tenant + billing + RLS policies
+- V003: dimensiones del DW (dim_tiempo, dim_entidad, dim_cuenta, etc.)
+- V004: fact_observacion particionado por anio
 
-Luego aplicar las 4 migraciones en orden desde
-`infrastructure/postgres/migrations/V001..V004` (copy/paste del SQL).
+Forma facil: abrir `pgadmin`, conectarte a `aibenchef`, abrir cada archivo en Query Tool y
+ejecutar (F5).
 
-Alternativa por SSH al VPS:
-
+Forma SSH:
 ```bash
-# El nombre exacto del container lo ves con: docker ps | grep aibenchef-postgres
+# El nombre del container postgres lo ves con: docker ps | grep azoramind_postgres
 docker exec -i <container> psql -U postgres -d aibenchef < V001__schemas.sql
 docker exec -i <container> psql -U postgres -d aibenchef < V002__auth_tenant_billing.sql
 docker exec -i <container> psql -U postgres -d aibenchef < V003__dw_dimensions.sql
@@ -123,35 +124,7 @@ docker exec -i <container> psql -U postgres -d aibenchef < V004__dw_fact_observa
 
 ---
 
-## Paso 4: crear `aibenchef-cube` (App custom)
-
-EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
-
-- Nombre del servicio: `aibenchef-cube`
-- Origen: **Imagen Docker**
-- Imagen: `cubejs/cube:latest`
-- Variables:
-  ```
-  CUBEJS_DEV_MODE=false
-  CUBEJS_DB_TYPE=postgres
-  CUBEJS_DB_HOST=aibenchef_aibenchef-postgres
-  CUBEJS_DB_PORT=5432
-  CUBEJS_DB_NAME=aibenchef
-  CUBEJS_DB_USER=postgres
-  CUBEJS_DB_PASS=<password de aibenchef-postgres>
-  CUBEJS_API_SECRET=<openssl rand -hex 32>
-  CUBEJS_REDIS_URL=redis://aibenchef_aibenchef-redis:6379
-  CUBEJS_WEB_SOCKETS=true
-  CUBEJS_LOG_LEVEL=warn
-  ```
-- Volumenes:
-  - Mount: `/cube/conf` <- desde Git (mas adelante) o copiar manual `data-platform/cube/`
-- Puerto interno: `4000`
-- **Dominio publico:** NO agregar — solo lo consume `aibenchef-api` por hostname interno.
-
----
-
-## Paso 5: crear `aibenchef-api` (App desde GitHub)
+## Paso 4: crear `aibenchef-api` (App desde GitHub)
 
 EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
@@ -163,22 +136,14 @@ EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
   - Tipo: **Dockerfile**
   - Path Dockerfile: `apps/api/Dockerfile`
   - Build context: `apps/api`
-- Variables:
+- Variables minimas:
   ```
   APP_ENV=production
-  DATABASE_URL=postgresql+asyncpg://postgres:<pwd>@aibenchef_aibenchef-postgres:5432/aibenchef
-  REDIS_URL=redis://aibenchef_aibenchef-redis:6379
-  CUBEJS_API_URL=http://aibenchef_aibenchef-cube:4000/cubejs-api/v1
-  CUBEJS_API_SECRET=<mismo que en cube>
+  DATABASE_URL=postgresql+asyncpg://aibenchef_app:<pwd>@azoramind_postgres:5432/aibenchef
   APP_URL=https://aibenchef.azoramind.com
   API_URL=https://api.aibenchef.azoramind.com
   SECRET_KEY=<openssl rand -hex 64>
-  MINIO_ENDPOINT=aibenchef_aibenchef-minio:9000
-  MINIO_ACCESS_KEY=aibenchef-admin
-  MINIO_SECRET_KEY=<pwd de minio>
-  MINIO_BUCKET=aibenchef
-  MINIO_PUBLIC_URL=https://storage.aibenchef.azoramind.com
-  SENTRY_DSN=<de glitchtip — ver paso 8>
+  SENTRY_DSN=<de glitchtip — ver paso 7, opcional al inicio>
   ```
 - Puerto interno: `8000`
 - Dominios:
@@ -187,7 +152,7 @@ EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
 ---
 
-## Paso 6: crear `aibenchef-web` (App desde GitHub)
+## Paso 5: crear `aibenchef-web` (App desde GitHub)
 
 EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
@@ -213,21 +178,26 @@ EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
 ---
 
-## Resumen visual de dominios a agregar en EasyPanel
+## Resumen visual MVP — solo lo que creas ahora
 
-| Servicio | Puerto interno | Dominio publico | Hostname interno destino |
-|---|---|---|---|
-| `aibenchef-postgres` | 5432 | (no) | `aibenchef_aibenchef-postgres:5432` |
-| `aibenchef-redis` | 6379 | (no) | `aibenchef_aibenchef-redis:6379` |
-| `aibenchef-minio` | 9000 | `storage.aibenchef.azoramind.com` | `aibenchef_aibenchef-minio:9000` |
-| `aibenchef-minio` | 9001 | `storage-console.aibenchef.azoramind.com` | `aibenchef_aibenchef-minio:9001` |
-| `aibenchef-cube` | 4000 | (no — interno) | `aibenchef_aibenchef-cube:4000` |
-| `aibenchef-api` | 8000 | `api.aibenchef.azoramind.com` | `aibenchef_aibenchef-api:8000` |
-| `aibenchef-web` | 3000 | `aibenchef.azoramind.com` | `aibenchef_aibenchef-web:3000` |
+| Servicio | Donde | Puerto | Dominio publico | Hostname interno |
+|---|---|---|---|---|
+| Database `aibenchef` | en `postgres` existente (proyecto azoramind) | 5432 | — | `azoramind_postgres:5432` |
+| `aibenchef-api` | nuevo en proyecto `aibenchef` | 8000 | `api.aibenchef.azoramind.com` | `aibenchef_aibenchef-api:8000` |
+| `aibenchef-web` | nuevo en proyecto `aibenchef` | 3000 | `aibenchef.azoramind.com` | `aibenchef_aibenchef-web:3000` |
+
+CNAMEs minimos en Cloudflare:
+```
+CNAME  aibenchef       -> azoramind.com   Solo DNS  (ya creado)
+CNAME  api.aibenchef   -> azoramind.com   Solo DNS  (agregar)
+```
+
+Los CNAMEs `storage.aibenchef` y `storage-console.aibenchef` los agregamos cuando metamos
+MinIO (Fase 4).
 
 ---
 
-## Paso 7: configurar TLS
+## Paso 6: configurar TLS
 
 EasyPanel + Traefik lo hacen automatico cuando agregas el dominio custom:
 - Solicita cert Let's Encrypt
@@ -239,7 +209,7 @@ Si falla TLS al primer intento, verificar:
 
 ---
 
-## Paso 8: integrar Glitchtip (Sentry self-hosted)
+## Paso 7: integrar Glitchtip (Sentry self-hosted) — opcional
 
 Glitchtip ya esta en tu proyecto `azoramind`. Crear proyectos nuevos para Aibenchef:
 
@@ -252,7 +222,7 @@ Glitchtip ya esta en tu proyecto `azoramind`. Crear proyectos nuevos para Aibenc
 
 ---
 
-## Paso 9: scraping mensual via n8n
+## Paso 8: scraping mensual via n8n — cuando tengamos scraper funcional
 
 n8n ya esta en tu stack. En lugar de Prefect/Airflow:
 
@@ -270,7 +240,7 @@ n8n ya esta en tu stack. En lugar de Prefect/Airflow:
 
 ---
 
-## Paso 10: metricas en Grafana
+## Paso 9: metricas en Grafana — cuando haya trafico real
 
 Tu Grafana existente puede scrapear `/metrics` de FastAPI (cuando lo agreguemos con
 `prometheus-fastapi-instrumentator` en Fase 3).
@@ -280,10 +250,27 @@ Tu Grafana existente puede scrapear `/metrics` de FastAPI (cuando lo agreguemos 
 
 ---
 
-## Paso 11: backups del Postgres de Aibenchef
+## Paso 10: backups del Postgres
 
-EasyPanel -> `aibenchef-postgres` -> Backups -> programar diario a las 03:00.
-Destino: bucket Backblaze B2 (USD 0.005/GB/mes) o el mismo MinIO si quieres todo interno.
+Como reusamos el postgres existente, los backups que ya tengas configurados ahi tambien
+cubren la database `aibenchef`. Verificar.
+
+Si no hay backups configurados: EasyPanel -> proyecto azoramind -> `postgres` -> Backups
+-> programar diario a las 03:00.
+
+---
+
+## Cuando agregar mas servicios (no ahora)
+
+| Trigger | Que agregar |
+|---|---|
+| Necesitas rate limit serio o queue de jobs | `aibenchef-redis` (Redis template, 1 click) |
+| Empezamos a generar exports PDF/Excel (Fase 4) | `aibenchef-minio` (MinIO template) |
+| Hay 3+ dashboards con queries pesadas | `aibenchef-cube` (Cube.dev imagen) |
+| El scraper SBS tiene que correr automatico mensual | `aibenchef-worker` (App custom desde Git) |
+| El postgres compartido empieza a saturarse | `aibenchef-postgres` dedicado (Postgres template) y migrar data |
+
+Cada uno se agrega cuando duele no tenerlo, no antes.
 
 ---
 
