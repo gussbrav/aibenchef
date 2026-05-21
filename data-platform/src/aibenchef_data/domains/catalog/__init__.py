@@ -11,6 +11,7 @@ from .enums import Grupo, Topico, MES_ABREV_SBS, MES_NOMBRE
 from .periodo import Periodo
 from .entidad import Entidad
 from .repositories.entidades_catalog import EntidadesCatalog
+from .sbs_url import SbsFileRef, SbsUrlBuilder
 
 __all__ = [
     "Grupo",
@@ -20,4 +21,6 @@ __all__ = [
     "Periodo",
     "Entidad",
     "EntidadesCatalog",
+    "SbsFileRef",
+    "SbsUrlBuilder",
 ]
