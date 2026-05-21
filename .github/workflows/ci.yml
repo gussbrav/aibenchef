@@ -7,7 +7,6 @@ on:
     branches: [main, staging]
   workflow_dispatch:
 
-# Cancelar runs anteriores del mismo ref (ahorra minutos)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -22,7 +21,7 @@ env:
 
 jobs:
   web:
-    name: web — Next.js (typecheck + build)
+    name: web — Next.js
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -38,14 +37,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
+          # Sin cache aqui — requiere pnpm-lock.yaml committeado.
+          # Se activa cuando agreguemos el lockfile (proxima iteracion).
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-
-      - name: Lint (Biome)
-        run: pnpm --filter web exec biome check apps/web --reporter=github
-        continue-on-error: true # warning-only mientras estabilizamos el codigo
 
       - name: Type check
         run: pnpm --filter web typecheck
@@ -53,7 +49,6 @@ jobs:
       - name: Build
         run: pnpm --filter web build
         env:
-          # Stubs para que el build no falle por ENV vars exigidas en runtime.
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
           BETTER_AUTH_SECRET: ci-only-secret-32-chars-minimum-length-aaaaaaa
           BETTER_AUTH_URL: https://ci.example.com
@@ -61,7 +56,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
 
   data-platform:
-    name: data-platform — Python (ruff + pytest)
+    name: data-platform — Python
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -72,20 +67,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v3
         with:
-          enable-cache: true
-          cache-dependency-glob: "data-platform/uv.lock"
+          version: latest
 
       - name: Install Python ${{ env.PYTHON_VERSION }}
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
         run: uv sync --frozen
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-        continue-on-error: true # warning-only mientras estabilizamos
 
       - name: Ruff lint
         run: uv run ruff check --output-format=github .
