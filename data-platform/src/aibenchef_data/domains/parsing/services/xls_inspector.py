@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..value_objects.xls_format import detect_xls_format
+from ..value_objects.xls_format import detect_xls_format, hex_preview
 from .xls_reader import XlsSheet, read_xls
 
 
@@ -36,13 +36,23 @@ class XlsInspector:
         if not xls_path.exists():
             return f"[ERROR] No existe: {xls_path}"
 
+        fmt = detect_xls_format(xls_path)
+
         try:
             sheets = read_xls(xls_path)
         except Exception as e:
-            return f"[ERROR] {xls_path.name}: {e}"
+            # Cuando falla, mostrar magic bytes para diagnostico
+            return (
+                f"# {xls_path.name}\n"
+                f"  path:   {xls_path}\n"
+                f"  size:   {xls_path.stat().st_size:,} bytes\n"
+                f"  format: {fmt.value}\n"
+                f"  [ERROR] {e}\n"
+                f"  hex preview (first 32 bytes):\n"
+                f"  {hex_preview(xls_path)}"
+            )
 
         out: list[str] = []
-        fmt = detect_xls_format(xls_path)
         out.append(f"# {xls_path.name}")
         out.append(f"  path:   {xls_path}")
         out.append(f"  size:   {xls_path.stat().st_size:,} bytes")
