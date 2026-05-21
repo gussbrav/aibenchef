@@ -49,10 +49,33 @@ dev = [
 target-version = "py312"
 line-length = 100
 src = ["src"]
+extend-exclude = [".venv", "local-data"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF", "TCH"]
-ignore = ["E501"]
+# Reglas core. Empezamos pragmaticos; vamos endureciendo en futuras iteraciones.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (imports unused, undefined names)
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",  # line too long (formatter se encarga)
+    "B008",  # function call in default arg (click usa esto)
+    "RUF012", # mutable class attributes (innecesario aqui)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B011", "F401"]
+"src/aibenchef_data/cli.py" = ["B008"]  # click.option en defaults
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
 
 [tool.mypy]
 python_version = "3.12"

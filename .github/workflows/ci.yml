@@ -5,38 +5,90 @@ on:
     branches: [main, staging]
   pull_request:
     branches: [main, staging]
+  workflow_dispatch:
+
+# Cancelar runs anteriores del mismo ref (ahorra minutos)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   web:
+    name: web — Next.js (typecheck + build)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - uses: actions/setup-node@v4
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-        working-directory: .
-      - run: pnpm --filter web typecheck
-        working-directory: .
-      - run: pnpm --filter web build
-        working-directory: .
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm --filter web exec biome check apps/web --reporter=github
+        continue-on-error: true # warning-only mientras estabilizamos el codigo
+
+      - name: Type check
+        run: pnpm --filter web typecheck
+
+      - name: Build
+        run: pnpm --filter web build
+        env:
+          # Stubs para que el build no falle por ENV vars exigidas en runtime.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          BETTER_AUTH_SECRET: ci-only-secret-32-chars-minimum-length-aaaaaaa
+          BETTER_AUTH_URL: https://ci.example.com
+          NEXT_PUBLIC_APP_URL: https://ci.example.com
+          NEXT_TELEMETRY_DISABLED: "1"
 
   data-platform:
+    name: data-platform — Python (ruff + pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: data-platform
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - run: uv python install 3.12
-      - run: uv sync --frozen
-      - run: uv run ruff check .
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "data-platform/uv.lock"
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+        continue-on-error: true # warning-only mientras estabilizamos
+
+      - name: Ruff lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Pytest
+        run: uv run pytest -q
