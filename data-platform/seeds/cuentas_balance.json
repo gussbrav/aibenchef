@@ -1,1536 +1,1014 @@
 [
   {
-    "codigo": "BG_0001",
-    "nombre": "Activo",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": null,
-    "orden": 1,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0002",
+    "codigo": "A1",
     "nombre": "DISPONIBLE",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 2,
+    "nivel": 2,
+    "parent_codigo": "A",
+    "orden": 1,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0003",
+    "codigo": "A1.1",
     "nombre": "Caja",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0002",
-    "orden": 3,
+    "nivel": 3,
+    "parent_codigo": "A1",
+    "orden": 2,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0004",
+    "codigo": "A1.2",
     "nombre": "Bancos y Corresponsales",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0002",
-    "orden": 4,
+    "nivel": 3,
+    "parent_codigo": "A1",
+    "orden": 3,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0005",
+    "codigo": "A1.3",
     "nombre": "Canje",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0002",
+    "nivel": 3,
+    "parent_codigo": "A1",
+    "orden": 4,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A1.4",
+    "nombre": "Otros",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A1",
     "orden": 5,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0006",
-    "nombre": "Otros",
+    "codigo": "A2",
+    "nombre": "FONDOS INTERBANCARIOS",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0002",
+    "parent_codigo": "A",
     "orden": 6,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0007",
-    "nombre": "FONDOS INTERBANCARIOS",
+    "codigo": "A3",
+    "nombre": "INVERSIONES NETAS DE PROVISIONES E INGRESOS NO DEVENGADOS",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
+    "nivel": 2,
+    "parent_codigo": "A",
     "orden": 7,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0008",
-    "nombre": "INVERSIONES NETAS DE PROVISIONES",
+    "codigo": "A3.1",
+    "nombre": "Negociables para Intermediación Financiera",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 8,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0009",
+    "codigo": "A3.2",
     "nombre": "Inversiones a Valor Razonable con Cambios en Resultados",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0008",
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 9,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0010",
+    "codigo": "A3.3",
     "nombre": "Inversiones Disponibles para la Venta",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0008",
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 10,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0011",
+    "codigo": "A3.4",
     "nombre": "Inversiones a Vencimiento",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0008",
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 11,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0012",
-    "nombre": "Inversiones en Subsidiarias, Asociadas y Negocios Conjuntos",
+    "codigo": "A3.5",
+    "nombre": "Permanentes",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0008",
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 12,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0013",
-    "nombre": "Inversiones en Commodities",
+    "codigo": "A3.6",
+    "nombre": "Inversiones en subsidiarias y asociadas",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0008",
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 13,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0014",
-    "nombre": "Provisiones",
+    "codigo": "A3.7",
+    "nombre": "Inversiones en Commodities",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0008",
+    "nivel": 3,
+    "parent_codigo": "A3",
     "orden": 14,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0015",
-    "nombre": "CRÉDITOS NETOS DE PROVISIONES Y DE INGRESOS NO DEVENGADOS",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 15,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0016",
-    "nombre": "Vigentes",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 16,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0017",
-    "nombre": "Cuentas Corrientes",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 17,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0018",
-    "nombre": "Tarjetas de Crédito",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 18,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0019",
-    "nombre": "Descuentos",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 19,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0020",
-    "nombre": "Factoring",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 20,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0021",
-    "nombre": "Préstamos",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 21,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0022",
-    "nombre": "Arrendamiento Financiero",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 22,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0023",
-    "nombre": "Hipotecarios para Vivienda",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 23,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0024",
-    "nombre": "Comercio Exterior",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 24,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0025",
-    "nombre": "Créditos por Liquidar",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 25,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0026",
-    "nombre": "Otros",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 26,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0027",
-    "nombre": "Refinanciados y Reestructurados",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 27,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0028",
-    "nombre": "Atrasados",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 28,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0029",
-    "nombre": "Vencidos",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 29,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0030",
-    "nombre": "En Cobranza Judicial",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 30,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0031",
+    "codigo": "A3.8",
     "nombre": "Provisiones",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 31,
+    "nivel": 3,
+    "parent_codigo": "A3",
+    "orden": 15,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0032",
-    "nombre": "Intereses y Comisiones no Devengados",
+    "codigo": "A3.9",
+    "nombre": "Ingresos por Compraventa de Valores no Devengados",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A3",
+    "orden": 16,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A4",
+    "nombre": "CRÉDITOS NETOS DE PROVISIONES E INGRESOS NO DEVENGADOS",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0015",
-    "orden": 32,
+    "parent_codigo": "A",
+    "orden": 17,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0033",
-    "nombre": "CUENTAS POR COBRAR NETAS DE PROVISIONES",
+    "codigo": "A4.1",
+    "nombre": "Vigentes",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 33,
+    "nivel": 3,
+    "parent_codigo": "A4",
+    "orden": 18,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0034",
-    "nombre": "RENDIMIENTOS POR COBRAR",
+    "codigo": "A4.1.1",
+    "nombre": "Cuentas Corrientes",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 34,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 19,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0035",
-    "nombre": "Disponible",
+    "codigo": "A4.1.2",
+    "nombre": "Tarjetas de Crédito",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0034",
-    "orden": 35,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 20,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0036",
-    "nombre": "Fondos Interbancarios",
+    "codigo": "A4.1.3",
+    "nombre": "Descuentos",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0034",
-    "orden": 36,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 21,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0037",
-    "nombre": "Inversiones",
+    "codigo": "A4.1.4",
+    "nombre": "Factoring",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0034",
-    "orden": 37,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 22,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0038",
-    "nombre": "Créditos",
+    "codigo": "A4.1.5",
+    "nombre": "Préstamos",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0034",
-    "orden": 38,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 23,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0039",
-    "nombre": "Cuentas por Cobrar",
+    "codigo": "A4.1.6",
+    "nombre": "Arrendamiento",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0034",
-    "orden": 39,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 24,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0040",
-    "nombre": "BIENES REALIZABLES, RECIBIDOS EN PAGO Y ADJUDICADOS NETOS",
+    "codigo": "A4.1.7",
+    "nombre": "Hipotecarios",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 40,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 25,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0041",
-    "nombre": "INMUEBLES, MOBILIARIO Y EQUIPO NETO",
+    "codigo": "A4.1.8",
+    "nombre": "Comercio Exterior",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 41,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 26,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0042",
-    "nombre": "OTROS  ACTIVOS",
+    "codigo": "A4.1.9",
+    "nombre": "Créditos por Liquidar",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 42,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 27,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0043",
-    "nombre": "TOTAL ACTIVO",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 43,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0044",
-    "nombre": "Tipo de Cambio Contable:  S/ 3,273",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0043",
-    "orden": 44,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0045",
-    "nombre": "Pasivo",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0043",
-    "orden": 45,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0046",
-    "nombre": "OBLIGACIONES CON EL PÚBLICO",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 46,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0047",
-    "nombre": "Depósitos a la Vista",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0046",
-    "orden": 47,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0048",
-    "nombre": "Depósitos de Ahorro",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0046",
-    "orden": 48,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0049",
-    "nombre": "Depósitos a Plazo",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0046",
-    "orden": 49,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0050",
-    "nombre": "Certificados Bancarios y de Depósitos",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0046",
-    "orden": 50,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0051",
-    "nombre": "Cuentas a Plazo",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0046",
-    "orden": 51,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0052",
-    "nombre": "C.T.S.",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 52,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0053",
+    "codigo": "A4.1.10",
     "nombre": "Otros",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0052",
-    "orden": 53,
+    "nivel": 4,
+    "parent_codigo": "A4.1",
+    "orden": 28,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0054",
-    "nombre": "Depósitos Restringidos",
+    "codigo": "A4.2",
+    "nombre": "Refinanciados y Reestructurados",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A4",
+    "orden": 29,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A4.3",
+    "nombre": "Atrasados",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A4",
+    "orden": 30,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A4.3.1",
+    "nombre": "Vencidos",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "A4.3",
+    "orden": 31,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A4.3.2",
+    "nombre": "En Cobranza Judicial",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "A4.3",
+    "orden": 32,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A4.4",
+    "nombre": "Provisiones",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A4",
+    "orden": 33,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A4.5",
+    "nombre": "Intereses y Comisiones  no Devengados",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A4",
+    "orden": 34,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A5",
+    "nombre": "CUENTAS POR COBRAR NETAS DE PROVISIONES",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0052",
-    "orden": 54,
+    "parent_codigo": "A",
+    "orden": 35,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0055",
-    "nombre": "Otras Obligaciones",
+    "codigo": "A6",
+    "nombre": "RENDIMIENTOS DEVENGADOS POR COBRAR",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0052",
-    "orden": 55,
+    "parent_codigo": "A",
+    "orden": 36,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0056",
-    "nombre": "A la vista",
+    "codigo": "A6.1",
+    "nombre": "Disponible",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0052",
-    "orden": 56,
+    "nivel": 3,
+    "parent_codigo": "A6",
+    "orden": 37,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0057",
-    "nombre": "Relacionadas con Inversiones",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0052",
-    "orden": 57,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0058",
-    "nombre": "DEPÓSITOS DEL SISTEMA FINANCIERO Y ORGANISMOS INTERNACIONALES",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 58,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0059",
-    "nombre": "Depósitos a la Vista",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0058",
-    "orden": 59,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0060",
-    "nombre": "Depósitos de Ahorro",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0058",
-    "orden": 60,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0061",
-    "nombre": "Depósitos a Plazo",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0058",
-    "orden": 61,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0062",
-    "nombre": "FONDOS INTERBANCARIOS",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 62,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0063",
-    "nombre": "ADEUDOS Y OBLIGACIONES  FINANCIERAS",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 63,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0064",
-    "nombre": "Instituciones del País",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0063",
-    "orden": 64,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0065",
-    "nombre": "Instituciones del Exterior y Organismos Internacionales",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0063",
-    "orden": 65,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0066",
-    "nombre": "OBLIGACIONES EN CIRCULACIÓN NO SUBORDINADAS",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 66,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0067",
-    "nombre": "Bonos de Arrendamiento Financiero",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0066",
-    "orden": 67,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0068",
-    "nombre": "Instrumentos Hipotecarios",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0066",
-    "orden": 68,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0069",
-    "nombre": "Otros Instrumentos de Deuda",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0066",
-    "orden": 69,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0070",
-    "nombre": "CUENTAS POR PAGAR",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 70,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0071",
-    "nombre": "INTERESES Y OTROS GASTOS  POR PAGAR",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 71,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0072",
-    "nombre": "Obligaciones con el Público",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0071",
-    "orden": 72,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0073",
-    "nombre": "Depósitos del Sistema Financiero y Organismos Internacionales",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0071",
-    "orden": 73,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0074",
+    "codigo": "A6.2",
     "nombre": "Fondos Interbancarios",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0071",
-    "orden": 74,
+    "nivel": 3,
+    "parent_codigo": "A6",
+    "orden": 38,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0075",
+    "codigo": "A6.3",
+    "nombre": "Inversiones",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A6",
+    "orden": 39,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A6.4",
+    "nombre": "Créditos",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A6",
+    "orden": 40,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A6.5",
+    "nombre": "Cuentas por Cobrar",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "A6",
+    "orden": 41,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A7",
+    "nombre": "BIENES REALIZABLES, RECIBIDOS EN PAGO, ADJUDICADOS Y FUERA DE USO NETOS",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "A",
+    "orden": 42,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A8",
+    "nombre": "INMUEBLE, MOBILIARIO Y EQUIPO NETO",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "A",
+    "orden": 43,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A9",
+    "nombre": "OTROS ACTIVOS",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "A",
+    "orden": 44,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1",
+    "nombre": "OBLIGACIONES CON EL PÚBLICO",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 45,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.1",
+    "nombre": "Depósitos A La Vista",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B1",
+    "orden": 46,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.2",
+    "nombre": "Depósitos de Ahorros",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B1",
+    "orden": 47,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.3",
+    "nombre": "Depósitos a Plazo",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B1",
+    "orden": 48,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.3.1",
+    "nombre": "Certificados Bancarios y de Depósitos",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "B1.3",
+    "orden": 49,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.3.2",
+    "nombre": "Cuentas a Plazo",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "B1.3",
+    "orden": 50,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.3.3",
+    "nombre": "C.T.S.",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "B1.3",
+    "orden": 51,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.3.4",
+    "nombre": "Otros",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "B1.3",
+    "orden": 52,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.4",
+    "nombre": "Depósitos Restringidos",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B1",
+    "orden": 53,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.5",
+    "nombre": "Otras Obligaciones",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B1",
+    "orden": 54,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.5.1",
+    "nombre": "A la Vista",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "B1.5",
+    "orden": 55,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B1.5.2",
+    "nombre": "Relacionadas con Inversiones",
+    "tipo_estado": "balance",
+    "nivel": 4,
+    "parent_codigo": "B1.5",
+    "orden": 56,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B2",
+    "nombre": "DEPÓSITOS DEL SISTEMA FINANCIERO Y ORGANISMOS INTERNACIONALES",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 57,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B2.1",
+    "nombre": "Depósitos a la Vista",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B2",
+    "orden": 58,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B2.2",
+    "nombre": "Depósitos de Ahorros",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B2",
+    "orden": 59,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B2.3",
+    "nombre": "Depósitos a Plazo",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B2",
+    "orden": 60,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B3",
+    "nombre": "FONDOS INTERBANCARIOS",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 61,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B4",
+    "nombre": "ADEUDOS Y OBLIGACIONES FINANCIERAS",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 62,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B4.1",
+    "nombre": "Instituciones Financieras del País",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B4",
+    "orden": 63,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B4.2",
+    "nombre": "Empresas del Exterior y Organismos Internacionales",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B4",
+    "orden": 64,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B5",
+    "nombre": "OBLIGACIONES EN CIRCULACIÓN NO SUBORDINADAS",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 65,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B5.1",
+    "nombre": "Bonos de Arrendamiento Financiero",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B5",
+    "orden": 66,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B5.2",
+    "nombre": "Instrumentos Hipotecarios",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B5",
+    "orden": 67,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B5.3",
+    "nombre": "Otros Instrumentos de Deuda",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B5",
+    "orden": 68,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B6",
+    "nombre": "CUENTAS POR PAGAR NETAS",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 69,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B7",
+    "nombre": "INTERESES Y OTROS GASTOS DEVENGADOS POR PAGAR",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 70,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B7.1",
+    "nombre": "Obligaciones con el Público",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B7",
+    "orden": 71,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B7.2",
+    "nombre": "Depósitos del Sistema Financiero y Organismos Internacionales",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B7",
+    "orden": 72,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B7.3",
+    "nombre": "Fondos Interbancarios",
+    "tipo_estado": "balance",
+    "nivel": 3,
+    "parent_codigo": "B7",
+    "orden": 73,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B7.4",
     "nombre": "Adeudos y Obligaciones Financieras",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0071",
-    "orden": 75,
+    "nivel": 3,
+    "parent_codigo": "B7",
+    "orden": 74,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0076",
+    "codigo": "B7.5",
     "nombre": "Obligaciones en Circulación no Subordinadas",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0071",
-    "orden": 76,
+    "nivel": 3,
+    "parent_codigo": "B7",
+    "orden": 75,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0077",
+    "codigo": "B7.6",
     "nombre": "Cuentas por Pagar",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0071",
-    "orden": 77,
+    "nivel": 3,
+    "parent_codigo": "B7",
+    "orden": 76,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0078",
+    "codigo": "B8",
     "nombre": "OTROS PASIVOS",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 78,
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 77,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0079",
+    "codigo": "B9",
     "nombre": "PROVISIONES",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 79,
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 78,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0080",
+    "codigo": "B9.1",
     "nombre": "Créditos Indirectos",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0079",
-    "orden": 80,
+    "nivel": 3,
+    "parent_codigo": "B9",
+    "orden": 79,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0081",
+    "codigo": "B9.2",
     "nombre": "Otras Provisiones",
     "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0079",
-    "orden": 81,
+    "nivel": 3,
+    "parent_codigo": "B9",
+    "orden": 80,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0082",
+    "codigo": "B10",
     "nombre": "OBLIGACIONES EN CIRCULACIÓN SUBORDINADAS 1/",
     "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 82,
+    "nivel": 2,
+    "parent_codigo": "B",
+    "orden": 81,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0083",
-    "nombre": "TOTAL PASIVO",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 83,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0084",
-    "nombre": "PATRIMONIO",
-    "tipo_estado": "balance",
-    "nivel": 1,
-    "parent_codigo": null,
-    "orden": 84,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0085",
+    "codigo": "C1",
     "nombre": "Capital Social",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0084",
-    "orden": 85,
+    "parent_codigo": "C",
+    "orden": 82,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0086",
+    "codigo": "C2",
+    "nombre": "Capital Adicional y Ajustes al Patrimonio",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "C",
+    "orden": 83,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "C3",
     "nombre": "Capital Adicional",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0084",
-    "orden": 86,
+    "parent_codigo": "C",
+    "orden": 84,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0087",
+    "codigo": "C4",
     "nombre": "Reservas",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0084",
-    "orden": 87,
+    "parent_codigo": "C",
+    "orden": 85,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0088",
+    "codigo": "C5",
     "nombre": "Ajustes al Patrimonio",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0084",
-    "orden": 88,
+    "parent_codigo": "C",
+    "orden": 86,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0089",
+    "codigo": "C6",
     "nombre": "Resultados Acumulados",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0084",
-    "orden": 89,
+    "parent_codigo": "C",
+    "orden": 87,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0090",
-    "nombre": "Resultado Neto del Ejercicio",
+    "codigo": "C7",
+    "nombre": "Resultados no realizados",
     "tipo_estado": "balance",
     "nivel": 2,
-    "parent_codigo": "BG_0084",
-    "orden": 90,
+    "parent_codigo": "C",
+    "orden": 88,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0091",
-    "nombre": "TOTAL PASIVO Y PATRIMONIO",
+    "codigo": "C8",
+    "nombre": "Resultados Netos del Ejercicio",
+    "tipo_estado": "balance",
+    "nivel": 2,
+    "parent_codigo": "C",
+    "orden": 89,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "A",
+    "nombre": "A",
+    "tipo_estado": "balance",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 90,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": null
+  },
+  {
+    "codigo": "B",
+    "nombre": "B",
     "tipo_estado": "balance",
     "nivel": 1,
     "parent_codigo": null,
     "orden": 91,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
+    "aplica_a": [],
     "categoria": null
   },
   {
-    "codigo": "BG_0092",
-    "nombre": "CONTINGENTES",
+    "codigo": "C",
+    "nombre": "C",
     "tipo_estado": "balance",
     "nivel": 1,
     "parent_codigo": null,
     "orden": 92,
     "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0093",
-    "nombre": "Avales, Cartas Fianza, Cartas de Crédito y Aceptaciones Bancarias",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0092",
-    "orden": 93,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0094",
-    "nombre": "Líneas de Crédito no Utilizadas y Créditos Concedidos no Desembolsados",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0092",
-    "orden": 94,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0095",
-    "nombre": "Instrumentos Financieros Derivados",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0092",
-    "orden": 95,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0096",
-    "nombre": "Otras Cuentas Contingentes",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0092",
-    "orden": 96,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0097",
-    "nombre": "Tipo de Cambio Contable:  S/ 3,273",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0092",
-    "orden": 97,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac",
-      "crac",
-      "edpyme"
-    ],
-    "categoria": null
-  },
-  {
-    "codigo": "BG_0098",
-    "nombre": "1/ Incluye gastos devengados por pagar.",
-    "tipo_estado": "balance",
-    "nivel": 2,
-    "parent_codigo": "BG_0092",
-    "orden": 98,
-    "signo": 1,
-    "aplica_a": [
-      "banca_multiple",
-      "cmac"
-    ],
+    "aplica_a": [],
     "categoria": null
   }
 ]

@@ -158,6 +158,36 @@ def catalog_extract_canonical(
         click.echo(f"  {cat:<13} -> {p}")
 
 
+@catalog.command("seed-dim-cuenta")
+@click.option(
+    "--seeds-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=str),
+    default="./seeds",
+    help="Carpeta con cuentas_balance.json y cuentas_resultados.json.",
+)
+def catalog_seed_dim_cuenta(seeds_dir: str) -> None:
+    """Pobla dw.dim_cuenta desde los seeds JSON (idempotente, UPSERT)."""
+    from pathlib import Path as _P
+
+    import asyncio
+
+    from aibenchef_data.domains.loading import DimCuentaSeeder
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with connection() as conn:
+                seeder = DimCuentaSeeder(conn)
+                n = await seeder.seed_from_json(_P(seeds_dir))
+                await conn.commit()
+                click.echo(f"# dw.dim_cuenta: {n} filas upserted desde {seeds_dir}")
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
+
+
 @catalog.command("urls")
 @click.argument("periodo", type=str)
 @click.option("--grupo", type=click.Choice([g.value for g in Grupo]), default=None)
@@ -271,6 +301,56 @@ def ingest(periodo: str | None, grupo: str | None, topico: str | None) -> None:
     log.warning("ingest.partial", message="Por ahora solo corre scrape. Parser y loader en Fase 1.4/1.5.")
     ctx = click.get_current_context()
     ctx.invoke(scrape, periodo=periodo, grupo=grupo, topico=topico, dry_run=False, force=False)
+
+
+# ============================================================================
+# import — carga de archivos al raw.* schema en Postgres
+# ============================================================================
+
+
+@main.group("import")
+def import_grp() -> None:
+    """Comandos de carga de datos a raw.* en Postgres."""
+
+
+@import_grp.command("base-eeff")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+)
+@click.option("--bg-sheet", type=str, default="BG")
+@click.option("--er-sheet", type=str, default="ER")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_eeff(path: str, bg_sheet: str, er_sheet: str, batch_size: int) -> None:
+    """Bootstrap historico: cargar BASE EE.FF..xlsx a raw.eeff_observacion."""
+    from pathlib import Path as _P
+
+    import asyncio
+
+    from aibenchef_data.domains.loading import BaseEeffImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with connection() as conn:
+                importer = BaseEeffImporter(conn, batch_size=batch_size)
+                result = await importer.import_file(
+                    _P(path), bg_sheet=bg_sheet, er_sheet=er_sheet
+                )
+                await conn.commit()
+                click.echo(
+                    f"# Import {result.source_file}:\n"
+                    f"  rows_inserted: {result.rows_inserted:,}\n"
+                    f"  duration:      {result.duration_seconds:.1f}s\n"
+                    f"  errors:        {len(result.errors)}"
+                )
+                for err in result.errors:
+                    click.echo(f"  ERROR: {err}")
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
 
 
 # ============================================================================
