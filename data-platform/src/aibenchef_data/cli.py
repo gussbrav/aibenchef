@@ -101,10 +101,10 @@ def catalog_periodo(periodo: str | None) -> None:
 
 @catalog.command("extract-canonical")
 @click.option(
-    "--from-dir",
-    type=click.Path(exists=True, file_okay=False, path_type=str),
+    "--base-eeff",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
     required=True,
-    help="Directorio donde estan los CONSOLIDADO BALANCE / GYP y CABECERAS INDICADORES.",
+    help="Ruta al archivo BASE EE.FF..xlsx de Gus (fila 0 hoja BG y ER tienen los codigos canonicos).",
 )
 @click.option(
     "--out-dir",
@@ -112,28 +112,45 @@ def catalog_periodo(periodo: str | None) -> None:
     default="./seeds",
     help="Donde escribir los seeds JSON (cuentas_balance.json, etc).",
 )
-def catalog_extract_canonical(from_dir: str, out_dir: str) -> None:
-    """Extraer plan de cuentas canonico desde los archivos consolidados de Gus."""
+@click.option(
+    "--bg-sheet",
+    type=str,
+    default="BG",
+    help="Nombre de la hoja Balance General (default: BG).",
+)
+@click.option(
+    "--er-sheet",
+    type=str,
+    default="ER",
+    help="Nombre de la hoja Estado de Resultados (default: ER).",
+)
+def catalog_extract_canonical(
+    base_eeff: str, out_dir: str, bg_sheet: str, er_sheet: str
+) -> None:
+    """Extraer plan de cuentas canonico con codigos reales SBS (A1.1, B2, etc).
+
+    Lee la fila 0 de las hojas BG y ER de BASE EE.FF..xlsx. Cada columna ahi
+    tiene formato '(A1.1) Caja' = codigo regulatorio real + nombre.
+    """
     from pathlib import Path as _P
 
     from aibenchef_data.domains.catalog.repositories.cuentas_canonicas_extractor import (
-        extract_all,
+        extract_from_base_eeff,
         write_seeds,
     )
 
-    src = _P(from_dir)
+    src = _P(base_eeff)
     dest = _P(out_dir)
 
-    click.echo(f"# Extrayendo plan canonico desde {src}")
-    seeds = extract_all(knowledge_base_dir=src)
+    click.echo(f"# Extrayendo plan canonico desde {src.name}")
+    seeds = extract_from_base_eeff(src, bg_sheet_name=bg_sheet, er_sheet_name=er_sheet)
 
     for categoria, items in seeds.items():
-        n_padres = sum(1 for c in items if c["nivel"] == 1)
-        n_hijas = sum(1 for c in items if c["nivel"] == 2)
-        click.echo(
-            f"  {categoria:<13} {len(items):>4} cuentas  "
-            f"({n_padres} padres + {n_hijas} hijas)"
-        )
+        by_nivel: dict[int, int] = {}
+        for c in items:
+            by_nivel[c.nivel] = by_nivel.get(c.nivel, 0) + 1
+        niveles_str = " ".join(f"L{lvl}={n}" for lvl, n in sorted(by_nivel.items()))
+        click.echo(f"  {categoria:<13} {len(items):>4} cuentas  ({niveles_str})")
 
     paths = write_seeds(seeds, out_dir=dest)
     click.echo("\n# Escritos:")

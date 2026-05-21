@@ -1,0 +1,1022 @@
+[
+  {
+    "codigo": "ER_0001",
+    "nombre": "BANCOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 1,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0002",
+    "nombre": "2018-05-31 00:00:00",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0001",
+    "orden": 2,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0003",
+    "nombre": "(En  Miles de Soles)",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0001",
+    "orden": 3,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0004",
+    "nombre": "INGRESOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 4,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0005",
+    "nombre": "Disponible",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 5,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0006",
+    "nombre": "Fondos Interbancarios",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 6,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0007",
+    "nombre": "Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 7,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0008",
+    "nombre": "Créditos Directos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 8,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0009",
+    "nombre": "Ganancias por Valorización de Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 9,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0010",
+    "nombre": "Ganancias por Inversiones en Subsidiarias, Asociadas y Negocios Conjuntos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 10,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0011",
+    "nombre": "Diferencia de Cambio",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 11,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0012",
+    "nombre": "Ganancias en Productos Financieros Derivados",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 12,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0013",
+    "nombre": "Otros",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0004",
+    "orden": 13,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0014",
+    "nombre": "GASTOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 14,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0015",
+    "nombre": "Obligaciones con el Público",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 15,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0016",
+    "nombre": "Depósitos del Sistema Financiero y Organismos Financieros Internacionales",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 16,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0017",
+    "nombre": "Fondos Interbancarios",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 17,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0018",
+    "nombre": "Adeudos y Obligaciones Financieras",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 18,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0019",
+    "nombre": "Obligaciones en Circulación no Subordinadas",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 19,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0020",
+    "nombre": "Obligaciones en Circulación Subordinadas",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 20,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0021",
+    "nombre": "Pérdida por Valorización de Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 21,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0022",
+    "nombre": "Pérdidas por Inversiones en Subsidiarias, Asociadas y Negocios Conjuntos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 22,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0023",
+    "nombre": "Primas al Fondo de Seguro de Depósitos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 23,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0024",
+    "nombre": "Diferencia de Cambio",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 24,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0025",
+    "nombre": "Pérdidas en Productos Financieros Derivados",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 25,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0026",
+    "nombre": "Otros",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0014",
+    "orden": 26,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0027",
+    "nombre": "MARGEN FINANCIERO BRUTO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 27,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0028",
+    "nombre": "PROVISIONES PARA CRÉDITOS DIRECTOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 28,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0029",
+    "nombre": "MARGEN FINANCIERO NETO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 29,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0030",
+    "nombre": "INGRESOS POR SERVICIOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 30,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0031",
+    "nombre": "Cuentas por Cobrar",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0030",
+    "orden": 31,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0032",
+    "nombre": "Créditos Indirectos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0030",
+    "orden": 32,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0033",
+    "nombre": "Fideicomisos y Comisiones de Confianza",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0030",
+    "orden": 33,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0034",
+    "nombre": "Ingresos Diversos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0030",
+    "orden": 34,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0035",
+    "nombre": "GASTOS POR SERVICIOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 35,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0036",
+    "nombre": "Cuentas por Pagar",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0035",
+    "orden": 36,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0037",
+    "nombre": "Créditos Indirectos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0035",
+    "orden": 37,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0038",
+    "nombre": "Fideicomisos y Comisiones de Confianza",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0035",
+    "orden": 38,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0039",
+    "nombre": "Gastos Diversos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0035",
+    "orden": 39,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0040",
+    "nombre": "UTILIDAD (PÉRDIDA) POR VENTA DE CARTERA",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 40,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0041",
+    "nombre": "MARGEN OPERACIONAL",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 41,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0042",
+    "nombre": "GASTOS ADMINISTRATIVOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 42,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0043",
+    "nombre": "Personal",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0042",
+    "orden": 43,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0044",
+    "nombre": "Directorio",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0042",
+    "orden": 44,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0045",
+    "nombre": "Servicios Recibidos de Terceros",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0042",
+    "orden": 45,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0046",
+    "nombre": "Impuestos y Contribuciones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0042",
+    "orden": 46,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0047",
+    "nombre": "MARGEN OPERACIONAL NETO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 47,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0048",
+    "nombre": "PROVISIONES, DEPRECIACIÓN Y AMORTIZACIÓN",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 48,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0049",
+    "nombre": "Provisones para Créditos Indirectos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 49,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0050",
+    "nombre": "Provisiones por Pérdida por Deterioro de Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 50,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0051",
+    "nombre": "Provisiones para Incobrabilidad de Cuentas por Cobrar",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 51,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0052",
+    "nombre": "Provisiones para Bienes Realizables, Recibidos en Pago y Adjudicados",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 52,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0053",
+    "nombre": "Otras Provisiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 53,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0054",
+    "nombre": "Depreciación",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 54,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0055",
+    "nombre": "Amortización",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0048",
+    "orden": 55,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0056",
+    "nombre": "OTROS INGRESOS Y GASTOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 56,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0057",
+    "nombre": "RESULTADO ANTES DE IMPUESTO A LA RENTA",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 57,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0058",
+    "nombre": "IMPUESTO A LA RENTA",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 58,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0059",
+    "nombre": "RESULTADO NETO DEL EJERCICIO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 59,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0060",
+    "nombre": "Tipo de Cambio Contable: S/ 3.273",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0059",
+    "orden": 60,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": null
+  },
+  {
+    "codigo": "ER_0061",
+    "nombre": "Tipo de Cambio Contable:  S/ 3,273",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "ER_0059",
+    "orden": 61,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera"
+    ],
+    "categoria": null
+  }
+]

@@ -1,0 +1,738 @@
+[
+  {
+    "codigo": "IND_0001",
+    "nombre": "CABECERA",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 1,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CABECERA"
+  },
+  {
+    "codigo": "IND_0002",
+    "nombre": "SOLVENCIA",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 2,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "SOLVENCIA"
+  },
+  {
+    "codigo": "IND_0003",
+    "nombre": "Ratio de Capital Global (al 30/04/2019)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0002",
+    "orden": 3,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": "SOLVENCIA"
+  },
+  {
+    "codigo": "IND_0004",
+    "nombre": "Apalancamiento Global ( N° de veces )",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0002",
+    "orden": 4,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "SOLVENCIA"
+  },
+  {
+    "codigo": "IND_0005",
+    "nombre": "Apalancamiento Global Ajustado ( N° de veces ) **",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0002",
+    "orden": 5,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "SOLVENCIA"
+  },
+  {
+    "codigo": "IND_0006",
+    "nombre": "Pasivo Total / Capital Social y Reservas ( N° de veces )",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0002",
+    "orden": 6,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "SOLVENCIA"
+  },
+  {
+    "codigo": "IND_0007",
+    "nombre": "CALIDAD DE ACTIVOS",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 7,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0008",
+    "nombre": "Cartera Atrasada / Créditos Directos",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 8,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0009",
+    "nombre": "Créditos Atrasados con más de 90 días de atraso / Créditos Directos",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 9,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0010",
+    "nombre": "Cartera Atrasada M.N. / Créditos Directos M.N.",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 10,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0011",
+    "nombre": "Cartera Atrasada M.E. / Créditos Directos M.E.",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 11,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0012",
+    "nombre": "Créditos Refinanciados y Reestructurados / Créditos Directos",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 12,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0013",
+    "nombre": "Provisiones / Créditos Atrasados",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 13,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0014",
+    "nombre": "Provisiones / Cartera Atrasada",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 14,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0015",
+    "nombre": "Cartera de Alto Riesgo / Créditos Directos (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 15,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0016",
+    "nombre": "Activo Rentable / Activo Total",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 16,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0017",
+    "nombre": "Cartera Pesada / Créditos Directos y Contingentes (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0007",
+    "orden": 17,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "CALIDAD DE ACTIVOS"
+  },
+  {
+    "codigo": "IND_0018",
+    "nombre": "EFICIENCIA Y GESTIÓN",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 18,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0019",
+    "nombre": "Financiamiento a personas vinculadas / Patrimonio Efectivo",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 19,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0020",
+    "nombre": "Gastos de Administración Anualizados / Activo Rentable Promedio",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 20,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0021",
+    "nombre": "Gastos de Operación / Margen Financiero Total",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 21,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0022",
+    "nombre": "Gastos de Administración Anualizados/ Créditos Directos e Indirectos Promedio (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 22,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0023",
+    "nombre": "Gastos de Operación Anualizados / Margen Financiero Total Anualizado (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 23,
+    "signo": 1,
+    "aplica_a": [],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0024",
+    "nombre": "Ingresos Financieros / Ingresos Totales",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 24,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0025",
+    "nombre": "Ingresos Financieros Anualizados / Activo Productivo Promedio",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 25,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0026",
+    "nombre": "Créditos Directos / Personal ( S/. Miles )",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 26,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0027",
+    "nombre": "Créditos Directos / Empleados (Miles S/.)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 27,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0028",
+    "nombre": "Créditos Directos / Número de Oficinas (Miles S/.)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 28,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0029",
+    "nombre": "Depósitos / Número de Oficinas ( S/. Miles )",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 29,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0030",
+    "nombre": "Depósitos/ Créditos Directos (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 30,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0031",
+    "nombre": "N° de Sanciones a la Empresa (*)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 31,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0032",
+    "nombre": "N° de Sanciones a Accionistas, Directores y Trabajadores (*)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0018",
+    "orden": 32,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "EFICIENCIA Y GESTIÓN"
+  },
+  {
+    "codigo": "IND_0033",
+    "nombre": "RENTABILIDAD",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 33,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "RENTABILIDAD"
+  },
+  {
+    "codigo": "IND_0034",
+    "nombre": "Utilidad Neta Anualizada / Patrimonio Promedio",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0033",
+    "orden": 34,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "RENTABILIDAD"
+  },
+  {
+    "codigo": "IND_0035",
+    "nombre": "Utilidad Neta Anualizada / Activo Promedio",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0033",
+    "orden": 35,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "RENTABILIDAD"
+  },
+  {
+    "codigo": "IND_0036",
+    "nombre": "Margen Financiero Bruto / Ingresos Financieros",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0033",
+    "orden": 36,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "RENTABILIDAD"
+  },
+  {
+    "codigo": "IND_0037",
+    "nombre": "Ingresos Financieros / Ingresos Totales",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0033",
+    "orden": 37,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera"
+    ],
+    "categoria": "RENTABILIDAD"
+  },
+  {
+    "codigo": "IND_0038",
+    "nombre": "Ingresos Financieros / Activo Rentable",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0033",
+    "orden": 38,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "RENTABILIDAD"
+  },
+  {
+    "codigo": "IND_0039",
+    "nombre": "LIQUIDEZ",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 39,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0040",
+    "nombre": "Ratio de Liquidez en M.N.",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 40,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0041",
+    "nombre": "Ratio de Liquidez en M.E.",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 41,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0042",
+    "nombre": "Ratio de Liquidez Ajustado en M.N.",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 42,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0043",
+    "nombre": "Ratio de Liquidez Ajustado en M.E.",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 43,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0044",
+    "nombre": "Caja y Bancos M.N. / Obligaciones a la Vista M. N. ( N° de veces )",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 44,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0045",
+    "nombre": "Caja y Bancos en M.E. / Obligaciones a la Vista M.E. ( N° de veces)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 45,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0046",
+    "nombre": "Adeudos / Pasivo Total (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 46,
+    "signo": 1,
+    "aplica_a": [
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0047",
+    "nombre": "Disponible / Activo Total (%)",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0039",
+    "orden": 47,
+    "signo": 1,
+    "aplica_a": [
+      "edpyme"
+    ],
+    "categoria": "LIQUIDEZ"
+  },
+  {
+    "codigo": "IND_0048",
+    "nombre": "POSICIÓN EN MONEDA EXTRANJERA",
+    "tipo_estado": "indicador",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 48,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "financiera",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "POSICIÓN EN MONEDA EXTRANJERA"
+  },
+  {
+    "codigo": "IND_0049",
+    "nombre": "Posición Global en M.E. / Patrimonio Efectivo",
+    "tipo_estado": "indicador",
+    "nivel": 2,
+    "parent_codigo": "IND_0048",
+    "orden": 49,
+    "signo": 1,
+    "aplica_a": [
+      "banca_multiple",
+      "cmac",
+      "crac",
+      "edpyme"
+    ],
+    "categoria": "POSICIÓN EN MONEDA EXTRANJERA"
+  }
+]
