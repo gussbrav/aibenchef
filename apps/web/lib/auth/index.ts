@@ -15,6 +15,15 @@ export const auth = betterAuth({
     },
   }),
 
+  // Postgres genera UUIDs via gen_random_uuid() (defaultRandom() en Drizzle).
+  // Sin esto, Better Auth genera IDs como string random, lo que rompe los
+  // INSERT contra columnas UUID (-> 422 FAILED_TO_CREATE_USER).
+  advanced: {
+    database: {
+      generateId: false,
+    },
+  },
+
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false, // activar despues con Resend
