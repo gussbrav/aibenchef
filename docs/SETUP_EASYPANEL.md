@@ -8,6 +8,24 @@ Reemplaza el deploy manual con `docker-compose.production.yml` + `Caddyfile`
 
 ---
 
+## Convencion de nombres en EasyPanel (importante)
+
+EasyPanel separa dos cosas:
+
+| Concepto | Ejemplo | Donde se usa |
+|---|---|---|
+| **Nombre del servicio** (corto) | `aibenchef-postgres` | En la UI de EasyPanel, en el nombre que ves en el sidebar |
+| **Hostname interno** (resolucion DNS dentro de la red docker) | `aibenchef_aibenchef-postgres` | En las variables de entorno donde un servicio se conecta a otro |
+
+El hostname interno es `<proyecto>_<servicio>`. Ejemplo del CRM Palma Rio que ya tenes:
+`azoramind_crm-azoramind:8002`.
+
+Asi que en este doc:
+- Al crear el servicio uso el **nombre corto** (`aibenchef-postgres`).
+- En `DATABASE_URL` y similares uso el **hostname interno** (`aibenchef_aibenchef-postgres`).
+
+---
+
 ## Antes de empezar
 
 ### 1. Cloudflare DNS
@@ -31,6 +49,8 @@ Panel.azoramind.com -> Panel. Confirmar al menos 4 GB libres. Aibenchef necesita
 - MinIO: 256 MB
 - **Total**: ~3-4 GB en uso normal
 
+Tu VPS tiene 17 GB libres -> holgura tranquila.
+
 ---
 
 ## Paso 1: crear proyecto `aibenchef` en EasyPanel
@@ -50,19 +70,22 @@ Dentro del proyecto `aibenchef`, click **"+"** -> **Plantilla**.
 ### 2.1 Postgres
 - Tipo: PostgreSQL
 - Version: **16**
-- Nombre: `aibenchef-postgres`
+- Nombre del servicio: `aibenchef-postgres`
 - Password: dejar autogenerar y copiar (la usaremos en API)
 - Volumen: persistente
 - Recursos: por defecto, ajustar despues si hace falta
 
+Hostname interno resultante: `aibenchef_aibenchef-postgres:5432`
+
 ### 2.2 Redis
 - Tipo: Redis
-- Nombre: `aibenchef-redis`
-- Por defecto basta
+- Nombre del servicio: `aibenchef-redis`
+
+Hostname interno: `aibenchef_aibenchef-redis:6379`
 
 ### 2.3 MinIO
 - Tipo: MinIO (o si no esta como template, usar imagen `minio/minio:latest`)
-- Nombre: `aibenchef-minio`
+- Nombre del servicio: `aibenchef-minio`
 - Variables:
   - `MINIO_ROOT_USER`: `aibenchef-admin`
   - `MINIO_ROOT_PASSWORD`: generar fuerte (`openssl rand -hex 32`)
@@ -70,12 +93,14 @@ Dentro del proyecto `aibenchef`, click **"+"** -> **Plantilla**.
 - Volumen: persistente en `/data`
 - Puertos: `9000` (API S3) y `9001` (console web)
 
+Hostname interno: `aibenchef_aibenchef-minio:9000` (S3) y `:9001` (console).
+
 ---
 
 ## Paso 3: aplicar migraciones SQL
 
-EasyPanel -> proyecto `aibenchef` -> `aibenchef-postgres` -> Consola (o usar `pgadmin` ya
-existente).
+EasyPanel -> proyecto `aibenchef` -> `aibenchef-postgres` -> Consola (o usar `pgadmin` que ya
+tenes corriendo y conectarte a `aibenchef_aibenchef-postgres`).
 
 ```sql
 -- Crear DB (si EasyPanel no la creo)
@@ -89,13 +114,12 @@ Luego aplicar las 4 migraciones en orden desde
 Alternativa por SSH al VPS:
 
 ```bash
-docker exec -i aibenchef_aibenchef-postgres_1 psql -U postgres -d aibenchef < V001__schemas.sql
-docker exec -i aibenchef_aibenchef-postgres_1 psql -U postgres -d aibenchef < V002__auth_tenant_billing.sql
-docker exec -i aibenchef_aibenchef-postgres_1 psql -U postgres -d aibenchef < V003__dw_dimensions.sql
-docker exec -i aibenchef_aibenchef-postgres_1 psql -U postgres -d aibenchef < V004__dw_fact_observacion.sql
+# El nombre exacto del container lo ves con: docker ps | grep aibenchef-postgres
+docker exec -i <container> psql -U postgres -d aibenchef < V001__schemas.sql
+docker exec -i <container> psql -U postgres -d aibenchef < V002__auth_tenant_billing.sql
+docker exec -i <container> psql -U postgres -d aibenchef < V003__dw_dimensions.sql
+docker exec -i <container> psql -U postgres -d aibenchef < V004__dw_fact_observacion.sql
 ```
-
-(El nombre exacto del container lo ves con `docker ps`).
 
 ---
 
@@ -103,35 +127,35 @@ docker exec -i aibenchef_aibenchef-postgres_1 psql -U postgres -d aibenchef < V0
 
 EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
-- Nombre: `aibenchef-cube`
+- Nombre del servicio: `aibenchef-cube`
 - Origen: **Imagen Docker**
 - Imagen: `cubejs/cube:latest`
 - Variables:
   ```
   CUBEJS_DEV_MODE=false
   CUBEJS_DB_TYPE=postgres
-  CUBEJS_DB_HOST=aibenchef-postgres
+  CUBEJS_DB_HOST=aibenchef_aibenchef-postgres
   CUBEJS_DB_PORT=5432
   CUBEJS_DB_NAME=aibenchef
   CUBEJS_DB_USER=postgres
   CUBEJS_DB_PASS=<password de aibenchef-postgres>
   CUBEJS_API_SECRET=<openssl rand -hex 32>
-  CUBEJS_REDIS_URL=redis://aibenchef-redis:6379
+  CUBEJS_REDIS_URL=redis://aibenchef_aibenchef-redis:6379
   CUBEJS_WEB_SOCKETS=true
   CUBEJS_LOG_LEVEL=warn
   ```
 - Volumenes:
   - Mount: `/cube/conf` <- desde Git (mas adelante) o copiar manual `data-platform/cube/`
 - Puerto interno: `4000`
-- **No** exponer publicamente — solo lo consume `aibenchef-api`.
+- **Dominio publico:** NO agregar — solo lo consume `aibenchef-api` por hostname interno.
 
 ---
 
-## Paso 5: crear `aibenchef-api` (App custom desde GitHub)
+## Paso 5: crear `aibenchef-api` (App desde GitHub)
 
 EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
-- Nombre: `aibenchef-api`
+- Nombre del servicio: `aibenchef-api`
 - Origen: **GitHub**
 - Repo: `gussbrav/aibenchef`
 - Branch: `main`
@@ -142,14 +166,14 @@ EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 - Variables:
   ```
   APP_ENV=production
-  DATABASE_URL=postgresql+asyncpg://postgres:<pwd>@aibenchef-postgres:5432/aibenchef
-  REDIS_URL=redis://aibenchef-redis:6379
-  CUBEJS_API_URL=http://aibenchef-cube:4000/cubejs-api/v1
+  DATABASE_URL=postgresql+asyncpg://postgres:<pwd>@aibenchef_aibenchef-postgres:5432/aibenchef
+  REDIS_URL=redis://aibenchef_aibenchef-redis:6379
+  CUBEJS_API_URL=http://aibenchef_aibenchef-cube:4000/cubejs-api/v1
   CUBEJS_API_SECRET=<mismo que en cube>
   APP_URL=https://aibenchef.azoramind.com
   API_URL=https://api.aibenchef.azoramind.com
   SECRET_KEY=<openssl rand -hex 64>
-  MINIO_ENDPOINT=aibenchef-minio:9000
+  MINIO_ENDPOINT=aibenchef_aibenchef-minio:9000
   MINIO_ACCESS_KEY=aibenchef-admin
   MINIO_SECRET_KEY=<pwd de minio>
   MINIO_BUCKET=aibenchef
@@ -157,15 +181,17 @@ EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
   SENTRY_DSN=<de glitchtip — ver paso 8>
   ```
 - Puerto interno: `8000`
-- Dominio: **api.aibenchef.azoramind.com**, HTTPS automatico (EasyPanel pide cert Let's Encrypt solo).
+- Dominios:
+  1. (auto) `https://aibenchef-aibenchef-api.l7weu8.easypanel.host` -> usar para probar antes del DNS
+  2. (custom) `https://api.aibenchef.azoramind.com` -> `http://aibenchef_aibenchef-api:8000`
 
 ---
 
-## Paso 6: crear `aibenchef-web` (App custom desde GitHub)
+## Paso 6: crear `aibenchef-web` (App desde GitHub)
 
 EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
 
-- Nombre: `aibenchef-web`
+- Nombre del servicio: `aibenchef-web`
 - Origen: **GitHub**
 - Repo: `gussbrav/aibenchef`
 - Branch: `main`
@@ -181,32 +207,47 @@ EasyPanel -> proyecto `aibenchef` -> **"+"** -> **App**.
   NEXT_PUBLIC_SENTRY_DSN=<de glitchtip>
   ```
 - Puerto interno: `3000`
-- Dominio: **aibenchef.azoramind.com**, HTTPS automatico.
+- Dominios:
+  1. (auto) `https://aibenchef-aibenchef-web.l7weu8.easypanel.host` -> para probar antes del DNS
+  2. (custom) `https://aibenchef.azoramind.com` -> `http://aibenchef_aibenchef-web:3000`
 
 ---
 
-## Paso 7: configurar dominios y TLS
+## Resumen visual de dominios a agregar en EasyPanel
 
-EasyPanel hace esto automatico cuando agregas el dominio al servicio:
-- Genera config Traefik
+| Servicio | Puerto interno | Dominio publico | Hostname interno destino |
+|---|---|---|---|
+| `aibenchef-postgres` | 5432 | (no) | `aibenchef_aibenchef-postgres:5432` |
+| `aibenchef-redis` | 6379 | (no) | `aibenchef_aibenchef-redis:6379` |
+| `aibenchef-minio` | 9000 | `storage.aibenchef.azoramind.com` | `aibenchef_aibenchef-minio:9000` |
+| `aibenchef-minio` | 9001 | `storage-console.aibenchef.azoramind.com` | `aibenchef_aibenchef-minio:9001` |
+| `aibenchef-cube` | 4000 | (no — interno) | `aibenchef_aibenchef-cube:4000` |
+| `aibenchef-api` | 8000 | `api.aibenchef.azoramind.com` | `aibenchef_aibenchef-api:8000` |
+| `aibenchef-web` | 3000 | `aibenchef.azoramind.com` | `aibenchef_aibenchef-web:3000` |
+
+---
+
+## Paso 7: configurar TLS
+
+EasyPanel + Traefik lo hacen automatico cuando agregas el dominio custom:
 - Solicita cert Let's Encrypt
 - Renueva auto cada 60 dias
 
 Si falla TLS al primer intento, verificar:
-- CNAME en Cloudflare apunta a `azoramind.com` Y esta en "Solo DNS" (nube gris)
-- Puerto 80 abierto en firewall (necesario para HTTP-01 challenge)
+- CNAME en Cloudflare apunta a `azoramind.com` Y esta en "Solo DNS" (nube gris).
+- Puerto 80 abierto en el firewall (HTTP-01 challenge).
 
 ---
 
 ## Paso 8: integrar Glitchtip (Sentry self-hosted)
 
-Glitchtip ya esta en tu proyecto `azoramind`. Crear nuevo proyecto dentro:
+Glitchtip ya esta en tu proyecto `azoramind`. Crear proyectos nuevos para Aibenchef:
 
-1. Abrir glitchtip en tu navegador (domain configurado en EasyPanel para ese servicio).
+1. Abrir glitchtip en tu navegador (dominio configurado en EasyPanel para ese servicio).
 2. Login.
 3. New Project -> Platform: Python (Aibenchef API). Copiar DSN.
 4. New Project -> Platform: JavaScript (Next.js). Copiar DSN.
-5. Pegar DSNs en variables de `aibenchef-api` y `aibenchef-web` (paso 5 y 6).
+5. Pegar DSNs en variables de `aibenchef-api` (SENTRY_DSN) y `aibenchef-web` (NEXT_PUBLIC_SENTRY_DSN).
 6. Restart ambos servicios.
 
 ---
@@ -217,12 +258,12 @@ n8n ya esta en tu stack. En lugar de Prefect/Airflow:
 
 1. Abrir n8n en navegador.
 2. New Workflow: "SBS Monthly Ingestion".
-3. Trigger: **Cron**, cron expression `0 6 5 * *` (dia 5 de cada mes 06:00).
-4. Node 1: **Execute Command** -> ejecuta el scraper Python en container `aibenchef-worker`:
+3. Trigger: **Cron**, expresion `0 6 5 * *` (dia 5 de cada mes 06:00).
+4. Node 1: **Execute Command** -> ejecuta el scraper en el container worker:
    ```
-   docker exec aibenchef-worker python -m scrapers.sbs.cli ingest
+   docker exec <aibenchef-worker container> python -m scrapers.sbs.cli ingest
    ```
-5. Node 2: **HTTP Request** -> POST a webhook de notificacion (Slack o WhatsApp via evolution).
+5. Node 2: **HTTP Request** -> POST a webhook de notificacion (Slack o WhatsApp via `evolution`).
 6. Activar workflow.
 
 (El servicio `aibenchef-worker` lo creamos en Fase 1.)
@@ -231,11 +272,11 @@ n8n ya esta en tu stack. En lugar de Prefect/Airflow:
 
 ## Paso 10: metricas en Grafana
 
-Tu grafana existente puede scrapear el endpoint `/metrics` de FastAPI (cuando lo agreguemos
-con `prometheus-fastapi-instrumentator` en Fase 3).
+Tu Grafana existente puede scrapear `/metrics` de FastAPI (cuando lo agreguemos con
+`prometheus-fastapi-instrumentator` en Fase 3).
 
-1. Prometheus existente: agregar scrape config para `aibenchef-api:8000/metrics`.
-2. Grafana: importar dashboard FastAPI (ID `14282`) y conectarlo a tu Prometheus.
+1. Prometheus existente: agregar scrape config para `aibenchef_aibenchef-api:8000/metrics`.
+2. Grafana: importar dashboard FastAPI (ID `14282`) y conectarlo a Prometheus.
 
 ---
 
@@ -268,7 +309,7 @@ git push origin main
 ```
 
 EasyPanel detecta el push, rebuilds y rolling update automatico (si configuraste auto-deploy
-on push, sino click "Deploy" en EasyPanel).
+on push, sino click "Implementar" en EasyPanel — como el boton verde que vi en tu CRM).
 
 ---
 
