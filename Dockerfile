@@ -1,14 +1,9 @@
 # =========================================================================
 # Dockerfile Next.js 15 todo-en-uno (frontend + API Routes + migrator)
 #
-# Estrategia: NO usamos Next.js standalone output porque el migrator necesita
-# postgres-js disponible en runtime y standalone solo bundlea modulos usados
-# por Next. Mejor copiar node_modules completo (imagen ~250MB) pero todo
-# funciona seguro.
-#
 # Build context: raiz del repo
 # Migraciones SQL: copiadas al image desde infrastructure/postgres/migrations
-# Entry: corre migrator -> arranca Next.js (sin script externo, evita CRLF bugs)
+# Entry: CMD inline que corre migrator -> arranca Next.js (sin script .sh)
 # =========================================================================
 
 FROM node:22-alpine AS deps
@@ -25,6 +20,18 @@ RUN pnpm install --no-frozen-lockfile
 FROM node:22-alpine AS builder
 WORKDIR /repo
 RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
+
+# Build args -> env vars para que Next build no warne y prerender funcione.
+# Estos vienen de EasyPanel (--build-arg). En docker-compose local pasarlos
+# tambien si querias el mismo build.
+ARG DATABASE_URL=""
+ARG BETTER_AUTH_SECRET=""
+ARG BETTER_AUTH_URL=""
+ARG NEXT_PUBLIC_APP_URL=""
+ENV DATABASE_URL=$DATABASE_URL
+ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
+ENV BETTER_AUTH_URL=$BETTER_AUTH_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
@@ -77,5 +84,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD wget -q -O /dev/null http://localhost:3000/api/health || exit 1
 
 # Entrypoint inline: migrator + Next.js start
-# Si migrator falla, el container muere y EasyPanel reintenta
 CMD ["sh", "-c", "node /app/apps/web/scripts/migrate.js && cd /app/apps/web && exec node_modules/.bin/next start -H 0.0.0.0 -p 3000"]
