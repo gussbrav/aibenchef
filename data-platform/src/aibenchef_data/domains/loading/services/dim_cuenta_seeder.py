@@ -31,9 +31,7 @@ class DimCuentaSeeder:
         for category in ("balance", "resultados"):
             path = seeds_dir / f"cuentas_{category}.json"
             if not path.exists():
-                log.warning(
-                    "seed.skip_missing_file", category=category, path=str(path)
-                )
+                log.warning("seed.skip_missing_file", category=category, path=str(path))
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))
             try:

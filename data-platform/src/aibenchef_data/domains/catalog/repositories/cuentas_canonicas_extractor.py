@@ -11,7 +11,6 @@ deriva la jerarquia del codigo mismo: (A1.1) -> padre (A1).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
 
@@ -26,8 +25,15 @@ log = get_logger(__name__)
 # Columnas dimensionales en BASE EE.FF..xlsx (no son cuentas).
 # Las columnas de cuentas empiezan despues.
 _DIMENSION_HEADERS = {
-    "code", "mes", "tipo entidad", "microfinan.", "microfinan",
-    "nacional", "empresa sbs", "nomb_correg", "moneda",
+    "code",
+    "mes",
+    "tipo entidad",
+    "microfinan.",
+    "microfinan",
+    "nacional",
+    "empresa sbs",
+    "nomb_correg",
+    "moneda",
 }
 
 
@@ -56,9 +62,7 @@ def extract_from_base_eeff(
             context={"hojas_disponibles": [s.name for s in sheets]},
         )
 
-    cuentas_balance = _extract_from_header_row(
-        by_name[bg_sheet_name.upper()], TipoEstado.BALANCE
-    )
+    cuentas_balance = _extract_from_header_row(by_name[bg_sheet_name.upper()], TipoEstado.BALANCE)
     cuentas_resultados = _extract_from_header_row(
         by_name[er_sheet_name.upper()], TipoEstado.RESULTADOS
     )
@@ -161,9 +165,7 @@ def write_seeds(
     for categoria, items in seeds.items():
         p = out_dir / f"cuentas_{categoria}.json"
         serializable = [_to_dict(c) for c in items]
-        p.write_text(
-            json.dumps(serializable, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        p.write_text(json.dumps(serializable, ensure_ascii=False, indent=2), encoding="utf-8")
         paths[categoria] = p
     return paths
 

@@ -19,7 +19,6 @@ import json
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEEDS_DIR = Path(__file__).resolve().parents[1] / "seeds"
 OUT_DIR = REPO_ROOT / "infrastructure" / "postgres" / "migrations"
@@ -134,7 +133,7 @@ def main() -> None:
     bg_path.write_text(bg_sql, encoding="utf-8")
     er_path.write_text(er_sql, encoding="utf-8")
 
-    print(f"# Generado:")
+    print("# Generado:")
     print(f"  {bg_path}  ({len(balance)} cuentas)")
     print(f"  {er_path}  ({len(resultados)} cuentas)")
     print()

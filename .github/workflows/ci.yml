@@ -16,7 +16,6 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  PNPM_VERSION: "10"
   PYTHON_VERSION: "3.12"
 
 jobs:
@@ -29,9 +28,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
+        # Sin `version:` aqui — pnpm/action-setup lee el campo "packageManager"
+        # de package.json (pinned a pnpm@10.0.0). Tener ambos genera el error
+        # ERR_PNPM_BAD_PM_VERSION.
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -79,6 +79,9 @@ jobs:
 
       - name: Ruff lint
         run: uv run ruff check --output-format=github .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
 
       - name: Pytest
         run: uv run pytest -q

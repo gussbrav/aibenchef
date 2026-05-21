@@ -111,7 +111,7 @@ class HttpxDownloader:
     async def _do_download(
         self,
         target: DownloadTarget,
-        tmp: "Path",
+        tmp: Path,
         start: float,
     ) -> DownloadResult:
         async with self._client.stream("GET", target.url) as response:

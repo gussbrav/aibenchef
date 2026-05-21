@@ -61,7 +61,11 @@ class DownloaderService:
 
     @staticmethod
     def succeeded(results: Sequence[DownloadResult]) -> list[DownloadResult]:
-        return [r for r in results if r.status in (DownloadStatus.OK, DownloadStatus.SKIPPED_ALREADY_EXISTS)]
+        return [
+            r
+            for r in results
+            if r.status in (DownloadStatus.OK, DownloadStatus.SKIPPED_ALREADY_EXISTS)
+        ]
 
     @staticmethod
     def failed(results: Sequence[DownloadResult]) -> list[DownloadResult]:

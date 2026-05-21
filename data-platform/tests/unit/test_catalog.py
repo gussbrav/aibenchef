@@ -65,8 +65,10 @@ class TestPeriodo:
         assert Periodo(2023, 12) < Periodo(2024, 1)
 
     def test_immutability(self):
+        from dataclasses import FrozenInstanceError
+
         p = Periodo(2024, 3)
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             p.anio = 2025  # type: ignore[misc]
 
 

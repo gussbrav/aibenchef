@@ -61,9 +61,7 @@ class XlsInspector:
         out.append("")
 
         for idx, sheet in enumerate(sheets):
-            out.append(
-                f"## Sheet [{idx}] '{sheet.name}'  rows={sheet.n_rows}  cols={sheet.n_cols}"
-            )
+            out.append(f"## Sheet [{idx}] '{sheet.name}'  rows={sheet.n_rows}  cols={sheet.n_cols}")
             out.append(self._render_preview(sheet))
             out.append("")
 
@@ -74,9 +72,7 @@ class XlsInspector:
         cols = min(sheet.n_cols, self._max_preview_cols)
         lines: list[str] = []
 
-        header = "      " + " | ".join(
-            f"col{c:02d}".center(self._cell_width) for c in range(cols)
-        )
+        header = "      " + " | ".join(f"col{c:02d}".center(self._cell_width) for c in range(cols))
         lines.append(header)
         lines.append("      " + "-" * (len(header) - 6))
 

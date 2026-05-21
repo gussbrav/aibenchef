@@ -84,12 +84,31 @@ class Topico(StrEnum):
 # Abreviatura SBS por mes (1=en, 2=fe, ..., 12=di).
 # Aparece en el nombre del archivo: B-2334-en2020.xls
 MES_ABREV_SBS: dict[int, str] = {
-    1: "en", 2: "fe", 3: "ma", 4: "ab", 5: "my", 6: "jn",
-    7: "jl", 8: "ag", 9: "se", 10: "oc", 11: "no", 12: "di",
+    1: "en",
+    2: "fe",
+    3: "ma",
+    4: "ab",
+    5: "my",
+    6: "jn",
+    7: "jl",
+    8: "ag",
+    9: "se",
+    10: "oc",
+    11: "no",
+    12: "di",
 }
 
 MES_NOMBRE: dict[int, str] = {
-    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
-    5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
-    9: "Setiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+    1: "Enero",
+    2: "Febrero",
+    3: "Marzo",
+    4: "Abril",
+    5: "Mayo",
+    6: "Junio",
+    7: "Julio",
+    8: "Agosto",
+    9: "Setiembre",
+    10: "Octubre",
+    11: "Noviembre",
+    12: "Diciembre",
 }

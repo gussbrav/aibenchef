@@ -12,8 +12,7 @@ class TestSbsUrlBuilder:
         ref = SbsUrlBuilder.build(Grupo.CMAC, Topico.EEFF, Periodo(2024, 3))
         assert ref.filename == "C-1101-ma2024.xls"
         assert ref.url() == (
-            "https://intranet2.sbs.gob.pe/estadistica/financiera/"
-            "2024/Marzo/C-1101-ma2024.xls"
+            "https://intranet2.sbs.gob.pe/estadistica/financiera/2024/Marzo/C-1101-ma2024.xls"
         )
 
     def test_banca_multiple_indicadores(self):
@@ -21,9 +20,7 @@ class TestSbsUrlBuilder:
         assert ref.filename == "B-2401-en2020.xls"
 
     def test_clientes_credito_banca_multiple_uses_6_digit_code(self):
-        ref = SbsUrlBuilder.build(
-            Grupo.BANCA_MULTIPLE, Topico.CLIENTES_CREDITO, Periodo(2024, 3)
-        )
+        ref = SbsUrlBuilder.build(Grupo.BANCA_MULTIPLE, Topico.CLIENTES_CREDITO, Periodo(2024, 3))
         assert ref.filename == "B-230803-ma2024.xls"
 
     def test_edpyme_no_tiene_depositos(self):

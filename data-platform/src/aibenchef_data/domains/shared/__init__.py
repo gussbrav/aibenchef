@@ -1,26 +1,26 @@
 """Primitivos compartidos entre bounded contexts."""
 
 from .errors import (
-    DomainError,
-    ValidationError,
-    NotFoundError,
     ConflictError,
+    DomainError,
     ExternalServiceError,
+    NotFoundError,
+    ValidationError,
     is_domain_error,
 )
 from .logger import configure_logging, get_logger
-from .result import Result, Err, Ok
+from .result import Err, Ok, Result
 
 __all__ = [
-    "DomainError",
-    "ValidationError",
-    "NotFoundError",
     "ConflictError",
+    "DomainError",
+    "Err",
     "ExternalServiceError",
-    "is_domain_error",
+    "NotFoundError",
+    "Ok",
+    "Result",
+    "ValidationError",
     "configure_logging",
     "get_logger",
-    "Result",
-    "Ok",
-    "Err",
+    "is_domain_error",
 ]

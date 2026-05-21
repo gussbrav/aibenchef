@@ -59,9 +59,7 @@ def read_xls(path: Path) -> list[XlsSheet]:
     if fmt == XlsFormat.XML2003:
         return _read_xml2003(path)
 
-    raise ValidationError(
-        f"Formato no soportado para {path.name}", context={"format": fmt.value}
-    )
+    raise ValidationError(f"Formato no soportado para {path.name}", context={"format": fmt.value})
 
 
 # ============================================================================
@@ -81,9 +79,7 @@ def _read_biff(path: Path) -> list[XlsSheet]:
             for c in range(sheet.ncols):
                 row_cells.append(_normalize_xlrd_cell(sheet, r, c))
             rows.append(row_cells)
-        sheets.append(
-            XlsSheet(name=sheet.name, n_rows=sheet.nrows, n_cols=sheet.ncols, rows=rows)
-        )
+        sheets.append(XlsSheet(name=sheet.name, n_rows=sheet.nrows, n_cols=sheet.ncols, rows=rows))
     return sheets
 
 
@@ -124,9 +120,7 @@ def _read_xlsx(path: Path) -> list[XlsSheet]:
                 row_cells: list[Cell] = [_normalize(v) for v in row]
                 rows.append(row_cells)
                 max_cols = max(max_cols, len(row_cells))
-            sheets.append(
-                XlsSheet(name=ws.title, n_rows=len(rows), n_cols=max_cols, rows=rows)
-            )
+            sheets.append(XlsSheet(name=ws.title, n_rows=len(rows), n_cols=max_cols, rows=rows))
         return sheets
     finally:
         wb.close()
@@ -184,9 +178,7 @@ def _read_html(path: Path) -> list[XlsSheet]:
                 cells.append(_parse_html_cell(txt))
             rows.append(cells)
             max_cols = max(max_cols, len(cells))
-        sheets.append(
-            XlsSheet(name=f"table_{idx}", n_rows=len(rows), n_cols=max_cols, rows=rows)
-        )
+        sheets.append(XlsSheet(name=f"table_{idx}", n_rows=len(rows), n_cols=max_cols, rows=rows))
     return sheets
 
 

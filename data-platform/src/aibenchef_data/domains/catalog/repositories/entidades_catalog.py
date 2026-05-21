@@ -25,7 +25,7 @@ class EntidadesCatalog:
 
     # ---------- factories ----------
     @classmethod
-    def from_seed_file(cls, path: Path) -> "EntidadesCatalog":
+    def from_seed_file(cls, path: Path) -> EntidadesCatalog:
         raw = json.loads(path.read_text(encoding="utf-8"))
         entidades = [
             Entidad(
@@ -42,14 +42,10 @@ class EntidadesCatalog:
         return cls(entidades)
 
     @classmethod
-    def default(cls) -> "EntidadesCatalog":
+    def default(cls) -> EntidadesCatalog:
         """Cargar el seed por defecto bundleado con el paquete."""
         here = Path(__file__).resolve()
-        seed_path = (
-            here.parent.parent.parent.parent.parent.parent
-            / "seeds"
-            / "entidades.json"
-        )
+        seed_path = here.parent.parent.parent.parent.parent.parent / "seeds" / "entidades.json"
         if not seed_path.exists():
             return cls([])
         return cls.from_seed_file(seed_path)

@@ -5,10 +5,10 @@ from .services.xls_reader import XlsSheet, read_xls
 from .value_objects.xls_format import XlsFormat, detect_xls_format
 
 __all__ = [
-    "XlsInspector",
-    "XlsSheetInfo",
-    "XlsSheet",
-    "read_xls",
     "XlsFormat",
+    "XlsInspector",
+    "XlsSheet",
+    "XlsSheetInfo",
     "detect_xls_format",
+    "read_xls",
 ]

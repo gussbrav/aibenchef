@@ -8,17 +8,17 @@ Public API:
 - DownloaderService: orquestador con concurrencia limitada
 """
 
-from .entities.download_target import DownloadTarget
 from .entities.download_result import DownloadResult, DownloadStatus
+from .entities.download_target import DownloadTarget
 from .services.discover_targets import DiscoverTargets
 from .services.downloader_service import DownloaderService
 from .services.http_downloader import HttpxDownloader
 
 __all__ = [
-    "DownloadTarget",
+    "DiscoverTargets",
     "DownloadResult",
     "DownloadStatus",
-    "DiscoverTargets",
+    "DownloadTarget",
     "DownloaderService",
     "HttpxDownloader",
 ]

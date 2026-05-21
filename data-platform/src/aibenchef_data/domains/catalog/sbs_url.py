@@ -91,10 +91,10 @@ _URL_CODES: dict[tuple[Grupo, Topico], tuple[str, str] | None] = {
     # ---------- EDPYMEs ----------
     (Grupo.EDPYME, Topico.EEFF): ("C", "4103"),
     (Grupo.EDPYME, Topico.COLOCACIONES): ("C", "4223"),
-    (Grupo.EDPYME, Topico.DEPOSITOS): None,         # no aplica
+    (Grupo.EDPYME, Topico.DEPOSITOS): None,  # no aplica
     (Grupo.EDPYME, Topico.CASTIGOS): ("C", "4242"),
     (Grupo.EDPYME, Topico.CLIENTES_CREDITO): ("C", "4226"),
-    (Grupo.EDPYME, Topico.CLIENTES_AHORRO): None,   # no aplica
+    (Grupo.EDPYME, Topico.CLIENTES_AHORRO): None,  # no aplica
     (Grupo.EDPYME, Topico.OFICINAS): ("C", "4205"),
     (Grupo.EDPYME, Topico.CREDITOS_DEPOSITOS_GEO): ("C", "4228"),
     (Grupo.EDPYME, Topico.PERSONAL): ("C", "4206"),

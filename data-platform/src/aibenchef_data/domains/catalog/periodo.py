@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Self
 
 from dateutil.relativedelta import relativedelta
@@ -49,7 +49,7 @@ class Periodo:
 
     @classmethod
     def previous_month(cls, from_date: date | None = None) -> Self:
-        ref = from_date or datetime.now(timezone.utc).date()
+        ref = from_date or datetime.now(UTC).date()
         prev = ref.replace(day=1) - relativedelta(months=1)
         return cls(prev.year, prev.month)
 

@@ -12,14 +12,14 @@ Pattern matching nativo de Python 3.10+ hace esto muy ergonomico:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 E = TypeVar("E")
 
 
 @dataclass(frozen=True, slots=True)
-class Ok(Generic[T]):
+class Ok[T]:
     value: T
 
     @property
@@ -28,7 +28,7 @@ class Ok(Generic[T]):
 
 
 @dataclass(frozen=True, slots=True)
-class Err(Generic[E]):
+class Err[E]:
     error: E
 
     @property

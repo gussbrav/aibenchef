@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 import psycopg
 from psycopg_pool import AsyncConnectionPool
@@ -52,6 +52,5 @@ async def connection() -> AsyncIterator[psycopg.AsyncConnection]:
 @asynccontextmanager
 async def transaction() -> AsyncIterator[psycopg.AsyncConnection]:
     """Adquirir conexion en transaccion. Auto commit/rollback."""
-    async with connection() as conn:
-        async with conn.transaction():
-            yield conn
+    async with connection() as conn, conn.transaction():
+        yield conn

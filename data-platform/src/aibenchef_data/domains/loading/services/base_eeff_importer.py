@@ -9,11 +9,12 @@ Procesa las hojas BG y ER del archivo unificado de Gus:
 
 from __future__ import annotations
 
-import io
+import contextlib
 import time
+from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import psycopg
 
@@ -28,8 +29,15 @@ log = get_logger(__name__)
 
 # Columnas dimensionales en la fila 0 de BG/ER
 _DIM_COLS_LOWER = {
-    "code", "mes", "tipo entidad", "microfinan.", "microfinan",
-    "nacional", "empresa sbs", "nomb_correg", "moneda",
+    "code",
+    "mes",
+    "tipo entidad",
+    "microfinan.",
+    "microfinan",
+    "nacional",
+    "empresa sbs",
+    "nomb_correg",
+    "moneda",
 }
 
 
@@ -57,9 +65,7 @@ class BaseEeffImporter:
         by_name = {s.name.upper(): s for s in sheets}
 
         if bg_sheet.upper() not in by_name and er_sheet.upper() not in by_name:
-            raise ValidationError(
-                "No se encontraron hojas BG ni ER", context={"file": path.name}
-            )
+            raise ValidationError("No se encontraron hojas BG ni ER", context={"file": path.name})
 
         inserted = 0
         errors: list[str] = []
@@ -89,10 +95,8 @@ class BaseEeffImporter:
                 errors.append(f"sheet={sheet.name}: {e}")
                 log.error("import.sheet_failed", sheet=sheet.name, error=str(e))
                 # Rollback para que la siguiente hoja arranque limpia
-                try:
+                with contextlib.suppress(Exception):
                     await self._conn.rollback()
-                except Exception:
-                    pass
 
         return ImportResult(
             source="base_eeff",
@@ -157,10 +161,8 @@ class BaseEeffImporter:
         4. COMMIT al final del batch para liberar locks.
         """
         # Si una invocacion previa fallo dejando la temp creada, la limpiamos.
-        try:
+        with contextlib.suppress(Exception):
             await self._conn.rollback()
-        except Exception:
-            pass
 
         async with self._conn.cursor() as cur:
             await cur.execute("DROP TABLE IF EXISTS _eeff_stage")

@@ -12,8 +12,8 @@ from .download_target import DownloadTarget
 class DownloadStatus(StrEnum):
     OK = "ok"
     SKIPPED_ALREADY_EXISTS = "skipped_already_exists"
-    NOT_PUBLISHED = "not_published"          # 404 -> el periodo aun no se publico
-    FAILED = "failed"                         # error tras reintentos
+    NOT_PUBLISHED = "not_published"  # 404 -> el periodo aun no se publico
+    FAILED = "failed"  # error tras reintentos
 
 
 @dataclass(frozen=True, slots=True)

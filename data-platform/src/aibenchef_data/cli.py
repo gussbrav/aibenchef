@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 
 import click
 
@@ -53,7 +54,7 @@ def db() -> None:
     """Comandos de diagnostico y operacion de la base de datos."""
 
 
-def _resolve_migrations_dir() -> "Path":
+def _resolve_migrations_dir() -> Path:
     """Resuelve el directorio de migraciones.
 
     Prioridad:
@@ -61,7 +62,6 @@ def _resolve_migrations_dir() -> "Path":
     2. <repo_root>/infrastructure/postgres/migrations descubierto desde __file__.
     """
     import os
-    from pathlib import Path
 
     env_dir = os.environ.get("MIGRATIONS_DIR")
     if env_dir:
@@ -100,7 +100,6 @@ def db_migrate(dry_run: bool, migrations_dir: str | None) -> None:
       empujar DDL al Postgres remoto desde tu maquina.
     """
     import re
-    from pathlib import Path
 
     import psycopg
 
@@ -181,7 +180,7 @@ def db_ping() -> None:
     parsed = urlparse(url)
     safe_url = url.replace(parsed.password or "", "***") if parsed.password else url
 
-    click.echo(f"# Conectando a:")
+    click.echo("# Conectando a:")
     click.echo(f"  url:    {safe_url}")
     click.echo(f"  host:   {parsed.hostname}")
     click.echo(f"  port:   {parsed.port}")
@@ -192,30 +191,25 @@ def db_ping() -> None:
     try:
         # psycopg quiere postgres:// o postgresql://, NO postgresql+asyncpg://
         clean = url.replace("postgresql+asyncpg://", "postgresql://")
-        with psycopg.connect(clean, connect_timeout=10) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT current_database(), version()")
-                row = cur.fetchone()
-                click.echo("# Conexion OK")
-                click.echo(f"  database: {row[0]}")
-                click.echo(f"  version:  {row[1]}")
-                cur.execute(
-                    "SELECT version FROM public.schema_migrations ORDER BY version"
-                )
-                versions = [r[0] for r in cur.fetchall()]
-                click.echo(f"  migrations applied ({len(versions)}): {versions}")
+        with psycopg.connect(clean, connect_timeout=10) as conn, conn.cursor() as cur:
+            cur.execute("SELECT current_database(), version()")
+            row = cur.fetchone()
+            click.echo("# Conexion OK")
+            click.echo(f"  database: {row[0]}")
+            click.echo(f"  version:  {row[1]}")
+            cur.execute("SELECT version FROM public.schema_migrations ORDER BY version")
+            versions = [r[0] for r in cur.fetchall()]
+            click.echo(f"  migrations applied ({len(versions)}): {versions}")
     except psycopg.OperationalError as e:
         click.echo(f"# ERROR de conexion: {e}")
         click.echo("\n# Diagnostico rapido:")
-        click.echo(
-            f"  Test-NetConnection -ComputerName {parsed.hostname} -Port {parsed.port}"
-        )
+        click.echo(f"  Test-NetConnection -ComputerName {parsed.hostname} -Port {parsed.port}")
         click.echo("  Si TcpTestSucceeded:False -> puerto cerrado o firewall.")
         click.echo("  Opciones: exponer puerto en EasyPanel o usar SSH tunnel.")
-        raise click.Abort()
+        raise click.Abort() from e
     except Exception as e:
         click.echo(f"# ERROR: {type(e).__name__}: {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 # ============================================================================
@@ -232,9 +226,7 @@ def catalog() -> None:
 @click.option("--grupo", type=click.Choice([g.value for g in Grupo]), default=None)
 @click.option("--solo-microfinanzas", is_flag=True, default=False)
 @click.option("--solo-activas", is_flag=True, default=True)
-def catalog_list_entidades(
-    grupo: str | None, solo_microfinanzas: bool, solo_activas: bool
-) -> None:
+def catalog_list_entidades(grupo: str | None, solo_microfinanzas: bool, solo_activas: bool) -> None:
     """Listar entidades del catalogo SBS."""
     cat = EntidadesCatalog.default()
     g = Grupo(grupo) if grupo else None
@@ -300,9 +292,7 @@ def catalog_periodo(periodo: str | None) -> None:
     default="ER",
     help="Nombre de la hoja Estado de Resultados (default: ER).",
 )
-def catalog_extract_canonical(
-    base_eeff: str, out_dir: str, bg_sheet: str, er_sheet: str
-) -> None:
+def catalog_extract_canonical(base_eeff: str, out_dir: str, bg_sheet: str, er_sheet: str) -> None:
     """Extraer plan de cuentas canonico con codigos reales SBS (A1.1, B2, etc).
 
     Lee la fila 0 de las hojas BG y ER de BASE EE.FF..xlsx. Cada columna ahi
@@ -343,9 +333,8 @@ def catalog_extract_canonical(
 )
 def catalog_seed_dim_cuenta(seeds_dir: str) -> None:
     """Pobla dw.dim_cuenta desde los seeds JSON (idempotente, UPSERT)."""
-    from pathlib import Path as _P
-
     import asyncio
+    from pathlib import Path as _P
 
     from aibenchef_data.domains.loading import DimCuentaSeeder
     from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
@@ -433,7 +422,7 @@ async def _run_scrape(
     dry_run: bool,
     force: bool,
 ) -> None:
-    log = get_logger(__name__)
+    get_logger(__name__)
     cfg = settings()
     storage = RawStorage()
     discoverer = DiscoverTargets(storage=storage, base_url=cfg.sbs_base_url)
@@ -474,7 +463,9 @@ async def _run_scrape(
 def ingest(periodo: str | None, grupo: str | None, topico: str | None) -> None:
     """Pipeline completo: scrape -> parse -> load -> dbt. (parse/load en construccion)"""
     log = get_logger(__name__)
-    log.warning("ingest.partial", message="Por ahora solo corre scrape. Parser y loader en Fase 1.4/1.5.")
+    log.warning(
+        "ingest.partial", message="Por ahora solo corre scrape. Parser y loader en Fase 1.4/1.5."
+    )
     ctx = click.get_current_context()
     ctx.invoke(scrape, periodo=periodo, grupo=grupo, topico=topico, dry_run=False, force=False)
 
@@ -499,9 +490,8 @@ def import_grp() -> None:
 @click.option("--batch-size", type=int, default=10_000)
 def import_base_eeff(path: str, bg_sheet: str, er_sheet: str, batch_size: int) -> None:
     """Bootstrap historico: cargar BASE EE.FF..xlsx a raw.eeff_observacion."""
-    from pathlib import Path as _P
-
     import asyncio
+    from pathlib import Path as _P
 
     from aibenchef_data.domains.loading import BaseEeffImporter
     from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
@@ -511,9 +501,7 @@ def import_base_eeff(path: str, bg_sheet: str, er_sheet: str, batch_size: int) -
         try:
             async with connection() as conn:
                 importer = BaseEeffImporter(conn, batch_size=batch_size)
-                result = await importer.import_file(
-                    _P(path), bg_sheet=bg_sheet, er_sheet=er_sheet
-                )
+                result = await importer.import_file(_P(path), bg_sheet=bg_sheet, er_sheet=er_sheet)
                 await conn.commit()
                 click.echo(
                     f"# Import {result.source_file}:\n"
