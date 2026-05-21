@@ -48,8 +48,15 @@ class DimCuentaSeeder:
         return total
 
     async def _upsert_batch(self, items: Iterable[dict], category: str) -> int:
+        # Ordenar por nivel ASC para que los padres se inserten antes que los hijos.
+        # Sino la FK dim_cuenta.parent_codigo -> dim_cuenta.codigo se viola.
+        items_sorted = sorted(
+            list(items),
+            key=lambda it: (it.get("nivel", 99), it.get("orden", 0)),
+        )
+
         rows = []
-        for it in items:
+        for it in items_sorted:
             tipo_estado = it.get("tipo_estado") or (
                 "balance" if category == "balance" else "resultados"
             )
