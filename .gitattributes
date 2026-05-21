@@ -1,0 +1,7 @@
+# Asegurar line endings LF para scripts que corren en Linux
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sql       text eol=lf
+Dockerfile  text eol=lf
+.env*       text eol=lf
