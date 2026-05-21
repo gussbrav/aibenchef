@@ -13,8 +13,14 @@ Ejemplos:
 from __future__ import annotations
 
 import asyncio
+import sys
 
 import click
+
+# psycopg async requiere SelectorEventLoop. Windows usa ProactorEventLoop por
+# default, lo que rompe la conexion. Esto se setea ANTES de cualquier asyncio.run().
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from aibenchef_data.domains.catalog import (
     EntidadesCatalog,
