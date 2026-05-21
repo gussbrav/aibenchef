@@ -50,8 +50,10 @@ export function TrendChart({ data }: TrendChartProps) {
               fontSize: "12px",
             }}
             labelStyle={{ color: "#0f172a", fontWeight: 600 }}
-            formatter={(v: number | null) =>
-              v == null ? "—" : `${v.toFixed(2)}%`
+            formatter={(value: number | string) =>
+              typeof value === "number" && Number.isFinite(value)
+                ? `${value.toFixed(2)}%`
+                : "—"
             }
           />
           <Legend
