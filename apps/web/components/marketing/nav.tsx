@@ -20,9 +20,17 @@ export function Nav() {
               FAQ
             </Link>
           </nav>
-          <Link href="/waitlist">
-            <Button size="sm">Waitlist</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="hidden sm:inline-flex items-center text-sm text-slate-700 hover:text-slate-900 font-medium px-3 py-2"
+            >
+              Entrar
+            </Link>
+            <Link href="/waitlist">
+              <Button size="sm">Waitlist</Button>
+            </Link>
+          </div>
         </div>
       </Container>
     </header>
