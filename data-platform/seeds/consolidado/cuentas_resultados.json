@@ -1,0 +1,859 @@
+[
+  {
+    "codigo": "1",
+    "nombre": "INGRESOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 1,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.1",
+    "nombre": "Disponible",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 2,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.2",
+    "nombre": "Fondos Interbancarios",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 3,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.3",
+    "nombre": "Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 4,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.4",
+    "nombre": "Créditos Directos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 5,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.5",
+    "nombre": "Ganancias por Valorización de Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 6,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.6",
+    "nombre": "Ganancias por Inversiones en Subsidiarias, Asociadas y Negocios Conjuntos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 7,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.7",
+    "nombre": "Diferencia de Cambio",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 8,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "1.8",
+    "nombre": "Ganancias en Productos Financieros Derivados",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 9,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC"
+    ]
+  },
+  {
+    "codigo": "1.9",
+    "nombre": "Otros",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "1",
+    "orden": 10,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2",
+    "nombre": "GASTOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 11,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.1",
+    "nombre": "Obligaciones con el Público",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 12,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.2",
+    "nombre": "Depósitos del Sistema Financiero y Organismos Financieros Internacionales",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 13,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC"
+    ]
+  },
+  {
+    "codigo": "2.3",
+    "nombre": "Fondos Interbancarios",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 14,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.4",
+    "nombre": "Adeudos y Obligaciones Financieras",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 15,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.5",
+    "nombre": "Obligaciones en Circulación no Subordinadas",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 16,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.6",
+    "nombre": "Obligaciones en Circulación Subordinadas",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 17,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC"
+    ]
+  },
+  {
+    "codigo": "2.7",
+    "nombre": "Pérdida por Valorización de Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 18,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.8",
+    "nombre": "Pérdidas por Inversiones en Subsidiarias, Asociadas y Negocios Conjuntos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 19,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.9",
+    "nombre": "Primas al Fondo de Seguro de Depósitos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 20,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.10",
+    "nombre": "Diferencia de Cambio",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 21,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "2.11",
+    "nombre": "Pérdidas en Productos Financieros Derivados",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 22,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC"
+    ]
+  },
+  {
+    "codigo": "2.12",
+    "nombre": "Otros",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "2",
+    "orden": 23,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "3",
+    "nombre": "MARGEN FINANCIERO BRUTO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 24,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "4",
+    "nombre": "PROVISIONES PARA CRÉDITOS DIRECTOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 25,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "5",
+    "nombre": "MARGEN FINANCIERO NETO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 26,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "6",
+    "nombre": "INGRESOS POR SERVICIOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 27,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "6.1",
+    "nombre": "Cuentas por Cobrar",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "6",
+    "orden": 28,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "6.2",
+    "nombre": "Créditos Indirectos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "6",
+    "orden": 29,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "6.3",
+    "nombre": "Fideicomisos y Comisiones de Confianza",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "6",
+    "orden": 30,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "6.4",
+    "nombre": "Ingresos Diversos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "6",
+    "orden": 31,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "7",
+    "nombre": "GASTOS POR SERVICIOS FINANCIEROS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 32,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "7.1",
+    "nombre": "Cuentas por Pagar",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "7",
+    "orden": 33,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "7.2",
+    "nombre": "Créditos Indirectos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "7",
+    "orden": 34,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "7.3",
+    "nombre": "Fideicomisos y Comisiones de Confianza",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "7",
+    "orden": 35,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "7.4",
+    "nombre": "Gastos Diversos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "7",
+    "orden": 36,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "8",
+    "nombre": "UTILIDAD (PÉRDIDA) POR VENTA DE CARTERA",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 37,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "9",
+    "nombre": "MARGEN OPERACIONAL",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 38,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "10",
+    "nombre": "GASTOS ADMINISTRATIVOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 39,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "10.1",
+    "nombre": "Personal",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "10",
+    "orden": 40,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "10.2",
+    "nombre": "Directorio",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "10",
+    "orden": 41,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "10.3",
+    "nombre": "Servicios Recibidos de Terceros",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "10",
+    "orden": 42,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "10.4",
+    "nombre": "Impuestos y Contribuciones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "10",
+    "orden": 43,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "11",
+    "nombre": "MARGEN OPERACIONAL NETO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 44,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12",
+    "nombre": "PROVISIONES, DEPRECIACIÓN Y AMORTIZACIÓN",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 45,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.1",
+    "nombre": "Provisones para Créditos Indirectos",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 46,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.2",
+    "nombre": "Provisiones por Pérdida por Deterioro de Inversiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 47,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.3",
+    "nombre": "Provisiones para Incobrabilidad de Cuentas por Cobrar",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 48,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.4",
+    "nombre": "Provisiones para Bienes Realizables, Recibidos en Pago y Adjudicados",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 49,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.5",
+    "nombre": "Otras Provisiones",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 50,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.6",
+    "nombre": "Depreciación",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 51,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "12.7",
+    "nombre": "Amortización",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "12",
+    "orden": 52,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "13",
+    "nombre": "OTROS INGRESOS Y GASTOS",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 53,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "14",
+    "nombre": "RESULTADO ANTES DE IMPUESTO A LA RENTA",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 54,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "15",
+    "nombre": "IMPUESTO A LA RENTA",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 55,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "16",
+    "nombre": "RESULTADO NETO DEL EJERCICIO",
+    "tipo_estado": "resultados",
+    "nivel": 1,
+    "parent_codigo": null,
+    "orden": 56,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS",
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "16.1",
+    "nombre": "Tipo de Cambio Contable: S/ 3.273",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "16",
+    "orden": 57,
+    "aplica_a": [
+      "CMAC",
+      "CRAC",
+      "EDPYMES"
+    ]
+  },
+  {
+    "codigo": "16.2",
+    "nombre": "Tipo de Cambio Contable:  S/ 3,273",
+    "tipo_estado": "resultados",
+    "nivel": 2,
+    "parent_codigo": "16",
+    "orden": 58,
+    "aplica_a": [
+      "BANCOS",
+      "FINANCIERAS"
+    ]
+  }
+]

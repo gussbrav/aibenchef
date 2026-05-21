@@ -503,6 +503,135 @@ def catalog_extract_canonical(base_eeff: str, out_dir: str, bg_sheet: str, er_sh
         click.echo(f"  {cat:<13} -> {p}")
 
 
+@catalog.command("normalize-entidades")
+@click.option("--dry-run", is_flag=True, default=False)
+def catalog_normalize_entidades(dry_run: bool) -> None:
+    """Normaliza nombres de entidad en raw.eeff_observacion + dim_entidad.
+
+    Aplica:
+    - Quita asteriscos finales (***)
+    - Quita superindices Unicode (¹²³⁴...)
+    - Quita sufijos "N/" (notas al pie)
+    - Aplica aliases definidos en dw.entidad_alias
+
+    Cuando hay conflict (canonico ya existe), DELETE el duplicado y conserva
+    los datos del canonico (los datos suelen ser identicos).
+    """
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        # 1) Listar todas las (entidad -> canonico) que serian renombradas
+        cur.execute("""
+            SELECT DISTINCT nomb_correg, dw.normalizar_entidad(nomb_correg) AS canonico
+            FROM raw.eeff_observacion
+            WHERE nomb_correg <> dw.normalizar_entidad(nomb_correg)
+            ORDER BY 1
+        """)
+        renames = cur.fetchall()
+        click.echo(f"# Renombres detectados: {len(renames)}")
+        for nom, can in renames[:20]:
+            click.echo(f"  {nom!r:<55} -> {can!r}")
+        if len(renames) > 20:
+            click.echo(f"  ... ({len(renames) - 20} mas)")
+
+        if dry_run:
+            click.echo("\n# Dry-run: no se aplico nada.")
+            return
+
+        # 2) Para cada par (viejo, canonico), si el canonico ya existe en una fila
+        #    con misma key (periodo, moneda, tipo_estado, cuenta_codigo), borrar la
+        #    fila vieja. Si NO existe, actualizar la fila vieja al canonico.
+        deletes = 0
+        updates = 0
+        for viejo, canonico in renames:
+            # Borrar duplicados (donde tanto el viejo como el canonico existen)
+            cur.execute(
+                """
+                DELETE FROM raw.eeff_observacion v
+                WHERE v.nomb_correg = %s
+                  AND EXISTS (
+                    SELECT 1 FROM raw.eeff_observacion c
+                    WHERE c.nomb_correg = %s
+                      AND c.periodo       = v.periodo
+                      AND c.moneda        = v.moneda
+                      AND c.tipo_estado   = v.tipo_estado
+                      AND c.cuenta_codigo = v.cuenta_codigo
+                  )
+                """,
+                (viejo, canonico),
+            )
+            deletes += cur.rowcount
+            # Updatear las que quedan al canonico
+            cur.execute(
+                "UPDATE raw.eeff_observacion SET nomb_correg = %s WHERE nomb_correg = %s",
+                (canonico, viejo),
+            )
+            updates += cur.rowcount
+        conn.commit()
+
+        # 3) Limpiar dim_entidad: borrar entidades duplicadas que ya no son referenciadas
+        cur.execute(
+            """
+            DELETE FROM dw.dim_entidad e
+            WHERE NOT EXISTS (
+                SELECT 1 FROM raw.eeff_observacion r WHERE r.nomb_correg = e.nomb_correg
+            )
+            """
+        )
+        dropped_dim = cur.rowcount
+        conn.commit()
+
+        click.echo("")
+        click.echo(f"# Aplicado: {updates} updates, {deletes} deletes en raw.eeff_observacion")
+        click.echo(f"# dim_entidad limpiada: {dropped_dim} entidades obsoletas borradas")
+        click.echo("# Siguiente paso: aibenchef db refresh-mvs --concurrently")
+
+
+@catalog.command("add-alias")
+@click.argument("alias_text")
+@click.argument("canonico")
+@click.option(
+    "--fuente",
+    default="manual",
+    help="Origen del alias: manual / sbs_eeff / etc.",
+)
+def catalog_add_alias(alias_text: str, canonico: str, fuente: str) -> None:
+    """Registra un alias en dw.entidad_alias.
+
+    Ejemplo (renombre legal):
+      aibenchef catalog add-alias "Banco Azteca" "Banco Alfin"
+
+    Ejemplo (variante con asterisco):
+      aibenchef catalog add-alias "Citibank***" "Citibank"
+    """
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM dw.dim_entidad WHERE nomb_correg = %s",
+            (canonico,),
+        )
+        if not cur.fetchone():
+            raise click.ClickException(
+                f"El canonico {canonico!r} no existe en dw.dim_entidad. "
+                "Primero crealo o usa el nombre exacto."
+            )
+        cur.execute(
+            """
+            INSERT INTO dw.entidad_alias (alias, nomb_correg, fuente)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (alias) DO UPDATE SET
+                nomb_correg = EXCLUDED.nomb_correg,
+                fuente      = EXCLUDED.fuente
+            """,
+            (alias_text, canonico, fuente),
+        )
+        conn.commit()
+        click.echo(f"# Alias registrado: {alias_text!r} -> {canonico!r}")
+
+
 @catalog.command("extract-from-consolidado")
 @click.option(
     "--balance",

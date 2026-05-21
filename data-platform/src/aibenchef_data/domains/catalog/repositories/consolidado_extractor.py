@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 
 from aibenchef_data.domains.parsing import read_xls
@@ -113,78 +114,81 @@ def _extract_one(path: Path, *, tipo_estado: str) -> list[CuentaCanonica]:
     # Numerador autoincremental por seccion para asignar codigos.
     section_counters: dict[str, int] = {}  # ej {"A": 9, "B": 5}
 
+    # Top-level por seccion: contadores actuales y ultimo header registrado
+    last_header_codigo: str | None = None
+    # Contadores de hijos por codigo de parent (ej {"A1": 4})
+    child_counters: dict[str, int] = {}
+
     for row_idx in range(0, sheet.n_rows):
-        # Recoger texto de cada columna A-E
+        # Recoger texto de cada columna A-E (descarta datetimes)
         cells_per_col: dict[int, str] = {}
-        for col, _ in _COL_TO_GRUPO.items():
+        for col in _COL_TO_GRUPO:
             v = sheet.cell(row_idx, col)
             if v is None:
                 continue
+            if isinstance(v, (datetime, date)):
+                continue  # filas de fecha de cierre
             s = str(v).strip()
-            if s:
-                cells_per_col[col] = s
+            if not s:
+                continue
+            # Skipear strings que son datetimes serializados
+            if _looks_like_datetime(s):
+                continue
+            cells_per_col[col] = s
 
         if not cells_per_col:
             continue
 
-        # Tomar el nombre de la primera celda no vacia (BANCOS first)
+        # Tomar el nombre del primer match no vacio
         nombre_raw = next(iter(cells_per_col.values()))
         nombre_lower = nombre_raw.strip().lower()
 
-        # Filtrar headers de columna y marcadores de seccion
+        # Filtrar metadata (headers de columna, marcadores, titulos)
         if nombre_lower in header_terms:
             if tipo_estado == "balance" and nombre_lower in ("activo", "pasivo", "patrimonio"):
                 current_section_prefix = {"activo": "A", "pasivo": "B", "patrimonio": "C"}[
                     nombre_lower
                 ]
-                parent_stack = []
+                last_header_codigo = None  # reset al cambiar seccion
             continue
 
-        # Filtrar lineas de fecha/titulo
-        if "miles de soles" in nombre_lower or "al " in nombre_lower[:4]:
+        # Filtrar lineas de meta del archivo
+        if (
+            "miles de soles" in nombre_lower
+            or nombre_lower.startswith("al ")
+            or nombre_lower.startswith("(")
+        ):
             continue
 
         nombre_canonico = nombre_raw.strip()
-        # Detectar nivel via mayusculas + indentacion
-        es_header = nombre_canonico.upper() == nombre_canonico  # MAYUSCULAS = top de bloque
-        indent_spaces = len(nombre_raw) - len(nombre_raw.lstrip())
-        # En BANCOS hijos tienen 3 espacios. En CMAC no hay indent visible.
-        # Si MAYUSCULAS, nivel = 2 (balance) o 1 (resultados); sino, nivel = nivel_padre + 1
-        if es_header:
-            nivel = 2 if tipo_estado == "balance" else 1
-        elif indent_spaces >= 3:
-            nivel = 3 if tipo_estado == "balance" else 2
-        else:
-            # CMAC / heuristica: si hay parent_stack y la cuenta es hijo del header actual, nivel++
-            nivel = (parent_stack and len(parent_stack) + 1) or (
-                2 if tipo_estado == "balance" else 1
-            )
+        es_header = nombre_canonico.upper() == nombre_canonico
 
-        # Determinar codigo segun la seccion y orden.
-        # Strategy simplificada: contador por seccion, sub-indices para hijos.
+        # Determinar codigo + nivel + parent
         if es_header:
-            # Nueva cuenta L2 (balance) o L1 (resultados): incrementa contador top
+            # Cuenta de cabecera (L2 balance / L1 resultados)
             top_key = current_section_prefix or "X"
             section_counters[top_key] = section_counters.get(top_key, 0) + 1
-            codigo = (
-                f"{top_key}{section_counters[top_key]}"
-                if top_key
-                else str(section_counters[top_key])
-            )
-            parent_codigo = top_key if top_key in ("A", "B", "C") else None
-            parent_stack = [codigo]
+            n_top = section_counters[top_key]
+            if tipo_estado == "balance":
+                codigo = f"{top_key}{n_top}"
+                parent_codigo = top_key
+                nivel = 2
+            else:
+                # Resultados: codigos son numeros enteros (1, 2, 3, ...)
+                codigo = str(n_top)
+                parent_codigo = None
+                nivel = 1
+            last_header_codigo = codigo
         else:
-            # Hijo: codigo = parent + '.' + child_idx
-            if not parent_stack:
-                # Sin parent contexto, skip
+            # Cuenta hija del ultimo header visto
+            if not last_header_codigo:
                 continue
-            parent_codigo = parent_stack[-1]
-            child_idx_key = f"{parent_codigo}.child"
-            section_counters[child_idx_key] = section_counters.get(child_idx_key, 0) + 1
-            codigo = f"{parent_codigo}.{section_counters[child_idx_key]}"
-            # No agregamos a parent_stack porque solo trackeamos L1/L2 parents
+            child_counters[last_header_codigo] = child_counters.get(last_header_codigo, 0) + 1
+            codigo = f"{last_header_codigo}.{child_counters[last_header_codigo]}"
+            parent_codigo = last_header_codigo
+            nivel = 3 if tipo_estado == "balance" else 2
 
-        # Calcular aplica_a: grupos donde NO esta vacio en esa fila
+        # aplica_a: grupos donde la celda NO esta vacia en esta fila
         aplica_a = tuple(_COL_TO_GRUPO[c] for c in sorted(cells_per_col.keys()))
 
         orden += 1
@@ -201,6 +205,17 @@ def _extract_one(path: Path, *, tipo_estado: str) -> list[CuentaCanonica]:
         )
 
     return cuentas
+
+
+def _looks_like_datetime(s: str) -> bool:
+    """True si el string parece una fecha/datetime serializada."""
+    s = s.strip()
+    if not s or len(s) < 8:
+        return False
+    # 2018-05-31 00:00:00 / 2018-05-31
+    if s[:4].isdigit() and len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return True
+    return False
 
 
 def _initial_section_prefix(tipo_estado: str) -> str:

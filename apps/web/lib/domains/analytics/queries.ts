@@ -30,32 +30,34 @@ export async function listEntidades(opts: {
   tipoEntidad?: string;
   soloMicrofinancieras?: boolean;
 } = {}): Promise<Entidad[]> {
-  const conds: string[] = [];
+  const conds: string[] = ["NOT e.es_total", "NOT e.es_sucursal", "e.activa"];
   const params: unknown[] = [];
 
   if (opts.tipoEntidad) {
     params.push(opts.tipoEntidad);
-    conds.push(`tipo_entidad = $${params.length}`);
+    conds.push(`e.tipo_entidad = $${params.length}`);
   }
   if (opts.soloMicrofinancieras) {
-    conds.push(`microfinanciera = 'SI'`);
+    conds.push("e.microfinanciera");
   }
 
-  const whereClause = conds.length > 0 ? `WHERE ${conds.join(" AND ")}` : "";
+  const whereClause = `WHERE ${conds.join(" AND ")}`;
   const rows = await db.execute<Record<string, unknown>>(
     sql.raw(`
       SELECT
-        nomb_correg                                AS "nombCorreg",
-        MAX(empresa_sbs)                           AS "empresaSbs",
-        MAX(tipo_entidad)                          AS "tipoEntidad",
-        BOOL_OR(microfinanciera = 'SI')            AS "microfinanciera",
-        MAX(nacional)                              AS "nacional",
-        MIN(periodo)                               AS "primerPeriodo",
-        MAX(periodo)                               AS "ultimoPeriodo"
-      FROM raw.eeff_observacion
+        e.nomb_correg                                AS "nombCorreg",
+        COALESCE(MAX(e.empresa_sbs), MAX(r.empresa_sbs)) AS "empresaSbs",
+        e.tipo_entidad                               AS "tipoEntidad",
+        e.microfinanciera                            AS "microfinanciera",
+        MAX(r.nacional)                              AS "nacional",
+        MIN(r.periodo)                               AS "primerPeriodo",
+        MAX(r.periodo)                               AS "ultimoPeriodo"
+      FROM dw.dim_entidad e
+      LEFT JOIN raw.eeff_observacion r ON r.nomb_correg = e.nomb_correg
       ${whereClause}
-      GROUP BY nomb_correg
-      ORDER BY nomb_correg
+      GROUP BY e.nomb_correg, e.tipo_entidad, e.microfinanciera
+      HAVING MAX(r.periodo) IS NOT NULL
+      ORDER BY e.nomb_correg
     `),
   );
   return rows.map((r) => ({
@@ -134,27 +136,29 @@ export async function getRatiosLatest(opts: {
         SELECT MAX(periodo) AS p FROM marts.mv_eeff_ratios
       )
       SELECT
-        periodo, TO_CHAR(fecha_cierre, 'YYYY-MM-DD') AS "fechaCierre",
-        nomb_correg AS "nombCorreg", empresa_sbs AS "empresaSbs",
-        tipo_entidad AS "tipoEntidad", microfinanciera, nacional, moneda,
-        total_activo AS "totalActivo", total_pasivo AS "totalPasivo",
-        patrimonio, utilidad_neta AS "utilidadNeta",
-        cartera_bruta AS "carteraBruta",
-        ratio_mora AS "ratioMora",
-        ratio_cobertura_atrasados AS "ratioCoberturaAtrasados",
-        ratio_cobertura_car AS "ratioCoberturaCar",
-        depositos_sbs AS "depositosSbs",
-        total_fondeo AS "totalFondeo",
-        ratio_ahorros_sobre_fondeo AS "ratioAhorrosSobreFondeo",
-        gasto_fondeo AS "gastoFondeo",
-        ingresos_totales AS "ingresosTotales",
-        ratio_eficiencia AS "ratioEficiencia",
-        roa, roe, apalancamiento
-      FROM marts.mv_eeff_ratios
-      WHERE periodo = (SELECT p FROM ultimo)
-        AND moneda = ${moneda}
-        AND (${tipoEntidad}::text IS NULL OR tipo_entidad = ${tipoEntidad}::text)
-      ORDER BY nomb_correg
+        r.periodo, TO_CHAR(r.fecha_cierre, 'YYYY-MM-DD') AS "fechaCierre",
+        r.nomb_correg AS "nombCorreg", r.empresa_sbs AS "empresaSbs",
+        r.tipo_entidad AS "tipoEntidad", r.microfinanciera, r.nacional, r.moneda,
+        r.total_activo AS "totalActivo", r.total_pasivo AS "totalPasivo",
+        r.patrimonio, r.utilidad_neta AS "utilidadNeta",
+        r.cartera_bruta AS "carteraBruta",
+        r.ratio_mora AS "ratioMora",
+        r.ratio_cobertura_atrasados AS "ratioCoberturaAtrasados",
+        r.ratio_cobertura_car AS "ratioCoberturaCar",
+        r.depositos_sbs AS "depositosSbs",
+        r.total_fondeo AS "totalFondeo",
+        r.ratio_ahorros_sobre_fondeo AS "ratioAhorrosSobreFondeo",
+        r.gasto_fondeo AS "gastoFondeo",
+        r.ingresos_totales AS "ingresosTotales",
+        r.ratio_eficiencia AS "ratioEficiencia",
+        r.roa, r.roe, r.apalancamiento
+      FROM marts.mv_eeff_ratios r
+      JOIN dw.dim_entidad e ON e.nomb_correg = r.nomb_correg
+      WHERE r.periodo = (SELECT p FROM ultimo)
+        AND r.moneda = ${moneda}
+        AND NOT e.es_total AND NOT e.es_sucursal AND e.activa
+        AND (${tipoEntidad}::text IS NULL OR r.tipo_entidad = ${tipoEntidad}::text)
+      ORDER BY r.nomb_correg
     `,
   );
 
