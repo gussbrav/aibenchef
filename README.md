@@ -49,6 +49,7 @@ uv run dbt run
 
 ```
 aibenchef/
+├── Dockerfile              Dockerfile principal (Next.js standalone + migrator)
 ├── apps/
 │   └── web/                Next.js 15 todo-en-uno (frontend + API Routes + auth + billing)
 ├── packages/

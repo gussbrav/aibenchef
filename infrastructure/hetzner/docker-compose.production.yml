@@ -143,7 +143,7 @@ services:
   web:
     build:
       context: ../..
-      dockerfile: apps/web/Dockerfile
+      dockerfile: Dockerfile
     container_name: aibenchef-web
     restart: unless-stopped
     environment:

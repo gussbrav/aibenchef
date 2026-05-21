@@ -83,10 +83,10 @@ Dentro del proyecto `aibenchef` -> **"+"** -> **App**.
 - **Origen:** GitHub
 - **Repo:** `gussbrav/aibenchef`
 - **Branch:** `main`
-- **Build:**
-  - Tipo: **Dockerfile**
-  - Path Dockerfile: `apps/web/Dockerfile`
-  - Build context: **raiz del repo** (`.`) — necesita el monorepo entero
+- **Compilacion:**
+  - Tipo: **Dockerfile** (no Buildpacks/Nixpacks)
+  - Archivo: `Dockerfile` (en la raiz del repo)
+  - Ruta de compilacion: `/`
 - **Variables de entorno:**
   ```
   NODE_ENV=production
