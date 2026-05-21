@@ -41,9 +41,32 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // refresh diario
   },
 
-  trustedOrigins: [
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-  ],
+  trustedOrigins: buildTrustedOrigins(),
 });
+
+/**
+ * Dominios permitidos para auth (cookies + CORS de Better Auth).
+ *
+ * Por defecto: NEXT_PUBLIC_APP_URL (produccion canonica) + localhost (dev).
+ * Adicionalmente: cualquier dominio extra en BETTER_AUTH_TRUSTED_ORIGINS
+ * separado por coma (ej: dominio interno de EasyPanel para staging/preview).
+ *
+ * Necesario porque cuando el usuario accede por un host alternativo, el
+ * Origin del browser difiere y Better Auth rechaza la request por seguridad.
+ */
+function buildTrustedOrigins(): string[] {
+  const out = new Set<string>([
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    "http://localhost:3000",
+  ]);
+  const extra = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+  if (extra) {
+    for (const o of extra.split(",")) {
+      const trimmed = o.trim();
+      if (trimmed) out.add(trimmed);
+    }
+  }
+  return [...out];
+}
 
 export type Session = typeof auth.$Infer.Session;
