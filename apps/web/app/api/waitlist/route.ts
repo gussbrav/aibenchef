@@ -8,6 +8,35 @@ export const dynamic = "force-dynamic";
 
 const log = logger.child("api.waitlist");
 
+/**
+ * Resuelve el origin publico real cuando la app corre detras de un proxy
+ * reverso (EasyPanel/Traefik). req.url devuelve el hostname interno del
+ * contenedor (http://0.0.0.0:3000/...) lo que rompe los redirects.
+ *
+ * Prioridad:
+ *  1. NEXT_PUBLIC_APP_URL (configurado en build/runtime).
+ *  2. x-forwarded-proto + x-forwarded-host (forwarded por el reverse proxy).
+ *  3. host header + https asumido.
+ *  4. req.url.origin como ultimo recurso.
+ */
+function resolvePublicOrigin(req: NextRequest, h: Headers): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (envUrl) return envUrl.replace(/\/$/, "");
+
+  const fwdHost = h.get("x-forwarded-host");
+  const fwdProto = h.get("x-forwarded-proto");
+  if (fwdHost) {
+    return `${fwdProto ?? "https"}://${fwdHost}`;
+  }
+
+  const host = h.get("host");
+  if (host && !host.startsWith("0.0.0.0") && !host.startsWith("127.0.0.1")) {
+    return `https://${host}`;
+  }
+
+  return new URL(req.url).origin;
+}
+
 const inputSchema = z.object({
   email: z.string().min(3).max(254),
   organization: z.string().max(200).optional(),
@@ -60,7 +89,8 @@ export async function POST(req: NextRequest) {
     // Si la request es JSON (fetch API), devolver JSON.
     const accept = req.headers.get("accept") ?? "";
     if (!accept.includes("application/json")) {
-      return NextResponse.redirect(new URL("/waitlist/ok", req.url), 303);
+      const origin = resolvePublicOrigin(req, headersList);
+      return NextResponse.redirect(`${origin}/waitlist/ok`, 303);
     }
 
     return {
