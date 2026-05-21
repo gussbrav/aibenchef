@@ -1,193 +1,227 @@
-# Setup de servicios externos — accion del humano
+# Setup de servicios — Hetzner self-hosted
 
-Este documento lista paso a paso lo que **tiene que hacer Gus manualmente** en cada
-servicio externo. Va en orden de prioridad. Marcar con `[x]` lo hecho.
-
----
-
-## 1. Cloudflare — subdominios DNS
-
-### Pre-requisito
-- `azoramind.com` debe estar gestionado en Cloudflare (DNS apuntando a tus nameservers).
-
-### Subdominios a crear (los 3 al mismo tiempo)
-
-Andate a `https://dash.cloudflare.com` -> seleccionar `azoramind.com` -> DNS -> Records.
-
-Por ahora **NO crear los CNAMEs todavia** porque los servicios destino aun no existen.
-Solo reservar los nombres mentalmente:
-
-| Subdominio | Para que | DNS final (cuando deploy este listo) |
-|---|---|---|
-| `aibenchef.azoramind.com` | Frontend Next.js | CNAME -> `cname.vercel-dns.com` |
-| `api.aibenchef.azoramind.com` | Backend FastAPI | CNAME -> `<railway-app>.up.railway.app` |
-| `storage.aibenchef.azoramind.com` | Cloudflare R2 publico | CNAME -> R2 custom domain (auto) |
-
-**Accion ahora:** ninguna. Vuelvo a este doc cuando levantemos Vercel/Railway.
+Este documento reemplaza el anterior `SETUP_EXTERNAL_SERVICES.md` cuando se decidio
+self-hostear todo en Hetzner. Casi nada requiere cuenta externa.
 
 ---
 
-## 2. GitHub — repositorio remoto
+## Estado al 2026-05-21
 
-```bash
-# crear repo privado en github (via web o gh cli)
-gh repo create gussbrav/aibenchef --private --source=. --remote=origin --push
-# o manual:
-# 1. crear gussbrav/aibenchef en github.com
-# 2. cd D:\PROYECTO\SBS\aibenchef
-# 3. git remote add origin git@github.com:gussbrav/aibenchef.git
-# 4. git push -u origin main
+- [x] **Cloudflare DNS**: CNAME `aibenchef.azoramind.com` -> `azoramind.com` (Solo DNS, sin proxy).
+- [x] **GitHub repo**: https://github.com/gussbrav/aibenchef (Gus lo creo).
+- [x] **Hetzner VPS**: 24 GB RAM ya operativo, CRM Palma Rio corriendo ahi.
+- [ ] **DNS adicionales** (cuando deployemos): `api.aibenchef`, `storage.aibenchef`, `storage-console.aibenchef`.
+- [ ] **Resend** (email transaccional, free tier): pendiente Fase 4.
+- [ ] **Stripe** (billing): pendiente Fase 5.
+- [ ] **Sentry** dev plan (opcional): pendiente Fase 4.
+
+---
+
+## 1. Cloudflare — DNS records (sin proxy por ahora)
+
+CNAME ya creado:
+```
+CNAME  aibenchef        -> azoramind.com  (Solo DNS)
 ```
 
-**Accion ahora:** crear el repo y pushear el commit inicial.
+**Antes del primer deploy**, agregar estos otros:
+
+```
+CNAME  api.aibenchef               -> azoramind.com  (Solo DNS)
+CNAME  storage.aibenchef           -> azoramind.com  (Solo DNS)
+CNAME  storage-console.aibenchef   -> azoramind.com  (Solo DNS)
+```
+
+**Importante:** dejar todos en "Solo DNS" (nube gris) hasta que Caddy emita el certificado
+TLS Let's Encrypt. Caddy necesita resolver el challenge HTTP-01 directo al VPS.
+
+**Despues del primer deploy exitoso**, podes opcionalmente prender el proxy naranja en
+Cloudflare para ganar:
+- Cache estatica gratis (mejora velocidad LATAM)
+- DDoS proteccion
+- Reglas de WAF
+
+Pero antes de prender el proxy, cambiar el dominio en `Caddyfile` a usar TLS DNS-01
+challenge (requiere API token de Cloudflare).
 
 ---
 
-## 3. Vercel — frontend
+## 2. Bootstrap del VPS Hetzner (primera vez)
 
-1. Andate a `https://vercel.com` y conectate con tu cuenta GitHub.
-2. Import Project -> seleccionar `aibenchef`.
-3. Framework Preset: Next.js (auto detectado).
-4. Root Directory: `apps/web`.
-5. Build Command: `cd ../.. && pnpm install --frozen-lockfile && pnpm --filter web build`.
-6. Output: `apps/web/.next` (auto).
-7. Variables de entorno: vacias por ahora; iremos rellenando en Fase 1.
-8. Deploy.
-9. Una vez deployado, ve a Settings -> Domains -> Add `aibenchef.azoramind.com`.
-10. Vercel te da un CNAME a apuntar -> volve a Cloudflare y crea el record.
+SSH al VPS como root:
 
-**Accion ahora:** opcional, podes esperar a Fase 1 cuando haya pagina real.
+```bash
+ssh root@46.224.250.197
+```
 
----
+Bajar y correr el bootstrap:
 
-## 4. Railway — backend + postgres + cube
+```bash
+curl -fsSL https://raw.githubusercontent.com/gussbrav/aibenchef/main/infrastructure/hetzner/bootstrap.sh | bash
+```
 
-1. `https://railway.app` -> Login con GitHub.
-2. New Project -> Deploy from GitHub repo -> `aibenchef`.
-3. Crear 3 services dentro del proyecto:
-   - **api**: Root Directory `apps/api`, command `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-   - **cube**: Image `cubejs/cube:latest`, mount `data-platform/cube` como volumen.
-   - **postgres** (recomendado): plugin Postgres de Railway, o si crece migrar a Neon.
-4. Variables de entorno por service (copiar de `.env.example`).
-5. Generar dominio publico `api.aibenchef.azoramind.com` en Settings de service `api`.
-6. Railway te da CNAME -> agregar en Cloudflare.
-
-**Accion ahora:** crear cuenta Railway (gratis para empezar, ~USD 5 credito mensual). Configurar service en Fase 1.
+Esto:
+- Actualiza paquetes
+- Instala Docker + Docker Compose plugin
+- Crea usuario `aibenchef` sin privilegios root
+- Activa UFW firewall (22/80/443)
+- Activa fail2ban
+- Clona el repo en `/home/aibenchef/aibenchef`
 
 ---
 
-## 5. Clerk vs Supabase Auth — decision pendiente
+## 3. Configurar secrets de produccion
 
-Lee `docs/adr/002-clerk-vs-supabase.md`.
+```bash
+su - aibenchef
+cd ~/aibenchef/infrastructure/hetzner
+cp .env.production.example .env.production
+```
 
-Recomendacion: **Supabase** (ahorra costos y combina auth + db + storage).
+Generar secrets fuertes (correr en el VPS):
 
-Si Supabase:
-1. `https://supabase.com` -> New Project -> region `us-east-1` (mas cerca de Peru via cable transatlantico) o `sa-east-1` (Sao Paulo, ping menor).
-2. Crear proyecto `aibenchef-prod`.
-3. Settings -> API -> copiar `URL`, `anon key`, `service_role key`.
-4. Pegarlas en `.env` (variables a agregar luego).
-5. Authentication -> Providers -> habilitar Email + Google + Microsoft.
-6. Database -> Settings -> Connection string -> copiar la "Session pooler" string para `DATABASE_URL`.
+```bash
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 32)" >> .env.production
+echo "API_SECRET_KEY=$(openssl rand -hex 64)" >> .env.production
+echo "CUBEJS_API_SECRET=$(openssl rand -hex 32)" >> .env.production
+echo "MINIO_ROOT_PASSWORD=$(openssl rand -hex 32)" >> .env.production
+```
 
-**Accion ahora:** crear cuenta Supabase y proyecto. No tocar tablas todavia.
+Editar `.env.production` y limpiar lineas duplicadas:
 
-Si Clerk:
-1. `https://clerk.com` -> New Application.
-2. Habilitar Organizations en Settings.
-3. Email + Google + Microsoft providers.
-4. Copiar `Publishable key` y `Secret key` al `.env`.
-
----
-
-## 6. Stripe — billing
-
-1. `https://stripe.com` -> Create account (modo Test).
-2. Copiar `Publishable key` y `Secret key` (test mode) -> `.env`.
-3. Products -> crear 5 productos: Starter / Pro / Business / Enterprise / API Metered.
-   - **NO crear aun** — esperar a Fase 5 cuando definamos precios finales con feedback de leads.
-4. Webhooks -> crear endpoint apuntando a `https://api.aibenchef.azoramind.com/v1/webhooks/stripe` con eventos:
-   - `customer.subscription.*`
-   - `invoice.paid`
-   - `invoice.payment_failed`
-
-**Accion ahora:** solo crear cuenta. Productos en Fase 5.
+```bash
+nano .env.production
+```
 
 ---
 
-## 7. Cloudflare R2 — storage
+## 4. Verificar que no haya conflicto con CRM Palma Rio
 
-1. Cloudflare Dashboard -> R2 Object Storage -> Create bucket `aibenchef-prod`.
-2. R2 -> Manage R2 API Tokens -> Create API Token -> scope `Object Read & Write`.
-3. Copiar `Access Key ID` y `Secret Access Key` -> `.env`.
-4. (Opcional) Bucket -> Settings -> Custom Domains -> conectar `storage.aibenchef.azoramind.com`.
+```bash
+# Que esta usando puertos 80/443?
+sudo ss -tlnp | grep -E ':80 |:443 '
+```
 
-**Accion ahora:** opcional, puede esperar a Fase 1.
+Si CRM Palma Rio tiene un Nginx/Caddy en 80/443:
+- **Opcion A** (mejor): migrar CRM Palma Rio detras del nuevo Caddy de Aibenchef. Editar `Caddyfile` para agregar el dominio del CRM como otro `reverse_proxy`.
+- **Opcion B** (rapida): correr el Caddy de Aibenchef en otros puertos (8080/8443) y dejar que el Nginx/Caddy existente le haga proxy con `proxy_pass http://localhost:8080`.
 
----
-
-## 8. Resend — email transaccional
-
-1. `https://resend.com` -> Sign up.
-2. Domains -> Add `aibenchef.azoramind.com` -> seguir instrucciones DNS (SPF, DKIM, DMARC en Cloudflare).
-3. API Keys -> Create key -> `.env`.
-
-**Accion ahora:** opcional, Fase 4 cuando haya signup.
+Si no hay nada en 80/443, podemos arrancar Aibenchef en esos puertos directamente.
 
 ---
 
-## 9. Sentry + PostHog — observabilidad
+## 5. Primer deploy
 
-1. Sentry: `https://sentry.io` -> Free dev plan. New Project -> Next.js + Python. Copiar 2 DSNs.
-2. PostHog: `https://posthog.com` -> Free hasta 1M events. Copiar `project key` y `host`.
+```bash
+cd ~/aibenchef/infrastructure/hetzner
+bash ../../infrastructure/hetzner/deploy.sh
+```
 
-**Accion ahora:** opcional, Fase 4.
+Esto:
+- `git pull` del repo
+- Build de imagenes Docker
+- Aplica migraciones SQL
+- Levanta stack completo (Caddy, Postgres, Redis, MinIO, Cube, API, Web)
+- Caddy negocia certificado TLS Let's Encrypt automatico
 
----
+**Verificar:**
+```bash
+docker compose -f docker-compose.production.yml ps
+docker compose -f docker-compose.production.yml logs caddy -f
+```
 
-## 10. Nubefact — facturacion electronica Peru
-
-1. `https://nubefact.com` -> Crear cuenta empresa (necesitas RUC).
-2. Setup serie de comprobantes (Factura F001, Boleta B001).
-3. Generar token API -> `.env`.
-
-**Accion ahora:** Fase 5 cuando haya primer pago.
-
----
-
-## Checklist prioridad
-
-### Esta semana (sem 1)
-- [ ] Crear repo GitHub y push.
-- [ ] Cuenta Supabase + proyecto vacio.
-- [ ] Cuenta Stripe (test mode).
-- [ ] Cuenta Cloudflare R2 + bucket.
-- [ ] Verificar que `azoramind.com` esta en Cloudflare con DNS gestionado ahi.
-
-### Semana 8 (cuando haya MVP demo)
-- [ ] Vercel deploy + DNS `aibenchef.azoramind.com`.
-- [ ] Railway deploy + DNS `api.aibenchef.azoramind.com`.
-- [ ] Sentry + PostHog conectados.
-
-### Semana 13-14 (billing)
-- [ ] Stripe productos definidos con precios finales.
-- [ ] Stripe webhook en prod.
-- [ ] Nubefact integrado.
+Abrir en navegador:
+- https://aibenchef.azoramind.com — debe mostrar landing con candadito verde
+- https://api.aibenchef.azoramind.com/v1/health — debe devolver `{"status":"ok"}`
 
 ---
 
-## Costos estimados al ano 1
+## 6. Servicios externos (los unicos que requieren cuenta externa)
 
-| Servicio | Costo mensual estimado | Comentario |
-|---|---|---|
-| Cloudflare (DNS + R2 100GB) | USD 5 | R2 escala bien |
-| Vercel Pro (post free tier) | USD 20 | Cuando pasamos 100GB bw |
-| Railway | USD 20-50 | Postgres + 2 services + workers |
-| Supabase | USD 0-25 | Free hasta 50k MAU; Pro USD 25 |
-| Stripe | 3.9% + USD 0.30 por transaccion | Sin fee fijo mensual |
-| Resend | USD 0 | Free hasta 3k emails/mes |
-| Sentry | USD 0-29 | Free dev plan suficiente al inicio |
-| PostHog | USD 0 | Free hasta 1M events |
-| Nubefact | ~USD 30 | Plan basico Peru |
-| Dominio | USD 1 | Ya tienes azoramind.com |
-| **TOTAL inicial** | **~USD 80-130/mes** | Hasta ~50 orgs activas |
+### Resend (email transaccional) — gratis 3k emails/mes
+
+**Cuando:** Fase 4, cuando agreguemos signup/recovery con email.
+
+1. https://resend.com -> Sign up con `gussbrav@gmail.com`.
+2. Domains -> Add `aibenchef.azoramind.com` -> Resend te da 3 records DNS (SPF, DKIM, MX). Agregar en Cloudflare.
+3. API Keys -> Create key -> copiar a `.env.production` como `RESEND_API_KEY`.
+4. Restart api: `docker compose restart api`.
+
+### Sentry (opcional) — gratis 5k errores/mes
+
+**Cuando:** Fase 4, cuando arranquemos a tener trafico real.
+
+1. https://sentry.io -> Free dev plan.
+2. New Project -> Next.js -> copiar DSN -> `NEXT_PUBLIC_SENTRY_DSN`.
+3. New Project -> Python (FastAPI) -> copiar DSN -> `SENTRY_DSN`.
+
+### Stripe (billing) — sin costo fijo, fee por transaccion 3.9% + USD 0.30
+
+**Cuando:** Fase 5, semana 13-14.
+
+1. https://stripe.com -> Create account.
+2. Test mode primero. Crear productos (Starter, Pro, Business) con precios definidos tras entrevistas.
+3. Webhook endpoint: `https://api.aibenchef.azoramind.com/v1/webhooks/stripe` con eventos `customer.subscription.*`, `invoice.*`.
+4. Copiar `Secret key`, `Publishable key`, `Webhook secret` a `.env.production`.
+
+### Nubefact (facturacion Peru) — ~USD 30/mes
+
+**Cuando:** Fase 5, cuando entre el primer cliente pagante peruano.
+
+1. https://nubefact.com -> Cuenta empresa (con RUC).
+2. Configurar series F001 (facturas) y B001 (boletas).
+3. Token API -> `NUBEFACT_TOKEN` en `.env.production`.
+
+---
+
+## 7. Backups y mantenimiento
+
+### Backup Postgres diario
+
+Cron en el VPS como root:
+
+```bash
+crontab -e
+```
+
+```cron
+0 3 * * * docker exec aibenchef-postgres pg_dump -U aibenchef aibenchef | gzip > /backups/aibenchef-$(date +\%Y\%m\%d).sql.gz
+0 4 * * * find /backups -name 'aibenchef-*.sql.gz' -mtime +30 -delete
+```
+
+**Mejor:** subir a un bucket Backblaze B2 (USD 0.005/GB/mes) o R2 con `rclone`.
+
+### Update mensual del VPS
+
+```bash
+ssh root@46.224.250.197 'apt-get update && apt-get upgrade -y && reboot'
+```
+
+### Logs
+
+```bash
+# Tail de todos los servicios
+cd ~/aibenchef/infrastructure/hetzner
+docker compose -f docker-compose.production.yml logs -f --tail=100
+
+# Solo errores
+docker compose -f docker-compose.production.yml logs --since=1h | grep -i error
+```
+
+---
+
+## Costos al ano 1 — actualizado
+
+| Item | Costo mensual estimado |
+|---|---|
+| Hetzner VPS (ya tenes) | USD 0 (asumido) |
+| Cloudflare DNS | USD 0 |
+| Dominio (azoramind.com ya tenes) | USD 0 |
+| Resend free tier | USD 0 |
+| Sentry free tier | USD 0 |
+| MinIO self-hosted | USD 0 |
+| Stripe (sin transacciones aun) | USD 0 |
+| **TOTAL meses 1-4** | **USD 0** |
+| Nubefact (cuando entre primer pago) | USD 30 |
+| Stripe fees (3.9% del MRR) | variable |
+| **TOTAL meses 5+** | **USD 30 + fees Stripe** |

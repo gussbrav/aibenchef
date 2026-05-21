@@ -1,0 +1,206 @@
+name: aibenchef-prod
+
+# =========================================================================
+# Stack production de Aibenchef self-hosted en Hetzner VPS.
+# Aislado del CRM Palma Rio: red propia, volumenes propios, prefijo aibenchef-*.
+# Caddy de este stack puede compartir 80/443 si lo dejamos como reverse proxy
+# global, o correr en puertos internos detras del Caddy/Nginx existente.
+# Por ahora arranca como standalone en 80/443 — si hay conflicto, mover a 8080/8443.
+# =========================================================================
+
+networks:
+  aibenchef:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  caddy_data:
+  caddy_config:
+  cube_cubestore:
+
+services:
+
+  # ---------- Reverse proxy + TLS automatico ----------
+  caddy:
+    image: caddy:2-alpine
+    container_name: aibenchef-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - aibenchef
+    depends_on:
+      - web
+      - api
+
+  # ---------- Postgres 16 ----------
+  postgres:
+    image: postgres:16-alpine
+    container_name: aibenchef-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aibenchef
+      POSTGRES_USER: ${POSTGRES_USER:-aibenchef}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # 24GB VPS: dejar 4GB para Postgres; el resto reparte CRM + servicios
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command: >
+      postgres
+      -c shared_buffers=2GB
+      -c effective_cache_size=6GB
+      -c maintenance_work_mem=512MB
+      -c work_mem=32MB
+      -c max_connections=200
+      -c max_wal_size=4GB
+      -c min_wal_size=1GB
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c log_min_duration_statement=500
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - aibenchef
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aibenchef} -d aibenchef"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Redis (cache + Cube store + rate limit) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: aibenchef-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru
+    volumes:
+      - cube_cubestore:/data
+    networks:
+      - aibenchef
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------- MinIO S3-compatible storage ----------
+  minio:
+    image: minio/minio:latest
+    container_name: aibenchef-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: https://storage-console.aibenchef.azoramind.com
+    volumes:
+      - minio_data:/data
+    networks:
+      - aibenchef
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------- Cube.dev semantic layer ----------
+  cube:
+    image: cubejs/cube:latest
+    container_name: aibenchef-cube
+    restart: unless-stopped
+    environment:
+      CUBEJS_DEV_MODE: "false"
+      CUBEJS_DB_TYPE: postgres
+      CUBEJS_DB_HOST: postgres
+      CUBEJS_DB_PORT: 5432
+      CUBEJS_DB_NAME: aibenchef
+      CUBEJS_DB_USER: ${POSTGRES_USER:-aibenchef}
+      CUBEJS_DB_PASS: ${POSTGRES_PASSWORD}
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+      CUBEJS_REDIS_URL: redis://redis:6379
+      CUBEJS_WEB_SOCKETS: "true"
+      CUBEJS_LOG_LEVEL: warn
+    volumes:
+      - ../../data-platform/cube:/cube/conf:ro
+    networks:
+      - aibenchef
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------- FastAPI backend ----------
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    container_name: aibenchef-api
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aibenchef}:${POSTGRES_PASSWORD}@postgres:5432/aibenchef
+      REDIS_URL: redis://redis:6379
+      CUBEJS_API_URL: http://cube:4000/cubejs-api/v1
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+      APP_URL: https://aibenchef.azoramind.com
+      API_URL: https://api.aibenchef.azoramind.com
+      SECRET_KEY: ${API_SECRET_KEY}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: aibenchef
+      MINIO_PUBLIC_URL: https://storage.aibenchef.azoramind.com
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Aibenchef <noreply@aibenchef.azoramind.com>}
+    networks:
+      - aibenchef
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------- Next.js web ----------
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    container_name: aibenchef-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://api.aibenchef.azoramind.com
+      NEXT_PUBLIC_APP_URL: https://aibenchef.azoramind.com
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    networks:
+      - aibenchef
+    depends_on:
+      - api
+
+  # ---------- Workers / scheduled tasks (futuro Fase 1) ----------
+  # worker:
+  #   build:
+  #     context: ../../data-platform
+  #     dockerfile: Dockerfile
+  #   container_name: aibenchef-worker
+  #   restart: unless-stopped
+  #   command: ["python", "-m", "scrapers.sbs.cli", "watch"]
+  #   environment:
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-aibenchef}:${POSTGRES_PASSWORD}@postgres:5432/aibenchef
+  #     ...
+  #   networks:
+  #     - aibenchef
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy

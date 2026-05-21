@@ -1,0 +1,89 @@
+# =========================================================================
+# Caddy reverse proxy para Aibenchef
+# HTTPS automatico via Let's Encrypt. Cloudflare CNAME debe estar en "Solo DNS"
+# (sin proxy naranja) para que Caddy pueda resolver el challenge HTTP-01.
+# =========================================================================
+
+{
+    # Email para alertas Let's Encrypt
+    email gussbrav@gmail.com
+
+    # Logs estructurados a stdout para docker logs
+    log {
+        format json
+        level INFO
+    }
+}
+
+# -------------------- Frontend --------------------
+aibenchef.azoramind.com {
+    reverse_proxy web:3000
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# -------------------- API --------------------
+api.aibenchef.azoramind.com {
+    reverse_proxy api:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        Access-Control-Allow-Origin "https://aibenchef.azoramind.com"
+        Access-Control-Allow-Credentials "true"
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# -------------------- MinIO storage publico --------------------
+storage.aibenchef.azoramind.com {
+    reverse_proxy minio:9000 {
+        header_up Host {host}
+    }
+
+    encode zstd gzip
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# -------------------- MinIO console (admin) --------------------
+# Acceso restringido por basic auth + IP allowlist en produccion
+storage-console.aibenchef.azoramind.com {
+    reverse_proxy minio:9001
+
+    # NOTA: agregar IP allowlist en prod
+    # @denied not remote_ip 1.2.3.4/32
+    # respond @denied 403
+
+    log {
+        output stdout
+        format json
+    }
+}
