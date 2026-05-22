@@ -57,6 +57,16 @@ export function SqlWorkbenchClient() {
   const [nombreNuevo, setNombreNuevo] = useState("");
   const [queryActualId, setQueryActualId] = useState<string | null>(null);
 
+  // Hot-load desde sessionStorage cuando viene de Genie u otro modulo
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const preload = sessionStorage.getItem("aibenchef.workbench.preload");
+    if (preload) {
+      setSqlText(preload);
+      sessionStorage.removeItem("aibenchef.workbench.preload");
+    }
+  }, []);
+
   const cargarLista = useCallback(async () => {
     try {
       const r = await fetch("/api/v1/sql/queries");

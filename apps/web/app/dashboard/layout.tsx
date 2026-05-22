@@ -36,6 +36,8 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/eeff" label="Estados Financieros" />
               <NavLink href="/dashboard/tableros" label="Tableros" />
               <NavLink href="/dashboard/analisis" label="Analisis Dinamico" />
+              <NavLink href="/dashboard/notebooks" label="Notebooks" />
+              <NavLink href="/dashboard/genie" label="Genie ✨" />
               <NavLink href="/dashboard/sql" label="SQL Workbench" />
               <NavLink href="/dashboard/catalog" label="Catalog" />
               <NavLink href="/dashboard/admin/archivos" label="Archivos SBS" />
