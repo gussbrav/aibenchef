@@ -3,23 +3,18 @@ import Link from "next/link";
 import { ArrowRight, BarChart3, Building2, Calendar } from "lucide-react";
 import { Card } from "@/components/ui";
 import { getRatiosLatest } from "@/lib/domains/analytics";
-import { formatPct, formatNumberCompact } from "./_lib/format";
+import {
+  formatPct,
+  formatNumberCompact,
+  tipoEntidadLabel,
+  TIPO_ENTIDAD_ORDER,
+} from "./_lib/format";
 
 export const metadata: Metadata = {
   title: "Resumen",
 };
 
 export const dynamic = "force-dynamic";
-
-// Orden canonico SBS: bancos primero (mayor escala), luego financieras,
-// luego microfinanzas (CMAC -> CRAC -> EDPYMES por tamano historico promedio).
-const TIPO_ENTIDAD_ORDER: Record<string, number> = {
-  BANCOS: 1,
-  FINANCIERAS: 2,
-  CMAC: 3,
-  CRAC: 4,
-  EDPYMES: 5,
-};
 
 export default async function DashboardHome() {
   const rows = await getRatiosLatest({ moneda: "TOTAL" });
@@ -111,7 +106,7 @@ export default async function DashboardHome() {
                 {sortedRows.map((r) => (
                   <tr key={`${r.nombCorreg}-${r.moneda}`} className="hover:bg-slate-50">
                     <td className="px-6 py-3 font-medium text-slate-900">{r.nombCorreg}</td>
-                    <td className="px-4 py-3 text-slate-600">{r.tipoEntidad}</td>
+                    <td className="px-4 py-3 text-slate-600">{tipoEntidadLabel(r.tipoEntidad)}</td>
                     <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
                       {formatNumberCompact(r.totalActivo)}
                     </td>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { Entidad } from "@/lib/domains/analytics";
+import { tipoEntidadLabel, TIPO_ENTIDAD_ORDER } from "@/app/dashboard/_lib/format";
 
 export function EntidadSelector({
   entidades,
@@ -51,7 +52,12 @@ export function EntidadSelector({
       if (!byGroup.has(k)) byGroup.set(k, []);
       byGroup.get(k)!.push(e);
     }
-    return [...byGroup.entries()].sort(([a], [b]) => a.localeCompare(b));
+    return [...byGroup.entries()].sort(([a], [b]) => {
+      const oa = TIPO_ENTIDAD_ORDER[a] ?? 99;
+      const ob = TIPO_ENTIDAD_ORDER[b] ?? 99;
+      if (oa !== ob) return oa - ob;
+      return a.localeCompare(b);
+    });
   }, [entidades, query]);
 
   function selectEntidad(nombCorreg: string) {
@@ -99,7 +105,7 @@ export function EntidadSelector({
               grouped.map(([grupo, items]) => (
                 <div key={grupo} className="py-1">
                   <p className="px-3 py-1 text-xs font-semibold tracking-wider uppercase text-slate-500">
-                    {grupo}
+                    {tipoEntidadLabel(grupo)}
                   </p>
                   {items.map((e) => {
                     const selected = e.nombCorreg === valor;
