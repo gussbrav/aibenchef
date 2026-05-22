@@ -612,7 +612,9 @@ class _CuentaLookup:
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
         # 0) Alias manual (dw.cuenta_alias) — para nombres renombrados en SBS
-        alias_codigo = self._aliases.get((section, nombre_norm)) or self._aliases.get(("", nombre_norm))
+        alias_codigo = self._aliases.get((section, nombre_norm)) or self._aliases.get(
+            ("", nombre_norm)
+        )
         if alias_codigo:
             nombre = self._codigo_to_nombre.get(alias_codigo, "")
             return (alias_codigo, nombre)

@@ -579,12 +579,8 @@ def catalog_init_maestra(periodo: str, dry_run: bool) -> None:
             f = files[0]
             click.echo(f"  [{grupo:<12}] {f.name}")
             sheets = read_xls(f)
-            balance_sheet = next(
-                (s for s in sheets if _is_balance_sheet(s)), None
-            )
-            resultados_sheet = next(
-                (s for s in sheets if _is_resultados_sheet(s)), None
-            )
+            balance_sheet = next((s for s in sheets if _is_balance_sheet(s)), None)
+            resultados_sheet = next((s for s in sheets if _is_resultados_sheet(s)), None)
 
             for tipo_estado, sheet, lookup in (
                 ("balance", balance_sheet, lookup_balance),
@@ -627,9 +623,8 @@ def catalog_init_maestra(periodo: str, dry_run: bool) -> None:
                     nombre_norm = _normalize(nombre_raw)
 
                     # Footnotes que empiezan con "tipo de cambio" o "N/" (notas al pie)
-                    if (
-                        nombre_norm.startswith("tipo de cambio")
-                        or re.match(r"^\d+/\s", nombre_raw.strip())
+                    if nombre_norm.startswith("tipo de cambio") or re.match(
+                        r"^\d+/\s", nombre_raw.strip()
                     ):
                         # Las dejamos en maestra como NULL codigo para mantener orden
                         is_null_row = True
@@ -819,9 +814,7 @@ def catalog_detectar_cambios(periodo: str, grupo: str | None, max_diffs: int) ->
                         """,
                         (tipo_estado, tipo_entidad),
                     )
-                    maestra_rows = {
-                        r[0]: (r[1], r[2]) for r in cur.fetchall()
-                    }
+                    maestra_rows = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
 
                 diffs_renamed: list[str] = []
                 diffs_extra: list[str] = []
