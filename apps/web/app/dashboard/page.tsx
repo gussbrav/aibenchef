@@ -11,6 +11,16 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+// Orden canonico SBS: bancos primero (mayor escala), luego financieras,
+// luego microfinanzas (CMAC -> CRAC -> EDPYMES por tamano historico promedio).
+const TIPO_ENTIDAD_ORDER: Record<string, number> = {
+  BANCOS: 1,
+  FINANCIERAS: 2,
+  CMAC: 3,
+  CRAC: 4,
+  EDPYMES: 5,
+};
+
 export default async function DashboardHome() {
   const rows = await getRatiosLatest({ moneda: "TOTAL" });
   const lastPeriod = rows[0]?.periodo;
@@ -22,6 +32,16 @@ export default async function DashboardHome() {
   const avgRoa = avg(rows.map((r) => r.roa));
   const avgRoe = avg(rows.map((r) => r.roe));
   const avgMora = avg(rows.map((r) => r.ratioMora));
+
+  // Ordenar: 1) grupo en orden canonico SBS, 2) cartera bruta DESC dentro del grupo
+  const sortedRows = [...rows].sort((a, b) => {
+    const ga = TIPO_ENTIDAD_ORDER[a.tipoEntidad] ?? 99;
+    const gb = TIPO_ENTIDAD_ORDER[b.tipoEntidad] ?? 99;
+    if (ga !== gb) return ga - gb;
+    const ca = a.carteraBruta ?? -Infinity;
+    const cb = b.carteraBruta ?? -Infinity;
+    return cb - ca;
+  });
 
   return (
     <div className="space-y-8">
@@ -88,7 +108,7 @@ export default async function DashboardHome() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((r) => (
+                {sortedRows.map((r) => (
                   <tr key={`${r.nombCorreg}-${r.moneda}`} className="hover:bg-slate-50">
                     <td className="px-6 py-3 font-medium text-slate-900">{r.nombCorreg}</td>
                     <td className="px-4 py-3 text-slate-600">{r.tipoEntidad}</td>
