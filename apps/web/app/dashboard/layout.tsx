@@ -45,8 +45,11 @@ export default async function DashboardLayout({
         </Container>
       </header>
 
-      <main className="py-10">
-        <Container size="xl">{children}</Container>
+      <main className="py-6">
+        {/* Layout full-width. Las paginas narrow (Resumen, EEFF) se envuelven
+            internamente en <Container size="xl">. Las paginas tool (analisis,
+            sql, catalog) usan todo el ancho. */}
+        <Container size="full">{children}</Container>
       </main>
     </div>
   );

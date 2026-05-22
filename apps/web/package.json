@@ -33,7 +33,9 @@
     "recharts": "^2.15.0",
     "ag-grid-react": "^32.3.0",
     "ag-grid-community": "^32.3.0",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "@monaco-editor/react": "^4.6.0",
+    "@anthropic-ai/sdk": "^0.39.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

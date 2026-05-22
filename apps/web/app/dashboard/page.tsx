@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BarChart3, Building2, Calendar } from "lucide-react";
-import { Card } from "@/components/ui";
+import { Card, Container } from "@/components/ui";
 import { getRatiosLatest } from "@/lib/domains/analytics";
 import {
   formatPct,
@@ -39,7 +39,7 @@ export default async function DashboardHome() {
   });
 
   return (
-    <div className="space-y-8">
+    <Container size="xl" className="space-y-8 px-0">
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Resumen del sistema</h1>
         <p className="text-slate-600 flex items-center gap-2">
@@ -132,7 +132,7 @@ export default async function DashboardHome() {
           </div>
         </Card>
       </section>
-    </div>
+    </Container>
   );
 }
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Calendar } from "lucide-react";
-import { Card } from "@/components/ui";
+import { Card, Container } from "@/components/ui";
 import { getRatios, getRatiosLatest, listEntidades } from "@/lib/domains/analytics";
 import type { Moneda, RatioEeff } from "@/lib/domains/analytics";
 import { EntidadSelector } from "./entidad-selector";
@@ -38,7 +38,11 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
   }
 
   if (!entidadSeleccionada) {
-    return <EmptyState />;
+    return (
+      <Container size="xl" className="px-0">
+        <EmptyState />
+      </Container>
+    );
   }
 
   const historia = await getRatios({ entidad: entidadSeleccionada, moneda });
@@ -47,7 +51,7 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
   const haceUnAnio = ultimoIndex >= 12 ? historia[ultimoIndex - 12] : undefined;
 
   return (
-    <div className="space-y-8">
+    <Container size="xl" className="space-y-8 px-0">
       <header className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
@@ -135,7 +139,7 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
           </section>
         </>
       )}
-    </div>
+    </Container>
   );
 }
 

@@ -10,6 +10,7 @@ import { Play, Save, Trash2, Plus, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 import { formatNumber } from "@/app/dashboard/_lib/format";
+import { SqlEditor } from "@/components/sql-editor";
 
 ModuleRegistry.registerModules([ClientSideRowModelModule]);
 
@@ -138,14 +139,6 @@ export function SqlWorkbenchClient() {
     setQueryActualId(null);
     setResultado(null);
     setError(null);
-  };
-
-  // Atajo: Ctrl/Cmd+Enter ejecuta
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      ejecutar();
-    }
   };
 
   const filtradas = useMemo(() => {
@@ -307,15 +300,13 @@ export function SqlWorkbenchClient() {
           </div>
         </header>
 
-        {/* Editor (textarea simple; podriamos usar Monaco mas adelante) */}
-        <div className="flex-shrink-0" style={{ height: 280 }}>
-          <textarea
+        {/* Editor Monaco (autocomplete + syntax highlight) */}
+        <div className="flex-shrink-0 border-b border-slate-200" style={{ height: 280 }}>
+          <SqlEditor
             value={sqlText}
-            onChange={(e) => setSqlText(e.target.value)}
-            onKeyDown={onKeyDown}
-            spellCheck={false}
-            className="w-full h-full p-3 font-mono text-[12.5px] text-slate-900 bg-white border-b border-slate-200 outline-none resize-none"
-            placeholder="-- Escribe tu SQL aqui (solo SELECT sobre marts.* y dw.*)"
+            onChange={setSqlText}
+            onRun={ejecutar}
+            onSave={nombreNuevo.trim() ? guardar : undefined}
           />
         </div>
 

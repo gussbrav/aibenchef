@@ -193,21 +193,21 @@ export async function executeQuerySandbox(
   let exitoso = false;
   let errorMsg: string | undefined;
 
+  // CRITICAL: drizzle/postgres-js usa POOL — db.execute() puede ir a conexiones
+  // distintas. SET LOCAL solo aplica DENTRO de una transaccion, asi que todo
+  // debe ejecutarse en el mismo db.transaction(). Lanzar al final fuerza
+  // rollback (queremos descartar el SET ROLE igual).
   try {
-    // postgres-js client via drizzle: usamos db.execute con un BEGIN/SET/SELECT/ROLLBACK
-    // como statements separados. Drizzle exec en una sola sesion implicitamente.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql.raw("SET LOCAL statement_timeout = '15s'"));
+      await tx.execute(
+        sql.raw("SET LOCAL idle_in_transaction_session_timeout = '20s'"),
+      );
+      await tx.execute(sql.raw("SET LOCAL search_path TO marts, dw, pg_catalog"));
+      await tx.execute(sql.raw("SET LOCAL ROLE app_sql_readonly"));
 
-    // SET LOCAL afecta solo la transaccion. Necesitamos BEGIN explicito.
-    await db.execute(sql.raw("BEGIN"));
-    try {
-      await db.execute(sql.raw("SET LOCAL statement_timeout = '15s'"));
-      await db.execute(sql.raw("SET LOCAL idle_in_transaction_session_timeout = '20s'"));
-      await db.execute(sql.raw("SET LOCAL search_path TO marts, dw, pg_catalog"));
-      await db.execute(sql.raw("SET LOCAL ROLE app_sql_readonly"));
-
-      const result = await db.execute<Record<string, unknown>>(sql.raw(wrapped));
+      const result = await tx.execute<Record<string, unknown>>(sql.raw(wrapped));
       filas = result as Array<Record<string, unknown>>;
-      // Inferir columnas del primer registro (o de pg_attribute meta — drizzle no expone)
       if (filas.length > 0) {
         columnas = Object.keys(filas[0]!).map((k) => ({
           key: k,
@@ -217,9 +217,9 @@ export async function executeQuerySandbox(
         columnas = [];
       }
       exitoso = true;
-    } finally {
-      await db.execute(sql.raw("ROLLBACK"));
-    }
+      // No throw -> commit. Como solo hicimos SET LOCAL + SELECT, commit es
+      // equivalente a rollback semanticamente (no hay writes).
+    });
   } catch (e) {
     errorMsg = e instanceof Error ? e.message : String(e);
     if (audit) {

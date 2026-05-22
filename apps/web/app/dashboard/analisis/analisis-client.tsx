@@ -6,7 +6,7 @@ import type { ColDef, GridReadyEvent, ValueFormatterParams } from "ag-grid-commu
 import { ClientSideRowModelModule, ModuleRegistry } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
-import { BarChart3, Download, Save } from "lucide-react";
+import { BarChart3, Download, Save, Palette } from "lucide-react";
 
 import { formatNumber } from "@/app/dashboard/_lib/format";
 
@@ -14,6 +14,11 @@ import { ChartPanel } from "./chart-panel";
 import { exportarAExcel } from "./xlsx-export";
 import { FieldPicker } from "./field-picker";
 import { WorkspacesSidebar } from "./workspaces-sidebar";
+import {
+  type FormatoCondicional,
+  calcularStatsColumna,
+  makeCellStyle,
+} from "./conditional-formatting";
 import {
   DEFAULT_CONFIG,
   type ColumnasDisponibles,
@@ -33,6 +38,10 @@ export function AnalisisClient() {
   const [error, setError] = useState<string | null>(null);
   const [workspacesAbierto, setWorkspacesAbierto] = useState(false);
   const [chartAbierto, setChartAbierto] = useState(false);
+  // Map columna -> formato condicional. Se persiste con el workspace.
+  const [formatoCondicional, setFormatoCondicional] = useState<
+    Record<string, FormatoCondicional>
+  >({});
 
   // Cargar columnas cuando cambia la fuente
   useEffect(() => {
@@ -125,10 +134,30 @@ export function AnalisisClient() {
           return formatNumber(n, 0);
         };
         def.cellClass = "tabular-nums text-slate-700";
+
+        // Aplicar formato condicional si la columna lo tiene configurado
+        const cfg = formatoCondicional[c.key];
+        if (cfg) {
+          const stats = calcularStatsColumna(resultado.filas, c.key);
+          const styleFn = makeCellStyle(cfg, stats);
+          def.cellStyle = (params) => styleFn(params) ?? undefined;
+        }
       }
       return def;
     });
-  }, [resultado]);
+  }, [resultado, formatoCondicional]);
+
+  // Toggle de formato condicional por columna (cicla: none -> heatmap -> barras -> none)
+  const ciclarFormato = useCallback((columnaKey: string) => {
+    setFormatoCondicional((prev) => {
+      const actual = prev[columnaKey];
+      const next: Record<string, FormatoCondicional> = { ...prev };
+      if (!actual) next[columnaKey] = { tipo: "heatmap" };
+      else if (actual.tipo === "heatmap") next[columnaKey] = { tipo: "barras" };
+      else delete next[columnaKey];
+      return next;
+    });
+  }, []);
 
   // Default ColDef
   const defaultColDef: ColDef = useMemo(
@@ -174,6 +203,11 @@ export function AnalisisClient() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <FormatoMenu
+              resultado={resultado}
+              formatoActual={formatoCondicional}
+              onToggle={ciclarFormato}
+            />
             <button
               type="button"
               onClick={() => setChartAbierto((v) => !v)}
@@ -246,6 +280,81 @@ export function AnalisisClient() {
             setWorkspacesAbierto(false);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function FormatoMenu({
+  resultado,
+  formatoActual,
+  onToggle,
+}: {
+  resultado: PivotResultado | null;
+  formatoActual: Record<string, FormatoCondicional>;
+  onToggle: (key: string) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const medidas = resultado?.columnas.filter((c) => c.tipo === "medida") ?? [];
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        disabled={!resultado}
+        className="h-7 px-3 text-xs bg-white border border-slate-300 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1"
+      >
+        <Palette className="w-3.5 h-3.5" />
+        Formato
+      </button>
+      {abierto && resultado && (
+        <div
+          className="absolute right-0 top-9 z-30 w-72 bg-white border border-slate-200 rounded-lg shadow-lg p-2"
+          onMouseLeave={() => setAbierto(false)}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
+            Toggle formato por columna
+          </p>
+          <p className="text-[10px] text-slate-500 px-2 pb-2 leading-snug">
+            Click cicla: ninguno → heatmap → barras → ninguno
+          </p>
+          <div className="max-h-72 overflow-y-auto">
+            {medidas.length === 0 ? (
+              <p className="text-xs text-slate-500 px-2 py-3 text-center">
+                Sin medidas para formatear
+              </p>
+            ) : (
+              medidas.map((m) => {
+                const tipo = formatoActual[m.key]?.tipo;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => onToggle(m.key)}
+                    className="w-full flex items-center justify-between px-2 py-1.5 text-xs hover:bg-slate-50 rounded"
+                  >
+                    <span className="truncate text-slate-700">{m.label}</span>
+                    <span
+                      className={
+                        tipo === "heatmap"
+                          ? "text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded"
+                          : tipo === "barras"
+                            ? "text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded"
+                            : "text-[10px] text-slate-400"
+                      }
+                    >
+                      {tipo === "heatmap"
+                        ? "heatmap"
+                        : tipo === "barras"
+                          ? "barras"
+                          : "—"}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
