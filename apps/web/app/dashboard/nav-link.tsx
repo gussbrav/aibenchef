@@ -27,7 +27,7 @@ export function NavLink({ href, label, exact = false }: NavLinkProps) {
     <Link
       href={href as Route}
       className={cn(
-        "relative h-16 inline-flex items-center text-sm transition-colors",
+        "relative h-14 inline-flex items-center transition-colors",
         isActive
           ? "text-slate-900 font-semibold"
           : "text-slate-600 hover:text-slate-900",

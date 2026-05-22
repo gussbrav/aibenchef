@@ -67,19 +67,34 @@ export async function createSavedQuery(
   if (!data.nombre.trim()) throw new ValidationError("Nombre requerido", {});
   if (!data.sqlText.trim()) throw new ValidationError("SQL requerido", {});
 
-  const rows = await db.execute<Record<string, unknown>>(
-    sql`
-      INSERT INTO app.saved_queries
-        (user_id, nombre, descripcion, sql_text, parametros, es_publico, tags)
-      VALUES
-        (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null}, ${data.sqlText},
-         ${JSON.stringify(data.parametros ?? {})}::jsonb,
-         ${data.esPublico ?? false},
-         ${data.tags ?? []})
-      RETURNING id, user_id, nombre, descripcion, sql_text, parametros, es_publico,
-                tags, created_at, updated_at
-    `,
-  );
+  const tagsArr = data.tags ?? [];
+  const rows =
+    tagsArr.length > 0
+      ? await db.execute<Record<string, unknown>>(
+          sql`
+            INSERT INTO app.saved_queries
+              (user_id, nombre, descripcion, sql_text, parametros, es_publico, tags)
+            VALUES
+              (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null}, ${data.sqlText},
+               ${JSON.stringify(data.parametros ?? {})}::jsonb,
+               ${data.esPublico ?? false},
+               ${tagsArr}::text[])
+            RETURNING id, user_id, nombre, descripcion, sql_text, parametros, es_publico,
+                      tags, created_at, updated_at
+          `,
+        )
+      : await db.execute<Record<string, unknown>>(
+          sql`
+            INSERT INTO app.saved_queries
+              (user_id, nombre, descripcion, sql_text, parametros, es_publico)
+            VALUES
+              (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null}, ${data.sqlText},
+               ${JSON.stringify(data.parametros ?? {})}::jsonb,
+               ${data.esPublico ?? false})
+            RETURNING id, user_id, nombre, descripcion, sql_text, parametros, es_publico,
+                      tags, created_at, updated_at
+          `,
+        );
   return mapRow(rows[0]!);
 }
 

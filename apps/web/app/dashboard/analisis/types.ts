@@ -48,7 +48,10 @@ export type PivotResultado = {
 export const DEFAULT_CONFIG: PivotConfig = {
   fuente: "balance",
   dimensiones: ["periodo", "nomb_correg"],
-  medidas: ["cta_a", "cta_b", "cta_c"],
+  // Por default usamos cuentas L2 que SIEMPRE tienen data (los totales L1
+  // 'cta_a/b/c' fueron deprecated del MV hasta V026 — quedan como sintetizados).
+  // A1 = DISPONIBLE, A4 = CREDITOS NETOS, B1 = OBLIGACIONES CON EL PUBLICO
+  medidas: ["cta_a1", "cta_a4", "cta_b1"],
   agregacion: "NONE",
   filtros: {
     moneda: ["TOTAL"],

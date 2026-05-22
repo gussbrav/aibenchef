@@ -81,14 +81,25 @@ export async function createTablero(
   data: { nombre: string; descripcion?: string | null; tags?: string[]; esPublico?: boolean },
 ): Promise<Tablero> {
   if (!data.nombre.trim()) throw new ValidationError("Nombre requerido", {});
-  const rows = await db.execute<Record<string, unknown>>(
-    sql`
-      INSERT INTO app.tableros (user_id, nombre, descripcion, tags, es_publico)
-      VALUES (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null},
-              ${data.tags ?? []}, ${data.esPublico ?? false})
-      RETURNING id, user_id, nombre, descripcion, es_publico, tags, created_at, updated_at
-    `,
-  );
+  const tagsArr = data.tags ?? [];
+  const rows =
+    tagsArr.length > 0
+      ? await db.execute<Record<string, unknown>>(
+          sql`
+            INSERT INTO app.tableros (user_id, nombre, descripcion, tags, es_publico)
+            VALUES (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null},
+                    ${tagsArr}::text[], ${data.esPublico ?? false})
+            RETURNING id, user_id, nombre, descripcion, es_publico, tags, created_at, updated_at
+          `,
+        )
+      : await db.execute<Record<string, unknown>>(
+          sql`
+            INSERT INTO app.tableros (user_id, nombre, descripcion, es_publico)
+            VALUES (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null},
+                    ${data.esPublico ?? false})
+            RETURNING id, user_id, nombre, descripcion, es_publico, tags, created_at, updated_at
+          `,
+        );
   return { ...mapTableroRow(rows[0]!), widgets: [] };
 }
 

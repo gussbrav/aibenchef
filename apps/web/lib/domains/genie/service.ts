@@ -25,14 +25,22 @@ import type { GenieRequest, GenieResponse } from "./types";
 const MODELO_DEFAULT = "claude-opus-4-7";
 const MAX_TOKENS = 2048;
 
+class GenieNotConfiguredError extends ValidationError {
+  constructor() {
+    super(
+      "Genie no esta configurado: falta la variable de entorno ANTHROPIC_API_KEY. " +
+        "Configurala en EasyPanel (Settings -> Environment) y reinicia el servicio.",
+      { paso: "config" },
+    );
+  }
+}
+
 let _client: Anthropic | null = null;
 function client(): Anthropic {
   if (_client) return _client;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY no esta definida. Configurala en .env / EasyPanel para habilitar Genie.",
-    );
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new GenieNotConfiguredError();
   }
   _client = new Anthropic({ apiKey });
   return _client;
@@ -54,20 +62,27 @@ export async function generarSqlDesdeNl(
   const userPrompt = buildUserPrompt(req);
 
   const c = client();
-  const response = await c.messages.create({
-    model: MODELO_DEFAULT,
-    max_tokens: MAX_TOKENS,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        // Prompt caching: el catalog snapshot cambia raramente. Marcarlo como
-        // cacheable reduce costo significativamente en uso continuo.
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: userPrompt }],
-  });
+  let response: Awaited<ReturnType<typeof c.messages.create>>;
+  try {
+    response = await c.messages.create({
+      model: MODELO_DEFAULT,
+      max_tokens: MAX_TOKENS,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          // Prompt caching: el catalog snapshot cambia raramente. Marcarlo como
+          // cacheable reduce costo significativamente en uso continuo.
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userPrompt }],
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // Diferenciar errores de Anthropic (auth, rate limit, etc) para UX clara
+    throw new Error(`Anthropic API: ${msg}`);
+  }
 
   const duracionMs = Date.now() - start;
   const tokensInput = response.usage.input_tokens ?? 0;

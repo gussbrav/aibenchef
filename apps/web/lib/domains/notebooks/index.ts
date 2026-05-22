@@ -92,13 +92,25 @@ export async function createNotebook(
   data: { titulo: string; descripcion?: string | null; tags?: string[] },
 ): Promise<Notebook> {
   if (!data.titulo.trim()) throw new ValidationError("Titulo requerido", {});
-  const rows = await db.execute<Record<string, unknown>>(
-    sql`
-      INSERT INTO app.notebooks (user_id, titulo, descripcion, tags)
-      VALUES (${userId}, ${data.titulo.trim()}, ${data.descripcion ?? null}, ${data.tags ?? []})
-      RETURNING id, user_id, titulo, descripcion, es_publico, tags, created_at, updated_at
-    `,
-  );
+  // Postgres no puede inferir el tipo de un array vacio via parametro -> casteo.
+  // Si hay tags, pasamos el array; si no, usamos el default de la columna.
+  const tagsArr = data.tags ?? [];
+  const rows =
+    tagsArr.length > 0
+      ? await db.execute<Record<string, unknown>>(
+          sql`
+            INSERT INTO app.notebooks (user_id, titulo, descripcion, tags)
+            VALUES (${userId}, ${data.titulo.trim()}, ${data.descripcion ?? null}, ${tagsArr}::text[])
+            RETURNING id, user_id, titulo, descripcion, es_publico, tags, created_at, updated_at
+          `,
+        )
+      : await db.execute<Record<string, unknown>>(
+          sql`
+            INSERT INTO app.notebooks (user_id, titulo, descripcion)
+            VALUES (${userId}, ${data.titulo.trim()}, ${data.descripcion ?? null})
+            RETURNING id, user_id, titulo, descripcion, es_publico, tags, created_at, updated_at
+          `,
+        );
   return { ...mapNotebook(rows[0]!), cells: [] };
 }
 
