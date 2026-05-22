@@ -10,11 +10,14 @@
  *        - SET LOCAL statement_timeout = '15s'
  *        - SET LOCAL search_path TO marts, dw, pg_catalog
  *   5. Resultados truncados a 5000 filas (configurable).
+ *   6. Audit log post-ejecucion (app.sql_audit_log).
  *
  * No prevenimos 100% el abuso (un usuario malicioso podria correr queries
  * que toquen indices/cache), pero el rol readonly + statement_timeout son
  * la defensa principal.
  */
+
+import { createHash } from "node:crypto";
 
 import { sql } from "drizzle-orm";
 
@@ -22,6 +25,12 @@ import { db } from "@/lib/infrastructure/db";
 import { ValidationError } from "@/lib/domains/shared";
 
 import type { QueryResult } from "./types";
+
+export type AuditMetadata = {
+  userId: string;
+  ip?: string | null;
+  userAgent?: string | null;
+};
 
 const KEYWORDS_PROHIBIDOS = [
   // DDL
@@ -126,13 +135,41 @@ export function validateSql(sqlText: string): void {
   }
 }
 
+function sqlHash(sqlText: string): string {
+  return createHash("sha256").update(sqlText).digest("hex").slice(0, 16);
+}
+
+async function insertAuditLog(
+  sqlText: string,
+  audit: AuditMetadata,
+  result: { duracionMs: number; filas: number; truncado: boolean; exitoso: boolean; error?: string },
+): Promise<void> {
+  try {
+    await db.execute(sql`
+      INSERT INTO app.sql_audit_log
+        (user_id, sql_text, sql_hash, duracion_ms, filas, truncado,
+         exitoso, error_msg, ip, user_agent)
+      VALUES
+        (${audit.userId}, ${sqlText}, ${sqlHash(sqlText)},
+         ${result.duracionMs}, ${result.filas}, ${result.truncado},
+         ${result.exitoso}, ${result.error ?? null},
+         ${audit.ip ?? null}::inet, ${audit.userAgent ?? null})
+    `);
+  } catch {
+    // No bloquear la ejecucion si el audit log falla. Silent.
+  }
+}
+
 /**
  * Ejecuta una query SELECT en sandbox readonly.
  *
  * @throws ValidationError si la query viola las reglas.
  * @throws Error con mensaje friendly si falla en runtime.
  */
-export async function executeQuerySandbox(sqlText: string): Promise<QueryResult> {
+export async function executeQuerySandbox(
+  sqlText: string,
+  audit?: AuditMetadata,
+): Promise<QueryResult> {
   validateSql(sqlText);
 
   const start = Date.now();
@@ -152,6 +189,9 @@ export async function executeQuerySandbox(sqlText: string): Promise<QueryResult>
   // Ejecutar dentro de una transaccion descartable
   let filas: Array<Record<string, unknown>> = [];
   let columnas: Array<{ key: string; tipo: string }> = [];
+
+  let exitoso = false;
+  let errorMsg: string | undefined;
 
   try {
     // postgres-js client via drizzle: usamos db.execute con un BEGIN/SET/SELECT/ROLLBACK
@@ -176,12 +216,22 @@ export async function executeQuerySandbox(sqlText: string): Promise<QueryResult>
       } else {
         columnas = [];
       }
+      exitoso = true;
     } finally {
       await db.execute(sql.raw("ROLLBACK"));
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Error ejecutando query: ${msg}`);
+    errorMsg = e instanceof Error ? e.message : String(e);
+    if (audit) {
+      await insertAuditLog(sqlText, audit, {
+        duracionMs: Date.now() - start,
+        filas: 0,
+        truncado: false,
+        exitoso: false,
+        error: errorMsg,
+      });
+    }
+    throw new Error(`Error ejecutando query: ${errorMsg}`);
   }
 
   const truncado = filas.length > MAX_RESULT_ROWS;
@@ -189,11 +239,21 @@ export async function executeQuerySandbox(sqlText: string): Promise<QueryResult>
     filas = filas.slice(0, MAX_RESULT_ROWS);
   }
 
+  const duracionMs = Date.now() - start;
+  if (audit) {
+    await insertAuditLog(sqlText, audit, {
+      duracionMs,
+      filas: filas.length,
+      truncado,
+      exitoso,
+    });
+  }
+
   return {
     columnas,
     filas,
     totalFilas: filas.length,
-    duracionMs: Date.now() - start,
+    duracionMs,
     truncado,
   };
 }

@@ -14,7 +14,8 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const hdrs = await headers();
+    const session = await auth.api.getSession({ headers: hdrs });
     if (!session) throw new UnauthorizedError("Sesion requerida", {});
     const json = await req.json();
     const parsed = bodySchema.safeParse(json);
@@ -23,6 +24,17 @@ export async function POST(req: NextRequest) {
         issues: parsed.error.flatten().fieldErrors,
       });
     }
-    return executeQuerySandbox(parsed.data.sqlText);
+    // Audit metadata: IP via x-forwarded-for (EasyPanel via Traefik) o
+    // x-real-ip; user agent del header HTTP.
+    const ip =
+      hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      hdrs.get("x-real-ip") ??
+      null;
+    const userAgent = hdrs.get("user-agent");
+    return executeQuerySandbox(parsed.data.sqlText, {
+      userId: session.user.id,
+      ip,
+      userAgent,
+    });
   });
 }
