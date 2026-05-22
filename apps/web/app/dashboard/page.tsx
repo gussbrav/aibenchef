@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArrowRight, BarChart3, Building2, Calendar } from "lucide-react";
+import { auth } from "@/lib/auth";
 import { Card, Container } from "@/components/ui";
 import { getRatiosLatest } from "@/lib/domains/analytics";
+import { WelcomeBanner } from "./welcome-banner";
 import {
   formatPct,
   formatNumberCompact,
@@ -17,6 +20,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardHome() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const userName = session?.user.name ?? "";
+
   const rows = await getRatiosLatest({ moneda: "TOTAL" });
   const lastPeriod = rows[0]?.periodo;
   const lastFecha = rows[0]?.fechaCierre;
@@ -40,6 +46,8 @@ export default async function DashboardHome() {
 
   return (
     <Container size="xl" className="space-y-8 px-0">
+      <WelcomeBanner userName={userName} />
+
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Resumen del sistema</h1>
         <p className="text-slate-600 flex items-center gap-2">

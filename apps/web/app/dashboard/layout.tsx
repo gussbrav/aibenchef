@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { Container } from "@/components/ui";
+import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { DashboardUserMenu } from "./user-menu";
 import { NavLink } from "./nav-link";
 
@@ -54,7 +55,10 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/admin/archivos" label="Archivos" />
             </nav>
 
-            <DashboardUserMenu name={session.user.name} email={session.user.email} />
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <CommandPaletteTrigger />
+              <DashboardUserMenu name={session.user.name} email={session.user.email} />
+            </div>
           </div>
         </Container>
       </header>
@@ -65,6 +69,9 @@ export default async function DashboardLayout({
             sql, catalog) usan todo el ancho. */}
         <Container size="full">{children}</Container>
       </main>
+
+      {/* Command Palette global — atajo Cmd+K / Ctrl+K */}
+      <CommandPalette />
     </div>
   );
 }
