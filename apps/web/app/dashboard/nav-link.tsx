@@ -6,7 +6,9 @@ import type { Route } from "next";
 import { cn } from "@/lib/utils/cn";
 
 interface NavLinkProps {
-  href: Route;
+  // Permitimos string para que rutas recientes (que aun no estan en el
+  // RouteType generado de Next) compilen. La validacion la hace Next en runtime.
+  href: Route | string;
   label: string;
   /**
    * Si true, el link se marca como activo solo cuando el pathname matchea
@@ -23,7 +25,7 @@ export function NavLink({ href, label, exact = false }: NavLinkProps) {
 
   return (
     <Link
-      href={href}
+      href={href as Route}
       className={cn(
         "relative h-16 inline-flex items-center text-sm transition-colors",
         isActive
