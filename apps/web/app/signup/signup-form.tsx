@@ -1,43 +1,165 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { AlertCircle, Lock, Loader2, Sparkles } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 
+type InvitationPreview = {
+  email: string;
+  role: "admin" | "usuario";
+  expiresAt: string;
+};
+
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") || "";
+
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Validar token al cargar
+  useEffect(() => {
+    if (!token) {
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
+    fetch(`/api/v1/invitations/${encodeURIComponent(token)}/preview`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.error) {
+          setPreviewError(json.error.message ?? "Invitacion invalida");
+        } else {
+          setInvitation(json.data as InvitationPreview);
+        }
+      })
+      .catch((e) => setPreviewError(String(e)))
+      .finally(() => setPreviewLoading(false));
+  }, [token]);
+
+  // Estado: sin token -> mensaje "solo por invitacion"
+  if (!token) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-amber-700" />
+        </div>
+        <h2 className="text-lg font-semibold text-slate-900">Registro por invitacion</h2>
+        <p className="text-sm text-slate-600">
+          El acceso a Aibenchef es <strong>cerrado</strong>. Solicita una invitacion al
+          administrador de tu organizacion. Cuando la recibas por email, vas a tener un
+          link unico que te permite crear tu cuenta.
+        </p>
+        <div className="pt-2">
+          <Link href="/login" className="text-brand-600 hover:underline font-medium text-sm">
+            ¿Ya tenes cuenta? Entra
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (previewLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-sm text-slate-500 py-8">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Validando invitacion...
+      </div>
+    );
+  }
+
+  if (previewError || !invitation) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="mx-auto w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
+          <AlertCircle className="w-6 h-6 text-rose-700" />
+        </div>
+        <h2 className="text-lg font-semibold text-slate-900">Invitacion invalida</h2>
+        <p className="text-sm text-slate-600">
+          {previewError ?? "Este link expiro o ya fue usado."} Pide al administrador
+          que te envie una nueva invitacion.
+        </p>
+        <div className="pt-2">
+          <Link href="/login" className="text-brand-600 hover:underline font-medium text-sm">
+            ¿Ya tenes cuenta? Entra
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const fmtExpira = new Date(invitation.expiresAt).toLocaleDateString("es-PE", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const { error: authError } = await authClient.signUp.email({
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      password,
-      callbackURL: "/dashboard",
-    });
+    try {
+      // 1. Crear cuenta via Better Auth con el email DE LA INVITACION
+      const { error: authError } = await authClient.signUp.email({
+        name: name.trim(),
+        email: invitation!.email,
+        password,
+        callbackURL: "/dashboard",
+      });
 
-    if (authError) {
-      setError(traducirError(authError.message ?? authError.code ?? "Error al crear cuenta"));
+      if (authError) {
+        setError(
+          traducirError(authError.message ?? authError.code ?? "Error al crear cuenta"),
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 2. Aceptar la invitacion (asigna rol + consume token)
+      const ar = await fetch(
+        `/api/v1/invitations/${encodeURIComponent(token)}/accept`,
+        { method: "POST" },
+      );
+      const arJson = await ar.json();
+      if (arJson.error) {
+        // La cuenta se creo pero no se asigno el rol. No es fatal — admin
+        // puede asignar manualmente desde Settings.
+        console.warn("accept invitation failed:", arJson.error);
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      <div className="rounded-lg bg-violet-50 border border-violet-200 p-3 flex items-start gap-2">
+        <Sparkles className="w-4 h-4 text-violet-700 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-violet-900">
+          <p className="font-semibold">Invitacion valida</p>
+          <p>
+            Email: <span className="font-mono">{invitation.email}</span>
+            <br />
+            Rol: <span className="font-mono">{invitation.role}</span> · Expira{" "}
+            {fmtExpira}
+          </p>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <label htmlFor="name" className="block text-sm font-medium text-slate-700">
           Nombre completo
@@ -55,19 +177,17 @@ export function SignupForm() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-          Email
-        </label>
+        <label className="block text-sm font-medium text-slate-700">Email</label>
         <Input
-          id="email"
-          name="email"
           type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="tu@empresa.com"
+          value={invitation.email}
+          readOnly
+          disabled
+          className="bg-slate-100 cursor-not-allowed"
         />
+        <p className="text-xs text-slate-500">
+          El email viene de la invitacion y no se puede cambiar.
+        </p>
       </div>
 
       <div className="space-y-2">

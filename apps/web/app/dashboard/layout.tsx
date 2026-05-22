@@ -19,6 +19,17 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  // Gate por status: usuarios suspendidos no pueden entrar
+  const { getUser } = await import("@/lib/domains/users");
+  try {
+    const user = await getUser(session.user.id);
+    if (user.status === "suspended") {
+      redirect("/login?suspended=1");
+    }
+  } catch {
+    // si falla la query no bloqueamos — fail-open para no romper UX
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 border-b border-slate-200">

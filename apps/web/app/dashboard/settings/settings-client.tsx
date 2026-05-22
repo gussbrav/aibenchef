@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Sparkles, User as UserIcon, Users as UsersIcon } from "lucide-react";
+import {
+  History,
+  MailPlus,
+  Settings,
+  Sparkles,
+  User as UserIcon,
+  Users as UsersIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 
 import { AiProvidersSection } from "./ai-providers-section";
+import { AuditSection } from "./audit-section";
+import { InvitationsSection } from "./invitations-section";
 import { ProfileSection } from "./profile-section";
 import { UsersSection } from "./users-section";
 
-type Tab = "perfil" | "ai" | "usuarios";
+type Tab = "perfil" | "ai" | "usuarios" | "invitaciones" | "auditoria";
 
 type Me = { id: string; role: "admin" | "usuario" };
 
@@ -30,6 +39,8 @@ export function SettingsClient() {
     { id: "perfil", label: "Mi perfil", icon: UserIcon },
     { id: "ai", label: "Proveedores AI", icon: Sparkles, adminOnly: true },
     { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
+    { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
+    { id: "auditoria", label: "Auditoria", icon: History, adminOnly: true },
   ];
 
   const isAdmin = me?.role === "admin";
@@ -71,6 +82,8 @@ export function SettingsClient() {
         {tab === "perfil" && <ProfileSection />}
         {tab === "ai" && isAdmin && <AiProvidersSection />}
         {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
+        {tab === "invitaciones" && isAdmin && <InvitationsSection />}
+        {tab === "auditoria" && isAdmin && <AuditSection />}
         {tab !== "perfil" && !isAdmin && (
           <div className="p-6 bg-slate-50 border border-slate-200 rounded text-sm text-slate-600 text-center">
             Esta seccion es solo para administradores.

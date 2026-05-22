@@ -1,6 +1,7 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Container, Card } from "@/components/ui";
 import { SignupForm } from "./signup-form";
 
@@ -8,6 +9,10 @@ export const metadata: Metadata = {
   title: "Crear cuenta",
   description: "Crea tu cuenta en Aibenchef.",
 };
+
+// SignupForm usa useSearchParams() para leer ?token=...
+// Force-dynamic evita el prerender estatico que no soporta search params.
+export const dynamic = "force-dynamic";
 
 export default function SignupPage() {
   return (
@@ -26,12 +31,21 @@ export default function SignupPage() {
             Crea tu cuenta
           </h1>
           <p className="text-slate-600">
-            Acceso al beta privado. Necesitas estar en la waitlist o tener invitación.
+            Acceso al beta privado. Solo por invitacion del administrador.
           </p>
         </div>
 
         <Card variant="elevated" className="p-8">
-          <SignupForm />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center gap-2 text-sm text-slate-500 py-8">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Cargando...
+              </div>
+            }
+          >
+            <SignupForm />
+          </Suspense>
         </Card>
 
         <p className="text-sm text-slate-600 text-center mt-6">
