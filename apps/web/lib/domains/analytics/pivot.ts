@@ -72,8 +72,11 @@ type MvSchema = {
 
 const SCHEMA_CACHE: Map<string, MvSchema> = new Map();
 
+// Usamos vistas wrapper cuando existen (V026 agrega totales L1 sinteticos en
+// v_eeff_balance_ancho). Si en el futuro creamos v_eeff_resultados_ancho con
+// computed columns, apuntar aqui tambien.
 const MV_TABLE: Record<FuentePivot, string> = {
-  balance: "marts.mv_eeff_balance_ancho",
+  balance: "marts.v_eeff_balance_ancho",
   resultados: "marts.mv_eeff_resultados_ancho",
   ratios: "marts.mv_eeff_ratios",
 };
