@@ -104,6 +104,10 @@ export function SettingsClient() {
           API keys de proveedores AI. Las keys se guardan encriptadas con AES-256-GCM
           en la base de datos — nunca aparecen en plaintext en la respuesta del servidor.
         </p>
+        <p className="text-xs text-slate-500 mt-2">
+          <strong>Genie</strong> usa el primer proveedor habilitado con key valida.
+          Prioridad: Claude → Ollama → OpenAI → Gemini.
+        </p>
       </header>
 
       <section>
