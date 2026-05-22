@@ -503,6 +503,405 @@ def catalog_extract_canonical(base_eeff: str, out_dir: str, bg_sheet: str, er_sh
         click.echo(f"  {cat:<13} -> {p}")
 
 
+@catalog.command("init-maestra")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM del periodo desde el cual extraer la cabecera (ej 202603).",
+)
+@click.option("--dry-run", is_flag=True, default=False)
+def catalog_init_maestra(periodo: str, dry_run: bool) -> None:
+    """Inicializa dw.cabecera_maestra extrayendo el orden estructural desde
+    los archivos SBS reales del periodo indicado.
+
+    Para cada grupo (BANCOS, FINANCIERAS, CMAC, CRAC, EDPYMES) busca un
+    archivo EEFF del periodo y registra la cabecera en orden, mapeando cada
+    fila al codigo canonico de dw.dim_cuenta via matching por nombre +
+    fuzzy. El resultado es la base estructural posicional que reemplaza el
+    matching por nombre del importer.
+    """
+    import re
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.loading.services.monthly_eeff_importer import (
+        _cell_str,
+        _CuentaLookup,
+        _detect_layout,
+        _normalize,
+    )
+    from aibenchef_data.domains.parsing import read_xls
+
+    p = Periodo.from_yyyymm(periodo)
+    sql_pat = {
+        "BANCOS": "banca_multiple",
+        "FINANCIERAS": "financiera",
+        "CMAC": "cmac",
+        "CRAC": "crac",
+        "EDPYMES": "edpyme",
+    }
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    storage_root = _P("./local-data/raw").resolve()
+
+    import asyncio as _asyncio
+
+    import psycopg as _ps
+
+    async def _build_lookups() -> tuple[_CuentaLookup, _CuentaLookup]:
+        # Helper que crea ambos lookups en una sola apertura del pool
+        from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+        await open_pool()
+        try:
+            async with connection() as conn:
+                bal = await _CuentaLookup.from_db(conn, tipo_estado="balance")
+                res = await _CuentaLookup.from_db(conn, tipo_estado="resultados")
+                return bal, res
+        finally:
+            await close_pool()
+
+    lookup_balance, lookup_resultados = _asyncio.run(_build_lookups())
+
+    total_rows = 0
+    insertados_por_grupo: dict[str, int] = {}
+
+    with _ps.connect(url, connect_timeout=10) as conn:
+        for grupo, dir_grupo in sql_pat.items():
+            base = storage_root / dir_grupo / "eeff" / str(p.anio) / f"{p.mes:02d}"
+            if not base.is_dir():
+                click.echo(f"  [SKIP] {grupo}: no hay carpeta {base}")
+                continue
+            files = sorted(base.glob("*.xls"))
+            if not files:
+                click.echo(f"  [SKIP] {grupo}: sin archivos")
+                continue
+            f = files[0]
+            click.echo(f"  [{grupo:<12}] {f.name}")
+            sheets = read_xls(f)
+            balance_sheet = next(
+                (s for s in sheets if _is_balance_sheet(s)), None
+            )
+            resultados_sheet = next(
+                (s for s in sheets if _is_resultados_sheet(s)), None
+            )
+
+            for tipo_estado, sheet, lookup in (
+                ("balance", balance_sheet, lookup_balance),
+                ("resultados", resultados_sheet, lookup_resultados),
+            ):
+                if sheet is None:
+                    continue
+                layout = _detect_layout(sheet)
+                orden = 0
+                section = "A" if tipo_estado == "balance" else ""
+                parent: str | None = section if section == "C" else None
+                # Pre-cargar markers
+                section_markers = {
+                    "activo": "A",
+                    "pasivo": "B",
+                    "patrimonio": "C",
+                    "patrimonio neto": "C",
+                }
+                # Totales: se conservan en cabecera con codigo NULL para preservar
+                # alineacion posicional con los archivos. Importer las saltea.
+                null_markers = {
+                    "total activo",
+                    "total pasivo",
+                    "total pasivo y patrimonio",
+                    "total patrimonio",
+                    "total patrimonio neto",
+                    "contingentes",
+                    "cuentas contingentes",
+                    "cuentas de orden",
+                    # Footnotes y off-balance frecuentes en archivos SBS:
+                    "avales, cartas fianza, cartas de credito y aceptaciones",
+                    "lineas de credito no utilizadas y creditos concedidos no desembolsados",
+                    "instrumentos financieros derivados",
+                    "otras cuentas contingentes",
+                }
+                for r in range(layout.data_start_row, sheet.n_rows):
+                    nombre_raw = _cell_str(sheet, r, 0)
+                    if not nombre_raw:
+                        continue
+                    nombre_norm = _normalize(nombre_raw)
+
+                    # Footnotes que empiezan con "tipo de cambio" o "N/" (notas al pie)
+                    if (
+                        nombre_norm.startswith("tipo de cambio")
+                        or re.match(r"^\d+/\s", nombre_raw.strip())
+                    ):
+                        # Las dejamos en maestra como NULL codigo para mantener orden
+                        is_null_row = True
+                    elif nombre_norm in null_markers:
+                        is_null_row = True
+                    else:
+                        is_null_row = False
+
+                    # Section header (Activo/Pasivo/Patrimonio): actualiza section
+                    # tracker pero no incrementa orden. Es solo metadata visual.
+                    if (
+                        tipo_estado == "balance"
+                        and not is_null_row
+                        and nombre_norm in section_markers
+                    ):
+                        section = section_markers[nombre_norm]
+                        parent = section if section == "C" else None
+                        continue
+
+                    es_header = nombre_raw.strip() == nombre_raw.strip().upper()
+                    codigo: str | None = None
+                    if is_null_row:
+                        codigo = None
+                    elif es_header:
+                        resolved = lookup.find_header(section, nombre_norm)
+                        if resolved:
+                            codigo, _ = resolved
+                            parent = codigo
+                    elif parent:
+                        resolved = lookup.find_child(parent, nombre_norm)
+                        if resolved:
+                            codigo, _ = resolved
+
+                    orden += 1
+                    if dry_run:
+                        codigo_str = "NULL" if codigo is None else f"codigo={codigo}"
+                        click.echo(
+                            f"    {tipo_estado:<11} orden={orden:>3} "
+                            f"{codigo_str:<20} "
+                            f"nombre={nombre_raw[:50]!r}"
+                        )
+                        continue
+                    # Insertar a la maestra
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO dw.cabecera_maestra
+                                (tipo_estado, tipo_entidad, orden, codigo, nombre,
+                                 nivel, es_header, valido_desde)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (tipo_estado, tipo_entidad, orden, valido_desde)
+                            DO UPDATE SET
+                                codigo    = EXCLUDED.codigo,
+                                nombre    = EXCLUDED.nombre,
+                                es_header = EXCLUDED.es_header,
+                                updated_at = now()
+                            """,
+                            (
+                                tipo_estado,
+                                grupo,
+                                orden,
+                                codigo,  # puede ser NULL
+                                nombre_raw.strip(),
+                                2 if es_header else 3,
+                                es_header,
+                                200801,
+                            ),
+                        )
+                        insertados_por_grupo[grupo] = insertados_por_grupo.get(grupo, 0) + 1
+                        total_rows += 1
+        if not dry_run:
+            conn.commit()
+
+    click.echo("")
+    if dry_run:
+        click.echo("# Dry-run: no se inserto nada.")
+    else:
+        click.echo(f"# Total filas insertadas en cabecera_maestra: {total_rows}")
+        for g, n in insertados_por_grupo.items():
+            click.echo(f"  {g:<12} {n} filas")
+
+
+@catalog.command("detectar-cambios")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM del periodo a validar contra la cabecera maestra.",
+)
+@click.option(
+    "--grupo",
+    type=click.Choice(["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES"]),
+    default=None,
+    help="Validar solo un grupo. Vacio = todos.",
+)
+@click.option(
+    "--max-diffs",
+    type=int,
+    default=10,
+    help="Maximo de diferencias mostradas por (grupo, tipo_estado).",
+)
+def catalog_detectar_cambios(periodo: str, grupo: str | None, max_diffs: int) -> None:
+    """Compara la estructura de un periodo contra dw.cabecera_maestra.
+
+    Para cada (tipo_estado, tipo_entidad) descubre el archivo del periodo,
+    extrae los nombres por orden y los compara con la maestra. Reporta:
+      - Filas donde el nombre del archivo difiere del nombre maestro
+      - Filas extras (archivo tiene mas filas que la maestra)
+      - Filas faltantes (maestra tiene mas filas que el archivo)
+
+    Util ANTES de re-importar para detectar si SBS cambio la estructura.
+    Si hay diferencias significativas, considera versionar la maestra:
+    valido_hasta = periodo_anterior y crear filas nuevas con valido_desde=periodo.
+    """
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.loading.services.monthly_eeff_importer import (
+        _cell_str,
+        _detect_layout,
+        _normalize,
+    )
+    from aibenchef_data.domains.parsing import read_xls
+
+    p = Periodo.from_yyyymm(periodo)
+    sql_pat = {
+        "BANCOS": "banca_multiple",
+        "FINANCIERAS": "financiera",
+        "CMAC": "cmac",
+        "CRAC": "crac",
+        "EDPYMES": "edpyme",
+    }
+    if grupo:
+        sql_pat = {grupo: sql_pat[grupo]}
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    storage_root = _P("./local-data/raw").resolve()
+
+    import psycopg as _ps
+
+    total_diffs = 0
+    with _ps.connect(url, connect_timeout=10) as conn:
+        for tipo_entidad, dir_grupo in sql_pat.items():
+            base = storage_root / dir_grupo / "eeff" / str(p.anio) / f"{p.mes:02d}"
+            if not base.is_dir():
+                click.echo(f"  [SKIP] {tipo_entidad}: carpeta no existe {base}")
+                continue
+            files = sorted(base.glob("*.xls"))
+            if not files:
+                click.echo(f"  [SKIP] {tipo_entidad}: sin archivos")
+                continue
+            f = files[0]
+            sheets = read_xls(f)
+            balance_sheet = next((s for s in sheets if _is_balance_sheet(s)), None)
+            resultados_sheet = next((s for s in sheets if _is_resultados_sheet(s)), None)
+
+            for tipo_estado, sheet in (
+                ("balance", balance_sheet),
+                ("resultados", resultados_sheet),
+            ):
+                if sheet is None:
+                    continue
+                # Extraer (orden, nombre_norm) desde el archivo
+                layout = _detect_layout(sheet)
+                file_rows: list[tuple[int, str, str]] = []  # (orden, nombre_norm, nombre_raw)
+                orden = 0
+                section_markers = {"activo", "pasivo", "patrimonio", "patrimonio neto"}
+                for r in range(layout.data_start_row, sheet.n_rows):
+                    nombre_raw = _cell_str(sheet, r, 0)
+                    if not nombre_raw:
+                        continue
+                    nombre_norm = _normalize(nombre_raw)
+                    if tipo_estado == "balance" and nombre_norm in section_markers:
+                        continue  # mirror init-maestra behavior
+                    orden += 1
+                    file_rows.append((orden, nombre_norm, nombre_raw.strip()))
+
+                # Cargar maestra
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT orden, nombre, codigo
+                        FROM dw.cabecera_maestra
+                        WHERE tipo_estado = %s
+                          AND tipo_entidad = %s
+                          AND valido_hasta IS NULL
+                        ORDER BY orden
+                        """,
+                        (tipo_estado, tipo_entidad),
+                    )
+                    maestra_rows = {
+                        r[0]: (r[1], r[2]) for r in cur.fetchall()
+                    }
+
+                diffs_renamed: list[str] = []
+                diffs_extra: list[str] = []
+                diffs_missing: list[str] = []
+                for orden, name_norm, name_raw in file_rows:
+                    if orden not in maestra_rows:
+                        diffs_extra.append(
+                            f"orden={orden:>3}  archivo={name_raw[:60]!r}  (sin maestra)"
+                        )
+                        continue
+                    maestra_nombre, _maestra_codigo = maestra_rows[orden]
+                    if _normalize(maestra_nombre) != name_norm:
+                        diffs_renamed.append(
+                            f"orden={orden:>3}  "
+                            f"maestra={maestra_nombre[:35]!r:<37}  "
+                            f"archivo={name_raw[:35]!r}"
+                        )
+                file_ordenes = {o for o, _, _ in file_rows}
+                for orden, (maestra_nombre, _codigo) in maestra_rows.items():
+                    if orden not in file_ordenes:
+                        diffs_missing.append(
+                            f"orden={orden:>3}  maestra={maestra_nombre[:60]!r}  "
+                            f"(archivo no tiene esta fila)"
+                        )
+
+                n_diffs = len(diffs_renamed) + len(diffs_extra) + len(diffs_missing)
+                total_diffs += n_diffs
+                status = "OK" if n_diffs == 0 else f"{n_diffs} diffs"
+                click.echo(
+                    f"  [{tipo_entidad:<12} {tipo_estado:<11}] {f.name:<25}  "
+                    f"file={len(file_rows):>3}  maestra={len(maestra_rows):>3}  {status}"
+                )
+                for d in diffs_renamed[:max_diffs]:
+                    click.echo(f"      ~ {d}")
+                if len(diffs_renamed) > max_diffs:
+                    click.echo(f"      ... ({len(diffs_renamed) - max_diffs} renames mas)")
+                for d in diffs_extra[:max_diffs]:
+                    click.echo(f"      + {d}")
+                if len(diffs_extra) > max_diffs:
+                    click.echo(f"      ... ({len(diffs_extra) - max_diffs} extras mas)")
+                for d in diffs_missing[:max_diffs]:
+                    click.echo(f"      - {d}")
+                if len(diffs_missing) > max_diffs:
+                    click.echo(f"      ... ({len(diffs_missing) - max_diffs} missing mas)")
+
+    click.echo("")
+    if total_diffs == 0:
+        click.echo(f"# {periodo} alinea perfecto con la maestra. Safe to import.")
+    else:
+        click.echo(f"# {periodo} tiene {total_diffs} diferencias contra la maestra.")
+        click.echo("# Si son cambios estructurales reales, versionar la maestra:")
+        click.echo("#   UPDATE dw.cabecera_maestra SET valido_hasta=<periodo-anterior>")
+        click.echo("#   y reinit con --periodo <nuevo>")
+
+
+def _is_balance_sheet(sheet) -> bool:
+    name = sheet.name.lower()
+    if name.startswith("bg_"):
+        return True
+    for r in range(0, 4):
+        v = sheet.cell(r, 0)
+        if v and "balance general" in str(v).lower():
+            return True
+    return False
+
+
+def _is_resultados_sheet(sheet) -> bool:
+    name = sheet.name.lower()
+    if name.startswith(("gyp_", "egyp_", "er_")):
+        return True
+    for r in range(0, 4):
+        v = sheet.cell(r, 0)
+        if not v:
+            continue
+        s = str(v).lower()
+        if "estado de ganancias" in s or "estado de resultados" in s:
+            return True
+    return False
+
+
 @catalog.command("normalize-entidades")
 @click.option("--dry-run", is_flag=True, default=False)
 def catalog_normalize_entidades(dry_run: bool) -> None:

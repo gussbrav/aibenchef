@@ -98,6 +98,8 @@ class MonthlyEeffImporter:
         self._conn = conn
         self._batch_size = batch_size
         self._lookup_cache: dict[str, _CuentaLookup] = {}
+        # Cache para cabecera_maestra: key = (tipo_estado, tipo_entidad)
+        self._position_cache: dict[tuple[str, str], _PositionLookup] = {}
 
     async def import_file(self, path: Path, *, tipo_entidad: str | None = None) -> ImportResult:
         """Importa un archivo SBS mensual.
@@ -189,6 +191,22 @@ class MonthlyEeffImporter:
         self._lookup_cache[tipo_estado] = lookup
         return lookup
 
+    async def _get_position_lookup(
+        self, tipo_estado: str, tipo_entidad: str, periodo: int
+    ) -> _PositionLookup:
+        key = (tipo_estado, tipo_entidad)
+        cached = self._position_cache.get(key)
+        if cached:
+            return cached
+        lookup = await _PositionLookup.from_db(
+            self._conn,
+            tipo_estado=tipo_estado,
+            tipo_entidad=tipo_entidad,
+            periodo=periodo,
+        )
+        self._position_cache[key] = lookup
+        return lookup
+
     async def _import_sheet(
         self,
         *,
@@ -211,6 +229,11 @@ class MonthlyEeffImporter:
             data_start_row=layout.data_start_row,
         )
 
+        # Cargar cabecera_maestra (positional) — None si esta vacia para este grupo.
+        position_lookup = await self._get_position_lookup(
+            tipo_estado, tipo_entidad, layout.periodo_yyyymm
+        )
+
         observations: list[tuple] = []
         # Section tracker: en balance "Activo" -> A, "Pasivo" -> B, "Patrimonio" -> C.
         # En resultados no hay secciones canonicas (todo bajo prefix "").
@@ -225,16 +248,10 @@ class MonthlyEeffImporter:
             "patrimonio": "C",
             "patrimonio neto": "C",
         }
-        # Markers que NO son cuentas (totales, headers de resumen)
-        _skip_markers = {
-            "total activo",
-            "total pasivo",
-            "total pasivo y patrimonio",
-            "total patrimonio",
-            "contingentes",
-            "cuentas contingentes",
-            "cuentas de orden",
-        }
+
+        # Counter posicional — debe espejar EXACTAMENTE init-maestra: cada fila
+        # no-vacia que no sea section marker (Activo/Pasivo/Patrimonio).
+        orden = 0
 
         for r in range(layout.data_start_row, sheet.n_rows):
             nombre_raw = _cell_str(sheet, r, 0)
@@ -242,32 +259,42 @@ class MonthlyEeffImporter:
                 continue
             nombre_norm = _normalize(nombre_raw)
 
-            # Skipear filas de totales y marcadores no-cuenta
-            if nombre_norm in _skip_markers:
-                continue
-
-            # Actualizar seccion actual si esta fila es un marker (Activo/Pasivo/Patrimonio)
+            # Section markers actualizan tracker pero no cuentan orden
             if tipo_estado == "balance" and nombre_norm in _section_markers:
                 current_section = _section_markers[nombre_norm]
-                # En Patrimonio (C) las cuentas son hijas directas de C; en
-                # Activo (A) / Pasivo (B) hay headers L2 (A1, A2, B1, B2...) intermedios.
                 current_parent_codigo = current_section if current_section == "C" else None
                 continue
+
+            orden += 1
 
             # Detector de header: las cabeceras SBS estan TODAS en mayusculas.
             es_header = nombre_raw.strip() == nombre_raw.strip().upper()
 
             codigo: str | None = None
             cuenta_nombre_canonico: str | None = None
-            if es_header:
-                resolved = lookup.find_header(current_section, nombre_norm)
-                if resolved:
-                    codigo, cuenta_nombre_canonico = resolved
+
+            # 1) Maestra posicional: si existe entrada para este orden, es
+            #    autoritativa. NULL codigo => fila conocida no-cuenta (skip).
+            if position_lookup.has(orden):
+                codigo = position_lookup.get_codigo(orden)
+                if codigo is None:
+                    continue  # footnote/total/contingente conocido
+                cuenta_nombre_canonico = position_lookup.get_nombre(orden)
+                # Mantener current_parent_codigo coherente para fallbacks posteriores
+                if es_header:
                     current_parent_codigo = codigo
-            elif current_parent_codigo:
-                resolved = lookup.find_child(current_parent_codigo, nombre_norm)
-                if resolved:
-                    codigo, cuenta_nombre_canonico = resolved
+            else:
+                # 2) Fallback nombre-based (mantiene compatibilidad si maestra
+                #    no esta inicializada o tiene gaps).
+                if es_header:
+                    resolved = lookup.find_header(current_section, nombre_norm)
+                    if resolved:
+                        codigo, cuenta_nombre_canonico = resolved
+                        current_parent_codigo = codigo
+                elif current_parent_codigo:
+                    resolved = lookup.find_child(current_parent_codigo, nombre_norm)
+                    if resolved:
+                        codigo, cuenta_nombre_canonico = resolved
 
             if not codigo:
                 continue
@@ -366,7 +393,9 @@ class MonthlyEeffImporter:
                     source, source_file
                 )
                 SELECT periodo, fecha_cierre, tipo_estado,
-                       empresa_sbs, nomb_correg, tipo_entidad, microfinanciera, nacional,
+                       empresa_sbs,
+                       dw.normalizar_entidad(nomb_correg),
+                       tipo_entidad, microfinanciera, nacional,
                        moneda, cuenta_codigo, cuenta_nombre, valor,
                        'monthly_eeff', source_file
                 FROM _eeff_stage
@@ -538,11 +567,28 @@ class _CuentaLookup:
                 (tipo_estado,),
             )
             rows = await cur.fetchall()
+            # Cargar aliases manuales: nombre_norm -> codigo
+            await cur.execute(
+                """
+                SELECT alias_norm, codigo, seccion
+                FROM dw.cuenta_alias
+                WHERE tipo_estado = %s
+                """,
+                (tipo_estado,),
+            )
+            alias_rows = await cur.fetchall()
         await conn.commit()
+        # Index de aliases: (seccion, alias_norm) -> codigo
+        instance._aliases: dict[tuple[str, str], str] = {
+            (a_sec or "", a_norm): a_codigo for a_norm, a_codigo, a_sec in alias_rows
+        }
+        # Tambien necesitamos el nombre canonical correspondiente al codigo
+        instance._codigo_to_nombre: dict[str, str] = {}
 
         for codigo, nombre, nivel, parent_codigo in rows:
             nombre_norm = _normalize(nombre)
             section = _section_prefix(codigo)
+            instance._codigo_to_nombre[codigo] = nombre
 
             is_header = nivel <= 2 and (
                 parent_codigo is None or len(parent_codigo) <= 1  # 'A', 'B', 'C', '1', '2', ...
@@ -565,6 +611,11 @@ class _CuentaLookup:
         return instance
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
+        # 0) Alias manual (dw.cuenta_alias) — para nombres renombrados en SBS
+        alias_codigo = self._aliases.get((section, nombre_norm)) or self._aliases.get(("", nombre_norm))
+        if alias_codigo:
+            nombre = self._codigo_to_nombre.get(alias_codigo, "")
+            return (alias_codigo, nombre)
         # 1) Match exacto
         exact = self._header.get((section, nombre_norm))
         if exact:
@@ -592,6 +643,16 @@ class _CuentaLookup:
         return None
 
     def find_child(self, parent_codigo: str, nombre_norm: str) -> tuple[str, str] | None:
+        # 0) Alias manual: derivar seccion del parent_codigo y consultar.
+        #    Las aliases capturan renombres intencionales (ej "Resultado Neto del
+        #    Ejercicio" -> C8) y aplican aunque la fila no sea uppercase.
+        seccion = _section_prefix(parent_codigo)
+        alias_codigo = self._aliases.get((seccion, nombre_norm)) or self._aliases.get(
+            ("", nombre_norm)
+        )
+        if alias_codigo:
+            nombre = self._codigo_to_nombre.get(alias_codigo, "")
+            return (alias_codigo, nombre)
         # 1) Exacto
         exact = self._child_by_parent_name.get((parent_codigo, nombre_norm))
         if exact:
@@ -613,6 +674,64 @@ class _CuentaLookup:
         if len(candidatos) == 1:
             return candidatos[0]
         return None
+
+
+class _PositionLookup:
+    """Index de dw.cabecera_maestra para resolver (orden) -> (codigo, nombre).
+
+    Replica el approach historico de la macro Excel de Gus: matching por
+    POSICION en lugar de nombre. Robusto ante renames sutiles de SBS.
+
+    NULL codigo significa "fila conocida no-cuenta" (total, footnote,
+    contingente). El importer salta esas filas.
+    """
+
+    __slots__ = ("_by_orden",)
+
+    def __init__(self) -> None:
+        # orden -> (codigo | None, nombre)
+        self._by_orden: dict[int, tuple[str | None, str]] = {}
+
+    @classmethod
+    async def from_db(
+        cls,
+        conn: psycopg.AsyncConnection,
+        *,
+        tipo_estado: str,
+        tipo_entidad: str,
+        periodo: int,
+    ) -> _PositionLookup:
+        instance = cls()
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT orden, codigo, nombre
+                FROM dw.cabecera_maestra
+                WHERE tipo_estado  = %s
+                  AND tipo_entidad = %s
+                  AND valido_desde <= %s
+                  AND (valido_hasta IS NULL OR valido_hasta >= %s)
+                """,
+                (tipo_estado, tipo_entidad, periodo, periodo),
+            )
+            for orden, codigo, nombre in await cur.fetchall():
+                instance._by_orden[orden] = (codigo, nombre)
+        await conn.commit()
+        return instance
+
+    def has(self, orden: int) -> bool:
+        return orden in self._by_orden
+
+    def get_codigo(self, orden: int) -> str | None:
+        entry = self._by_orden.get(orden)
+        return entry[0] if entry else None
+
+    def get_nombre(self, orden: int) -> str | None:
+        entry = self._by_orden.get(orden)
+        return entry[1] if entry else None
+
+    def is_empty(self) -> bool:
+        return not self._by_orden
 
 
 def _section_prefix(codigo: str) -> str:
