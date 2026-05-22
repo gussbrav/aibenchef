@@ -212,16 +212,28 @@ class MonthlyEeffImporter:
         )
 
         observations: list[tuple] = []
-        current_parent_codigo: str | None = None
         # Section tracker: en balance "Activo" -> A, "Pasivo" -> B, "Patrimonio" -> C.
         # En resultados no hay secciones canonicas (todo bajo prefix "").
         current_section: str = "A" if tipo_estado == "balance" else ""
+        # Default parent: en Patrimonio (C), las cuentas son hijas directas de C
+        # (no hay headers L2 intermedios como en Activo/Pasivo).
+        current_parent_codigo: str | None = current_section if current_section else None
 
         _section_markers = {
             "activo": "A",
             "pasivo": "B",
             "patrimonio": "C",
             "patrimonio neto": "C",
+        }
+        # Markers que NO son cuentas (totales, headers de resumen)
+        _skip_markers = {
+            "total activo",
+            "total pasivo",
+            "total pasivo y patrimonio",
+            "total patrimonio",
+            "contingentes",
+            "cuentas contingentes",
+            "cuentas de orden",
         }
 
         for r in range(layout.data_start_row, sheet.n_rows):
@@ -230,10 +242,16 @@ class MonthlyEeffImporter:
                 continue
             nombre_norm = _normalize(nombre_raw)
 
+            # Skipear filas de totales y marcadores no-cuenta
+            if nombre_norm in _skip_markers:
+                continue
+
             # Actualizar seccion actual si esta fila es un marker (Activo/Pasivo/Patrimonio)
             if tipo_estado == "balance" and nombre_norm in _section_markers:
                 current_section = _section_markers[nombre_norm]
-                current_parent_codigo = None  # reset parent al cambiar de seccion
+                # En Patrimonio (C) las cuentas son hijas directas de C; en
+                # Activo (A) / Pasivo (B) hay headers L2 (A1, A2, B1, B2...) intermedios.
+                current_parent_codigo = current_section if current_section == "C" else None
                 continue
 
             # Detector de header: las cabeceras SBS estan TODAS en mayusculas.
@@ -290,10 +308,24 @@ class MonthlyEeffImporter:
                         )
                     )
 
+        # Dedup en memoria por (entidad, moneda, codigo): si por fuzzy match
+        # multiples filas resolvieron al mismo codigo, conservar la primera
+        # (que es la mas confiable porque aparece antes en el archivo SBS).
+        seen: set[tuple] = set()
+        deduped: list[tuple] = []
+        for obs in observations:
+            # obs = (periodo, fecha, tipo_estado, empresa_sbs, nomb_correg, ...)
+            # key = (nomb_correg=4, moneda=8, codigo=9)
+            key = (obs[4], obs[8], obs[9])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(obs)
+
         # Volcar en batches
         inserted = 0
-        for i in range(0, len(observations), self._batch_size):
-            batch = observations[i : i + self._batch_size]
+        for i in range(0, len(deduped), self._batch_size):
+            batch = deduped[i : i + self._batch_size]
             inserted += await self._copy_batch(batch)
         return inserted
 
@@ -533,10 +565,54 @@ class _CuentaLookup:
         return instance
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
-        return self._header.get((section, nombre_norm))
+        # 1) Match exacto
+        exact = self._header.get((section, nombre_norm))
+        if exact:
+            return exact
+        # 2) Match fuzzy por prefix: SBS a veces trunca nombres largos.
+        #    Solo se devuelve si hay UN UNICO candidato (sino, ambiguo).
+        nombre_palabras = nombre_norm.split()
+        if len(nombre_palabras) < 2:
+            return None
+        candidatos = []
+        for (sec, cand_norm), value in self._header.items():
+            if sec != section:
+                continue
+            cand_palabras = cand_norm.split()
+            # Las primeras 3 palabras del input deben coincidir EXACTO con las primeras
+            # 3 del candidato (o todas si el input es mas corto).
+            n_check = min(3, len(nombre_palabras), len(cand_palabras))
+            if n_check < 2:
+                continue
+            if nombre_palabras[:n_check] == cand_palabras[:n_check]:
+                candidatos.append(value)
+        # Solo devolver si hay UN solo match (sino es ambiguo)
+        if len(candidatos) == 1:
+            return candidatos[0]
+        return None
 
     def find_child(self, parent_codigo: str, nombre_norm: str) -> tuple[str, str] | None:
-        return self._child_by_parent_name.get((parent_codigo, nombre_norm))
+        # 1) Exacto
+        exact = self._child_by_parent_name.get((parent_codigo, nombre_norm))
+        if exact:
+            return exact
+        # 2) Fuzzy single-match dentro del mismo parent
+        nombre_palabras = nombre_norm.split()
+        if not nombre_palabras:
+            return None
+        candidatos = []
+        for (parent, cand_norm), value in self._child_by_parent_name.items():
+            if parent != parent_codigo:
+                continue
+            cand_palabras = cand_norm.split()
+            n_check = min(2, len(nombre_palabras), len(cand_palabras))
+            if n_check < 1:
+                continue
+            if nombre_palabras[:n_check] == cand_palabras[:n_check]:
+                candidatos.append(value)
+        if len(candidatos) == 1:
+            return candidatos[0]
+        return None
 
 
 def _section_prefix(codigo: str) -> str:

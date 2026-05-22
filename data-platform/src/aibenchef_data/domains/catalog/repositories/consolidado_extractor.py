@@ -107,7 +107,6 @@ def _extract_one(path: Path, *, tipo_estado: str) -> list[CuentaCanonica]:
     cuentas: list[CuentaCanonica] = []
     orden = 0
     current_section_prefix = _initial_section_prefix(tipo_estado)
-    parent_stack: list[str] = []  # pila de parents segun nivel actual
     # Para detectar nivel: las cabeceras MAYUSCULAS son top de seccion, las
     # mixed-case son hijas. En BANCOS hay indentacion explicita "   Caja".
 
@@ -213,9 +212,7 @@ def _looks_like_datetime(s: str) -> bool:
     if not s or len(s) < 8:
         return False
     # 2018-05-31 00:00:00 / 2018-05-31
-    if s[:4].isdigit() and len(s) >= 10 and s[4] == "-" and s[7] == "-":
-        return True
-    return False
+    return bool(s[:4].isdigit() and len(s) >= 10 and s[4] == "-" and s[7] == "-")
 
 
 def _initial_section_prefix(tipo_estado: str) -> str:
