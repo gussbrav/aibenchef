@@ -17,33 +17,46 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
 import { ValidationError } from "@/lib/domains/shared";
+import { getProvider, getProviderApiKey } from "@/lib/domains/ai-providers";
 import { validateSql } from "@/lib/domains/sql-workbench";
 
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
 import type { GenieRequest, GenieResponse } from "./types";
 
-const MODELO_DEFAULT = "claude-opus-4-7";
+const MODELO_FALLBACK = "claude-opus-4-7";
 const MAX_TOKENS = 2048;
 
 class GenieNotConfiguredError extends ValidationError {
   constructor() {
     super(
-      "Genie no esta configurado: falta la variable de entorno ANTHROPIC_API_KEY. " +
-        "Configurala en EasyPanel (Settings -> Environment) y reinicia el servicio.",
+      "Genie no esta configurado: la API key de Claude no esta seteada. " +
+        "Configurala en /dashboard/settings (provider: claude) o " +
+        "via ANTHROPIC_API_KEY en EasyPanel.",
       { paso: "config" },
     );
   }
 }
 
-let _client: Anthropic | null = null;
-function client(): Anthropic {
-  if (_client) return _client;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
-    throw new GenieNotConfiguredError();
+// Resolver API key + modelo: prioridad DB (app.ai_providers) -> env var.
+async function resolveClaudeConfig(): Promise<{ apiKey: string; modelo: string }> {
+  // 1. Intentar desde DB (configurable via UI)
+  const dbKey = await getProviderApiKey("claude").catch(() => null);
+  let modelo = MODELO_FALLBACK;
+  try {
+    const provider = await getProvider("claude");
+    if (provider.modelDefault) modelo = provider.modelDefault;
+  } catch {
+    /* fallback al default */
   }
-  _client = new Anthropic({ apiKey });
-  return _client;
+  if (dbKey && dbKey.trim()) {
+    return { apiKey: dbKey, modelo };
+  }
+  // 2. Fallback a env
+  const envKey = process.env.ANTHROPIC_API_KEY;
+  if (envKey && envKey.trim()) {
+    return { apiKey: envKey, modelo };
+  }
+  throw new GenieNotConfiguredError();
 }
 
 export async function generarSqlDesdeNl(
@@ -58,14 +71,15 @@ export async function generarSqlDesdeNl(
   }
 
   const start = Date.now();
+  const { apiKey, modelo } = await resolveClaudeConfig();
   const systemPrompt = await buildSystemPrompt();
   const userPrompt = buildUserPrompt(req);
 
-  const c = client();
+  const c = new Anthropic({ apiKey });
   let response: Awaited<ReturnType<typeof c.messages.create>>;
   try {
     response = await c.messages.create({
-      model: MODELO_DEFAULT,
+      model: modelo,
       max_tokens: MAX_TOKENS,
       system: [
         {
@@ -124,7 +138,7 @@ export async function generarSqlDesdeNl(
       prompt: req.prompt,
       sql: sqlGenerado,
       explicacion,
-      modelo: MODELO_DEFAULT,
+      modelo: modelo,
       tokensInput,
       tokensOutput,
       duracionMs,
@@ -142,7 +156,7 @@ export async function generarSqlDesdeNl(
     prompt: req.prompt,
     sql: sqlGenerado,
     explicacion,
-    modelo: MODELO_DEFAULT,
+    modelo: modelo,
     tokensInput,
     tokensOutput,
     duracionMs,
@@ -154,7 +168,7 @@ export async function generarSqlDesdeNl(
     id,
     sql: sqlGenerado,
     explicacion,
-    modelo: MODELO_DEFAULT,
+    modelo: modelo,
     tokensInput,
     tokensOutput,
     duracionMs,

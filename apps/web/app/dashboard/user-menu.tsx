@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown, Settings } from "lucide-react";
 import { authClient } from "@/lib/auth/client";
 
 export function DashboardUserMenu({ name, email }: { name: string; email: string }) {
@@ -57,6 +58,15 @@ export function DashboardUserMenu({ name, email }: { name: string; email: string
             <p className="text-sm font-medium text-slate-900 truncate">{name}</p>
             <p className="text-xs text-slate-500 truncate">{email}</p>
           </div>
+          <Link
+            href={"/dashboard/settings" as never}
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+            role="menuitem"
+          >
+            <Settings className="w-4 h-4" />
+            Configuración
+          </Link>
           <button
             type="button"
             onClick={handleSignOut}
