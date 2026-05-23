@@ -316,9 +316,27 @@ def db_refresh_mvs(concurrently: bool) -> None:
 
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
     mvs = [
+        # EEFF (base)
         "marts.mv_eeff_balance_ancho",
         "marts.mv_eeff_resultados_ancho",
         "marts.mv_eeff_ratios",
+        # Negocio
+        "marts.mv_colocaciones_resumen",
+        "marts.mv_colocaciones_por_tipo",
+        "marts.mv_depositos_resumen",
+        "marts.mv_castigos_resumen",
+        # Indicadores prudenciales
+        "marts.mv_indicadores_prudenciales",
+        # Personal
+        "marts.mv_personal_resumen",
+        # Clientes
+        "marts.mv_clientes_resumen",
+        # Tasas
+        "marts.mv_tasas_activas_resumen",
+        "marts.mv_tasas_pasivas_resumen",
+        # Geografia
+        "marts.mv_creditos_distrito_long",
+        "marts.mv_cobertura_geografica",
     ]
     keyword = (
         "REFRESH MATERIALIZED VIEW CONCURRENTLY" if concurrently else "REFRESH MATERIALIZED VIEW"
@@ -341,6 +359,48 @@ def db_refresh_mvs(concurrently: bool) -> None:
 
     click.echo("")
     click.echo("# Refresh completo. Dashboard ya ve la data nueva.")
+
+
+@db.command("status")
+def db_status() -> None:
+    """Resumen del estado de cada dominio SBS cargado en la DB."""
+    import time
+
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    dominios = [
+        ("raw.eeff_observacion", "EEFF (BG + ER)"),
+        ("raw.colocaciones_observacion", "Colocaciones"),
+        ("raw.depositos_observacion", "Depositos"),
+        ("raw.castigos_observacion", "Castigos"),
+        ("raw.patrimonio_efectivo", "Patrimonio Efectivo"),
+        ("raw.ratio_liquidez", "Ratio Liquidez"),
+        ("raw.ratio_capital_global", "RCG (Basilea III)"),
+        ("raw.personal_observacion", "Personal (Headcount)"),
+        ("raw.clientes_ahorros", "Clientes Ahorros"),
+        ("raw.clientes_creditos", "Clientes Creditos"),
+        ("raw.tasas_activas", "Tasas Activas"),
+        ("raw.tasas_pasivas", "Tasas Pasivas"),
+        ("raw.creditos_distrito", "Creditos por Distrito"),
+        ("raw.creditos_depositos_oficina", "Cred+Dep por Oficina"),
+    ]
+
+    click.echo(f"{'Dominio':<28} {'Filas':>14} {'Periodos':<20}")
+    click.echo("-" * 70)
+    total = 0
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        for tabla, label in dominios:
+            try:
+                cur.execute(f"SELECT COUNT(*), MIN(periodo), MAX(periodo) FROM {tabla}")
+                n, mn, mx = cur.fetchone() or (0, None, None)
+                total += n or 0
+                rng = f"{mn} - {mx}" if mn else "(vacio)"
+                click.echo(f"  {label:<26} {n:>14,}  {rng}")
+            except Exception as e:
+                click.echo(f"  {label:<26}  ERR: {e}")
+    click.echo("-" * 70)
+    click.echo(f"  {'TOTAL':<26} {total:>14,}")
 
 
 @db.command("ping")
