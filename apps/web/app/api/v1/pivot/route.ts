@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { runPivot, type AgregacionPivot, type FuentePivot } from "@/lib/domains/analytics";
-import { handleRoute, ValidationError } from "@/lib/domains/shared";
+import { handleRoute, requireSession, ValidationError } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +32,7 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
+    await requireSession();
     const json = await req.json();
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {

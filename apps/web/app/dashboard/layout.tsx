@@ -38,6 +38,7 @@ export default async function DashboardLayout({
 
             <nav className="hidden md:flex items-center gap-5 lg:gap-6 text-[13px] flex-1 justify-center min-w-0 whitespace-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <NavLink href="/dashboard" label="Resumen" exact />
+              <NavLink href="/dashboard/informe" label="Informe ✨" />
               <NavLink href="/dashboard/eeff" label="Estados Financieros" />
               <NavLink href="/dashboard/tableros" label="Tableros" />
               <NavLink href="/dashboard/analisis" label="Analisis" />

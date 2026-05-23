@@ -30,36 +30,32 @@ export async function listEntidades(opts: {
   tipoEntidad?: string;
   soloMicrofinancieras?: boolean;
 } = {}): Promise<Entidad[]> {
-  const conds: string[] = ["NOT e.es_total", "NOT e.es_sucursal", "e.activa"];
-  const params: unknown[] = [];
+  // Usamos el sql tag de drizzle para parametros bindeados.
+  // El bug previo armaba $1 con sql.raw() — los placeholders no se substituyen
+  // y PG tira 42P02 "parameter $1 not present" en cuanto hay un filtro.
+  const tipoFilter = opts.tipoEntidad
+    ? sql`AND e.tipo_entidad = ${opts.tipoEntidad}`
+    : sql``;
+  const microFilter = opts.soloMicrofinancieras ? sql`AND e.microfinanciera` : sql``;
 
-  if (opts.tipoEntidad) {
-    params.push(opts.tipoEntidad);
-    conds.push(`e.tipo_entidad = $${params.length}`);
-  }
-  if (opts.soloMicrofinancieras) {
-    conds.push("e.microfinanciera");
-  }
-
-  const whereClause = `WHERE ${conds.join(" AND ")}`;
-  const rows = await db.execute<Record<string, unknown>>(
-    sql.raw(`
-      SELECT
-        e.nomb_correg                                AS "nombCorreg",
-        COALESCE(MAX(e.empresa_sbs), MAX(r.empresa_sbs)) AS "empresaSbs",
-        e.tipo_entidad                               AS "tipoEntidad",
-        e.microfinanciera                            AS "microfinanciera",
-        MAX(r.nacional)                              AS "nacional",
-        MIN(r.periodo)                               AS "primerPeriodo",
-        MAX(r.periodo)                               AS "ultimoPeriodo"
-      FROM dw.dim_entidad e
-      LEFT JOIN raw.eeff_observacion r ON r.nomb_correg = e.nomb_correg
-      ${whereClause}
-      GROUP BY e.nomb_correg, e.tipo_entidad, e.microfinanciera
-      HAVING MAX(r.periodo) IS NOT NULL
-      ORDER BY e.nomb_correg
-    `),
-  );
+  const rows = await db.execute<Record<string, unknown>>(sql`
+    SELECT
+      e.nomb_correg                                    AS "nombCorreg",
+      COALESCE(MAX(e.empresa_sbs), MAX(r.empresa_sbs)) AS "empresaSbs",
+      e.tipo_entidad                                   AS "tipoEntidad",
+      e.microfinanciera                                AS "microfinanciera",
+      MAX(r.nacional)                                  AS "nacional",
+      MIN(r.periodo)                                   AS "primerPeriodo",
+      MAX(r.periodo)                                   AS "ultimoPeriodo"
+    FROM dw.dim_entidad e
+    LEFT JOIN raw.eeff_observacion r ON r.nomb_correg = e.nomb_correg
+    WHERE NOT e.es_total AND NOT e.es_sucursal AND e.activa
+      ${tipoFilter}
+      ${microFilter}
+    GROUP BY e.nomb_correg, e.tipo_entidad, e.microfinanciera
+    HAVING MAX(r.periodo) IS NOT NULL
+    ORDER BY e.nomb_correg
+  `);
   return rows.map((r) => ({
     nombCorreg: String(r.nombCorreg),
     empresaSbs: r.empresaSbs as string | null,
