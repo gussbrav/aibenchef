@@ -1,6 +1,6 @@
 import { listPeriodosDisponibles } from "@/lib/domains/informe/queries";
 import { handleRoute } from "@/lib/domains/shared";
-import { requireSession } from "@/lib/domains/shared/auth-helpers";
+import { requireSession } from "@/lib/auth-helpers";
 export const dynamic = "force-dynamic";
 
 export async function GET() {

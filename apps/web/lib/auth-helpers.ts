@@ -21,7 +21,7 @@ import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 
-import { UnauthorizedError, ForbiddenError } from "./errors";
+import { UnauthorizedError, ForbiddenError } from "@/lib/domains/shared/errors";
 
 export type SessionUser = {
   id: string;

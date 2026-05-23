@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
 import { handleRoute } from "@/lib/domains/shared";
-import { requireSession } from "@/lib/domains/shared/auth-helpers";
+import { requireSession } from "@/lib/auth-helpers";
 export const dynamic = "force-dynamic";
 
 type Check = { name: string; status: "ok" | "missing" | "error"; detail?: string };

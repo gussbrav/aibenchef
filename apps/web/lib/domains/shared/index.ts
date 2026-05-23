@@ -3,6 +3,5 @@ export * from "./errors";
 export * from "./result";
 export * from "./http";
 export * from "./dates";
-// NO re-exportar auth-helpers desde aqui: usa "next/headers" y arrastra
-// imports server-only al bundle del cliente. Importar directamente desde
-// "@/lib/domains/shared/auth-helpers" donde se necesite (route handlers).
+// auth-helpers se movio a @/lib/auth-helpers para evitar que webpack siga
+// re-exports indirectos hasta bundlear "next/headers" en el cliente.

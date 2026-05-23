@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getInformeData } from "@/lib/domains/informe/queries";
 import { handleRoute, ValidationError } from "@/lib/domains/shared";
-import { requireSession } from "@/lib/domains/shared/auth-helpers";
+import { requireSession } from "@/lib/auth-helpers";
 export const dynamic = "force-dynamic";
 
 const querySchema = z.object({
