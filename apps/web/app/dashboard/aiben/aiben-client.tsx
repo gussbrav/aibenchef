@@ -43,7 +43,7 @@ type QueryResult = {
   duracionMs: number;
 };
 
-export function GenieClient() {
+export function AibenClient() {
   const router = useRouter();
   const [conversacion, setConversacion] = useState<Mensaje[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -145,7 +145,7 @@ export function GenieClient() {
         <header className="h-12 px-4 flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-violet-50 to-fuchsia-50">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-violet-600" />
-            <h2 className="text-sm font-semibold text-slate-900">Genie</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Aiben</h2>
             <span className="text-[10px] text-slate-500">
               Pregunta en lenguaje natural, recibe SQL listo para ejecutar.
             </span>
@@ -185,7 +185,7 @@ export function GenieClient() {
                   <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-3.5 h-3.5 text-violet-600" />
-                      <span className="text-xs font-semibold text-violet-900">Genie</span>
+                      <span className="text-xs font-semibold text-violet-900">Aiben</span>
                       <span className="text-[10px] text-slate-500 ml-auto">
                         {m.duracionMs}ms · {m.tokensInput + m.tokensOutput} tok
                       </span>
@@ -251,7 +251,7 @@ export function GenieClient() {
           {generando && (
             <div className="flex items-center gap-2 text-xs text-violet-700 p-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Genie esta pensando...
+              Aiben esta pensando...
             </div>
           )}
           {error && (
@@ -273,7 +273,7 @@ export function GenieClient() {
                   generar();
                 }
               }}
-              placeholder="Preguntale a Genie en lenguaje natural..."
+              placeholder="Preguntale a Aiben en lenguaje natural..."
               rows={2}
               className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 focus:border-violet-500 outline-none resize-none"
             />

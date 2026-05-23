@@ -32,7 +32,7 @@ const CAT_META: Record<
   users: { label: "Usuarios", icon: UsersIcon, color: "violet" },
   ai_providers: { label: "API keys", icon: KeyRound, color: "amber" },
   sql: { label: "SQL", icon: Code, color: "sky" },
-  genie: { label: "Genie", icon: Sparkles, color: "fuchsia" },
+  genie: { label: "Aiben", icon: Sparkles, color: "fuchsia" },
 };
 
 export function AuditSection() {
@@ -91,7 +91,7 @@ export function AuditSection() {
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Auditoria</h2>
         <p className="text-sm text-slate-600 mt-1">
-          Registro inmutable de cambios sensibles: roles, API keys, SQL ejecutado y prompts a Genie.
+          Registro inmutable de cambios sensibles: roles, API keys, SQL ejecutado y prompts a Aiben.
         </p>
       </div>
 

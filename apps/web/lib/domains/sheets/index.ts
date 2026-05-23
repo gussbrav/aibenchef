@@ -43,13 +43,14 @@ function mapRow(r: Record<string, unknown>): Sheet {
 }
 
 export async function listSheets(userId: string): Promise<SheetResumen[]> {
+  // n_cells via subquery escalar — jsonb_object_keys es SETOF y no se puede
+  // usar directo en SELECT sin generar cardinalidad multi-row.
   const rows = await db.execute<Record<string, unknown>>(
     sql`
       SELECT id, user_id, nombre, descripcion, n_rows, n_cols, es_publico,
              created_at, updated_at,
-             jsonb_object_keys(cells) IS NOT NULL AS has_cells,
-             (SELECT COUNT(*) FROM jsonb_object_keys(cells))::int AS n_cells
-      FROM app.sheets
+             COALESCE((SELECT COUNT(*)::int FROM jsonb_object_keys(s.cells)), 0) AS n_cells
+      FROM app.sheets s
       WHERE user_id = ${userId} OR es_publico = TRUE
       ORDER BY updated_at DESC
     `,

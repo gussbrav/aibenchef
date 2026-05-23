@@ -40,14 +40,14 @@ const PROVIDER_META: Record<
     label: "Anthropic Claude",
     icon: Sparkles,
     color: "violet",
-    descripcion: "Modelo Claude (Opus/Sonnet/Haiku). Usado por Genie NL2SQL.",
+    descripcion: "Modelo Claude (Opus/Sonnet/Haiku). Usado por Aiben NL2SQL.",
     modelHint: "ej: claude-opus-4-7, claude-sonnet-4-6",
   },
   openai: {
     label: "OpenAI GPT",
     icon: Zap,
     color: "emerald",
-    descripcion: "GPT-4o, GPT-4.1, o-series. Fallback para Genie y agentes futuros.",
+    descripcion: "GPT-4o, GPT-4.1, o-series. Fallback para Aiben y agentes futuros.",
     modelHint: "ej: gpt-4o, gpt-4.1, o1-preview",
   },
   ollama: {

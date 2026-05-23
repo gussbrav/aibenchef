@@ -50,7 +50,7 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/analisis" label="Analisis" />
               <NavLink href="/dashboard/notebooks" label="Notebooks" />
               <NavLink href="/dashboard/sheets" label="Sheets" />
-              <NavLink href="/dashboard/genie" label="Genie ✨" />
+              <NavLink href="/dashboard/aiben" label="Aiben ✨" />
               <NavLink href="/dashboard/sql" label="SQL" />
               <NavLink href="/dashboard/catalog" label="Catalog" />
               <NavLink href="/dashboard/admin/archivos" label="Archivos" />

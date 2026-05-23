@@ -101,9 +101,9 @@ export function WelcomeBanner({ userName }: { userName: string }) {
           color="sky"
         />
         <Tile
-          href="/dashboard/genie"
+          href="/dashboard/aiben"
           icon={Sparkles}
-          label="Genie"
+          label="Aiben"
           desc="Pregunta en lenguaje natural"
           color="violet"
         />
