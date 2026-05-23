@@ -5,6 +5,7 @@ import {
   History,
   MailPlus,
   Settings,
+  Sliders,
   Sparkles,
   User as UserIcon,
   Users as UsersIcon,
@@ -18,6 +19,7 @@ import { AuditSection } from "./audit-section";
 import { DebugSection } from "./debug-section";
 import { InvitationsSection } from "./invitations-section";
 import { ProfileSection } from "./profile-section";
+import { SystemSettingsSection } from "./system-settings-section";
 import { UsersSection } from "./users-section";
 
 type Tab =
@@ -25,6 +27,7 @@ type Tab =
   | "ai"
   | "usuarios"
   | "invitaciones"
+  | "sistema"
   | "auditoria"
   | "debug";
 
@@ -48,6 +51,7 @@ export function SettingsClient() {
     { id: "ai", label: "Proveedores AI", icon: Sparkles, adminOnly: true },
     { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
     { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
+    { id: "sistema", label: "Sistema", icon: Sliders, adminOnly: true },
     { id: "auditoria", label: "Auditoria", icon: History, adminOnly: true },
     { id: "debug", label: "Diagnostico", icon: Wrench, adminOnly: true },
   ];
@@ -92,6 +96,7 @@ export function SettingsClient() {
         {tab === "ai" && isAdmin && <AiProvidersSection />}
         {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
         {tab === "invitaciones" && isAdmin && <InvitationsSection />}
+        {tab === "sistema" && isAdmin && <SystemSettingsSection />}
         {tab === "auditoria" && isAdmin && <AuditSection />}
         {tab === "debug" && isAdmin && <DebugSection />}
         {tab !== "perfil" && !isAdmin && (

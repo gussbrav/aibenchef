@@ -26,11 +26,31 @@ export type SendEmailResult = {
 };
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
+  // Prioridad de configuracion:
+  //   1. app.system_settings (UI, sin redeploy) — si email_resend_enabled=true
+  //   2. process.env.RESEND_API_KEY (fallback legacy)
+  let apiKey: string | null = null;
+  let fromConfig: string | null = null;
+  try {
+    // Import dinamico para evitar ciclo de dependencias y permitir que esta
+    // funcion funcione tambien en contextos donde no hay DB (tests, etc).
+    const { getSystemSettingValue } = await import("@/lib/domains/system-settings");
+    const enabled = await getSystemSettingValue("email_resend_enabled");
+    if (enabled === "true") {
+      apiKey = await getSystemSettingValue("email_resend_api_key");
+      fromConfig = await getSystemSettingValue("email_resend_from");
+    }
+  } catch {
+    // Si la tabla no existe aun (migracion pendiente) o falla la DB,
+    // caemos al fallback de env vars.
+  }
+  if (!apiKey) {
+    apiKey = process.env.RESEND_API_KEY ?? null;
+  }
   if (!apiKey || !apiKey.trim()) {
     return { sent: false, reason: "no_resend_key" };
   }
-  const from = input.from || process.env.RESEND_FROM_EMAIL || "Aibenchef <no-reply@aibenchef.dev>";
+  const from = input.from || fromConfig || process.env.RESEND_FROM_EMAIL || "Aibenchef <no-reply@aibenchef.dev>";
 
   try {
     const resp = await fetch(`${RESEND_BASE}/emails`, {
