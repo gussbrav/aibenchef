@@ -11,7 +11,7 @@
 //   4. Punto de Equilibrio Anualizado
 //   5. Analisis Margen Neto: bubble + waterfall
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
 import {
@@ -184,13 +184,15 @@ export function InformeClient({
       </header>
 
       {/* ============ SELECTORES ============ */}
-      <SelectoresToolbarConTema
-        periodoActual={periodo.codigo}
-        peerGroupActual={competidores.map((c) => c.nombCorreg)}
-        entidadPropia={cliente.entidadPropia}
-        periodosDisponibles={periodosDisponibles}
-        entidadesDisponibles={entidadesDisponibles}
-      />
+      <Suspense fallback={<div className="h-12" />}>
+        <SelectoresToolbarConTema
+          periodoActual={periodo.codigo}
+          peerGroupActual={competidores.map((c) => c.nombCorreg)}
+          entidadPropia={cliente.entidadPropia}
+          periodosDisponibles={periodosDisponibles}
+          entidadesDisponibles={entidadesDisponibles}
+        />
+      </Suspense>
 
       {/* Cobertura: aviso si hay entidades del peer group sin data en las MVs */}
       {data.cobertura.entidadesSinData.length > 0 && (
