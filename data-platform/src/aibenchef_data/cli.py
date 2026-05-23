@@ -1563,10 +1563,20 @@ def import_base_clientes_creditos(path: str, sheet: str, batch_size: int) -> Non
 
 @import_grp.command("base-oficinas")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
-@click.option("--sheet", type=str, default="DataSF")
+@click.option(
+    "--sheet",
+    type=str,
+    default="auto",
+    help='Nombre de hoja exacta, o "auto" para concatenar todas las que '
+    'empiezen con "DataSF" (DataSF, DataSF_2, etc.).',
+)
 @click.option("--batch-size", type=int, default=20_000)
 def import_base_oficinas(path: str, sheet: str, batch_size: int) -> None:
-    """Cargar CREDITOS Y DEPOSITOS POR OFICINAS.xlsx (~1M filas) a raw.creditos_depositos_oficina."""
+    """Cargar CREDITOS Y DEPOSITOS POR OFICINAS.xlsx (~1M filas) a raw.creditos_depositos_oficina.
+
+    Por default lee todas las hojas DataSF, DataSF_2, ... (cuando el xlsx
+    supera el limite de Excel se parte en varias hojas).
+    """
     from aibenchef_data.domains.loading import BaseOficinasImporter
     _run_simple_import(BaseOficinasImporter, path, sheet, batch_size)
 

@@ -26,22 +26,58 @@ class BaseOficinasImporter:
         self._conn = conn
         self._batch_size = batch_size
 
-    async def import_file(self, path: Path, *, sheet: str = "DataSF") -> ImportResult:
+    async def import_file(self, path: Path, *, sheet: str = "auto") -> ImportResult:
+        """Carga el xlsx de oficinas en raw.creditos_depositos_oficina.
+
+        Args:
+            sheet: nombre de la hoja, o "auto"/"all" para auto-detectar todas
+                las hojas que comiencen con "DataSF" (caso comun cuando el
+                xlsx tiene >1M filas y se parte en DataSF + DataSF_2 + ...).
+        """
         start = time.perf_counter()
-        log.info("oficinas.import.start", path=str(path))
+        log.info("oficinas.import.start", path=str(path), sheet=sheet)
 
         try:
             import pandas as pd
         except ImportError as e:
             raise ValidationError(f"pandas no instalado: {e}") from e
 
-        try:
-            df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
-        except Exception as e:
-            raise ValidationError(f"No se pudo leer {path}: {e}") from e
+        # Decidir que hojas leer.
+        if sheet.lower() in ("auto", "all"):
+            try:
+                from openpyxl import load_workbook
+                wb = load_workbook(path, read_only=True, data_only=True)
+                sheets_to_read = [s for s in wb.sheetnames if s.lower().startswith("datasf")]
+                wb.close()
+            except Exception as e:
+                raise ValidationError(f"No pude listar hojas de {path}: {e}") from e
+            if not sheets_to_read:
+                raise ValidationError(
+                    f"No hojas que comiencen con 'DataSF' en {path}. "
+                    f"Pasa --sheet <nombre> explicito."
+                )
+            log.info("oficinas.import.auto_detect", hojas=sheets_to_read)
+        else:
+            sheets_to_read = [sheet]
 
-        df.columns = [str(c).strip() for c in df.columns]
-        log.info("oficinas.import.read", filas=len(df), cols=len(df.columns))
+        # Leer cada hoja y concatenar.
+        dfs = []
+        for s in sheets_to_read:
+            try:
+                d = pd.read_excel(path, sheet_name=s, engine="openpyxl")
+            except Exception as e:
+                raise ValidationError(f"No se pudo leer sheet '{s}' de {path}: {e}") from e
+            d.columns = [str(c).strip() for c in d.columns]
+            log.info("oficinas.import.sheet_read", sheet=s, filas=len(d), cols=len(d.columns))
+            dfs.append(d)
+
+        df = pd.concat(dfs, ignore_index=True) if len(dfs) > 1 else dfs[0]
+        log.info(
+            "oficinas.import.read",
+            filas=len(df),
+            cols=len(df.columns),
+            hojas=len(dfs),
+        )
 
         # Mapeo flexible — el archivo tiene caracteres latin-1 raros
         col_map: dict[str, str] = {}
