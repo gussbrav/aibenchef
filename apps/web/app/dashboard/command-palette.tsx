@@ -25,7 +25,15 @@ import { cn } from "@/lib/utils/cn";
 type NavItem = {
   label: string;
   description?: string;
-  group: "Navegacion" | "Tableros" | "Notebooks" | "Workspaces" | "Queries" | "Entidades" | "Acciones rapidas";
+  group:
+    | "Navegacion"
+    | "Tableros"
+    | "Notebooks"
+    | "Workspaces"
+    | "Queries"
+    | "Sheets"
+    | "Entidades"
+    | "Acciones rapidas";
   icon: React.ComponentType<{ className?: string }>;
   href?: string;
   action?: () => void;
@@ -36,6 +44,7 @@ type Tablero = { id: string; nombre: string };
 type Notebook = { id: string; titulo: string };
 type Workspace = { id: string; nombre: string };
 type SavedQuery = { id: string; nombre: string };
+type SheetItem = { id: string; nombre: string };
 type Entidad = { nombCorreg: string };
 
 const NAV_BASE: NavItem[] = [
@@ -44,6 +53,7 @@ const NAV_BASE: NavItem[] = [
   { label: "Tableros", group: "Navegacion", icon: LayoutDashboard, href: "/dashboard/tableros", keywords: ["dashboards"] },
   { label: "Analisis Dinamico", group: "Navegacion", icon: TableProperties, href: "/dashboard/analisis", keywords: ["pivot", "excel"] },
   { label: "Notebooks", group: "Navegacion", icon: NotebookText, href: "/dashboard/notebooks" },
+  { label: "Sheets", group: "Navegacion", icon: TableProperties, href: "/dashboard/sheets", keywords: ["spreadsheet", "excel", "zoho"] },
   { label: "Genie", group: "Navegacion", icon: Sparkles, href: "/dashboard/genie", keywords: ["ai", "nl2sql"] },
   { label: "SQL Workbench", group: "Navegacion", icon: Code, href: "/dashboard/sql", keywords: ["sql", "query"] },
   { label: "Catalog", group: "Navegacion", icon: Database, href: "/dashboard/catalog", keywords: ["schema", "tablas"] },
@@ -53,6 +63,7 @@ const NAV_BASE: NavItem[] = [
 const ACTIONS_BASE: NavItem[] = [
   { label: "Nuevo tablero", description: "Crear dashboard multi-widget", group: "Acciones rapidas", icon: LayoutDashboard, href: "/dashboard/tableros" },
   { label: "Nuevo notebook", description: "Reporte con SQL + markdown + charts", group: "Acciones rapidas", icon: NotebookText, href: "/dashboard/notebooks" },
+  { label: "Nueva sheet", description: "Hoja de calculo editable tipo Excel/Zoho", group: "Acciones rapidas", icon: TableProperties, href: "/dashboard/sheets" },
   { label: "Preguntar a Genie", description: "NL2SQL via Claude/Ollama", group: "Acciones rapidas", icon: Sparkles, href: "/dashboard/genie" },
   { label: "Ejecutar SQL ad-hoc", description: "Workbench con Monaco", group: "Acciones rapidas", icon: Code, href: "/dashboard/sql" },
   { label: "Invitar usuario", description: "Generar token de invitacion", group: "Acciones rapidas", icon: MailPlus, href: "/dashboard/settings?tab=invitaciones" },
@@ -67,6 +78,7 @@ export function CommandPalette() {
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [sheetItems, setSheetItems] = useState<SheetItem[]>([]);
   const [entidades, setEntidades] = useState<Entidad[]>([]);
 
   // Atajo global: Cmd+K (Mac) / Ctrl+K (Win/Linux)
@@ -89,12 +101,14 @@ export function CommandPalette() {
       fetch("/api/v1/notebooks").then((r) => r.json()).catch(() => null),
       fetch("/api/v1/workspaces").then((r) => r.json()).catch(() => null),
       fetch("/api/v1/sql/queries").then((r) => r.json()).catch(() => null),
+      fetch("/api/v1/sheets").then((r) => r.json()).catch(() => null),
       fetch("/api/v1/entidades").then((r) => r.json()).catch(() => null),
-    ]).then(([t, n, w, q, e]) => {
+    ]).then(([t, n, w, q, s, e]) => {
       if (t?.data?.rows) setTableros(t.data.rows as Tablero[]);
       if (n?.data?.rows) setNotebooks(n.data.rows as Notebook[]);
       if (w?.data?.rows) setWorkspaces(w.data.rows as Workspace[]);
       if (q?.data?.rows) setSavedQueries(q.data.rows as SavedQuery[]);
+      if (s?.data?.rows) setSheetItems(s.data.rows as SheetItem[]);
       if (e?.data?.rows) setEntidades(e.data.rows as Entidad[]);
     });
   }, [open]);
@@ -131,6 +145,14 @@ export function CommandPalette() {
         href: `/dashboard/sql`,
         keywords: ["sql", "query"],
       })),
+      ...sheetItems.map<NavItem>((s) => ({
+        label: s.nombre,
+        description: "Hoja de calculo",
+        group: "Sheets",
+        icon: TableProperties,
+        href: `/dashboard/sheets/${s.id}`,
+        keywords: ["sheet", "excel", "spreadsheet"],
+      })),
       ...entidades.slice(0, 50).map<NavItem>((e) => ({
         label: e.nombCorreg,
         description: "Ver EE.FF.",
@@ -156,6 +178,7 @@ export function CommandPalette() {
       "Navegacion",
       "Tableros",
       "Notebooks",
+      "Sheets",
       "Workspaces",
       "Queries",
       "Entidades",
@@ -180,7 +203,18 @@ export function CommandPalette() {
       {open && (
         <div
           className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-start justify-center pt-[15vh] px-4"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            setOpen(false);
+            setQuery("");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+              setQuery("");
+            }
+          }}
         >
           <Command
             shouldFilter
@@ -192,7 +226,7 @@ export function CommandPalette() {
               <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
               <Command.Input
                 value={query}
-                onValueChange={setQuery}
+                onValueChange={(v) => setQuery(typeof v === "string" ? v : "")}
                 placeholder="Buscar acciones, tableros, notebooks, entidades..."
                 className="flex-1 h-11 bg-transparent text-sm outline-none placeholder:text-slate-400"
                 autoFocus
