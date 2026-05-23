@@ -23,8 +23,19 @@ import {
   Tooltip,
   ReferenceLine,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 
 import type { InformeData, Kpi, KpiValor, PuntoEquilibrioRow } from "./fixture-data";
+
+type BubblePayload = {
+  label: string;
+  deltaPp: number;
+  margenNeto: number;
+  color: string;
+  x: number;
+  y: number;
+  z: number;
+};
 
 // ============================================================================
 // Helpers de formato y ranking
@@ -441,10 +452,11 @@ function SeccionMargenNetoBubble({
                 <ReferenceLine x={0} stroke="#94a3b8" strokeDasharray="3 3" />
                 <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                 <Tooltip
-                  content={(props: { active?: boolean; payload?: Array<{ payload: { label: string; deltaPp: number; margenNeto: number } }> }) => {
+                  content={(props: TooltipProps<number, string>) => {
                     const { active, payload } = props;
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
+                    if (!active || !payload || payload.length === 0) return null;
+                    const d = payload[0].payload as BubblePayload | undefined;
+                    if (!d) return null;
                     return (
                       <div className="bg-white border border-slate-200 rounded shadow-lg p-3 text-xs">
                         <p className="font-semibold text-slate-900 mb-1">{d.label}</p>
