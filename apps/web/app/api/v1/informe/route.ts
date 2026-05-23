@@ -12,6 +12,7 @@ const querySchema = z.object({
   peerGroup: z.string().optional(),
   entidadPropia: z.string().optional(),
   tema: z.string().optional(),
+  orden: z.string().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -27,12 +28,16 @@ export async function GET(req: NextRequest) {
     const peerGroup = parsed.data.peerGroup
       ? parsed.data.peerGroup.split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+    const orden = parsed.data.orden
+      ? parsed.data.orden.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
     return await getInformeData({
       clienteSlug: parsed.data.cliente,
       periodo: parsed.data.periodo,
       peerGroupOverride: peerGroup,
       entidadPropiaOverride: parsed.data.entidadPropia,
       temaOverride: parsed.data.tema,
+      ordenOverride: orden,
     });
   });
 }

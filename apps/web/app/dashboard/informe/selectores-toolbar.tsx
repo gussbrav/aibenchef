@@ -12,7 +12,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar, Users, X, Search, Check, Crown, Palette } from "lucide-react";
+import { Calendar, Users, X, Search, Check, Crown, Palette, ArrowUp, ArrowDown } from "lucide-react";
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { TEMAS_PRESET } from "@/lib/domains/informe";
@@ -100,7 +100,7 @@ export function SelectoresToolbar({
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-slate-500" />
             <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-              Peer ({peerGroupActual.length}):
+              Comparar con ({peerGroupActual.length}):
             </label>
             <button
               type="button"
@@ -286,13 +286,14 @@ function PeerGroupEditor({
   onClose: () => void;
   onAplicar: (nuevo: string[]) => void;
 }) {
-  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set(peerGroupActual));
+  // Usamos array en lugar de Set para preservar el orden que el usuario
+  // elige. El primero del array se renderea como primera columna en las
+  // tablas del informe.
+  const [orden, setOrden] = useState<string[]>([...peerGroupActual]);
+  const seleccionadas = useMemo(() => new Set(orden), [orden]);
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
 
-  // Orden canonico del proyecto: BANCOS -> FINANCIERAS -> CMAC -> CRAC -> EDPYMES
-  // (TIPO_ENTIDAD_ORDER en _lib/format.ts). Si aparece un tipo desconocido
-  // se manda al final.
   const tiposDisponibles = useMemo(() => {
     const set = new Set<string>();
     for (const e of entidadesDisponibles) set.add(e.tipoEntidad);
@@ -315,10 +316,26 @@ function PeerGroupEditor({
 
   const toggle = (nomb: string) => {
     if (nomb === entidadPropia) return;
-    setSeleccionadas((prev) => {
-      const next = new Set(prev);
-      if (next.has(nomb)) next.delete(nomb);
-      else next.add(nomb);
+    setOrden((prev) => {
+      if (prev.includes(nomb)) return prev.filter((x) => x !== nomb);
+      return [...prev, nomb];
+    });
+  };
+
+  const moverArriba = (idx: number) => {
+    if (idx <= 0) return;
+    setOrden((prev) => {
+      const next = [...prev];
+      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+      return next;
+    });
+  };
+
+  const moverAbajo = (idx: number) => {
+    setOrden((prev) => {
+      if (idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
       return next;
     });
   };
@@ -326,14 +343,14 @@ function PeerGroupEditor({
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col"
+        className="bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Editar Peer Group</h2>
+            <h2 className="text-lg font-bold text-slate-900">Editar comparativa</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Selecciona las entidades que aparecen en el informe. La entidad propia ({entidadPropia}) siempre se incluye.
+              Selecciona las entidades que aparecen en el informe y reordénalas con las flechas. La entidad propia ({entidadPropia}) siempre se incluye.
             </p>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
@@ -373,53 +390,114 @@ function PeerGroupEditor({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-2">
-          {filtradas.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">No hay entidades disponibles. ¿Está poblada raw.eeff_observacion?</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {filtradas.map((e) => {
-                const checked = seleccionadas.has(e.nombCorreg);
-                const esPropio = e.nombCorreg === entidadPropia;
-                return (
-                  <li key={e.nombCorreg}>
-                    <label
-                      className={`flex items-center gap-3 py-2 cursor-pointer hover:bg-slate-50 px-2 rounded ${
-                        esPropio ? "opacity-90" : ""
-                      }`}
+        <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+          {/* Columna izquierda: lista de entidades disponibles */}
+          <div className="overflow-y-auto px-6 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-2 sticky top-0 bg-white">
+              Disponibles ({filtradas.length})
+            </p>
+            {filtradas.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No hay entidades. ¿Está poblada raw.eeff_observacion?</p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {filtradas.map((e) => {
+                  const checked = seleccionadas.has(e.nombCorreg);
+                  const esPropio = e.nombCorreg === entidadPropia;
+                  return (
+                    <li key={e.nombCorreg}>
+                      <label className={`flex items-center gap-3 py-2 cursor-pointer hover:bg-slate-50 px-2 rounded ${esPropio ? "opacity-90" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={esPropio}
+                          onChange={() => toggle(e.nombCorreg)}
+                          className="w-4 h-4 rounded border-slate-300 text-brand-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-900 truncate">
+                            {e.nombCorreg}
+                            {esPropio && (
+                              <span className="ml-2 text-[10px] uppercase font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">
+                                propia
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {tipoEntidadLabel(e.tipoEntidad)} {e.microfinanciera ? "· microfinanciera" : ""}
+                          </p>
+                        </div>
+                        {checked && <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Columna derecha: orden actual de las seleccionadas */}
+          <div className="overflow-y-auto px-6 py-2 bg-slate-50/30">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 py-2 sticky top-0 bg-slate-50">
+              Orden de columnas ({orden.length})
+            </p>
+            {orden.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">Sin entidades seleccionadas.</p>
+            ) : (
+              <ol className="space-y-1">
+                {orden.map((nomb, idx) => {
+                  const esPropio = nomb === entidadPropia;
+                  return (
+                    <li
+                      key={nomb}
+                      className="flex items-center gap-2 px-2 py-1.5 bg-white border border-slate-200 rounded text-sm"
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
+                      <span className="text-[10px] font-mono text-slate-400 w-4 text-right">{idx + 1}</span>
+                      <span className="flex-1 truncate text-slate-900">
+                        {nomb}
+                        {esPropio && (
+                          <span className="ml-2 text-[10px] uppercase font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">
+                            propia
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => moverArriba(idx)}
+                        disabled={idx === 0}
+                        className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Subir"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5 text-slate-600" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moverAbajo(idx)}
+                        disabled={idx === orden.length - 1}
+                        className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Bajar"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5 text-slate-600" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggle(nomb)}
                         disabled={esPropio}
-                        onChange={() => toggle(e.nombCorreg)}
-                        className="w-4 h-4 rounded border-slate-300 text-brand-600"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-900 truncate">
-                          {e.nombCorreg}
-                          {esPropio && (
-                            <span className="ml-2 text-[10px] uppercase font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">
-                              propia
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          {e.tipoEntidad} {e.microfinanciera ? "· microfinanciera" : ""}
-                        </p>
-                      </div>
-                      {checked && <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                        className="p-1 rounded hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={esPropio ? "La entidad propia no se puede quitar" : "Quitar"}
+                      >
+                        <X className="w-3.5 h-3.5 text-rose-600" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
         </div>
 
         <footer className="px-6 py-3 border-t border-slate-200 flex items-center justify-between gap-3 bg-slate-50">
           <p className="text-xs text-slate-600">
-            <strong>{seleccionadas.size}</strong> entidades seleccionadas
+            <strong>{orden.length}</strong> entidades · primera columna: <strong>{orden[0] ?? "—"}</strong>
           </p>
           <div className="flex gap-2">
             <button
@@ -431,11 +509,11 @@ function PeerGroupEditor({
             </button>
             <button
               type="button"
-              onClick={() => onAplicar(Array.from(seleccionadas))}
-              disabled={seleccionadas.size === 0}
+              onClick={() => onAplicar(orden)}
+              disabled={orden.length === 0}
               className="h-9 px-4 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
             >
-              Aplicar ({seleccionadas.size})
+              Aplicar ({orden.length})
             </button>
           </div>
         </footer>

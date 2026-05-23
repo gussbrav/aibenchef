@@ -14,6 +14,7 @@ type SearchParams = Promise<{
   peerGroup?: string;
   entidadPropia?: string;
   tema?: string;
+  orden?: string;
 }>;
 
 export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
@@ -32,6 +33,9 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   const peerGroup = params.peerGroup
     ? params.peerGroup.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
+  const orden = params.orden
+    ? params.orden.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
 
   const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
     getInformeData({
@@ -40,6 +44,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       peerGroupOverride: peerGroup,
       entidadPropiaOverride: params.entidadPropia,
       temaOverride: params.tema,
+      ordenOverride: orden,
     }),
     listPeriodosDisponibles({ ultimosN: 36 }),
     listEntidadesDisponibles({}),

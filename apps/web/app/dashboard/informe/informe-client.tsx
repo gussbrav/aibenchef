@@ -542,11 +542,28 @@ function SeccionMargenNetoBubble({
                     );
                   }}
                 />
-                <Scatter data={scatterData} fill="#0F2A5E">
-                  {scatterData.map((d, i) => (
-                    <circle key={i} fill={d.color} fillOpacity={0.7} stroke="#fff" strokeWidth={2} r={0} />
-                  ))}
-                </Scatter>
+                <Scatter
+                  data={scatterData}
+                  shape={(props: { cx?: number; cy?: number; size?: number; payload?: BubbleChartPayload }) => {
+                    const { cx, cy, size, payload } = props;
+                    if (cx == null || cy == null || !payload) return <g />;
+                    // size viene del ZAxis range (200..1500); es AREA en px^2.
+                    // Convertir a radio: r = sqrt(area/PI).
+                    const area = typeof size === "number" && size > 0 ? size : 600;
+                    const r = Math.sqrt(area / Math.PI);
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={r}
+                        fill={payload.color}
+                        fillOpacity={0.75}
+                        stroke="#fff"
+                        strokeWidth={2}
+                      />
+                    );
+                  }}
+                />
               </ScatterChart>
             </ResponsiveContainer>
           </div>

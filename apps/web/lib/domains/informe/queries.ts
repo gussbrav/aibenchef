@@ -542,6 +542,28 @@ function buildBubbleAndWaterfall(
 // Endpoint principal del dominio
 // ============================================================================
 
+// Resuelve el "nombre largo / legal" de una entidad para usar en el header
+// del informe. Prioriza empresa_sbs (nombre legal completo) y cae a
+// nomb_correg si no hay. Si tampoco existe en dim_entidad, devuelve el
+// nomb_correg solicitado.
+async function getNombreLargoEntidad(nombCorreg: string): Promise<string> {
+  return safeQuery<string>(
+    `getNombreLargoEntidad[${nombCorreg}]`,
+    async () => {
+      const rows = await db.execute<{ empresa_sbs: string | null; nomb_correg: string }>(sql`
+        SELECT empresa_sbs, nomb_correg
+        FROM dw.dim_entidad
+        WHERE nomb_correg = ${nombCorreg}
+        LIMIT 1
+      `);
+      if (rows.length === 0) return nombCorreg;
+      const r = rows[0];
+      return r.empresa_sbs?.trim() || r.nomb_correg;
+    },
+    nombCorreg,
+  );
+}
+
 // Para cada entidad solicitada que NO matchea, buscar candidatos similares
 // usando ILIKE con tokens. Util para sugerir correcciones al usuario cuando
 // el peer group tiene typos o nombres distintos a los de dim_entidad.
@@ -580,12 +602,21 @@ export async function getInformeData(opts: {
   peerGroupOverride?: string[];
   entidadPropiaOverride?: string;
   temaOverride?: string;
+  ordenOverride?: string[];
 }): Promise<InformeData> {
   let cliente = await getClienteBySlug(opts.clienteSlug);
 
-  // Override de entidad propia (URL ?entidadPropia=XXX)
+  // Override de entidad propia + nombre largo del header.
+  // Asi "Resaltar: Mibanco" hace que el titulo principal diga el nombre
+  // legal de Mibanco en vez del cliente original.
   if (opts.entidadPropiaOverride && opts.entidadPropiaOverride !== cliente.entidadPropia) {
-    cliente = { ...cliente, entidadPropia: opts.entidadPropiaOverride };
+    const nombreLargo = await getNombreLargoEntidad(opts.entidadPropiaOverride);
+    cliente = {
+      ...cliente,
+      entidadPropia: opts.entidadPropiaOverride,
+      nombre: nombreLargo,
+      nombreCorto: opts.entidadPropiaOverride,
+    };
   }
 
   // Override de tema (URL ?tema=cusco | huancayo | piura | etc.)
@@ -605,7 +636,19 @@ export async function getInformeData(opts: {
     peerList = [...peerList, cliente.entidadPropia];
   }
 
-  const competidores = await buildCompetidores(opts.clienteSlug, peerList ?? null, cliente.entidadPropia);
+  let competidores = await buildCompetidores(opts.clienteSlug, peerList ?? null, cliente.entidadPropia);
+
+  // Override de orden (URL ?orden=A,B,C). Reordena los competidores segun la
+  // secuencia. Entidades no listadas en `orden` van al final.
+  if (opts.ordenOverride && opts.ordenOverride.length > 0) {
+    const ordenMap = new Map(opts.ordenOverride.map((n, i) => [n, i]));
+    competidores = [...competidores].sort((a, b) => {
+      const oa = ordenMap.get(a.nombCorreg) ?? Number.MAX_SAFE_INTEGER;
+      const ob = ordenMap.get(b.nombCorreg) ?? Number.MAX_SAFE_INTEGER;
+      return oa - ob;
+    });
+  }
+
   const entidadesNombs = competidores.map((c) => c.nombCorreg);
   const periodoPrev = periodoMismoMesAnioPrev(opts.periodo);
 
