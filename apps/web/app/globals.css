@@ -19,24 +19,78 @@ body {
   background: var(--background);
 }
 
-/* AG Grid Quartz — bordes verticales tipo Excel para Sheets */
+/* AG Grid Quartz — look tipo Excel para Sheets */
 .ag-theme-quartz {
   --ag-borders: solid 1px;
-  --ag-border-color: rgb(226 232 240); /* slate-200 */
-  --ag-row-border-color: rgb(226 232 240);
+  --ag-border-color: rgb(217 226 237); /* slate-200/300 mezcla */
+  --ag-row-border-color: rgb(229 235 243);
+  --ag-row-border-style: solid;
+  --ag-row-border-width: 1px;
+  --ag-header-background-color: rgb(243 244 246); /* gris-100 Excel-like */
+  --ag-header-foreground-color: rgb(55 65 81); /* slate-700 */
+  --ag-odd-row-background-color: #ffffff;
+  --ag-background-color: #ffffff;
   --ag-header-column-separator-display: block;
-  --ag-header-column-separator-color: rgb(203 213 225); /* slate-300 */
+  --ag-header-column-separator-color: rgb(203 213 225);
   --ag-header-column-separator-height: 100%;
   --ag-header-column-separator-width: 1px;
-  --ag-cell-horizontal-border: solid rgb(226 232 240);
+  --ag-header-column-resize-handle-display: block;
+  --ag-header-height: 24px;
+  --ag-row-height: 24px;
+  --ag-cell-horizontal-padding: 6px;
+  --ag-grid-size: 4px;
+  --ag-font-size: 12px;
+  --ag-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Calibri", sans-serif;
 }
+
+/* Bordes en TODAS las celdas (verticales + horizontales) tipo Excel */
 .ag-theme-quartz .ag-cell {
-  border-right: 1px solid rgb(226 232 240);
+  border-right: 1px solid rgb(229 235 243) !important;
+  border-bottom: 1px solid rgb(229 235 243) !important;
+  line-height: 22px;
+}
+
+/* Header con fondo gris claro y separadores marcados */
+.ag-theme-quartz .ag-header {
+  border-bottom: 1px solid rgb(203 213 225) !important;
 }
 .ag-theme-quartz .ag-header-cell {
-  border-right: 1px solid rgb(203 213 225);
+  border-right: 1px solid rgb(203 213 225) !important;
+  background-color: rgb(243 244 246);
+  font-weight: 600;
+  font-size: 11px;
 }
+
+/* Pinned-left column (numero de fila) tipo Excel: gris mas marcado */
+.ag-theme-quartz .ag-pinned-left-cols-container .ag-cell {
+  background-color: rgb(243 244 246);
+  border-right: 2px solid rgb(203 213 225) !important;
+  color: rgb(100 116 139); /* slate-500 */
+  font-weight: 500;
+}
+.ag-theme-quartz .ag-pinned-left-header {
+  border-right: 2px solid rgb(203 213 225) !important;
+  background-color: rgb(243 244 246);
+}
+
+/* Celda activa con outline verde Excel-style */
 .ag-theme-quartz .ag-cell-focus,
 .ag-theme-quartz .ag-cell-focus:focus {
-  border: 2px solid rgb(56 142 60) !important; /* verde tipo Excel */
+  border: 2px solid rgb(16 124 16) !important;
+  outline: none !important;
+}
+
+/* Hover de fila muy sutil */
+.ag-theme-quartz .ag-row-hover {
+  background-color: rgb(248 250 252) !important;
+}
+
+/* Filas seleccionadas */
+.ag-theme-quartz .ag-row-selected {
+  background-color: rgb(219 234 254) !important;
+}
+
+/* Header de columna centrado (A, B, C...) */
+.ag-theme-quartz .ag-center-header .ag-header-cell-label {
+  justify-content: center;
 }

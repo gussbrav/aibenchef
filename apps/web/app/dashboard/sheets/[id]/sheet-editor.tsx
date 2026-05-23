@@ -79,14 +79,14 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
       {
         headerName: "",
         valueGetter: (p) => (p.data as GridRow)?._row,
-        width: 50,
+        width: 42,
         pinned: "left",
         editable: false,
-        cellClass:
-          "text-slate-500 text-center font-mono text-[11px] bg-slate-100 border-r-2 border-slate-300",
+        cellStyle: { textAlign: "center" },
         suppressMovable: true,
         sortable: false,
         resizable: false,
+        lockPosition: "left",
       },
     ];
     for (let c = 0; c < sheet.nCols; c++) {
@@ -95,10 +95,9 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
         headerName: letter,
         field: letter,
         editable: true,
-        width: 110,
+        width: 92,
         cellEditor: "agTextCellEditor",
-        cellClass: "text-slate-900 text-sm",
-        headerClass: "text-center font-mono text-slate-700",
+        headerClass: "ag-center-header",
       });
     }
     return cols;
@@ -479,8 +478,8 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
           singleClickEdit
           stopEditingWhenCellsLoseFocus
           animateRows={false}
-          headerHeight={26}
-          rowHeight={26}
+          headerHeight={24}
+          rowHeight={24}
           enterNavigatesVertically
           enterNavigatesVerticallyAfterEdit
         />
