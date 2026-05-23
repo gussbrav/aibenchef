@@ -16,6 +16,7 @@ import { Calendar, Users, X, Search, Check, Crown, Palette } from "lucide-react"
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { TEMAS_PRESET } from "@/lib/domains/informe";
+import { TIPO_ENTIDAD_ORDER, tipoEntidadLabel } from "@/app/dashboard/_lib/format";
 
 function periodoLabel(periodo: number): string {
   const anio = Math.floor(periodo / 100);
@@ -289,10 +290,18 @@ function PeerGroupEditor({
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
 
+  // Orden canonico del proyecto: BANCOS -> FINANCIERAS -> CMAC -> CRAC -> EDPYMES
+  // (TIPO_ENTIDAD_ORDER en _lib/format.ts). Si aparece un tipo desconocido
+  // se manda al final.
   const tiposDisponibles = useMemo(() => {
     const set = new Set<string>();
     for (const e of entidadesDisponibles) set.add(e.tipoEntidad);
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => {
+      const oa = TIPO_ENTIDAD_ORDER[a] ?? 99;
+      const ob = TIPO_ENTIDAD_ORDER[b] ?? 99;
+      if (oa !== ob) return oa - ob;
+      return a.localeCompare(b);
+    });
   }, [entidadesDisponibles]);
 
   const filtradas = useMemo(() => {
@@ -356,8 +365,9 @@ function PeerGroupEditor({
                 type="button"
                 onClick={() => setFiltroTipo(t)}
                 className={`px-2 py-1 text-xs rounded ${filtroTipo === t ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                title={t}
               >
-                {t}
+                {tipoEntidadLabel(t)}
               </button>
             ))}
           </div>

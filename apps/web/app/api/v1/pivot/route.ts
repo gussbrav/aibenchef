@@ -2,8 +2,8 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { runPivot, type AgregacionPivot, type FuentePivot } from "@/lib/domains/analytics";
-import { handleRoute, requireSession, ValidationError } from "@/lib/domains/shared";
-
+import { handleRoute, ValidationError } from "@/lib/domains/shared";
+import { requireSession } from "@/lib/domains/shared/auth-helpers";
 export const dynamic = "force-dynamic";
 
 const fuenteSchema = z.enum(["balance", "resultados", "ratios"]);

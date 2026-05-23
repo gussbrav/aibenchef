@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Helpers de autenticacion para route handlers.
  *

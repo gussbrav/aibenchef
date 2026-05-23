@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getInformeData, listPeriodosDisponibles, listEntidadesDisponibles } from "@/lib/domains/informe";
+import { getInformeData, listPeriodosDisponibles, listEntidadesDisponibles } from "@/lib/domains/informe/queries";
 import { InformeClient } from "./informe-client";
 
 export const metadata: Metadata = {
