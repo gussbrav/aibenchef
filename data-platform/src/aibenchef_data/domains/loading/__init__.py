@@ -28,6 +28,7 @@ from .services.base_prudenciales_importers import (
 from .services.base_creditos_distrito_importer import BaseCreditosDistritoImporter
 from .services.base_oficinas_importer import BaseOficinasImporter
 from .services.base_tasas_activas_importer import BaseTasasActivasImporter
+from .services.base_tasas_pasivas_importer import BaseTasasPasivasImporter
 from .services.dim_cuenta_seeder import DimCuentaSeeder
 from .services.monthly_eeff_importer import MonthlyEeffImporter
 
@@ -45,6 +46,7 @@ __all__ = [
     "BaseRatioLiquidezImporter",
     "BaseRcgImporter",
     "BaseTasasActivasImporter",
+    "BaseTasasPasivasImporter",
     "DimCuentaSeeder",
     "ImportResult",
     "MonthlyEeffImporter",

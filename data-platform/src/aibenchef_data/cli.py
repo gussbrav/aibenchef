@@ -1531,6 +1531,16 @@ def import_base_tasas_activas(path: str, sheet: str, batch_size: int) -> None:
     _run_simple_import(BaseTasasActivasImporter, path, sheet, batch_size)
 
 
+@import_grp.command("base-tasas-pasivas")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="DATA PASIVAS")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_tasas_pasivas(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE TASAS PASIVAS.xlsx a raw.tasas_pasivas (con unpivot, header row 2)."""
+    from aibenchef_data.domains.loading import BaseTasasPasivasImporter
+    _run_simple_import(BaseTasasPasivasImporter, path, sheet, batch_size)
+
+
 @import_grp.command("base-depositos")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
 @click.option("--sheet", type=str, default="4.BDAhorros")
