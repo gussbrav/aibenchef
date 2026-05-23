@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgGridReact } from "ag-grid-react";
 import type {
-  CellSelectionChangedEvent,
+  CellFocusedEvent,
   CellValueChangedEvent,
   ColDef,
   GridApi,
@@ -50,14 +50,9 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectionStats, setSelectionStats] = useState<{
+  const [focusedCell, setFocusedCell] = useState<{
     cellRef: string;
-    cellValue: string | number | boolean | null | undefined;
-    count: number;
-    sum: number | null;
-    avg: number | null;
-    min: number | null;
-    max: number | null;
+    value: string | number | boolean | null | undefined;
   } | null>(null);
   const pendingCellsRef = useRef<SheetCells>({});
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,53 +176,23 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     }, 800);
   };
 
-  // Actualizar stats de seleccion (footer)
-  const onCellSelection = useCallback((e: CellSelectionChangedEvent) => {
-    const api = e.api;
-    const ranges = api.getCellRanges();
-    if (!ranges || ranges.length === 0) {
-      setSelectionStats(null);
+  // Track focused cell para mostrar en status bar (Community-safe).
+  // Selection multi-celda con stats requiere AG Grid Enterprise (cellSelection).
+  const onCellFocused = useCallback((e: CellFocusedEvent) => {
+    const rowIndex = e.rowIndex;
+    const colId = e.column && typeof e.column === "object" ? e.column.getColId() : null;
+    if (rowIndex === null || rowIndex === undefined || !colId || colId === "_row") {
+      setFocusedCell(null);
       return;
     }
-    // Para simplicidad, primer rango
-    const range = ranges[0]!;
-    const startRow = Math.min(range.startRow?.rowIndex ?? 0, range.endRow?.rowIndex ?? 0);
-    const endRow = Math.max(range.startRow?.rowIndex ?? 0, range.endRow?.rowIndex ?? 0);
-    const cols = range.columns;
-    const values: number[] = [];
-    let count = 0;
-    let firstValue: unknown = undefined;
-    let firstRef = "";
-    for (let r = startRow; r <= endRow; r++) {
-      for (const col of cols) {
-        const colId = col.getColId();
-        if (colId === "_row") continue;
-        const rowNode = api.getDisplayedRowAtIndex(r);
-        if (!rowNode) continue;
-        const v = (rowNode.data as GridRow)[colId];
-        if (v === null || v === undefined || v === "") continue;
-        count++;
-        if (firstValue === undefined) {
-          firstValue = v;
-          firstRef = `${colId}${(rowNode.data as GridRow)._row}`;
-        }
-        const n = Number(v);
-        if (Number.isFinite(n)) values.push(n);
-      }
+    const node = e.api.getDisplayedRowAtIndex(rowIndex);
+    if (!node) {
+      setFocusedCell(null);
+      return;
     }
-    const sum = values.length > 0 ? values.reduce((a, b) => a + b, 0) : null;
-    const avg = sum !== null && values.length > 0 ? sum / values.length : null;
-    const min = values.length > 0 ? Math.min(...values) : null;
-    const max = values.length > 0 ? Math.max(...values) : null;
-    setSelectionStats({
-      cellRef: firstRef || "—",
-      cellValue: firstValue as string | number | boolean | null | undefined,
-      count,
-      sum,
-      avg,
-      min,
-      max,
-    });
+    const row = (node.data as GridRow)._row;
+    const v = (node.data as GridRow)[colId];
+    setFocusedCell({ cellRef: `${colId}${row}`, value: v });
   }, []);
 
   const guardarYa = () => {
@@ -509,20 +474,19 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
             filter: false,
           }}
           onCellValueChanged={onCellChanged}
-          onCellSelectionChanged={onCellSelection}
+          onCellFocused={onCellFocused}
           onGridReady={onGridReady}
           singleClickEdit
           stopEditingWhenCellsLoseFocus
           animateRows={false}
           headerHeight={26}
           rowHeight={26}
-          cellSelection
           enterNavigatesVertically
           enterNavigatesVerticallyAfterEdit
         />
       </div>
 
-      {/* Status bar tipo Excel */}
+      {/* Status bar tipo Excel (single-cell focus en Community) */}
       <footer className="mx-2 mt-1 px-3 h-7 bg-slate-50 border border-slate-200 rounded flex items-center gap-4 text-[11px] text-slate-600">
         <span>
           <span className="font-mono text-slate-500 mr-1">Grilla:</span>
@@ -530,38 +494,23 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
         </span>
         <div className="w-px h-3 bg-slate-300" />
         <span>
-          <span className="font-mono text-slate-500 mr-1">Celdas:</span>
+          <span className="font-mono text-slate-500 mr-1">Con datos:</span>
           {Object.keys(sheet.cells).length}
         </span>
-        {selectionStats && (
+        {focusedCell && (
           <>
             <div className="w-px h-3 bg-slate-300" />
             <span>
-              <span className="font-mono text-slate-500 mr-1">Sel:</span>
-              <span className="font-mono">{selectionStats.cellRef}</span>
-              {selectionStats.count > 1 && (
-                <span className="ml-1 text-slate-500">({selectionStats.count} celdas)</span>
-              )}
+              <span className="font-mono text-slate-500 mr-1">Celda:</span>
+              <span className="font-mono font-semibold text-slate-800">{focusedCell.cellRef}</span>
             </span>
-            {selectionStats.count > 1 && selectionStats.sum !== null && (
-              <>
-                <span>
-                  <span className="font-mono text-slate-500 mr-1">Suma:</span>
-                  <span className="tabular-nums">{formatNumber(selectionStats.sum, 2)}</span>
-                </span>
-                <span>
-                  <span className="font-mono text-slate-500 mr-1">Prom:</span>
-                  <span className="tabular-nums">{formatNumber(selectionStats.avg!, 2)}</span>
-                </span>
-                <span>
-                  <span className="font-mono text-slate-500 mr-1">Min:</span>
-                  <span className="tabular-nums">{formatNumber(selectionStats.min!, 2)}</span>
-                </span>
-                <span>
-                  <span className="font-mono text-slate-500 mr-1">Max:</span>
-                  <span className="tabular-nums">{formatNumber(selectionStats.max!, 2)}</span>
-                </span>
-              </>
+            {focusedCell.value !== null && focusedCell.value !== undefined && focusedCell.value !== "" && (
+              <span className="truncate max-w-md">
+                <span className="font-mono text-slate-500 mr-1">Valor:</span>
+                {typeof focusedCell.value === "number"
+                  ? <span className="tabular-nums">{formatNumber(focusedCell.value, 2)}</span>
+                  : <span>{String(focusedCell.value)}</span>}
+              </span>
             )}
           </>
         )}
