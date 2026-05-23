@@ -15,6 +15,7 @@ import { db } from "@/lib/infrastructure/db";
 import {
   ForbiddenError,
   NotFoundError,
+  toIso,
   ValidationError,
 } from "@/lib/domains/shared";
 
@@ -44,8 +45,8 @@ function mapRow(r: Record<string, unknown>): User {
     role: (r.role as UserRole) ?? "usuario",
     status: (r.status as UserStatus) ?? "active",
     invitedBy: (r.invited_by as string | null) ?? null,
-    createdAt: (r.created_at as Date).toISOString(),
-    updatedAt: (r.updated_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   };
 }
 

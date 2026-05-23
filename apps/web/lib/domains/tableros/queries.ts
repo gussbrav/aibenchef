@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
-import { NotFoundError, ValidationError } from "@/lib/domains/shared";
+import { NotFoundError, ValidationError, toIso } from "@/lib/domains/shared";
 
 import type { Tablero, TableroResumen, TableroWidget, WidgetConfig, WidgetTipo } from "./types";
 
@@ -28,8 +28,8 @@ function mapTableroRow(r: Record<string, unknown>): Omit<Tablero, "widgets"> {
     descripcion: (r.descripcion as string | null) ?? null,
     esPublico: Boolean(r.es_publico),
     tags: (r.tags as string[]) ?? [],
-    createdAt: (r.created_at as Date).toISOString(),
-    updatedAt: (r.updated_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   };
 }
 

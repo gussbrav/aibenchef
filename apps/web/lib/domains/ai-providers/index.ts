@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
 import { decryptSecret, encryptSecret, maskSecret } from "@/lib/infrastructure/crypto";
-import { NotFoundError, ValidationError } from "@/lib/domains/shared";
+import { NotFoundError, ValidationError, toIso } from "@/lib/domains/shared";
 
 export type AiProviderId = "claude" | "openai" | "ollama" | "gemini";
 
@@ -41,8 +41,8 @@ function mapRow(r: Record<string, unknown>): AiProvider {
     enabled: Boolean(r.enabled),
     notas: (r.notas as string | null) ?? null,
     lastUpdatedBy: (r.last_updated_by as string | null) ?? null,
-    createdAt: (r.created_at as Date).toISOString(),
-    updatedAt: (r.updated_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   };
 }
 

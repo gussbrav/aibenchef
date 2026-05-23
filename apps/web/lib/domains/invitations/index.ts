@@ -20,6 +20,7 @@ import { db } from "@/lib/infrastructure/db";
 import {
   ConflictError,
   NotFoundError,
+  toIso,
   ValidationError,
 } from "@/lib/domains/shared";
 import { renderInvitationEmail, sendEmail } from "@/lib/infrastructure/email";
@@ -58,12 +59,12 @@ function mapRow(r: Record<string, unknown>): Invitation {
     email: String(r.email),
     role: r.role as InvitationRole,
     invitedBy: String(r.invited_by),
-    expiresAt: (r.expires_at as Date).toISOString(),
-    acceptedAt: r.accepted_at ? (r.accepted_at as Date).toISOString() : null,
+    expiresAt: toIso(r.expires_at),
+    acceptedAt: r.accepted_at ? toIso(r.accepted_at) : null,
     acceptedBy: (r.accepted_by as string | null) ?? null,
-    revokedAt: r.revoked_at ? (r.revoked_at as Date).toISOString() : null,
+    revokedAt: r.revoked_at ? toIso(r.revoked_at) : null,
     notas: (r.notas as string | null) ?? null,
-    createdAt: (r.created_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
     url: `${appUrl()}/signup?token=${token}`,
   };
 }
@@ -199,7 +200,7 @@ export async function previewInvitation(token: string): Promise<{
   return {
     email: String(r.email),
     role: r.role as InvitationRole,
-    expiresAt: (r.expires_at as Date).toISOString(),
+    expiresAt: toIso(r.expires_at),
   };
 }
 

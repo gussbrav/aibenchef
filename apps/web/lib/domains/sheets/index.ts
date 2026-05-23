@@ -8,7 +8,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
-import { NotFoundError, ValidationError } from "@/lib/domains/shared";
+import { NotFoundError, ValidationError, toIso } from "@/lib/domains/shared";
 
 export type SheetCells = Record<string, string | number | boolean | null>;
 
@@ -37,8 +37,8 @@ function mapRow(r: Record<string, unknown>): Sheet {
     nRows: Number(r.n_rows),
     nCols: Number(r.n_cols),
     esPublico: Boolean(r.es_publico),
-    createdAt: (r.created_at as Date).toISOString(),
-    updatedAt: (r.updated_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   };
 }
 
@@ -64,8 +64,8 @@ export async function listSheets(userId: string): Promise<SheetResumen[]> {
     nCols: Number(r.n_cols),
     esPublico: Boolean(r.es_publico),
     nCells: Number(r.n_cells ?? 0),
-    createdAt: (r.created_at as Date).toISOString(),
-    updatedAt: (r.updated_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   }));
 }
 

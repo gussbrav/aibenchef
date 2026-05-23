@@ -13,6 +13,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
+import { toIso } from "@/lib/domains/shared";
 
 export type AuditCategoria = "users" | "ai_providers" | "sql" | "genie";
 
@@ -128,6 +129,6 @@ function mapRow(r: Record<string, unknown>, categoria: AuditCategoria): AuditEve
     actorEmail: (r.actor_email as string | null) ?? null,
     actorName: (r.actor_name as string | null) ?? null,
     targetEmail: (r.target_email as string | null) ?? null,
-    createdAt: (r.created_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
   };
 }

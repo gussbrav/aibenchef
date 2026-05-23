@@ -8,7 +8,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
-import { NotFoundError, ValidationError } from "@/lib/domains/shared";
+import { NotFoundError, ValidationError, toIso } from "@/lib/domains/shared";
 
 import type { WorkspaceAnalisis, WorkspaceAnalisisConfig } from "./types";
 
@@ -21,8 +21,8 @@ function mapRow(r: Record<string, unknown>): WorkspaceAnalisis {
     config: r.config as WorkspaceAnalisisConfig,
     esDefault: Boolean(r.es_default),
     esPublico: Boolean(r.es_publico),
-    createdAt: (r.created_at as Date).toISOString(),
-    updatedAt: (r.updated_at as Date).toISOString(),
+    createdAt: toIso(r.created_at),
+    updatedAt: toIso(r.updated_at),
   };
 }
 
