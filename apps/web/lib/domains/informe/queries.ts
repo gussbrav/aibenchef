@@ -320,6 +320,7 @@ type CuadroResumenRow = {
   margen_bruto_anual: number | null;
   ingresos_fin_anual: number | null;
   inof_neto_anual: number | null;
+  n_oficinas: number | null;
 };
 
 async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promise<Map<string, CuadroResumenRow>> {
@@ -350,6 +351,11 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promis
              (COALESCE(cta_6, 0) - COALESCE(cta_7, 0)) AS inof_neto_anual
       FROM marts.mv_eeff_resultados_ancho
       WHERE periodo = ${periodo} AND moneda = 'TOTAL'
+    ),
+    oficinas AS (
+      SELECT nomb_correg, n_oficinas
+      FROM marts.v_oficinas_por_entidad
+      WHERE periodo = ${periodo}
     )
     SELECT
       bg.nomb_correg,
@@ -361,10 +367,12 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promis
       er.gastos_op_anual,
       er.margen_bruto_anual,
       er.ingresos_fin_anual,
-      er.inof_neto_anual
+      er.inof_neto_anual,
+      ofi.n_oficinas
     FROM bg_actual bg
-    LEFT JOIN bg_prev bgp ON bgp.nomb_correg = bg.nomb_correg
-    LEFT JOIN er_anual er ON er.nomb_correg = bg.nomb_correg
+    LEFT JOIN bg_prev bgp  ON bgp.nomb_correg = bg.nomb_correg
+    LEFT JOIN er_anual er  ON er.nomb_correg  = bg.nomb_correg
+    LEFT JOIN oficinas ofi ON ofi.nomb_correg = bg.nomb_correg
     WHERE bg.nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
       `);
       return [...r];
@@ -393,8 +401,15 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
   const mm = (v: number | null): number | null => (v == null ? null : v / 1_000_000);
 
   return [
-    // Datos generales — los 6 KPIs estan en gap (ver PRODUCT_VISION.md)
-    { codigo: "cr_n_oficinas", nombre: "N de agencias", unidad: "numero", signo: 1, seccion: "datos_generales", valores: todosNull() },
+    // Datos generales
+    {
+      codigo: "cr_n_oficinas",
+      nombre: "N de agencias",
+      unidad: "numero",
+      signo: 1,
+      seccion: "datos_generales",
+      valores: mk((r) => (r.n_oficinas == null ? null : Number(r.n_oficinas))),
+    },
     { codigo: "cr_n_clientes", nombre: "N de Clientes (Miles)", unidad: "numero_miles", signo: 1, seccion: "datos_generales", valores: todosNull() },
     { codigo: "cr_clientes_exclusivos", nombre: "% Clientes Exclusivos", unidad: "pct", signo: 1, seccion: "datos_generales", valores: todosNull() },
     { codigo: "cr_n_personal", nombre: "N de personal", unidad: "numero", signo: 1, seccion: "datos_generales", valores: todosNull() },
