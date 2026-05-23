@@ -60,6 +60,30 @@ export type WaterfallData = {
   totalBps: number;
 };
 
+export type TemaPreset = {
+  id: string;
+  nombre: string;
+  primary: string;
+  secondary: string;
+  acento: string;
+};
+
+export const TEMAS_PRESET: TemaPreset[] = [
+  { id: "arequipa",   nombre: "Caja Arequipa (azul/dorado)", primary: "#0F2A5E", secondary: "#FFB300", acento: "#2563EB" },
+  { id: "huancayo",   nombre: "Caja Huancayo (rojo)",        primary: "#C8102E", secondary: "#F4C300", acento: "#1E1E1E" },
+  { id: "cusco",      nombre: "Caja Cusco (vino)",           primary: "#722F37", secondary: "#FFD700", acento: "#8B4513" },
+  { id: "piura",      nombre: "Caja Piura (celeste)",        primary: "#1E90FF", secondary: "#FFFFFF", acento: "#003366" },
+  { id: "compartamos",nombre: "Compartamos (fucsia)",        primary: "#E91E63", secondary: "#FF9800", acento: "#FFFFFF" },
+  { id: "mibanco",    nombre: "Mibanco (verde)",             primary: "#2E7D32", secondary: "#A5D6A7", acento: "#FFD600" },
+  { id: "azoramind",  nombre: "Aibenchef default (violeta)", primary: "#1E3A8A", secondary: "#7C3AED", acento: "#06B6D4" },
+];
+
+export type CoberturaDatos = {
+  entidadesConData: string[];     // matchearon en mv_eeff_balance_ancho
+  entidadesSinData: string[];     // del peer group pero sin filas en MVs
+  sugerenciasMatch: Record<string, string[]>; // nomb_correg solicitado -> candidatos similares
+};
+
 export type InformeData = {
   cliente: Cliente;
   periodo: { codigo: number; label: string };
@@ -70,6 +94,7 @@ export type InformeData = {
   margenNetoBubble: BubblePoint[];
   margenNetoWaterfall: WaterfallData[];
   comentarios: Record<string, string>;
+  cobertura: CoberturaDatos;
 };
 
 export type EntidadDisponible = {

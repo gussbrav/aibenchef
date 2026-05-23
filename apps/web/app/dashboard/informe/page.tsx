@@ -12,6 +12,8 @@ type SearchParams = Promise<{
   cliente?: string;
   periodo?: string;
   peerGroup?: string;
+  entidadPropia?: string;
+  tema?: string;
 }>;
 
 export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
@@ -24,16 +26,21 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
     periodo = Number.parseInt(params.periodo, 10);
   } else {
     const periodos = await listPeriodosDisponibles({ ultimosN: 1 });
-    periodo = periodos[0] ?? 202004; // fallback al periodo del benchmark si no hay nada
+    periodo = periodos[0] ?? 202004;
   }
 
   const peerGroup = params.peerGroup
     ? params.peerGroup.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
 
-  // Cargar en paralelo: data del informe + listas para los selectores
   const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
-    getInformeData({ clienteSlug, periodo, peerGroupOverride: peerGroup }),
+    getInformeData({
+      clienteSlug,
+      periodo,
+      peerGroupOverride: peerGroup,
+      entidadPropiaOverride: params.entidadPropia,
+      temaOverride: params.tema,
+    }),
     listPeriodosDisponibles({ ultimosN: 36 }),
     listEntidadesDisponibles({}),
   ]);

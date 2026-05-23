@@ -1,18 +1,21 @@
 "use client";
 
-// Toolbar con dos controles:
-//   - Selector de periodo (dropdown YYYY-MM)
-//   - Editor de peer group (modal con multi-select buscable)
+// Toolbar con todos los controles del informe:
+//   - Periodo (dropdown)
+//   - Entidad propia (la que se resalta en azul oscuro en las tablas)
+//   - Peer group (modal con multi-select buscable)
+//   - Tema (paleta de colores: arequipa/huancayo/cusco/piura/etc)
 //
-// Al cambiar algo, navega a /dashboard/informe?periodo=X&peerGroup=A,B,C
+// Al cambiar cualquiera, se navega a /dashboard/informe?periodo=X&...
 // y Next re-renderea el server component con los nuevos params.
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar, Users, X, Search, Check } from "lucide-react";
+import { Calendar, Users, X, Search, Check, Crown, Palette } from "lucide-react";
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
+import { TEMAS_PRESET } from "@/lib/domains/informe";
 
 function periodoLabel(periodo: number): string {
   const anio = Math.floor(periodo / 100);
@@ -25,12 +28,14 @@ export function SelectoresToolbar({
   periodoActual,
   peerGroupActual,
   entidadPropia,
+  temaActual,
   periodosDisponibles,
   entidadesDisponibles,
 }: {
   periodoActual: number;
   peerGroupActual: string[];
   entidadPropia: string;
+  temaActual: string | null;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
 }) {
@@ -40,12 +45,25 @@ export function SelectoresToolbar({
   const [isPending, startTransition] = useTransition();
   const [editorAbierto, setEditorAbierto] = useState(false);
 
-  const navegar = (params: { periodo?: number; peerGroup?: string[] }) => {
+  const navegar = (changes: {
+    periodo?: number;
+    peerGroup?: string[];
+    entidadPropia?: string;
+    tema?: string | null;
+  }) => {
     const sp = new URLSearchParams(searchParams.toString());
-    if (params.periodo !== undefined) sp.set("periodo", String(params.periodo));
-    if (params.peerGroup !== undefined) {
-      // Excluir la entidad propia del CSV (siempre la inyecta el backend)
-      const filtered = params.peerGroup.filter((p) => p !== entidadPropia);
+    if (changes.periodo !== undefined) sp.set("periodo", String(changes.periodo));
+    if (changes.entidadPropia !== undefined) {
+      if (changes.entidadPropia) sp.set("entidadPropia", changes.entidadPropia);
+      else sp.delete("entidadPropia");
+    }
+    if (changes.tema !== undefined) {
+      if (changes.tema) sp.set("tema", changes.tema);
+      else sp.delete("tema");
+    }
+    if (changes.peerGroup !== undefined) {
+      const propio = changes.entidadPropia ?? entidadPropia;
+      const filtered = changes.peerGroup.filter((p) => p !== propio);
       if (filtered.length > 0) sp.set("peerGroup", filtered.join(","));
       else sp.delete("peerGroup");
     }
@@ -56,48 +74,50 @@ export function SelectoresToolbar({
 
   return (
     <>
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-4 py-3 flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-slate-500" />
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Periodo:</label>
-          <select
-            value={periodoActual}
-            onChange={(e) => navegar({ periodo: Number.parseInt(e.target.value, 10) })}
-            disabled={isPending || periodosDisponibles.length === 0}
-            className="h-8 px-2 text-sm border border-slate-300 rounded bg-white min-w-[120px] disabled:opacity-50"
-          >
-            {!periodosDisponibles.includes(periodoActual) && (
-              <option value={periodoActual}>{periodoLabel(periodoActual)} (actual)</option>
-            )}
-            {periodosDisponibles.map((p) => (
-              <option key={p} value={p}>
-                {periodoLabel(p)} ({p})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-slate-500" />
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-            Peer group ({peerGroupActual.length} entidades):
-          </label>
-          <button
-            type="button"
-            onClick={() => setEditorAbierto(true)}
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-4 py-3 flex flex-col gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <SelectorPeriodo
+            valor={periodoActual}
+            disponibles={periodosDisponibles}
             disabled={isPending}
-            className="h-8 px-3 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded transition-colors disabled:opacity-50"
-          >
-            Editar
-          </button>
-        </div>
+            onChange={(v) => navegar({ periodo: v })}
+          />
 
-        {isPending && (
-          <span className="text-xs text-slate-500 inline-flex items-center gap-2">
-            <span className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-            Cargando...
-          </span>
-        )}
+          <SelectorEntidadPropia
+            valor={entidadPropia}
+            disponibles={peerGroupActual}
+            disabled={isPending}
+            onChange={(v) => navegar({ entidadPropia: v })}
+          />
+
+          <SelectorTema
+            valor={temaActual}
+            disabled={isPending}
+            onChange={(v) => navegar({ tema: v })}
+          />
+
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-slate-500" />
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              Peer ({peerGroupActual.length}):
+            </label>
+            <button
+              type="button"
+              onClick={() => setEditorAbierto(true)}
+              disabled={isPending}
+              className="h-8 px-3 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded transition-colors disabled:opacity-50"
+            >
+              Editar
+            </button>
+          </div>
+
+          {isPending && (
+            <span className="text-xs text-slate-500 inline-flex items-center gap-2 ml-auto">
+              <span className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+              Actualizando...
+            </span>
+          )}
+        </div>
       </div>
 
       {editorAbierto && (
@@ -115,6 +135,142 @@ export function SelectoresToolbar({
     </>
   );
 }
+
+// ============================================================================
+// Selectores individuales
+// ============================================================================
+
+function SelectorPeriodo({
+  valor,
+  disponibles,
+  disabled,
+  onChange,
+}: {
+  valor: number;
+  disponibles: number[];
+  disabled: boolean;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Calendar className="w-4 h-4 text-slate-500" />
+      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Periodo:</label>
+      <select
+        value={valor}
+        onChange={(e) => onChange(Number.parseInt(e.target.value, 10))}
+        disabled={disabled || disponibles.length === 0}
+        className="h-8 px-2 text-sm border border-slate-300 rounded bg-white min-w-[140px] disabled:opacity-50"
+      >
+        {!disponibles.includes(valor) && (
+          <option value={valor}>{periodoLabel(valor)} (no en MV)</option>
+        )}
+        {disponibles.map((p) => (
+          <option key={p} value={p}>
+            {periodoLabel(p)} ({p})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function SelectorEntidadPropia({
+  valor,
+  disponibles,
+  disabled,
+  onChange,
+}: {
+  valor: string;
+  disponibles: string[];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Crown className="w-4 h-4 text-amber-500" />
+      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Resaltar:</label>
+      <select
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="h-8 px-2 text-sm border border-slate-300 rounded bg-white min-w-[160px] disabled:opacity-50"
+        title="Esta es la entidad que se resalta en azul oscuro como 'la propia'"
+      >
+        {disponibles.map((e) => (
+          <option key={e} value={e}>
+            {e}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function SelectorTema({
+  valor,
+  disabled,
+  onChange,
+}: {
+  valor: string | null;
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const temaActual = TEMAS_PRESET.find((t) => t.id === valor) ?? TEMAS_PRESET[0];
+
+  return (
+    <div className="relative flex items-center gap-2">
+      <Palette className="w-4 h-4 text-slate-500" />
+      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tema:</label>
+      <button
+        type="button"
+        onClick={() => setAbierto(!abierto)}
+        disabled={disabled}
+        className="h-8 px-3 text-sm border border-slate-300 rounded bg-white inline-flex items-center gap-2 hover:bg-slate-50 disabled:opacity-50"
+      >
+        <span className="inline-flex gap-0.5">
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: temaActual.primary }} />
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: temaActual.secondary }} />
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: temaActual.acento }} />
+        </span>
+        <span className="text-xs">{temaActual.nombre.split("(")[0].trim()}</span>
+      </button>
+      {abierto && (
+        <div
+          className="absolute top-10 left-0 z-30 bg-white border border-slate-200 rounded-lg shadow-xl p-2 min-w-[260px]"
+          onMouseLeave={() => setAbierto(false)}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-2 pb-1">Paleta de colores</p>
+          {TEMAS_PRESET.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                onChange(t.id);
+                setAbierto(false);
+              }}
+              className={`w-full text-left px-2 py-2 rounded hover:bg-slate-50 inline-flex items-center gap-3 ${
+                t.id === valor ? "bg-brand-50" : ""
+              }`}
+            >
+              <span className="inline-flex gap-0.5 flex-shrink-0">
+                <span className="w-4 h-4 rounded-sm" style={{ backgroundColor: t.primary }} />
+                <span className="w-4 h-4 rounded-sm" style={{ backgroundColor: t.secondary }} />
+                <span className="w-4 h-4 rounded-sm" style={{ backgroundColor: t.acento }} />
+              </span>
+              <span className="text-xs text-slate-700 flex-1">{t.nombre}</span>
+              {t.id === valor && <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Modal Peer Group Editor
+// ============================================================================
 
 function PeerGroupEditor({
   peerGroupActual,
@@ -149,7 +305,7 @@ function PeerGroupEditor({
   }, [entidadesDisponibles, busqueda, filtroTipo]);
 
   const toggle = (nomb: string) => {
-    if (nomb === entidadPropia) return; // no se puede sacar
+    if (nomb === entidadPropia) return;
     setSeleccionadas((prev) => {
       const next = new Set(prev);
       if (next.has(nomb)) next.delete(nomb);
@@ -209,7 +365,7 @@ function PeerGroupEditor({
 
         <div className="flex-1 overflow-y-auto px-6 py-2">
           {filtradas.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">No hay entidades que coincidan con el filtro.</p>
+            <p className="text-sm text-slate-500 text-center py-8">No hay entidades disponibles. ¿Está poblada raw.eeff_observacion?</p>
           ) : (
             <ul className="divide-y divide-slate-100">
               {filtradas.map((e) => {

@@ -9,7 +9,9 @@ export const dynamic = "force-dynamic";
 const querySchema = z.object({
   cliente: z.string().min(1).default("caja-arequipa"),
   periodo: z.coerce.number().int().min(200001).max(210012),
-  peerGroup: z.string().optional(), // CSV de nomb_correg
+  peerGroup: z.string().optional(),
+  entidadPropia: z.string().optional(),
+  tema: z.string().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -29,6 +31,8 @@ export async function GET(req: NextRequest) {
       clienteSlug: parsed.data.cliente,
       periodo: parsed.data.periodo,
       peerGroupOverride: peerGroup,
+      entidadPropiaOverride: parsed.data.entidadPropia,
+      temaOverride: parsed.data.tema,
     });
   });
 }

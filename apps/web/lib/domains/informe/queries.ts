@@ -25,7 +25,9 @@ import type {
   PuntoEquilibrioRow,
   BubblePoint,
   WaterfallData,
+  CoberturaDatos,
 } from "./types";
+import { TEMAS_PRESET } from "./types";
 
 const log = logger.child("informe");
 
@@ -239,7 +241,7 @@ async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[]
         FROM marts.v_punto_equilibrio_ancho
         WHERE periodo = ${periodo}
           AND moneda = 'TOTAL'
-          AND nomb_correg = ANY(${entidades}::text[])
+          AND nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
       `);
       return [...r];
     },
@@ -264,7 +266,7 @@ async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[]
         FROM marts.v_punto_equilibrio_ancho
         WHERE periodo = ${periodo}
           AND moneda = 'TOTAL'
-          AND nomb_correg = ANY(${entidades}::text[])
+          AND nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
       `);
       return [...r];
     },
@@ -363,7 +365,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promis
     FROM bg_actual bg
     LEFT JOIN bg_prev bgp ON bgp.nomb_correg = bg.nomb_correg
     LEFT JOIN er_anual er ON er.nomb_correg = bg.nomb_correg
-    WHERE bg.nomb_correg = ANY(${entidades}::text[])
+    WHERE bg.nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
       `);
       return [...r];
     },
@@ -540,14 +542,64 @@ function buildBubbleAndWaterfall(
 // Endpoint principal del dominio
 // ============================================================================
 
+// Para cada entidad solicitada que NO matchea, buscar candidatos similares
+// usando ILIKE con tokens. Util para sugerir correcciones al usuario cuando
+// el peer group tiene typos o nombres distintos a los de dim_entidad.
+async function buildSugerenciasMatch(faltantes: string[]): Promise<Record<string, string[]>> {
+  if (faltantes.length === 0) return {};
+  const out: Record<string, string[]> = {};
+  for (const nomb of faltantes) {
+    const tokens = nomb
+      .split(/\s+/)
+      .filter((t) => t.length >= 3)
+      .slice(0, 3);
+    if (tokens.length === 0) continue;
+    const pattern = `%${tokens.join("%")}%`;
+    const rows = await safeQuery<{ nomb_correg: string }[]>(
+      `buildSugerenciasMatch[${nomb}]`,
+      async () => {
+        const r = await db.execute<{ nomb_correg: string }>(sql`
+          SELECT DISTINCT nomb_correg
+          FROM dw.dim_entidad
+          WHERE nomb_correg ILIKE ${pattern}
+          ORDER BY nomb_correg
+          LIMIT 5
+        `);
+        return [...r];
+      },
+      [],
+    );
+    if (rows.length > 0) out[nomb] = rows.map((r) => r.nomb_correg);
+  }
+  return out;
+}
+
 export async function getInformeData(opts: {
   clienteSlug: string;
   periodo: number;
   peerGroupOverride?: string[];
+  entidadPropiaOverride?: string;
+  temaOverride?: string;
 }): Promise<InformeData> {
-  const cliente = await getClienteBySlug(opts.clienteSlug);
+  let cliente = await getClienteBySlug(opts.clienteSlug);
 
-  // Asegurar que la entidad propia esta SIEMPRE en el peer group
+  // Override de entidad propia (URL ?entidadPropia=XXX)
+  if (opts.entidadPropiaOverride && opts.entidadPropiaOverride !== cliente.entidadPropia) {
+    cliente = { ...cliente, entidadPropia: opts.entidadPropiaOverride };
+  }
+
+  // Override de tema (URL ?tema=cusco | huancayo | piura | etc.)
+  if (opts.temaOverride) {
+    const tema = TEMAS_PRESET.find((t) => t.id === opts.temaOverride);
+    if (tema) {
+      cliente = {
+        ...cliente,
+        brand: { primary: tema.primary, secondary: tema.secondary, acento: tema.acento },
+      };
+    }
+  }
+
+  // Garantizar que la entidad propia esta siempre en el peer group
   let peerList = opts.peerGroupOverride;
   if (peerList && !peerList.includes(cliente.entidadPropia)) {
     peerList = [...peerList, cliente.entidadPropia];
@@ -563,6 +615,18 @@ export async function getInformeData(opts: {
     getCuadroResumenRaw(opts.periodo, entidadesNombs),
   ]);
 
+  // Detectar cobertura: que entidades del peer group tienen data en MVs
+  const conData = new Set(cuadroRaw.keys());
+  const entidadesConData = entidadesNombs.filter((n) => conData.has(n));
+  const entidadesSinData = entidadesNombs.filter((n) => !conData.has(n));
+  const sugerenciasMatch = await buildSugerenciasMatch(entidadesSinData);
+
+  const cobertura: CoberturaDatos = {
+    entidadesConData,
+    entidadesSinData,
+    sugerenciasMatch,
+  };
+
   const cuadroResumen = buildCuadroResumen(cuadroRaw, competidores);
   const puntoEquilibrio = buildPuntoEquilibrioRows(peActual, competidores);
   const { bubble, waterfall } = buildBubbleAndWaterfall(peActual, pePrev, competidores);
@@ -577,10 +641,10 @@ export async function getInformeData(opts: {
     margenNetoBubble: bubble,
     margenNetoWaterfall: waterfall,
     comentarios: {
-      // En produccion estos vienen de config.comentario_ejecutivo
       margen_neto_bubble: "",
       margen_neto_waterfall: "",
     },
+    cobertura,
   };
 }
 

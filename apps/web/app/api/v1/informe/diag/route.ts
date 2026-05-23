@@ -96,11 +96,40 @@ export async function GET() {
       migracionesAplicadas = r3.map((r) => String(r.version));
     } catch {}
 
+    // Lista de los primeros 30 nomb_correg en dim_entidad — para entender
+    // el formato real que tienen vs lo que asume el peer group seed.
+    let entidadesEjemplo: string[] = [];
+    try {
+      const r4 = await db.execute<{ nomb_correg: string }>(sql`
+        SELECT DISTINCT nomb_correg
+        FROM dw.dim_entidad
+        WHERE NOT es_total AND NOT es_sucursal AND activa
+        ORDER BY nomb_correg
+        LIMIT 30
+      `);
+      entidadesEjemplo = r4.map((r) => String(r.nomb_correg));
+    } catch {}
+
+    // Que dice el peer group de caja-arequipa hoy
+    let peerGroupSembrado: string[] = [];
+    try {
+      const r5 = await db.execute<{ competidor_nomb_correg: string }>(sql`
+        SELECT pg.competidor_nomb_correg
+        FROM config.peer_group pg
+        JOIN config.cliente c ON c.id = pg.cliente_id
+        WHERE c.slug = 'caja-arequipa'
+        ORDER BY pg.orden
+      `);
+      peerGroupSembrado = r5.map((r) => String(r.competidor_nomb_correg));
+    } catch {}
+
     return {
       checks,
       ultimoPeriodoER,
       ultimoPeriodoBG,
       migracionesAplicadas,
+      entidadesEjemplo,
+      peerGroupSembrado,
       ts: new Date().toISOString(),
     };
   });

@@ -12,7 +12,8 @@
 //   5. Analisis Margen Neto: bubble + waterfall
 
 import { useMemo, useState } from "react";
-import { Download, FileText, Info, AlertCircle } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -183,7 +184,7 @@ export function InformeClient({
       </header>
 
       {/* ============ SELECTORES ============ */}
-      <SelectoresToolbar
+      <SelectoresToolbarConTema
         periodoActual={periodo.codigo}
         peerGroupActual={competidores.map((c) => c.nombCorreg)}
         entidadPropia={cliente.entidadPropia}
@@ -191,7 +192,11 @@ export function InformeClient({
         entidadesDisponibles={entidadesDisponibles}
       />
 
-      {/* Aviso si no hay competidores o data incompleta */}
+      {/* Cobertura: aviso si hay entidades del peer group sin data en las MVs */}
+      {data.cobertura.entidadesSinData.length > 0 && (
+        <CoberturaWarning cobertura={data.cobertura} />
+      )}
+
       {competidores.length === 0 && (
         <EmptyBox titulo="Sin entidades en el peer group" texto="Selecciona al menos una entidad usando el botón 'Editar' del toolbar." />
       )}
@@ -730,6 +735,70 @@ function EmptyBox({ titulo, texto }: { titulo: string; texto: string }) {
       <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-3" />
       <h3 className="text-sm font-semibold text-slate-700 mb-1">{titulo}</h3>
       <p className="text-xs text-slate-500 max-w-md mx-auto">{texto}</p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Wrapper que lee `tema` del URL y lo pasa al toolbar
+// ============================================================================
+
+function SelectoresToolbarConTema(props: {
+  periodoActual: number;
+  peerGroupActual: string[];
+  entidadPropia: string;
+  periodosDisponibles: number[];
+  entidadesDisponibles: EntidadDisponible[];
+}) {
+  const sp = useSearchParams();
+  const tema = sp.get("tema");
+  return <SelectoresToolbar {...props} temaActual={tema} />;
+}
+
+// ============================================================================
+// Warning de cobertura — entidades del peer group sin data en las MVs
+// ============================================================================
+
+function CoberturaWarning({ cobertura }: { cobertura: InformeData["cobertura"] }) {
+  const { entidadesSinData, sugerenciasMatch, entidadesConData } = cobertura;
+  const total = entidadesSinData.length + entidadesConData.length;
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-amber-900 mb-1">
+            {entidadesSinData.length} de {total} entidades sin data en las MVs
+          </h3>
+          <p className="text-xs text-amber-800 mb-3">
+            Las siguientes entidades no tienen filas en <code className="bg-amber-100 px-1 rounded">marts.v_eeff_balance_ancho</code> para este periodo.
+            Probablemente el nombre no coincide con <code className="bg-amber-100 px-1 rounded">dw.dim_entidad.nomb_correg</code> o falta cargar el periodo.
+          </p>
+          <ul className="space-y-2">
+            {entidadesSinData.map((nomb) => {
+              const sugerencias = sugerenciasMatch[nomb] ?? [];
+              return (
+                <li key={nomb} className="text-xs">
+                  <p className="font-mono text-amber-900">
+                    <span className="text-rose-600 font-bold">✗</span> {nomb}
+                  </p>
+                  {sugerencias.length > 0 ? (
+                    <p className="ml-4 text-amber-700">
+                      Sugerencias: {sugerencias.map((s) => <code key={s} className="bg-white border border-amber-300 px-1 rounded mr-1">{s}</code>)}
+                    </p>
+                  ) : (
+                    <p className="ml-4 text-amber-700 italic">Sin sugerencias en dim_entidad.</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[11px] text-amber-700 mt-3">
+            <strong>Tip:</strong> click en "Editar" del peer group para reemplazar estas entidades por las correctas.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
