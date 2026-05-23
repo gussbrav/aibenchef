@@ -130,6 +130,15 @@ export function InvitationsSection() {
           <h3 className="text-sm font-semibold text-slate-900">Crear invitacion</h3>
         </header>
         <div className="p-4 space-y-3">
+          <div className="p-3 bg-sky-50 border border-sky-200 rounded text-xs text-sky-900">
+            <p className="font-semibold mb-1">Como funciona:</p>
+            <ol className="list-decimal list-inside space-y-0.5 ml-1">
+              <li>Crea la invitacion ingresando el email y el rol que tendra el invitado.</li>
+              <li>Si el envio por email esta configurado, llega automaticamente. Sino, te mostramos el link copiable para que lo envies tu (WhatsApp, Slack, lo que sea).</li>
+              <li>El link es de un solo uso y expira en 7 dias.</li>
+              <li>Cuando el invitado abre el link, crea su contrasena y entra con el rol que le diste.</li>
+            </ol>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">

@@ -292,14 +292,52 @@ function ProviderCard({
             </div>
           )}
 
-          <Field label="API key" hint={provider.apiKeyConfigurado ? "Dejar vacio para mantener la actual" : undefined}>
+          {provider.provider === "ollama" && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 space-y-1.5">
+              <p className="font-semibold">Como configurar Ollama self-hosted:</p>
+              <ol className="list-decimal list-inside space-y-0.5 ml-1">
+                <li>
+                  <strong>API key:</strong> dejala vacia. Ollama por default no requiere autenticacion.
+                </li>
+                <li>
+                  <strong>Base URL:</strong> apunta a tu servidor. Si Ollama corre en el mismo EasyPanel project, usa <code className="font-mono bg-amber-100 px-1 rounded">http://azoramind_ollama:11434</code>. Si no, usa la IP/dominio publico (ej <code className="font-mono bg-amber-100 px-1 rounded">http://1.2.3.4:11434</code>).
+                </li>
+                <li>
+                  <strong>Modelo default:</strong> el modelo que descargaste con <code className="font-mono bg-amber-100 px-1 rounded">ollama pull qwen2.5-coder</code>.
+                </li>
+                <li>
+                  <strong>Marca</strong> "Habilitar este proveedor" y guarda.
+                </li>
+              </ol>
+              <p className="text-amber-800 pt-1">
+                Tip: testea con <code className="font-mono bg-amber-100 px-1 rounded">curl {baseUrl || "http://tu-server:11434"}/api/tags</code> para confirmar que la URL es accesible desde el servidor de Aibenchef.
+              </p>
+            </div>
+          )}
+
+          <Field
+            label={provider.provider === "ollama" ? "API key (opcional)" : "API key"}
+            hint={
+              provider.provider === "ollama"
+                ? "Ollama no requiere API key por default. Dejalo vacio."
+                : provider.apiKeyConfigurado
+                  ? "Dejar vacio para mantener la actual"
+                  : undefined
+            }
+          >
             <div className="flex gap-1">
               <div className="relative flex-1">
                 <input
                   type={showKey ? "text" : "password"}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={provider.apiKeyConfigurado ? "•••••••• (actual)" : "Pegar la API key aqui"}
+                  placeholder={
+                    provider.provider === "ollama"
+                      ? "(opcional - Ollama no requiere)"
+                      : provider.apiKeyConfigurado
+                        ? "•••••••• (actual)"
+                        : "Pegar la API key aqui"
+                  }
                   className="w-full h-9 px-3 pr-9 text-sm font-mono rounded border border-slate-300 focus:border-brand-500 outline-none"
                   autoComplete="off"
                 />

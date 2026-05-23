@@ -75,11 +75,15 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   }, [sheet]);
 
   const colDefs = useMemo<ColDef[]>(() => {
+    // Width dinamico del numero de fila: 1-9 -> 36, 10-99 -> 44,
+    // 100-999 -> 52, 1000-9999 -> 60, 10000+ -> 68
+    const digits = String(sheet.nRows).length;
+    const rowIndexWidth = 28 + digits * 8;
     const cols: ColDef[] = [
       {
         headerName: "",
         valueGetter: (p) => (p.data as GridRow)?._row,
-        width: 42,
+        width: rowIndexWidth,
         pinned: "left",
         editable: false,
         cellStyle: { textAlign: "center" },
@@ -101,7 +105,7 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
       });
     }
     return cols;
-  }, [sheet.nCols]);
+  }, [sheet.nCols, sheet.nRows]);
 
   // Auto-scroll a A1 al cargar
   const onGridReady = useCallback((params: GridReadyEvent) => {
