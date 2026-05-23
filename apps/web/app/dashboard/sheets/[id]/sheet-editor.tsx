@@ -18,7 +18,6 @@ import {
   Check,
   Download,
   Loader2,
-  Plus,
   Save,
   Trash2,
   Upload,
@@ -28,6 +27,8 @@ import { cn } from "@/lib/utils/cn";
 import { formatNumber } from "@/app/dashboard/_lib/format";
 
 import type { Sheet, SheetCells } from "@/lib/domains/sheets";
+
+import { evaluateFormula, type CellRawValue } from "./formula-engine";
 
 ModuleRegistry.registerModules([ClientSideRowModelModule]);
 
@@ -74,6 +75,13 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     return rows;
   }, [sheet]);
 
+  // Lookup function para el evaluador de formulas — busca por celda key (ej "A1")
+  // en el cells JSONB sparse.
+  const getCellRaw = useCallback(
+    (ref: string): CellRawValue => sheet.cells[ref],
+    [sheet.cells],
+  );
+
   const colDefs = useMemo<ColDef[]>(() => {
     // Width dinamico del numero de fila: 1-9 -> 36, 10-99 -> 44,
     // 100-999 -> 52, 1000-9999 -> 60, 10000+ -> 68
@@ -102,10 +110,35 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
         width: 92,
         cellEditor: "agTextCellEditor",
         headerClass: "ag-center-header",
+        // valueFormatter evalua formulas para DISPLAY. El raw value (con "=") se
+        // mantiene en data para que al editar se vea la formula original.
+        valueFormatter: (p) => {
+          const v = p.value as CellRawValue;
+          if (v === null || v === undefined || v === "") return "";
+          if (typeof v === "string" && v.trimStart().startsWith("=")) {
+            const result = evaluateFormula(v, getCellRaw);
+            if (typeof result === "number") {
+              // Numero: mostrar con formato. Si es entero, sin decimales.
+              return Number.isInteger(result)
+                ? String(result)
+                : formatNumber(result, 4).replace(/0+$/, "").replace(/\.$/, "");
+            }
+            return String(result);
+          }
+          return String(v);
+        },
+        cellClass: (p) => {
+          const v = p.value as CellRawValue;
+          if (typeof v === "string" && v.trimStart().startsWith("=")) {
+            return "text-emerald-700 tabular-nums";
+          }
+          if (typeof v === "number") return "tabular-nums text-right";
+          return "";
+        },
       });
     }
     return cols;
-  }, [sheet.nCols, sheet.nRows]);
+  }, [sheet.nCols, sheet.nRows, getCellRaw]);
 
   // Auto-scroll a A1 al cargar
   const onGridReady = useCallback((params: GridReadyEvent) => {
@@ -161,16 +194,51 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     if (!col || col === "_row") return;
     const key = `${col}${row}`;
     const newVal = e.newValue;
-    // Convertir a numero si parece numerico
+    // Convertir a numero si parece numerico. EXCEPCION: si empieza con "=" lo
+    // mantenemos como string (es una formula y se evalua en valueFormatter).
     let v: string | number | boolean | null = newVal;
     if (typeof newVal === "string" && newVal.trim() !== "") {
-      const n = Number(newVal.replace(/,/g, ""));
-      if (Number.isFinite(n) && String(n) === newVal.replace(/,/g, "").trim()) {
-        v = n;
+      const trimmed = newVal.trim();
+      if (!trimmed.startsWith("=")) {
+        const n = Number(trimmed.replace(/,/g, ""));
+        if (Number.isFinite(n) && String(n) === trimmed.replace(/,/g, "")) {
+          v = n;
+        }
       }
     }
     if (v === "" || v === undefined) v = null;
     pendingCellsRef.current[key] = v;
+
+    // Auto-grow: si el usuario esta editando la ultima fila o columna,
+    // crece la grilla automaticamente (+10 filas o +3 cols) para evitar
+    // necesidad de boton manual.
+    const colIdxEditado = colKey(sheet.nCols - 1) === col
+      ? sheet.nCols - 1
+      : -1;
+    const esUltimaFila = row >= sheet.nRows;
+    const esUltimaCol = colIdxEditado >= 0 && row > 0;
+    if (esUltimaFila || esUltimaCol) {
+      const nuevoNRows = esUltimaFila ? Math.min(sheet.nRows + 10, 10000) : undefined;
+      const nuevoNCols = esUltimaCol ? Math.min(sheet.nCols + 3, 100) : undefined;
+      // Persistir en background sin esperar (autosave se ocupa)
+      void (async () => {
+        try {
+          const body: Record<string, unknown> = {};
+          if (nuevoNRows !== undefined) body.nRows = nuevoNRows;
+          if (nuevoNCols !== undefined) body.nCols = nuevoNCols;
+          if (Object.keys(body).length === 0) return;
+          const r = await fetch(`/api/v1/sheets/${sheet.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const json = await r.json();
+          if (json.data) setSheet(json.data as Sheet);
+        } catch (err) {
+          console.error("Auto-grow failed", err);
+        }
+      })();
+    }
 
     // Debounce 800ms
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -319,23 +387,6 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     }
   };
 
-  // Resize sheet grid (agregar filas/columnas)
-  const agregar = async (qty: { rows?: number; cols?: number }) => {
-    try {
-      const nRows = Math.min((sheet.nRows ?? 100) + (qty.rows ?? 0), 10000);
-      const nCols = Math.min((sheet.nCols ?? 26) + (qty.cols ?? 0), 52);
-      const r = await fetch(`/api/v1/sheets/${sheet.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nRows, nCols }),
-      });
-      const json = await r.json();
-      if (json.data) setSheet(json.data as Sheet);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
   return (
     <div className="flex flex-col h-[calc(100vh-120px)]">
       <header className="flex items-center justify-between gap-3 px-2 mb-2">
@@ -391,27 +442,6 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
           </span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => agregar({ rows: 50 })}
-            disabled={sheet.nRows >= 10000}
-            className="h-8 px-2 text-xs bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 rounded inline-flex items-center gap-1"
-            title="Agregar 50 filas"
-          >
-            <Plus className="w-3 h-3" />
-            +50 filas
-          </button>
-          <button
-            type="button"
-            onClick={() => agregar({ cols: 5 })}
-            disabled={sheet.nCols >= 52}
-            className="h-8 px-2 text-xs bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 rounded inline-flex items-center gap-1"
-            title="Agregar 5 columnas"
-          >
-            <Plus className="w-3 h-3" />
-            +5 cols
-          </button>
-          <div className="w-px h-5 bg-slate-300 mx-1" />
           <input
             ref={fileInputRef}
             type="file"
@@ -508,12 +538,33 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
               <span className="font-mono font-semibold text-slate-800">{focusedCell.cellRef}</span>
             </span>
             {focusedCell.value !== null && focusedCell.value !== undefined && focusedCell.value !== "" && (
-              <span className="truncate max-w-md">
-                <span className="font-mono text-slate-500 mr-1">Valor:</span>
-                {typeof focusedCell.value === "number"
-                  ? <span className="tabular-nums">{formatNumber(focusedCell.value, 2)}</span>
-                  : <span>{String(focusedCell.value)}</span>}
-              </span>
+              <>
+                {typeof focusedCell.value === "string" && focusedCell.value.trimStart().startsWith("=") ? (
+                  // Formula: mostrar formula + resultado evaluado
+                  <>
+                    <span className="truncate max-w-xs">
+                      <span className="font-mono text-slate-500 mr-1">Formula:</span>
+                      <span className="font-mono text-emerald-700">{String(focusedCell.value)}</span>
+                    </span>
+                    <span className="truncate max-w-xs">
+                      <span className="font-mono text-slate-500 mr-1">=</span>
+                      {(() => {
+                        const r = evaluateFormula(focusedCell.value as string, getCellRaw);
+                        return typeof r === "number"
+                          ? <span className="tabular-nums font-semibold">{formatNumber(r, 2)}</span>
+                          : <span className="text-rose-600">{String(r)}</span>;
+                      })()}
+                    </span>
+                  </>
+                ) : (
+                  <span className="truncate max-w-md">
+                    <span className="font-mono text-slate-500 mr-1">Valor:</span>
+                    {typeof focusedCell.value === "number"
+                      ? <span className="tabular-nums">{formatNumber(focusedCell.value, 2)}</span>
+                      : <span>{String(focusedCell.value)}</span>}
+                  </span>
+                )}
+              </>
             )}
           </>
         )}
