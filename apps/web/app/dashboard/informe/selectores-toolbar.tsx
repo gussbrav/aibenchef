@@ -12,7 +12,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar, Users, X, Search, Check, Crown, Palette, ArrowUp, ArrowDown } from "lucide-react";
+import { Calendar, Users, X, Search, Check, Crown, Palette, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { TEMAS_PRESET } from "@/lib/domains/informe";
@@ -340,6 +340,46 @@ function PeerGroupEditor({
     });
   };
 
+  // Drag and drop nativo HTML5 — sin libs externas.
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
+  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent<HTMLLIElement>, idx: number) => {
+    setDraggingIdx(idx);
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox necesita setData para iniciar el drag.
+    e.dataTransfer.setData("text/plain", String(idx));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLIElement>, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dropTargetIdx !== idx) setDropTargetIdx(idx);
+  };
+
+  const handleDragLeave = () => {
+    setDropTargetIdx(null);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLLIElement>, targetIdx: number) => {
+    e.preventDefault();
+    const sourceIdx = draggingIdx;
+    setDraggingIdx(null);
+    setDropTargetIdx(null);
+    if (sourceIdx == null || sourceIdx === targetIdx) return;
+    setOrden((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(sourceIdx, 1);
+      next.splice(targetIdx, 0, moved);
+      return next;
+    });
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIdx(null);
+    setDropTargetIdx(null);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -446,11 +486,31 @@ function PeerGroupEditor({
               <ol className="space-y-1">
                 {orden.map((nomb, idx) => {
                   const esPropio = nomb === entidadPropia;
+                  const isDragging = draggingIdx === idx;
+                  const isDropTarget = dropTargetIdx === idx && draggingIdx !== null && draggingIdx !== idx;
                   return (
                     <li
                       key={nomb}
-                      className="flex items-center gap-2 px-2 py-1.5 bg-white border border-slate-200 rounded text-sm"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, idx)}
+                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, idx)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex items-center gap-2 px-2 py-1.5 bg-white border rounded text-sm transition-all ${
+                        isDragging
+                          ? "opacity-40 border-brand-400"
+                          : isDropTarget
+                            ? "border-brand-500 border-2 shadow-md -translate-y-0.5"
+                            : "border-slate-200 hover:border-slate-300"
+                      }`}
                     >
+                      <span
+                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 select-none"
+                        title="Arrastrar para reordenar"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </span>
                       <span className="text-[10px] font-mono text-slate-400 w-4 text-right">{idx + 1}</span>
                       <span className="flex-1 truncate text-slate-900">
                         {nomb}
@@ -483,7 +543,7 @@ function PeerGroupEditor({
                         onClick={() => toggle(nomb)}
                         disabled={esPropio}
                         className="p-1 rounded hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={esPropio ? "La entidad propia no se puede quitar" : "Quitar"}
+                        title={esPropio ? "La entidad propia no se puede quitar (sí mover)" : "Quitar"}
                       >
                         <X className="w-3.5 h-3.5 text-rose-600" />
                       </button>

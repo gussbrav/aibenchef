@@ -508,20 +508,26 @@ function SeccionMargenNetoBubble({
           </p>
           <div style={{ width: "100%", height: 380 }}>
             <ResponsiveContainer>
-              <ScatterChart margin={{ top: 20, right: 40, bottom: 40, left: 40 }}>
+              <ScatterChart margin={{ top: 30, right: 40, bottom: 50, left: 70 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis
                   type="number"
                   dataKey="x"
                   domain={[xMin, xMax]}
-                  label={{ value: "Punto de Equilibrio (pp)", position: "bottom" }}
+                  label={{ value: "Punto de Equilibrio (pp)", position: "insideBottom", offset: -15 }}
                   tickFormatter={(v) => v.toFixed(1)}
                 />
                 <YAxis
                   type="number"
                   dataKey="y"
                   domain={[yMin, yMax]}
-                  label={{ value: "Rendimiento de Cartera (pp)", angle: -90, position: "left" }}
+                  label={{
+                    value: "Rendimiento de Cartera (pp)",
+                    angle: -90,
+                    position: "insideLeft",
+                    offset: 0,
+                    style: { textAnchor: "middle" },
+                  }}
                   tickFormatter={(v) => v.toFixed(1)}
                 />
                 <ZAxis type="number" dataKey="z" range={[200, 1500]} />
