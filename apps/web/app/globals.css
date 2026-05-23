@@ -18,3 +18,25 @@ body {
   color: var(--foreground);
   background: var(--background);
 }
+
+/* AG Grid Quartz — bordes verticales tipo Excel para Sheets */
+.ag-theme-quartz {
+  --ag-borders: solid 1px;
+  --ag-border-color: rgb(226 232 240); /* slate-200 */
+  --ag-row-border-color: rgb(226 232 240);
+  --ag-header-column-separator-display: block;
+  --ag-header-column-separator-color: rgb(203 213 225); /* slate-300 */
+  --ag-header-column-separator-height: 100%;
+  --ag-header-column-separator-width: 1px;
+  --ag-cell-horizontal-border: solid rgb(226 232 240);
+}
+.ag-theme-quartz .ag-cell {
+  border-right: 1px solid rgb(226 232 240);
+}
+.ag-theme-quartz .ag-header-cell {
+  border-right: 1px solid rgb(203 213 225);
+}
+.ag-theme-quartz .ag-cell-focus,
+.ag-theme-quartz .ag-cell-focus:focus {
+  border: 2px solid rgb(56 142 60) !important; /* verde tipo Excel */
+}
