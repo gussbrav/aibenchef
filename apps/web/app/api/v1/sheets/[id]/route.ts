@@ -12,6 +12,8 @@ const patchBody = z.object({
   nombre: z.string().min(1).max(200).optional(),
   descripcion: z.string().max(500).nullable().optional(),
   cells: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  nRows: z.number().int().min(10).max(10000).optional(),
+  nCols: z.number().int().min(5).max(100).optional(),
 });
 
 async function requireUserId(): Promise<string> {

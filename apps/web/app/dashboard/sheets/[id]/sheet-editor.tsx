@@ -3,13 +3,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgGridReact } from "ag-grid-react";
-import type { CellValueChangedEvent, ColDef } from "ag-grid-community";
+import type {
+  CellSelectionChangedEvent,
+  CellValueChangedEvent,
+  ColDef,
+  GridApi,
+  GridReadyEvent,
+} from "ag-grid-community";
 import { ClientSideRowModelModule, ModuleRegistry } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
-import { ArrowLeft, Check, Download, Loader2, Save, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Download,
+  Loader2,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+import { formatNumber } from "@/app/dashboard/_lib/format";
 
 import type { Sheet, SheetCells } from "@/lib/domains/sheets";
 
@@ -18,7 +34,6 @@ ModuleRegistry.registerModules([ClientSideRowModelModule]);
 const COL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 function colKey(idx: number): string {
-  // Soporta hasta AZ (52 columnas)
   if (idx < 26) return COL_LETTERS[idx]!;
   const first = Math.floor(idx / 26) - 1;
   const second = idx % 26;
@@ -35,8 +50,19 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectionStats, setSelectionStats] = useState<{
+    cellRef: string;
+    cellValue: string | number | boolean | null | undefined;
+    count: number;
+    sum: number | null;
+    avg: number | null;
+    min: number | null;
+    max: number | null;
+  } | null>(null);
   const pendingCellsRef = useRef<SheetCells>({});
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridApiRef = useRef<GridApi | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Construir rowData desde el JSONB sparse
   const rowData = useMemo<GridRow[]>(() => {
@@ -61,8 +87,11 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
         width: 50,
         pinned: "left",
         editable: false,
-        cellClass: "text-slate-500 text-center font-mono bg-slate-50",
+        cellClass:
+          "text-slate-500 text-center font-mono text-[11px] bg-slate-100 border-r-2 border-slate-300",
         suppressMovable: true,
+        sortable: false,
+        resizable: false,
       },
     ];
     for (let c = 0; c < sheet.nCols; c++) {
@@ -73,43 +102,60 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
         editable: true,
         width: 110,
         cellEditor: "agTextCellEditor",
-        cellClass: "text-slate-900",
+        cellClass: "text-slate-900 text-sm",
+        headerClass: "text-center font-mono text-slate-700",
       });
     }
     return cols;
   }, [sheet.nCols]);
 
+  // Auto-scroll a A1 al cargar
+  const onGridReady = useCallback((params: GridReadyEvent) => {
+    gridApiRef.current = params.api;
+    // Posicionar la primera celda visible
+    setTimeout(() => {
+      params.api.ensureIndexVisible(0, "top");
+      params.api.ensureColumnVisible(colKey(0));
+      // Foco en A1
+      params.api.setFocusedCell(0, colKey(0));
+    }, 50);
+  }, []);
+
   // Auto-save con debounce
-  const persistCells = useCallback(async () => {
-    if (Object.keys(pendingCellsRef.current).length === 0) return;
-    setSaving(true);
-    setError(null);
-    const next: SheetCells = { ...sheet.cells, ...pendingCellsRef.current };
-    // Limpiar celdas vacias (null o "")
-    for (const k of Object.keys(next)) {
-      const v = next[k];
-      if (v === null || v === undefined || v === "") delete next[k];
-    }
-    try {
-      const r = await fetch(`/api/v1/sheets/${sheet.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cells: next }),
-      });
-      const json = await r.json();
-      if (json.error) {
-        setError(json.error.message ?? "Error guardando");
-      } else {
-        setSheet(json.data as Sheet);
-        pendingCellsRef.current = {};
-        setSavedAt(new Date());
+  const persistCells = useCallback(
+    async (extraCells?: SheetCells) => {
+      const cellsToSave = { ...pendingCellsRef.current, ...(extraCells ?? {}) };
+      if (Object.keys(cellsToSave).length === 0) return;
+      setSaving(true);
+      setError(null);
+      const next: SheetCells = { ...sheet.cells, ...cellsToSave };
+      // Limpiar celdas vacias
+      for (const k of Object.keys(next)) {
+        const v = next[k];
+        if (v === null || v === undefined || v === "") delete next[k];
       }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setSaving(false);
-    }
-  }, [sheet.id, sheet.cells]);
+      try {
+        const r = await fetch(`/api/v1/sheets/${sheet.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cells: next }),
+        });
+        const json = await r.json();
+        if (json.error) {
+          setError(json.error.message ?? "Error guardando");
+        } else {
+          setSheet(json.data as Sheet);
+          pendingCellsRef.current = {};
+          setSavedAt(new Date());
+        }
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [sheet.id, sheet.cells],
+  );
 
   const onCellChanged = (e: CellValueChangedEvent<GridRow>) => {
     const row = (e.data as GridRow)._row;
@@ -134,6 +180,55 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
       persistCells();
     }, 800);
   };
+
+  // Actualizar stats de seleccion (footer)
+  const onCellSelection = useCallback((e: CellSelectionChangedEvent) => {
+    const api = e.api;
+    const ranges = api.getCellRanges();
+    if (!ranges || ranges.length === 0) {
+      setSelectionStats(null);
+      return;
+    }
+    // Para simplicidad, primer rango
+    const range = ranges[0]!;
+    const startRow = Math.min(range.startRow?.rowIndex ?? 0, range.endRow?.rowIndex ?? 0);
+    const endRow = Math.max(range.startRow?.rowIndex ?? 0, range.endRow?.rowIndex ?? 0);
+    const cols = range.columns;
+    const values: number[] = [];
+    let count = 0;
+    let firstValue: unknown = undefined;
+    let firstRef = "";
+    for (let r = startRow; r <= endRow; r++) {
+      for (const col of cols) {
+        const colId = col.getColId();
+        if (colId === "_row") continue;
+        const rowNode = api.getDisplayedRowAtIndex(r);
+        if (!rowNode) continue;
+        const v = (rowNode.data as GridRow)[colId];
+        if (v === null || v === undefined || v === "") continue;
+        count++;
+        if (firstValue === undefined) {
+          firstValue = v;
+          firstRef = `${colId}${(rowNode.data as GridRow)._row}`;
+        }
+        const n = Number(v);
+        if (Number.isFinite(n)) values.push(n);
+      }
+    }
+    const sum = values.length > 0 ? values.reduce((a, b) => a + b, 0) : null;
+    const avg = sum !== null && values.length > 0 ? sum / values.length : null;
+    const min = values.length > 0 ? Math.min(...values) : null;
+    const max = values.length > 0 ? Math.max(...values) : null;
+    setSelectionStats({
+      cellRef: firstRef || "—",
+      cellValue: firstValue as string | number | boolean | null | undefined,
+      count,
+      sum,
+      avg,
+      min,
+      max,
+    });
+  }, []);
 
   const guardarYa = () => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -173,8 +268,7 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   };
 
   const eliminar = async () => {
-    if (!confirm(`Eliminar la sheet "${sheet.nombre}"? Esta accion no se puede deshacer.`))
-      return;
+    if (!confirm(`Eliminar la sheet "${sheet.nombre}"?`)) return;
     try {
       await fetch(`/api/v1/sheets/${sheet.id}`, { method: "DELETE" });
       router.push("/dashboard/sheets" as never);
@@ -188,11 +282,9 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     const wb = new ExcelJS.Workbook();
     wb.creator = "Aibenchef";
     const ws = wb.addWorksheet(sheet.nombre);
-    // Header row con letras
     const headers = Array.from({ length: sheet.nCols }, (_, c) => colKey(c));
     ws.addRow(headers);
     ws.getRow(1).font = { bold: true };
-    // Data rows
     for (let r = 1; r <= sheet.nRows; r++) {
       const row = Array.from({ length: sheet.nCols }, (_, c) => {
         const k = `${colKey(c)}${r}`;
@@ -210,6 +302,70 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     a.download = `${sheet.nombre}_${Date.now()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Import XLSX desde archivo del usuario
+  const importXlsx = async (file: File) => {
+    setError(null);
+    setSaving(true);
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      const buffer = await file.arrayBuffer();
+      await wb.xlsx.load(buffer);
+      const ws = wb.worksheets[0];
+      if (!ws) throw new Error("Archivo XLSX sin hojas");
+      const newCells: SheetCells = {};
+      let maxRow = 0;
+      let maxCol = 0;
+      ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+          const letter = colKey(colNumber - 1);
+          const key = `${letter}${rowNumber}`;
+          const v = cell.value;
+          if (v === null || v === undefined) return;
+          if (typeof v === "object") {
+            // ExcelJS cell value puede ser { text, hyperlink, formula, result, etc }
+            // o un Date. Aplanamos a primitivo.
+            if (v instanceof Date) {
+              newCells[key] = v.toISOString();
+            } else {
+              const fv = v as unknown as Record<string, unknown>;
+              const flat =
+                fv.result ?? fv.text ?? fv.formula ?? fv.hyperlink ?? JSON.stringify(v);
+              newCells[key] = flat as string | number | boolean | null;
+            }
+          } else {
+            newCells[key] = v as string | number | boolean | null;
+          }
+          if (rowNumber > maxRow) maxRow = rowNumber;
+          if (colNumber > maxCol) maxCol = colNumber;
+        });
+      });
+      await persistCells(newCells);
+      setSavedAt(new Date());
+    } catch (e) {
+      setError(`Error importando XLSX: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Resize sheet grid (agregar filas/columnas)
+  const agregar = async (qty: { rows?: number; cols?: number }) => {
+    try {
+      const nRows = Math.min((sheet.nRows ?? 100) + (qty.rows ?? 0), 10000);
+      const nCols = Math.min((sheet.nCols ?? 26) + (qty.cols ?? 0), 52);
+      const r = await fetch(`/api/v1/sheets/${sheet.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nRows, nCols }),
+      });
+      const json = await r.json();
+      if (json.data) setSheet(json.data as Sheet);
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
   return (
@@ -258,14 +414,58 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
             ) : savedAt ? (
               <span className="inline-flex items-center gap-1 text-emerald-700">
                 <Check className="w-3 h-3" />
-                Guardado {savedAt.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
+                Guardado{" "}
+                {savedAt.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
               </span>
             ) : (
-              <span>Auto-save cada 800ms · Ctrl+S para guardar ya</span>
+              <span>Auto-save · Ctrl+S</span>
             )}
           </span>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => agregar({ rows: 50 })}
+            disabled={sheet.nRows >= 10000}
+            className="h-8 px-2 text-xs bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 rounded inline-flex items-center gap-1"
+            title="Agregar 50 filas"
+          >
+            <Plus className="w-3 h-3" />
+            +50 filas
+          </button>
+          <button
+            type="button"
+            onClick={() => agregar({ cols: 5 })}
+            disabled={sheet.nCols >= 52}
+            className="h-8 px-2 text-xs bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 rounded inline-flex items-center gap-1"
+            title="Agregar 5 columnas"
+          >
+            <Plus className="w-3 h-3" />
+            +5 cols
+          </button>
+          <div className="w-px h-5 bg-slate-300 mx-1" />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                importXlsx(f);
+                e.target.value = "";
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="h-8 px-2 text-xs bg-white border border-slate-300 hover:bg-slate-50 rounded inline-flex items-center gap-1"
+            title="Importar XLSX"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Importar
+          </button>
           <button
             type="button"
             onClick={guardarYa}
@@ -286,7 +486,7 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
           <button
             type="button"
             onClick={eliminar}
-            className="h-8 px-3 text-xs bg-white border border-slate-300 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 rounded inline-flex items-center gap-1"
+            className="h-8 px-2 text-xs bg-white border border-slate-300 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 rounded inline-flex items-center"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -309,13 +509,63 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
             filter: false,
           }}
           onCellValueChanged={onCellChanged}
+          onCellSelectionChanged={onCellSelection}
+          onGridReady={onGridReady}
           singleClickEdit
           stopEditingWhenCellsLoseFocus
           animateRows={false}
-          headerHeight={28}
-          rowHeight={28}
+          headerHeight={26}
+          rowHeight={26}
+          cellSelection
+          enterNavigatesVertically
+          enterNavigatesVerticallyAfterEdit
         />
       </div>
+
+      {/* Status bar tipo Excel */}
+      <footer className="mx-2 mt-1 px-3 h-7 bg-slate-50 border border-slate-200 rounded flex items-center gap-4 text-[11px] text-slate-600">
+        <span>
+          <span className="font-mono text-slate-500 mr-1">Grilla:</span>
+          {sheet.nRows}×{sheet.nCols}
+        </span>
+        <div className="w-px h-3 bg-slate-300" />
+        <span>
+          <span className="font-mono text-slate-500 mr-1">Celdas:</span>
+          {Object.keys(sheet.cells).length}
+        </span>
+        {selectionStats && (
+          <>
+            <div className="w-px h-3 bg-slate-300" />
+            <span>
+              <span className="font-mono text-slate-500 mr-1">Sel:</span>
+              <span className="font-mono">{selectionStats.cellRef}</span>
+              {selectionStats.count > 1 && (
+                <span className="ml-1 text-slate-500">({selectionStats.count} celdas)</span>
+              )}
+            </span>
+            {selectionStats.count > 1 && selectionStats.sum !== null && (
+              <>
+                <span>
+                  <span className="font-mono text-slate-500 mr-1">Suma:</span>
+                  <span className="tabular-nums">{formatNumber(selectionStats.sum, 2)}</span>
+                </span>
+                <span>
+                  <span className="font-mono text-slate-500 mr-1">Prom:</span>
+                  <span className="tabular-nums">{formatNumber(selectionStats.avg!, 2)}</span>
+                </span>
+                <span>
+                  <span className="font-mono text-slate-500 mr-1">Min:</span>
+                  <span className="tabular-nums">{formatNumber(selectionStats.min!, 2)}</span>
+                </span>
+                <span>
+                  <span className="font-mono text-slate-500 mr-1">Max:</span>
+                  <span className="tabular-nums">{formatNumber(selectionStats.max!, 2)}</span>
+                </span>
+              </>
+            )}
+          </>
+        )}
+      </footer>
     </div>
   );
 }

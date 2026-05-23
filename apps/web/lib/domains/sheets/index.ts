@@ -104,7 +104,13 @@ export async function createSheet(
 export async function updateSheetCells(
   userId: string,
   id: string,
-  data: { cells?: SheetCells; nombre?: string; descripcion?: string | null },
+  data: {
+    cells?: SheetCells;
+    nombre?: string;
+    descripcion?: string | null;
+    nRows?: number;
+    nCols?: number;
+  },
 ): Promise<Sheet> {
   // Verificar pertenencia
   await getSheet(userId, id);
@@ -118,6 +124,14 @@ export async function updateSheetCells(
   }
   if (data.descripcion !== undefined) {
     sets.push(sql`descripcion = ${data.descripcion}`);
+  }
+  if (data.nRows !== undefined) {
+    const n = Math.min(Math.max(data.nRows, 10), 10000);
+    sets.push(sql`n_rows = ${n}`);
+  }
+  if (data.nCols !== undefined) {
+    const n = Math.min(Math.max(data.nCols, 5), 100);
+    sets.push(sql`n_cols = ${n}`);
   }
   if (sets.length === 0) return getSheet(userId, id);
 
