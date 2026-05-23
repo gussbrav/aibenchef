@@ -12,7 +12,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar, Users, X, Search, Check, Crown, Palette, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { Calendar, Users, X, Search, Check, Crown, Palette, GripVertical } from "lucide-react";
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { TEMAS_PRESET } from "@/lib/domains/informe";
@@ -63,9 +63,10 @@ export function SelectoresToolbar({
       else sp.delete("tema");
     }
     if (changes.peerGroup !== undefined) {
-      const propio = changes.entidadPropia ?? entidadPropia;
-      const filtered = changes.peerGroup.filter((p) => p !== propio);
-      if (filtered.length > 0) sp.set("peerGroup", filtered.join(","));
+      // IMPORTANTE: NO filtrar la entidad propia. Su posicion en el array
+      // ES el orden de la columna. Si la quitamos aca, el backend la
+      // re-agrega al final y se pierde el orden del usuario.
+      if (changes.peerGroup.length > 0) sp.set("peerGroup", changes.peerGroup.join(","));
       else sp.delete("peerGroup");
     }
     startTransition(() => {
@@ -322,24 +323,6 @@ function PeerGroupEditor({
     });
   };
 
-  const moverArriba = (idx: number) => {
-    if (idx <= 0) return;
-    setOrden((prev) => {
-      const next = [...prev];
-      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-      return next;
-    });
-  };
-
-  const moverAbajo = (idx: number) => {
-    setOrden((prev) => {
-      if (idx >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
-      return next;
-    });
-  };
-
   // Drag and drop nativo HTML5 — sin libs externas.
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -390,7 +373,7 @@ function PeerGroupEditor({
           <div>
             <h2 className="text-lg font-bold text-slate-900">Editar comparativa</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Selecciona las entidades que aparecen en el informe y reordénalas con las flechas. La entidad propia ({entidadPropia}) siempre se incluye.
+              Selecciona entidades de la izquierda y arrástralas en la derecha para reordenar las columnas. La entidad propia ({entidadPropia}) siempre se incluye.
             </p>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
@@ -506,7 +489,7 @@ function PeerGroupEditor({
                       }`}
                     >
                       <span
-                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 select-none"
+                        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-700 select-none p-1"
                         title="Arrastrar para reordenar"
                       >
                         <GripVertical className="w-4 h-4" />
@@ -522,28 +505,10 @@ function PeerGroupEditor({
                       </span>
                       <button
                         type="button"
-                        onClick={() => moverArriba(idx)}
-                        disabled={idx === 0}
-                        className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Subir"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5 text-slate-600" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moverAbajo(idx)}
-                        disabled={idx === orden.length - 1}
-                        className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Bajar"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5 text-slate-600" />
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => toggle(nomb)}
                         disabled={esPropio}
                         className="p-1 rounded hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={esPropio ? "La entidad propia no se puede quitar (sí mover)" : "Quitar"}
+                        title={esPropio ? "La entidad propia no se puede quitar (sí arrastrar)" : "Quitar"}
                       >
                         <X className="w-3.5 h-3.5 text-rose-600" />
                       </button>

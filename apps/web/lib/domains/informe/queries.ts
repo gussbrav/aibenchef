@@ -644,7 +644,9 @@ export async function getInformeData(opts: {
     }
   }
 
-  // Garantizar que la entidad propia esta siempre en el peer group
+  // Garantizar que la entidad propia esta siempre en el peer group.
+  // Solo agregamos al final si NO esta ya en el array — si esta, respetamos
+  // su posicion (el usuario puede ponerla primero, en medio o donde quiera).
   let peerList = opts.peerGroupOverride;
   if (peerList && !peerList.includes(cliente.entidadPropia)) {
     peerList = [...peerList, cliente.entidadPropia];
