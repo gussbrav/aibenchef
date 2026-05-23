@@ -123,6 +123,94 @@ export async function GET() {
       peerGroupSembrado = r5.map((r) => String(r.competidor_nomb_correg));
     } catch {}
 
+    // ====== Diagnostico especifico de oficinas (KPI cr_n_oficinas) ======
+    type OficinasDiag = {
+      rawCount: number | null;
+      periodosDisponibles: number[];
+      ultimoPeriodo: number | null;
+      empresasRawTop30: string[];
+      vistaPorEntidadUltimoPeriodo: Array<{ nomb_correg: string; n_oficinas: number }>;
+      busquedaMibanco: Array<{ nomb_correg: string; n_oficinas: number; periodo: number }>;
+      errores: string[];
+    };
+    const oficinas: OficinasDiag = {
+      rawCount: null,
+      periodosDisponibles: [],
+      ultimoPeriodo: null,
+      empresasRawTop30: [],
+      vistaPorEntidadUltimoPeriodo: [],
+      busquedaMibanco: [],
+      errores: [],
+    };
+    try {
+      const rc = await db.execute<{ count: number }>(
+        sql`SELECT COUNT(*)::int AS count FROM raw.creditos_depositos_oficina`,
+      );
+      oficinas.rawCount = Number(rc[0]?.count ?? 0);
+    } catch (e) {
+      oficinas.errores.push(`rawCount: ${(e as Error).message}`);
+    }
+
+    try {
+      const rp = await db.execute<{ periodo: number }>(sql`
+        SELECT DISTINCT periodo
+        FROM raw.creditos_depositos_oficina
+        ORDER BY periodo DESC
+        LIMIT 10
+      `);
+      oficinas.periodosDisponibles = rp.map((r) => Number(r.periodo));
+      oficinas.ultimoPeriodo = oficinas.periodosDisponibles[0] ?? null;
+    } catch (e) {
+      oficinas.errores.push(`periodos: ${(e as Error).message}`);
+    }
+
+    try {
+      const re = await db.execute<{ empresa_sbs: string }>(sql`
+        SELECT DISTINCT empresa_sbs
+        FROM raw.creditos_depositos_oficina
+        ORDER BY empresa_sbs
+        LIMIT 30
+      `);
+      oficinas.empresasRawTop30 = re.map((r) => String(r.empresa_sbs));
+    } catch (e) {
+      oficinas.errores.push(`empresas: ${(e as Error).message}`);
+    }
+
+    if (oficinas.ultimoPeriodo) {
+      try {
+        const rv = await db.execute<{ nomb_correg: string; n_oficinas: number }>(sql`
+          SELECT nomb_correg, n_oficinas
+          FROM marts.v_oficinas_por_entidad
+          WHERE periodo = ${oficinas.ultimoPeriodo}
+          ORDER BY n_oficinas DESC
+          LIMIT 20
+        `);
+        oficinas.vistaPorEntidadUltimoPeriodo = rv.map((r) => ({
+          nomb_correg: String(r.nomb_correg),
+          n_oficinas: Number(r.n_oficinas),
+        }));
+      } catch (e) {
+        oficinas.errores.push(`vista: ${(e as Error).message}`);
+      }
+    }
+
+    try {
+      const rm = await db.execute<{ nomb_correg: string; n_oficinas: number; periodo: number }>(sql`
+        SELECT nomb_correg, n_oficinas, periodo
+        FROM marts.v_oficinas_por_entidad
+        WHERE nomb_correg ILIKE '%mibanco%'
+        ORDER BY periodo DESC
+        LIMIT 5
+      `);
+      oficinas.busquedaMibanco = rm.map((r) => ({
+        nomb_correg: String(r.nomb_correg),
+        n_oficinas: Number(r.n_oficinas),
+        periodo: Number(r.periodo),
+      }));
+    } catch (e) {
+      oficinas.errores.push(`busquedaMibanco: ${(e as Error).message}`);
+    }
+
     return {
       checks,
       ultimoPeriodoER,
@@ -130,6 +218,7 @@ export async function GET() {
       migracionesAplicadas,
       entidadesEjemplo,
       peerGroupSembrado,
+      oficinas,
       ts: new Date().toISOString(),
     };
   });
