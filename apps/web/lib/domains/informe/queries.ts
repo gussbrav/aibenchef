@@ -542,10 +542,23 @@ function buildBubbleAndWaterfall(
 // Endpoint principal del dominio
 // ============================================================================
 
+// Limpia anotaciones decorativas que la SBS pega a los nombres:
+// asteriscos al final (** marca consolidacion con subsidiarias),
+// superindices unicode (¹²³), notas al pie "N/", whitespace excesivo.
+function limpiarNombreEntidad(raw: string): string {
+  let s = raw.trim();
+  // Asteriscos finales
+  s = s.replace(/\*+\s*$/u, "");
+  // Superindices unicode
+  s = s.replace(/[²³¹⁰-₟]+\s*$/u, "");
+  // Notas al pie tipo " 1/" al final
+  s = s.replace(/\s+\d{1,3}\/\s*$/u, "");
+  return s.trim();
+}
+
 // Resuelve el "nombre largo / legal" de una entidad para usar en el header
 // del informe. Prioriza empresa_sbs (nombre legal completo) y cae a
-// nomb_correg si no hay. Si tampoco existe en dim_entidad, devuelve el
-// nomb_correg solicitado.
+// nomb_correg si no hay. Limpia anotaciones decorativas como asteriscos.
 async function getNombreLargoEntidad(nombCorreg: string): Promise<string> {
   return safeQuery<string>(
     `getNombreLargoEntidad[${nombCorreg}]`,
@@ -556,11 +569,12 @@ async function getNombreLargoEntidad(nombCorreg: string): Promise<string> {
         WHERE nomb_correg = ${nombCorreg}
         LIMIT 1
       `);
-      if (rows.length === 0) return nombCorreg;
+      if (rows.length === 0) return limpiarNombreEntidad(nombCorreg);
       const r = rows[0];
-      return r.empresa_sbs?.trim() || r.nomb_correg;
+      const candidato = r.empresa_sbs?.trim() || r.nomb_correg;
+      return limpiarNombreEntidad(candidato);
     },
-    nombCorreg,
+    limpiarNombreEntidad(nombCorreg),
   );
 }
 

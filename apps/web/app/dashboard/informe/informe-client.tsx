@@ -148,7 +148,7 @@ export function InformeClient({
             <h1 className="text-3xl font-bold mb-1">{cliente.nombre}</h1>
             <p className="text-lg opacity-90">Cierre {periodo.label}</p>
             <div className="flex items-center gap-2 mt-4 flex-wrap">
-              <span className="text-xs uppercase opacity-75">Peer group:</span>
+              <span className="text-xs uppercase opacity-75">Comparativa:</span>
               {competidores.map((c) => (
                 <span
                   key={c.nombCorreg}
