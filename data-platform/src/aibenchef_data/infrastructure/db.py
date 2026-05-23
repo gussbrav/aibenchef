@@ -18,6 +18,17 @@ def _get_pool() -> AsyncConnectionPool:
     if _pool is None:
         # Convertir postgres+asyncpg:// a postgres:// para psycopg
         url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+        # TCP keepalive para evitar que server (panel.azoramind.com) cierre
+        # la conexion durante imports largos (>5min). Si la URL no trae
+        # keepalive params, los agregamos.
+        if "keepalives" not in url:
+            sep = "&" if "?" in url else "?"
+            url = (
+                f"{url}{sep}keepalives=1"
+                "&keepalives_idle=30"
+                "&keepalives_interval=10"
+                "&keepalives_count=5"
+            )
         _pool = AsyncConnectionPool(
             conninfo=url,
             min_size=2,

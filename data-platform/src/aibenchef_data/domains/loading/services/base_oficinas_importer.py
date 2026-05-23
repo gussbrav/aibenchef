@@ -179,13 +179,22 @@ class BaseOficinasImporter:
                 loaded_at = now()
         """
         inserted = 0
-        async with self._conn.cursor() as cur:
-            for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+        # Commit por batch para no mantener una transaccion gigante que
+        # el server pueda cerrar por timeout. UPSERT es idempotente asi
+        # que si se interrumpe, podemos re-correr y solo se actualizan
+        # las filas ya presentes.
+        for i in range(0, len(rows), self._batch_size):
+            batch = rows[i:i + self._batch_size]
+            async with self._conn.cursor() as cur:
                 await cur.executemany(sql, batch)
-                inserted += len(batch)
-                if inserted % 100_000 == 0 or inserted == len(rows):
-                    log.info("oficinas.import.batch_ok", total=inserted)
+            await self._conn.commit()
+            inserted += len(batch)
+            if inserted % 100_000 == 0 or inserted == len(rows):
+                log.info(
+                    "oficinas.import.batch_ok",
+                    total=inserted,
+                    pct=round(inserted / len(rows) * 100, 1),
+                )
 
         return ImportResult(
             source="base_oficinas", source_file=path.name,
