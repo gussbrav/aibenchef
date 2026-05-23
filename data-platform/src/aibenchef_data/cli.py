@@ -1410,6 +1410,127 @@ def import_monthly_eeff(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: int) -> None:
+    """Helper para correr un importer simple con DB pool + commit."""
+    import asyncio
+    from pathlib import Path as _P
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with connection() as conn:
+                imp = importer_cls(conn, batch_size=batch_size)
+                if sheet is not None:
+                    result = await imp.import_file(_P(path), sheet=sheet)
+                else:
+                    result = await imp.import_file(_P(path))
+                await conn.commit()
+                click.echo(
+                    f"# Import {result.source_file}:\n"
+                    f"  rows_inserted: {result.rows_inserted:,}\n"
+                    f"  rows_skipped:  {result.rows_skipped:,}\n"
+                    f"  duration:      {result.duration_seconds:.1f}s\n"
+                    f"  errors:        {len(result.errors)}"
+                )
+                for err in list(result.errors)[:20]:
+                    click.echo(f"  ERROR: {err}")
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
+
+
+@import_grp.command("base-patrimonio")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="Data")
+@click.option("--batch-size", type=int, default=5_000)
+def import_base_patrimonio(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE PATRIMONIO EFECTIVO.xlsx a raw.patrimonio_efectivo."""
+    from aibenchef_data.domains.loading import BasePatrimonioImporter
+    _run_simple_import(BasePatrimonioImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-ratio-liquidez")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="Data")
+@click.option("--batch-size", type=int, default=5_000)
+def import_base_ratio_liquidez(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE_RATIO_LIQUIDEZ.xlsx a raw.ratio_liquidez."""
+    from aibenchef_data.domains.loading import BaseRatioLiquidezImporter
+    _run_simple_import(BaseRatioLiquidezImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-rcg")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="DATA")
+@click.option("--batch-size", type=int, default=5_000)
+def import_base_rcg(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE_RCG.xlsx a raw.ratio_capital_global (Basilea III)."""
+    from aibenchef_data.domains.loading import BaseRcgImporter
+    _run_simple_import(BaseRcgImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-personal")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="Base")
+@click.option("--batch-size", type=int, default=5_000)
+def import_base_personal(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE PERSONAL.xlsx a raw.personal_observacion (headcount)."""
+    from aibenchef_data.domains.loading import BasePersonalImporter
+    _run_simple_import(BasePersonalImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-clientes-ahorros")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="2.BDClieAho")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_clientes_ahorros(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE CLIENTES AHORROS.xlsx a raw.clientes_ahorros."""
+    from aibenchef_data.domains.loading import BaseClientesAhorrosImporter
+    _run_simple_import(BaseClientesAhorrosImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-clientes-creditos")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="1.BDClieCred")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_clientes_creditos(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE CLIENTES CREDITOS.xlsx a raw.clientes_creditos."""
+    from aibenchef_data.domains.loading import BaseClientesCreditosImporter
+    _run_simple_import(BaseClientesCreditosImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-oficinas")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="DataSF")
+@click.option("--batch-size", type=int, default=20_000)
+def import_base_oficinas(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar CREDITOS Y DEPOSITOS POR OFICINAS.xlsx (~1M filas) a raw.creditos_depositos_oficina."""
+    from aibenchef_data.domains.loading import BaseOficinasImporter
+    _run_simple_import(BaseOficinasImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-creditos-distrito")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="BD")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_creditos_distrito(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE_Creditos_por_tipo_distrito.xlsx a raw.creditos_distrito."""
+    from aibenchef_data.domains.loading import BaseCreditosDistritoImporter
+    _run_simple_import(BaseCreditosDistritoImporter, path, sheet, batch_size)
+
+
+@import_grp.command("base-tasas-activas")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="Data")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_tasas_activas(path: str, sheet: str, batch_size: int) -> None:
+    """Cargar BASE TASAS ACTIVAS.xlsx a raw.tasas_activas (con unpivot)."""
+    from aibenchef_data.domains.loading import BaseTasasActivasImporter
+    _run_simple_import(BaseTasasActivasImporter, path, sheet, batch_size)
+
+
 @import_grp.command("base-depositos")
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
 @click.option("--sheet", type=str, default="4.BDAhorros")

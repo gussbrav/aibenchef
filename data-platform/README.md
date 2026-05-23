@@ -79,12 +79,41 @@ uv run aibenchef db refresh-mvs
 
 ### Estado actual de la DB (mayo 2026)
 
-| Tabla | Filas | Periodos | Última actualización |
+| Tabla | Filas | Periodos | Notas |
 |---|---|---|---|
 | `raw.eeff_observacion` | 5,021,181 | 200801 → 202603 | mensual via monthly-eeff |
-| `raw.colocaciones_observacion` | 70,440 | 200801 → 202303 | snapshot manual |
-| `raw.depositos_observacion` | 27,291 | 200905 → 202303 | snapshot manual |
-| `raw.castigos_observacion` | 61,645 | 200910 → 202303 | snapshot manual |
+| `raw.colocaciones_observacion` | 70,440 | 200801 → 202303 | snapshot |
+| `raw.depositos_observacion` | 27,291 | 200905 → 202303 | snapshot |
+| `raw.castigos_observacion` | 61,645 | 200910 → 202303 | snapshot |
+| `raw.patrimonio_efectivo` | 5,185 | 201501 → 202303 | Tier 1/2/3 Basilea |
+| `raw.ratio_liquidez` | 3,873 | 201601 → 202303 | MN + ME |
+| `raw.ratio_capital_global` | 5,706 | 201501 → 202303 | RCG Basilea III |
+| `raw.personal_observacion` | 10,275 | 200801 → 202303 | Headcount |
+| `raw.clientes_ahorros` | 38,075 | 200905 → 202303 | # clientes por producto |
+| `raw.clientes_creditos` | 83,345 | 200801 → 202303 | # clientes por producto |
+| `raw.tasas_activas` | 412,482 | 201601 → 202303 | Long fmt: segmento × plazo |
+| `raw.creditos_distrito` | 329,338 | 201201 → 202303 | Cartera por distrito |
+| `raw.creditos_depositos_oficina` | ~1,037,695 | 201301 → 202303 | Por oficina (~granular max) |
+| **TOTAL** | **~7.1M filas** | 18 años | |
+
+### Comandos para cargar todo
+
+```bash
+uv run aibenchef import base-eeff "/path/BASE EE.FF..xlsx"
+uv run aibenchef import base-colocaciones "/path/BASE COLOCACIONES.xlsx"
+uv run aibenchef import base-depositos "/path/BASE DEPÓSITOS.xlsx"
+uv run aibenchef import base-castigos "/path/BASE CASTIGOS.xlsx"
+uv run aibenchef import base-patrimonio "/path/BASE PATRIMONIO EFECTIVO.xlsx"
+uv run aibenchef import base-ratio-liquidez "/path/BASE_RATIO_LIQUIDEZ.xlsx"
+uv run aibenchef import base-rcg "/path/BASE_RCG.xlsx"
+uv run aibenchef import base-personal "/path/BASE PERSONAL.xlsx"
+uv run aibenchef import base-clientes-ahorros "/path/BASE CLIENTES AHORROS.xlsx"
+uv run aibenchef import base-clientes-creditos "/path/BASE CLIENTES CRÉDITOS.xlsx"
+uv run aibenchef import base-tasas-activas "/path/BASE TASAS ACTIVAS.xlsx"
+uv run aibenchef import base-creditos-distrito "/path/BASE_Creditos_por_tipo_distrito.xlsx"
+uv run aibenchef import base-oficinas "/path/CRÉDITOS Y DEPÓSITOS POR OFICINAS.xlsx"
+uv run aibenchef db refresh-mvs
+```
 
 Marts disponibles:
 - `marts.mv_eeff_ratios` — ratios financieros (ROA, ROE, morosidad, etc.)
