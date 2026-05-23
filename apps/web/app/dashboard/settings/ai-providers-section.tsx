@@ -150,6 +150,35 @@ function ProviderCard({
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message: string;
+    models?: string[];
+    elapsedMs?: number;
+    hint?: string;
+  } | null>(null);
+
+  const probarConexion = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await fetch(
+        `/api/v1/settings/ai-providers/${provider.provider}/test`,
+        { method: "POST" },
+      );
+      const json = await r.json();
+      if (json.error) {
+        setTestResult({ ok: false, message: json.error.message ?? "Error" });
+      } else {
+        setTestResult(json.data);
+      }
+    } catch (e) {
+      setTestResult({ ok: false, message: String(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -250,15 +279,86 @@ function ProviderCard({
           <p className="text-xs text-slate-500 mt-0.5">{meta.descripcion}</p>
         </div>
         {!editando && (
-          <button
-            type="button"
-            onClick={() => setEditando(true)}
-            className="text-xs font-medium px-3 h-8 bg-white border border-slate-300 hover:bg-slate-50 rounded"
-          >
-            Editar
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={probarConexion}
+              disabled={testing}
+              className="text-xs font-medium px-3 h-8 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 rounded inline-flex items-center gap-1"
+              title="Hace un curl desde el servidor al endpoint del provider"
+            >
+              {testing ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Zap className="w-3 h-3" />
+              )}
+              Probar
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando(true)}
+              className="text-xs font-medium px-3 h-8 bg-white border border-slate-300 hover:bg-slate-50 rounded"
+            >
+              Editar
+            </button>
+          </div>
         )}
       </header>
+
+      {testResult && (
+        <div
+          className={cn(
+            "mx-4 mt-3 p-3 rounded border text-xs",
+            testResult.ok
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+              : "bg-rose-50 border-rose-200 text-rose-900",
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0 flex-1">
+              {testResult.ok ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-700 flex-shrink-0 mt-0.5" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">
+                  {testResult.ok ? "Conexion exitosa" : "Conexion fallida"}
+                  {testResult.elapsedMs !== undefined && (
+                    <span className="ml-2 font-normal opacity-70">
+                      ({testResult.elapsedMs}ms)
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 break-words">{testResult.message}</p>
+                {testResult.hint && (
+                  <p className="mt-1 italic opacity-90">Sugerencia: {testResult.hint}</p>
+                )}
+                {testResult.models && testResult.models.length > 0 && (
+                  <details className="mt-1.5">
+                    <summary className="cursor-pointer font-medium">
+                      Modelos disponibles ({testResult.models.length})
+                    </summary>
+                    <ul className="mt-1 font-mono text-[11px] space-y-0.5 pl-3 max-h-32 overflow-y-auto">
+                      {testResult.models.map((m) => (
+                        <li key={m}>· {m}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTestResult(null)}
+              className="opacity-60 hover:opacity-100 flex-shrink-0"
+              aria-label="Cerrar"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {!editando ? (
         <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">

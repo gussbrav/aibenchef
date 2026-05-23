@@ -43,20 +43,41 @@ export function AnalisisClient() {
     Record<string, FormatoCondicional>
   >({});
 
-  // Cargar columnas cuando cambia la fuente
+  // Cargar columnas cuando cambia la fuente.
+  // Al cambiar de fuente:
+  //   1) limpiamos el resultado anterior para no mostrar datos viejos del Balance
+  //      mientras esperamos los nuevos de Resultados/Ratios.
+  //   2) podamos medidas/dimensiones que no existan en el nuevo schema (ej. cta_a
+  //      es valido en balance pero no en resultados). Sin esto, el auto-ejecutor
+  //      dispara el pivot con columnas invalidas y aparece "Columna no permitida".
   useEffect(() => {
     let alive = true;
     setCargandoCols(true);
     setError(null);
+    setResultado(null);
     fetch(`/api/v1/pivot/columnas?fuente=${config.fuente}`)
       .then((r) => r.json())
       .then((json) => {
         if (!alive) return;
         if (json.error) {
           setError(json.error.message ?? "Error cargando columnas");
-        } else {
-          setColumnas(json.data as ColumnasDisponibles);
+          return;
         }
+        const cols = json.data as ColumnasDisponibles;
+        setColumnas(cols);
+        const dimsValidas = new Set(cols.dimensiones.map((c) => c.key));
+        const medsValidas = new Set(cols.medidas.map((c) => c.key));
+        setConfig((cfg) => {
+          const dimsNew = cfg.dimensiones.filter((k) => dimsValidas.has(k));
+          const medsNew = cfg.medidas.filter((k) => medsValidas.has(k));
+          if (
+            dimsNew.length === cfg.dimensiones.length &&
+            medsNew.length === cfg.medidas.length
+          ) {
+            return cfg;
+          }
+          return { ...cfg, dimensiones: dimsNew, medidas: medsNew };
+        });
       })
       .catch((e) => {
         if (alive) setError(String(e));
