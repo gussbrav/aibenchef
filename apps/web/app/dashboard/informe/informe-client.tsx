@@ -623,6 +623,10 @@ function SeccionMargenNetoWaterfall({
       <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
         Margen Neto — Desviaciones en bps ({comparativoLabel})
       </h2>
+      <p className="text-xs text-slate-500 mt-2 px-2">
+        <strong>bps</strong> = <em>basis points</em> o puntos b&aacute;sicos. 1 bps = 0.01% =
+        1/100 de punto porcentual. As&iacute; un cambio de 100 bps equivale a 1 pp (punto porcentual).
+      </p>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
         <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
           {data.map((w) => {
@@ -648,8 +652,19 @@ function SeccionMargenNetoWaterfall({
         </div>
         <ComentarioBox texto={comentario} />
       </div>
-      <div className="mt-3 text-[10px] text-slate-500 px-2">
-        Leyenda: <strong>RC</strong> = Rendimiento de Cartera · <strong>CF</strong> = Costo de Fondeo · <strong>CP</strong> = Costo Provisiones · <strong>GO</strong> = Gastos Operacionales · <strong>Ot</strong> = Otros Ingresos y Gastos
+      <div className="mt-3 text-[10px] text-slate-500 px-2 space-y-1">
+        <p>
+          <strong>Componentes (descomposici&oacute;n del cambio):</strong>{" "}
+          <strong>RC</strong> = Rendimiento de Cartera ·{" "}
+          <strong>CF</strong> = Costo de Fondeo ·{" "}
+          <strong>CP</strong> = Costo Provisiones ·{" "}
+          <strong>GO</strong> = Gastos Operacionales ·{" "}
+          <strong>Ot</strong> = Otros Ingresos y Gastos
+        </p>
+        <p>
+          <strong>Unidad bps:</strong> 1 bps = 0.01% = 1/100 de punto porcentual. Total al pie de cada
+          gr&aacute;fico = suma de los componentes en bps (delta del Margen Neto entre ambos cierres).
+        </p>
       </div>
     </section>
   );
@@ -675,56 +690,67 @@ function Waterfall({
   const maxAbs = Math.max(Math.abs(base), Math.abs(final), ...componentes.map((c) => Math.abs(c.bps / 100)));
   const scale = maxAbs > 0 ? 100 / maxAbs : 1;
 
+  // Items en una sola estructura. Cada item se renderea en 3 filas (valor /
+  // barra / label) que comparten ancho via grid-cols. Asi las barras quedan
+  // alineadas al mismo nivel sin importar si el label tiene 1 o 2 lineas.
+  type WfItem = { label: string; valor: string; height: number; color: string; isComponent: boolean };
+  const items: WfItem[] = [
+    { label: baseLabel, valor: `${base.toFixed(2)}%`, height: Math.abs(base) * scale, color, isComponent: false },
+    ...componentes.map<WfItem>((c) => ({
+      label: c.label,
+      valor: c.bps.toString(),
+      height: Math.abs(c.bps / 100) * scale,
+      color: c.bps >= 0 ? "#94a3b8" : "#FB923C",
+      isComponent: true,
+    })),
+    { label: finalLabel, valor: `${final.toFixed(2)}%`, height: Math.abs(final) * scale, color, isComponent: false },
+  ];
+
+  const gridCols = { gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` };
+
   return (
     <div>
-      <div className="flex items-end gap-1 h-32 mt-2">
-        <BarSegment label={baseLabel} valor={`${base.toFixed(2)}%`} height={Math.abs(base) * scale} color={color} />
-        {componentes.map((c) => (
-          <BarSegment
-            key={c.label}
-            label={c.label}
-            valor={c.bps.toString()}
-            height={Math.abs(c.bps / 100) * scale}
-            color={c.bps >= 0 ? "#94a3b8" : "#FB923C"}
-            isComponent
+      {/* Fila 1: valores arriba de cada barra */}
+      <div className="grid gap-1 mt-2" style={gridCols}>
+        {items.map((it, i) => (
+          <div key={`v-${i}`} className="text-[8px] text-slate-500 text-center truncate" title={it.valor}>
+            {it.valor}
+          </div>
+        ))}
+      </div>
+
+      {/* Fila 2: barras alineadas al fondo, todas terminan al mismo nivel */}
+      <div className="grid items-end gap-1 h-28" style={gridCols}>
+        {items.map((it, i) => (
+          <div
+            key={`b-${i}`}
+            className="w-full rounded-sm"
+            style={{
+              height: `${Math.max(2, it.height)}px`,
+              backgroundColor: it.color,
+              opacity: it.isComponent ? 0.7 : 1,
+            }}
           />
         ))}
-        <BarSegment label={finalLabel} valor={`${final.toFixed(2)}%`} height={Math.abs(final) * scale} color={color} />
       </div>
+
+      {/* Fila 3: labels con altura fija (h-8) para acomodar hasta 2 lineas */}
+      <div className="grid items-start gap-1 mt-1 h-8" style={gridCols}>
+        {items.map((it, i) => (
+          <div
+            key={`l-${i}`}
+            className="text-[9px] text-slate-700 font-medium text-center leading-[1.15] break-words"
+          >
+            {it.label}
+          </div>
+        ))}
+      </div>
+
       <div className="border-t border-dashed border-amber-400 mt-1 pt-1 text-center">
         <span className={`text-[11px] font-bold ${totalBps >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
           {totalBps >= 0 ? "+" : ""}{totalBps} bps
         </span>
       </div>
-    </div>
-  );
-}
-
-function BarSegment({
-  label,
-  valor,
-  height,
-  color,
-  isComponent = false,
-}: {
-  label: string;
-  valor: string;
-  height: number;
-  color: string;
-  isComponent?: boolean;
-}) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-end">
-      <span className="text-[8px] text-slate-500 mb-0.5 whitespace-nowrap">{valor}</span>
-      <div
-        className="w-full rounded-sm"
-        style={{
-          height: `${Math.max(2, height)}px`,
-          backgroundColor: color,
-          opacity: isComponent ? 0.7 : 1,
-        }}
-      />
-      <span className="text-[9px] text-slate-700 font-medium mt-0.5">{label}</span>
     </div>
   );
 }
