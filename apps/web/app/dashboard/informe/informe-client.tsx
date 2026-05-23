@@ -1,17 +1,18 @@
 "use client";
 
 // Dashboard "Informe Ejecutivo" — replica visual del benchmark Caja
-// Arequipa (Junio 2020). Por ahora consume la fixture hardcoded; la
-// proxima iteracion conecta a marts.v_punto_equilibrio_ancho.
+// Arequipa (Junio 2020). Recibe data dinamica desde page.tsx (server)
+// que invoca getInformeData() del dominio informe.
 //
-// La estructura sigue las secciones del PDF original:
+// Las secciones:
 //   1. Header: cliente + periodo + boton descargar PPT
-//   2. Cuadro Resumen (slide 5)
-//   3. Punto de Equilibrio Anualizado (slide 6)
-//   4. Analisis Margen Neto: bubble + waterfall (slides 7-8)
+//   2. Toolbar de selectores (periodo + peer group editor)
+//   3. Cuadro Resumen
+//   4. Punto de Equilibrio Anualizado
+//   5. Analisis Margen Neto: bubble + waterfall
 
 import { useMemo, useState } from "react";
-import { Download, FileText, Info } from "lucide-react";
+import { Download, FileText, Info, AlertCircle } from "lucide-react";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -25,23 +26,25 @@ import {
 } from "recharts";
 import type { TooltipProps } from "recharts";
 
-import type { InformeData, Kpi, KpiValor, PuntoEquilibrioRow } from "./fixture-data";
+import type {
+  InformeData,
+  Kpi,
+  KpiValor,
+  PuntoEquilibrioRow,
+  EntidadDisponible,
+  BubblePoint,
+  WaterfallData,
+  Competidor,
+  KpiUnidad,
+} from "@/lib/domains/informe";
 
-type BubblePayload = {
-  label: string;
-  deltaPp: number;
-  margenNeto: number;
-  color: string;
-  x: number;
-  y: number;
-  z: number;
-};
+import { SelectoresToolbar } from "./selectores-toolbar";
 
 // ============================================================================
 // Helpers de formato y ranking
 // ============================================================================
 
-function formatValor(valor: number | null, unidad: Kpi["unidad"]): string {
+function formatValor(valor: number | null, unidad: KpiUnidad): string {
   if (valor === null || valor === undefined || Number.isNaN(valor)) return "—";
   switch (unidad) {
     case "pct":
@@ -54,7 +57,6 @@ function formatValor(valor: number | null, unidad: Kpi["unidad"]): string {
     case "numero_miles":
       return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 0 }).format(valor);
     case "moneda_mm":
-      return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 1 }).format(valor);
     case "moneda_miles":
       return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 1 }).format(valor);
     default:
@@ -62,8 +64,6 @@ function formatValor(valor: number | null, unidad: Kpi["unidad"]): string {
   }
 }
 
-// Computa rank 1/2/3 entre los valores no-nulos respetando el signo del KPI.
-// signo +1 = valor alto es mejor (ROE, cartera); signo -1 = valor alto es peor (mora, costos).
 function computeRanks(valores: KpiValor[], signo: 1 | -1): Map<string, number> {
   const ranks = new Map<string, number>();
   const sorted = valores
@@ -94,25 +94,48 @@ function RankBadge({ rank }: { rank?: number }) {
   );
 }
 
+type BubbleChartPayload = {
+  label: string;
+  deltaPp: number;
+  margenNeto: number;
+  color: string;
+  x: number;
+  y: number;
+  z: number;
+};
+
 // ============================================================================
 // Componente principal
 // ============================================================================
 
-export function InformeClient({ data }: { data: InformeData }) {
-  const { cliente, periodo, competidores, cuadroResumen, puntoEquilibrio, margenNetoBubble, margenNetoWaterfallVsAbr19, comentarios } = data;
+export function InformeClient({
+  data,
+  periodosDisponibles,
+  entidadesDisponibles,
+}: {
+  data: InformeData;
+  periodosDisponibles: number[];
+  entidadesDisponibles: EntidadDisponible[];
+}) {
+  const { cliente, periodo, periodoComparativo, competidores, cuadroResumen, puntoEquilibrio, margenNetoBubble, margenNetoWaterfall, comentarios } = data;
   const [exportando, setExportando] = useState(false);
 
-  const onExportPpt = () => {
+  const onExport = (formato: "pptx" | "pdf") => {
     setExportando(true);
-    // TODO Fase 4: conectar a /api/v1/informe/export?cliente=X&periodo=Y&formato=pptx
     setTimeout(() => {
-      alert("Export PPT — feature pendiente (Fase 4 del roadmap). Por ahora ver docs/PRODUCT_VISION.md");
+      alert(`Export ${formato.toUpperCase()} — feature pendiente (Fase 4 del roadmap). Ver docs/PRODUCT_VISION.md`);
       setExportando(false);
-    }, 400);
+    }, 300);
   };
 
+  // El label que matchea con competidores[i].labelCorto del cliente propio
+  const labelCortoPropio = competidores.find((c) => c.esPropio)?.labelCorto ?? cliente.nombreCorto;
+  const labelsCompetidores = competidores.map((c) => c.labelCorto);
+
+  const periodoLabel = `${periodo.label} vs ${periodoComparativo.label}`;
+
   return (
-    <div className="space-y-10 max-w-7xl mx-auto px-2">
+    <div className="space-y-8 max-w-7xl mx-auto px-2">
       {/* ============ HEADER ============ */}
       <header
         className="rounded-xl text-white p-8 relative overflow-hidden"
@@ -139,7 +162,7 @@ export function InformeClient({ data }: { data: InformeData }) {
           <div className="flex flex-col gap-2 flex-shrink-0">
             <button
               type="button"
-              onClick={onExportPpt}
+              onClick={() => onExport("pptx")}
               disabled={exportando}
               className="h-9 px-4 bg-white text-slate-900 hover:bg-slate-100 text-sm font-medium rounded transition-colors inline-flex items-center gap-2 disabled:opacity-60"
             >
@@ -148,7 +171,7 @@ export function InformeClient({ data }: { data: InformeData }) {
             </button>
             <button
               type="button"
-              onClick={onExportPpt}
+              onClick={() => onExport("pdf")}
               disabled={exportando}
               className="h-9 px-4 bg-white/15 hover:bg-white/25 text-white text-sm font-medium rounded transition-colors inline-flex items-center gap-2 disabled:opacity-60"
             >
@@ -159,24 +182,42 @@ export function InformeClient({ data }: { data: InformeData }) {
         </div>
       </header>
 
+      {/* ============ SELECTORES ============ */}
+      <SelectoresToolbar
+        periodoActual={periodo.codigo}
+        peerGroupActual={competidores.map((c) => c.nombCorreg)}
+        entidadPropia={cliente.entidadPropia}
+        periodosDisponibles={periodosDisponibles}
+        entidadesDisponibles={entidadesDisponibles}
+      />
+
+      {/* Aviso si no hay competidores o data incompleta */}
+      {competidores.length === 0 && (
+        <EmptyBox titulo="Sin entidades en el peer group" texto="Selecciona al menos una entidad usando el botón 'Editar' del toolbar." />
+      )}
+
       {/* ============ CUADRO RESUMEN ============ */}
-      <SeccionCuadroResumen data={cuadroResumen} competidores={competidores.map((c) => c.labelCorto)} clientePropio="Caja Arequipa" />
+      <SeccionCuadroResumen data={cuadroResumen} competidores={labelsCompetidores} clientePropio={labelCortoPropio} />
 
       {/* ============ PUNTO DE EQUILIBRIO ============ */}
-      <SeccionPuntoEquilibrio data={puntoEquilibrio} competidores={competidores.map((c) => c.labelCorto)} clientePropio="Caja Arequipa" />
+      <SeccionPuntoEquilibrio data={puntoEquilibrio} competidores={labelsCompetidores} clientePropio={labelCortoPropio} />
 
       {/* ============ ANALISIS MARGEN NETO — BUBBLE ============ */}
       <SeccionMargenNetoBubble
         data={margenNetoBubble}
         competidores={competidores}
         comentario={comentarios.margen_neto_bubble}
+        comparativoLabel={periodoLabel}
       />
 
-      {/* ============ ANALISIS MARGEN NETO — WATERFALL ============ */}
+      {/* ============ WATERFALL ============ */}
       <SeccionMargenNetoWaterfall
-        data={margenNetoWaterfallVsAbr19}
+        data={margenNetoWaterfall}
         competidores={competidores}
         comentario={comentarios.margen_neto_waterfall}
+        comparativoLabel={periodoLabel}
+        periodoBaseLabel={periodoComparativo.label}
+        periodoFinalLabel={periodo.label}
       />
 
       {/* ============ FOOTER ============ */}
@@ -185,7 +226,7 @@ export function InformeClient({ data }: { data: InformeData }) {
           Fuente: SBS · Benchmark generado por Aibenchef · {new Date().toLocaleDateString("es-PE", { dateStyle: "long" })}
         </p>
         <p className="text-[10px] text-slate-400 mt-1">
-          Datos provisionales basados en fixture del PDF de referencia. Conexion a marts.v_punto_equilibrio_ancho pendiente (V034).
+          Los KPIs marcados como "—" requieren datasets adicionales (Oficinas, Personal, Clientes, Mora) aun no ingeridos. Ver docs/ROADMAP.md Fase 1.
         </p>
       </footer>
     </div>
@@ -193,7 +234,7 @@ export function InformeClient({ data }: { data: InformeData }) {
 }
 
 // ============================================================================
-// Seccion: Cuadro Resumen
+// Cuadro Resumen
 // ============================================================================
 
 function SeccionCuadroResumen({
@@ -234,9 +275,7 @@ function SeccionCuadroResumen({
           <table className="w-full text-sm">
             <thead className="bg-slate-900 text-white">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider min-w-[260px]">
-                  {data.length > 0 ? "" : "KPI"}
-                </th>
+                <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider min-w-[260px]" />
                 {competidores.map((c) => (
                   <th
                     key={c}
@@ -311,7 +350,7 @@ function FragmentGrupo({
 }
 
 // ============================================================================
-// Seccion: Punto de Equilibrio Anualizado
+// Punto de Equilibrio Anualizado
 // ============================================================================
 
 function SeccionPuntoEquilibrio({
@@ -323,12 +362,24 @@ function SeccionPuntoEquilibrio({
   competidores: string[];
   clientePropio: string;
 }) {
+  const hayDatos = data.some((r) => Object.values(r.valores).some((v) => v !== null));
+
   return (
     <section>
       <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
         Punto de Equilibrio Anualizado
       </h2>
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
+        {!hayDatos && (
+          <div className="p-4 bg-amber-50 border-b border-amber-200 flex items-start gap-2 text-xs text-amber-800">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <p>
+              Sin datos calculados para este período. Probablemente faltan 12 meses históricos previos en <code>marts.mv_eeff_resultados_ancho</code> o
+              la cuenta <code>cta_a4</code> (cartera) no está poblada. Reintentar con un período más reciente o ejecutar{" "}
+              <code>SELECT marts.compute_kpis_punto_equilibrio(periodo)</code> en la base.
+            </p>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-900 text-white">
@@ -350,7 +401,8 @@ function SeccionPuntoEquilibrio({
             </thead>
             <tbody>
               {data.map((r, idx) => {
-                const isNeg = Object.values(r.valores).every((v) => v < 0);
+                const valoresNotNull = Object.values(r.valores).filter((v): v is number => v !== null);
+                const isNeg = valoresNotNull.length > 0 && valoresNotNull.every((v) => v < 0);
                 const valueClass = isNeg ? "text-rose-700" : "text-emerald-700";
                 return (
                   <tr
@@ -385,7 +437,7 @@ function SeccionPuntoEquilibrio({
         <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 flex items-start gap-2">
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-400" />
           <p>
-            Indicadores anualizados (acumulado 12 meses) sobre cartera promedio de 12 meses. Las componentes negativas son costos; el Punto de Equilibrio es la suma de costos (fondeo + provisiones + gastos operacionales).
+            Indicadores anualizados (trailing 12 meses) sobre cartera promedio de 12 meses. Las componentes negativas son costos; el Punto de Equilibrio es la suma de costos (fondeo + provisiones + gastos operacionales). %Margen Neto = %Rendimiento + %Punto Equilibrio + %Otros.
           </p>
         </div>
       </div>
@@ -394,25 +446,37 @@ function SeccionPuntoEquilibrio({
 }
 
 // ============================================================================
-// Seccion: Margen Neto Bubble Chart
+// Margen Neto — Bubble Chart
 // ============================================================================
 
 function SeccionMargenNetoBubble({
   data,
   competidores,
   comentario,
+  comparativoLabel,
 }: {
-  data: InformeData["margenNetoBubble"];
-  competidores: InformeData["competidores"];
+  data: BubblePoint[];
+  competidores: Competidor[];
   comentario: string;
+  comparativoLabel: string;
 }) {
-  // Recharts ScatterChart con bubbles
+  if (data.length === 0) {
+    return (
+      <section>
+        <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+          Analisis Margen Neto — {comparativoLabel}
+        </h2>
+        <EmptyBox titulo="Sin datos para el bubble chart" texto="Se requieren datos de Punto de Equilibrio del periodo actual y del mismo mes del año anterior." />
+      </section>
+    );
+  }
+
   const scatterData = data.map((d) => {
     const comp = competidores.find((c) => c.labelCorto === d.competidor);
     return {
       x: d.puntoEq,
       y: d.rendimiento,
-      z: d.margenNeto * 100, // tamaño burbuja
+      z: Math.abs(d.margenNeto * 100) || 1,
       label: d.competidor,
       color: comp?.color ?? "#888",
       deltaPp: d.deltaPp,
@@ -420,15 +484,20 @@ function SeccionMargenNetoBubble({
     };
   });
 
+  const xMin = Math.min(...scatterData.map((d) => d.x)) - 0.5;
+  const xMax = Math.max(...scatterData.map((d) => d.x)) + 0.5;
+  const yMin = Math.min(...scatterData.map((d) => d.y)) - 0.5;
+  const yMax = Math.max(...scatterData.map((d) => d.y)) + 0.5;
+
   return (
     <section>
       <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
-        Analisis Margen Neto — Abr.20 vs Abr.19
+        Analisis Margen Neto — {comparativoLabel}
       </h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-lg shadow-sm p-6">
           <p className="text-sm text-slate-500 mb-4">
-            Eje X: variacion del Punto de Equilibrio (pp). Eje Y: variacion del Rendimiento de Cartera (pp). Tamaño de burbuja = %Margen Neto actual.
+            Eje X: variación del Punto de Equilibrio (pp). Eje Y: variación del Rendimiento de Cartera (pp). Tamaño de burbuja proporcional al %Margen Neto actual.
           </p>
           <div style={{ width: "100%", height: 380 }}>
             <ResponsiveContainer>
@@ -437,16 +506,16 @@ function SeccionMargenNetoBubble({
                 <XAxis
                   type="number"
                   dataKey="x"
-                  domain={[-1, 2]}
+                  domain={[xMin, xMax]}
                   label={{ value: "Punto de Equilibrio (pp)", position: "bottom" }}
-                  tickFormatter={(v) => `${v.toFixed(1)}`}
+                  tickFormatter={(v) => v.toFixed(1)}
                 />
                 <YAxis
                   type="number"
                   dataKey="y"
-                  domain={[-3, 1]}
+                  domain={[yMin, yMax]}
                   label={{ value: "Rendimiento de Cartera (pp)", angle: -90, position: "left" }}
-                  tickFormatter={(v) => `${v.toFixed(1)}`}
+                  tickFormatter={(v) => v.toFixed(1)}
                 />
                 <ZAxis type="number" dataKey="z" range={[200, 1500]} />
                 <ReferenceLine x={0} stroke="#94a3b8" strokeDasharray="3 3" />
@@ -455,13 +524,13 @@ function SeccionMargenNetoBubble({
                   content={(props: TooltipProps<number, string>) => {
                     const { active, payload } = props;
                     if (!active || !payload || payload.length === 0) return null;
-                    const d = payload[0].payload as BubblePayload | undefined;
+                    const d = payload[0].payload as BubbleChartPayload | undefined;
                     if (!d) return null;
                     return (
                       <div className="bg-white border border-slate-200 rounded shadow-lg p-3 text-xs">
                         <p className="font-semibold text-slate-900 mb-1">{d.label}</p>
                         <p className="text-slate-600">Margen neto: <span className="font-mono">{(d.margenNeto * 100).toFixed(2)}%</span></p>
-                        <p className="text-slate-600">Delta vs Abr.19: <span className={`font-mono ${d.deltaPp >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{d.deltaPp.toFixed(2)} pp</span></p>
+                        <p className="text-slate-600">Delta interanual: <span className={`font-mono ${d.deltaPp >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{d.deltaPp.toFixed(2)} pp</span></p>
                       </div>
                     );
                   }}
@@ -474,7 +543,6 @@ function SeccionMargenNetoBubble({
               </ScatterChart>
             </ResponsiveContainer>
           </div>
-          {/* Leyenda manual */}
           <div className="flex flex-wrap gap-3 mt-2 justify-center">
             {competidores.map((c) => (
               <span key={c.nombCorreg} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
@@ -491,22 +559,39 @@ function SeccionMargenNetoBubble({
 }
 
 // ============================================================================
-// Seccion: Margen Neto Waterfall (Abr.20 vs Abr.19)
+// Margen Neto — Waterfall (mini-waterfall por competidor)
 // ============================================================================
 
 function SeccionMargenNetoWaterfall({
   data,
   competidores,
   comentario,
+  comparativoLabel,
+  periodoBaseLabel,
+  periodoFinalLabel,
 }: {
-  data: InformeData["margenNetoWaterfallVsAbr19"];
-  competidores: InformeData["competidores"];
+  data: WaterfallData[];
+  competidores: Competidor[];
   comentario: string;
+  comparativoLabel: string;
+  periodoBaseLabel: string;
+  periodoFinalLabel: string;
 }) {
+  if (data.length === 0) {
+    return (
+      <section>
+        <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+          Margen Neto — Desviaciones en bps
+        </h2>
+        <EmptyBox titulo="Sin datos para el waterfall" texto="Se requieren datos del Punto de Equilibrio para el período actual y el comparativo." />
+      </section>
+    );
+  }
+
   return (
     <section>
       <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
-        Margen Neto — Desviaciones en bps (Abr.20 vs Abr.19)
+        Margen Neto — Desviaciones en bps ({comparativoLabel})
       </h2>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
         <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -518,7 +603,15 @@ function SeccionMargenNetoWaterfall({
                 <h3 className="text-xs font-semibold text-center mb-2" style={{ color }}>
                   {w.competidor}
                 </h3>
-                <Waterfall base={w.base} final={w.final} componentes={w.componentes} totalBps={w.totalBps} color={color} />
+                <Waterfall
+                  base={w.base}
+                  final={w.final}
+                  componentes={w.componentes}
+                  totalBps={w.totalBps}
+                  color={color}
+                  baseLabel={periodoBaseLabel}
+                  finalLabel={periodoFinalLabel}
+                />
               </div>
             );
           })}
@@ -538,24 +631,24 @@ function Waterfall({
   componentes,
   totalBps,
   color,
+  baseLabel,
+  finalLabel,
 }: {
   base: number;
   final: number;
   componentes: { label: string; bps: number }[];
   totalBps: number;
   color: string;
+  baseLabel: string;
+  finalLabel: string;
 }) {
-  // Calculo de alturas: escalado por valor maximo
-  const maxAbs = Math.max(base, final, ...componentes.map((c) => Math.abs(c.bps / 100)));
-  const scale = 100 / maxAbs; // pixeles por unidad
-  const yBase = 110;
+  const maxAbs = Math.max(Math.abs(base), Math.abs(final), ...componentes.map((c) => Math.abs(c.bps / 100)));
+  const scale = maxAbs > 0 ? 100 / maxAbs : 1;
 
   return (
     <div>
       <div className="flex items-end gap-1 h-32 mt-2">
-        {/* Base */}
-        <BarSegment label="Abr-19" valor={`${base.toFixed(2)}%`} height={base * scale} color={color} />
-        {/* Componentes */}
+        <BarSegment label={baseLabel} valor={`${base.toFixed(2)}%`} height={Math.abs(base) * scale} color={color} />
         {componentes.map((c) => (
           <BarSegment
             key={c.label}
@@ -566,8 +659,7 @@ function Waterfall({
             isComponent
           />
         ))}
-        {/* Final */}
-        <BarSegment label="Abr-20" valor={`${final.toFixed(2)}%`} height={final * scale} color={color} />
+        <BarSegment label={finalLabel} valor={`${final.toFixed(2)}%`} height={Math.abs(final) * scale} color={color} />
       </div>
       <div className="border-t border-dashed border-amber-400 mt-1 pt-1 text-center">
         <span className={`text-[11px] font-bold ${totalBps >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
@@ -593,7 +685,7 @@ function BarSegment({
 }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-end">
-      <span className="text-[8px] text-slate-500 mb-0.5">{valor}</span>
+      <span className="text-[8px] text-slate-500 mb-0.5 whitespace-nowrap">{valor}</span>
       <div
         className="w-full rounded-sm"
         style={{
@@ -608,10 +700,17 @@ function BarSegment({
 }
 
 // ============================================================================
-// Caja de comentario ejecutivo (panel azul del PDF)
+// Helpers visuales
 // ============================================================================
 
 function ComentarioBox({ texto }: { texto: string }) {
+  if (!texto) {
+    return (
+      <div className="bg-slate-100 text-slate-500 rounded-lg p-5 self-start text-xs italic">
+        <p>Sin comentario ejecutivo para este período. Un admin puede agregarlo desde /dashboard/admin/comentarios (pendiente).</p>
+      </div>
+    );
+  }
   return (
     <div className="bg-slate-900 text-white rounded-lg p-5 self-start sticky top-20">
       <div className="flex items-start gap-2">
@@ -621,6 +720,16 @@ function ComentarioBox({ texto }: { texto: string }) {
         </svg>
         <p className="text-sm leading-relaxed">{texto}</p>
       </div>
+    </div>
+  );
+}
+
+function EmptyBox({ titulo, texto }: { titulo: string; texto: string }) {
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+      <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+      <h3 className="text-sm font-semibold text-slate-700 mb-1">{titulo}</h3>
+      <p className="text-xs text-slate-500 max-w-md mx-auto">{texto}</p>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { getInformeData, listPeriodosDisponibles, listEntidadesDisponibles } from "@/lib/domains/informe";
 import { InformeClient } from "./informe-client";
-import { CAJA_AREQUIPA_ABR_2020 } from "./fixture-data";
 
 export const metadata: Metadata = {
   title: "Informe Ejecutivo",
@@ -8,9 +8,41 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-// Por ahora la pagina sirve la fixture del benchmark Caja Arequipa Abr-2020
-// para validar el diseño visual. La proxima iteracion conecta a
-// marts.v_punto_equilibrio_ancho + marts.fact_kpis_mensuales (V033/V034).
-export default async function InformeEjecutivoPage() {
-  return <InformeClient data={CAJA_AREQUIPA_ABR_2020} />;
+type SearchParams = Promise<{
+  cliente?: string;
+  periodo?: string;
+  peerGroup?: string;
+}>;
+
+export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const clienteSlug = params.cliente ?? "caja-arequipa";
+
+  // Si no hay periodo en URL, usar el ultimo disponible
+  let periodo: number;
+  if (params.periodo) {
+    periodo = Number.parseInt(params.periodo, 10);
+  } else {
+    const periodos = await listPeriodosDisponibles({ ultimosN: 1 });
+    periodo = periodos[0] ?? 202004; // fallback al periodo del benchmark si no hay nada
+  }
+
+  const peerGroup = params.peerGroup
+    ? params.peerGroup.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
+
+  // Cargar en paralelo: data del informe + listas para los selectores
+  const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
+    getInformeData({ clienteSlug, periodo, peerGroupOverride: peerGroup }),
+    listPeriodosDisponibles({ ultimosN: 36 }),
+    listEntidadesDisponibles({}),
+  ]);
+
+  return (
+    <InformeClient
+      data={data}
+      periodosDisponibles={periodosDisponibles}
+      entidadesDisponibles={entidadesDisponibles}
+    />
+  );
 }
