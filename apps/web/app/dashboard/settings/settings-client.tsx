@@ -8,17 +8,25 @@ import {
   Sparkles,
   User as UserIcon,
   Users as UsersIcon,
+  Wrench,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 
 import { AiProvidersSection } from "./ai-providers-section";
 import { AuditSection } from "./audit-section";
+import { DebugSection } from "./debug-section";
 import { InvitationsSection } from "./invitations-section";
 import { ProfileSection } from "./profile-section";
 import { UsersSection } from "./users-section";
 
-type Tab = "perfil" | "ai" | "usuarios" | "invitaciones" | "auditoria";
+type Tab =
+  | "perfil"
+  | "ai"
+  | "usuarios"
+  | "invitaciones"
+  | "auditoria"
+  | "debug";
 
 type Me = { id: string; role: "admin" | "usuario" };
 
@@ -41,6 +49,7 @@ export function SettingsClient() {
     { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
     { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
     { id: "auditoria", label: "Auditoria", icon: History, adminOnly: true },
+    { id: "debug", label: "Diagnostico", icon: Wrench, adminOnly: true },
   ];
 
   const isAdmin = me?.role === "admin";
@@ -84,6 +93,7 @@ export function SettingsClient() {
         {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
         {tab === "invitaciones" && isAdmin && <InvitationsSection />}
         {tab === "auditoria" && isAdmin && <AuditSection />}
+        {tab === "debug" && isAdmin && <DebugSection />}
         {tab !== "perfil" && !isAdmin && (
           <div className="p-6 bg-slate-50 border border-slate-200 rounded text-sm text-slate-600 text-center">
             Esta seccion es solo para administradores.
