@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
   BarChart3,
+  Check,
   Code,
+  Loader2,
   Play,
-  Plus,
   Trash2,
   Type,
 } from "lucide-react";
@@ -31,7 +32,19 @@ type QueryResult = {
 export function NotebookEditor({ notebook: initial }: { notebook: Notebook }) {
   const router = useRouter();
   const [notebook, setNotebook] = useState<Notebook>(initial);
-  const [outputs, setOutputs] = useState<Record<string, QueryResult>>({});
+  // Hidratar outputs desde config.lastResult de cada SQL cell (persistido en DB).
+  const [outputs, setOutputs] = useState<Record<string, QueryResult>>(() => {
+    const init: Record<string, QueryResult> = {};
+    for (const c of initial.cells) {
+      if (c.tipo === "sql") {
+        const last = c.config?.lastResult as QueryResult | undefined;
+        if (last && Array.isArray(last.columnas) && Array.isArray(last.filas)) {
+          init[c.id] = last;
+        }
+      }
+    }
+    return init;
+  });
   const [running, setRunning] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -105,7 +118,24 @@ export function NotebookEditor({ notebook: initial }: { notebook: Notebook }) {
       if (json.error) {
         setErrors((e) => ({ ...e, [cellId]: json.error.message ?? "Error" }));
       } else {
-        setOutputs((o) => ({ ...o, [cellId]: json.data as QueryResult }));
+        const result = json.data as QueryResult;
+        setOutputs((o) => ({ ...o, [cellId]: result }));
+        // Persistir el ultimo resultado en config para que aparezca al recargar.
+        // Limitamos a las primeras 100 filas para no inflar el JSONB.
+        const cellActual = notebook.cells.find((c) => c.id === cellId);
+        if (cellActual) {
+          const lastResult = {
+            columnas: result.columnas,
+            filas: result.filas.slice(0, 100),
+            totalFilas: result.totalFilas,
+            duracionMs: result.duracionMs,
+            ranAt: new Date().toISOString(),
+          };
+          await guardarCell(cellId, cellActual.contenido, {
+            ...cellActual.config,
+            lastResult,
+          });
+        }
       }
     } catch (e) {
       setErrors((er) => ({ ...er, [cellId]: String(e) }));
@@ -230,15 +260,56 @@ function CellView({
   isFirst: boolean;
   isLast: boolean;
   todasCells: NotebookCell[];
-  onChange: (id: string, contenido: string, config?: Record<string, unknown>) => void;
+  onChange: (id: string, contenido: string, config?: Record<string, unknown>) => Promise<void>;
   onDelete: () => void;
   onMove: (dir: -1 | 1) => void;
   onRun: (sql: string) => void;
 }) {
   const [contenido, setContenido] = useState(cell.contenido);
   const [config, setConfig] = useState(cell.config);
+  const [savingState, setSavingState] = useState<"idle" | "saving" | "saved">("idle");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<string>(cell.contenido);
 
-  const guardar = () => onChange(cell.id, contenido, config);
+  const guardar = useCallback(
+    async (nuevoContenido?: string, nuevoConfig?: Record<string, unknown>) => {
+      const c = nuevoContenido ?? contenido;
+      const cfg = nuevoConfig ?? config;
+      if (c === lastSavedRef.current && nuevoConfig === undefined) {
+        return;
+      }
+      setSavingState("saving");
+      await onChange(cell.id, c, cfg);
+      lastSavedRef.current = c;
+      setSavingState("saved");
+      setTimeout(() => setSavingState("idle"), 1500);
+    },
+    [cell.id, contenido, config, onChange],
+  );
+
+  // Auto-save con debounce 1s al editar contenido
+  useEffect(() => {
+    if (contenido === lastSavedRef.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      guardar(contenido);
+    }, 1000);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [contenido, guardar]);
+
+  // Flush al desmontar (cambio de cell, navegacion)
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current && contenido !== lastSavedRef.current) {
+        clearTimeout(debounceRef.current);
+        // Best-effort: fire and forget
+        onChange(cell.id, contenido, config);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
@@ -254,6 +325,18 @@ function CellView({
           >
             {cell.tipo}
           </span>
+          {savingState === "saving" && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Guardando...
+            </span>
+          )}
+          {savingState === "saved" && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700">
+              <Check className="w-3 h-3" />
+              Guardado
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -290,7 +373,7 @@ function CellView({
           <textarea
             value={contenido}
             onChange={(e) => setContenido(e.target.value)}
-            onBlur={guardar}
+            onBlur={() => guardar()}
             rows={Math.min(20, Math.max(3, contenido.split("\n").length))}
             className="w-full px-3 py-2 text-sm rounded border border-slate-200 outline-none resize-y font-mono"
           />

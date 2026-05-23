@@ -46,8 +46,8 @@ export function DebugSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Wrench className="w-5 h-5 text-slate-600" />
             Diagnostico del sistema
@@ -61,7 +61,7 @@ export function DebugSection() {
           type="button"
           onClick={correr}
           disabled={loading}
-          className="px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded inline-flex items-center gap-1.5"
+          className="flex-shrink-0 px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded inline-flex items-center gap-2 whitespace-nowrap shadow-sm"
         >
           {loading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
