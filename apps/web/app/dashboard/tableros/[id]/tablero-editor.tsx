@@ -56,6 +56,7 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
   const [tablero, setTablero] = useState<Tablero>(initial);
   const [editandoWidget, setEditandoWidget] = useState<TableroWidget | null>(null);
   const [agregando, setAgregando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Layout para react-grid-layout
   const layout: Layout[] = useMemo(
@@ -101,6 +102,12 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
 
   const agregarWidget = async (tipo: WidgetTipo) => {
     setAgregando(false);
+    setError(null);
+    // Calcular nextY: el siguiente Y libre tras todos los widgets existentes.
+    // (Infinity no es JSON valido — se serializa como null y rompia el endpoint.)
+    const nextY = tablero.widgets.length === 0
+      ? 0
+      : Math.max(...tablero.widgets.map((w) => w.posY + w.posH));
     try {
       const r = await fetch(`/api/v1/tableros/${tablero.id}/widgets`, {
         method: "POST",
@@ -110,23 +117,33 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
           titulo: TIPOS_DISPONIBLES.find((t) => t.tipo === tipo)?.label,
           config: tipo === "markdown" ? { content: "## Titulo\n\nEscribe tu contenido aqui." } : {},
           posX: 0,
-          posY: Infinity, // RGL lo pondra al final
+          posY: nextY,
           posW: tipo === "kpi" ? 3 : tipo === "markdown" ? 6 : 6,
           posH: tipo === "kpi" ? 2 : 4,
         }),
       });
       const json = await r.json();
+      if (json.error) {
+        setError(`No se pudo crear el widget: ${json.error.message ?? "error desconocido"}`);
+        console.error("Add widget failed", json.error);
+        return;
+      }
       if (json.data) {
         const widget = json.data as TableroWidget;
         setTablero((prev) => ({ ...prev, widgets: [...prev.widgets, widget] }));
         setEditandoWidget(widget);
+      } else {
+        setError("Respuesta inesperada del servidor al crear el widget.");
       }
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Error de red al crear widget: ${msg}`);
       console.error("Add widget failed", e);
     }
   };
 
   const guardarWidget = async (widget: TableroWidget) => {
+    setError(null);
     try {
       const r = await fetch(`/api/v1/tableros/${tablero.id}/widgets/${widget.id}`, {
         method: "PATCH",
@@ -137,6 +154,10 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
         }),
       });
       const json = await r.json();
+      if (json.error) {
+        setError(`No se pudo guardar el widget: ${json.error.message ?? "error"}`);
+        return;
+      }
       if (json.data) {
         setTablero((prev) => ({
           ...prev,
@@ -144,23 +165,29 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
         }));
       }
     } catch (e) {
-      console.error("Save widget failed", e);
+      setError(`Error de red al guardar: ${e instanceof Error ? e.message : String(e)}`);
     }
     setEditandoWidget(null);
   };
 
   const eliminarWidget = async (widgetId: string) => {
     if (!confirm("Eliminar este widget?")) return;
+    setError(null);
     try {
-      await fetch(`/api/v1/tableros/${tablero.id}/widgets/${widgetId}`, {
+      const r = await fetch(`/api/v1/tableros/${tablero.id}/widgets/${widgetId}`, {
         method: "DELETE",
       });
+      const json = await r.json().catch(() => ({}));
+      if (json.error) {
+        setError(`No se pudo eliminar el widget: ${json.error.message ?? "error"}`);
+        return;
+      }
       setTablero((prev) => ({
         ...prev,
         widgets: prev.widgets.filter((w) => w.id !== widgetId),
       }));
     } catch (e) {
-      console.error("Delete widget failed", e);
+      setError(`Error de red al eliminar: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -217,6 +244,19 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
           )}
         </div>
       </header>
+
+      {error && (
+        <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700 flex items-start justify-between gap-2">
+          <span className="break-words">{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="text-rose-500 hover:text-rose-700 flex-shrink-0"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {tablero.widgets.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-xl">
