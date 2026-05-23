@@ -13,7 +13,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
-import { NotFoundError } from "@/lib/domains/shared";
+import { logger } from "@/lib/domains/shared";
 
 import type {
   Cliente,
@@ -26,6 +26,26 @@ import type {
   BubblePoint,
   WaterfallData,
 } from "./types";
+
+const log = logger.child("informe");
+
+// Helper: ejecuta una query y devuelve fallback si falla.
+// Logueamos con stack para diagnostico desde EasyPanel.
+async function safeQuery<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    const err = e as Error & { code?: string; detail?: string };
+    log.error("informe_query_failed", {
+      label,
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack?.split("\n").slice(0, 5).join("\n"),
+    });
+    return fallback;
+  }
+}
 
 // ============================================================================
 // Helpers
@@ -48,77 +68,124 @@ function periodoMismoMesAnioPrev(periodo: number): number {
 // Lookups de configuracion
 // ============================================================================
 
-export async function getClienteBySlug(slug: string): Promise<Cliente> {
-  const rows = await db.execute<{
-    slug: string;
-    nombre: string;
-    nombre_corto: string;
-    entidad_propia_nomb_correg: string;
-    color_primary: string;
-    color_secondary: string;
-    color_acento: string;
-  }>(sql`
-    SELECT
-      c.slug,
-      c.nombre,
-      c.nombre_corto,
-      c.entidad_propia_nomb_correg,
-      COALESCE(b.color_primary, '#0F2A5E')  AS color_primary,
-      COALESCE(b.color_secondary, '#FFB300') AS color_secondary,
-      COALESCE(b.color_acento, '#2563EB')   AS color_acento
-    FROM config.cliente c
-    LEFT JOIN config.cliente_branding b ON b.cliente_id = c.id
-    WHERE c.slug = ${slug}
-      AND c.activo
-    LIMIT 1
-  `);
+// Fallback usado cuando config.cliente no existe (V033 no aplicada) o el
+// cliente solicitado no esta sembrado. Permite que la pagina renderice
+// con un cliente "demo" en lugar de tirar 500.
+const CLIENTE_FALLBACK: Cliente = {
+  slug: "caja-arequipa",
+  nombre: "Caja Municipal de Ahorro y Credito Arequipa (fallback)",
+  nombreCorto: "Caja Arequipa",
+  entidadPropia: "CMAC Arequipa",
+  brand: { primary: "#0F2A5E", secondary: "#FFB300", acento: "#2563EB" },
+};
 
-  if (rows.length === 0) {
-    throw new NotFoundError(`Cliente '${slug}' no encontrado o inactivo`, { slug });
-  }
-  const r = rows[0];
-  return {
-    slug: r.slug,
-    nombre: r.nombre,
-    nombreCorto: r.nombre_corto,
-    entidadPropia: r.entidad_propia_nomb_correg,
-    brand: { primary: r.color_primary, secondary: r.color_secondary, acento: r.color_acento },
-  };
+export async function getClienteBySlug(slug: string): Promise<Cliente> {
+  return safeQuery(
+    "getClienteBySlug",
+    async () => {
+      const rows = await db.execute<{
+        slug: string;
+        nombre: string;
+        nombre_corto: string;
+        entidad_propia_nomb_correg: string;
+        color_primary: string;
+        color_secondary: string;
+        color_acento: string;
+      }>(sql`
+        SELECT
+          c.slug,
+          c.nombre,
+          c.nombre_corto,
+          c.entidad_propia_nomb_correg,
+          COALESCE(b.color_primary, '#0F2A5E')   AS color_primary,
+          COALESCE(b.color_secondary, '#FFB300') AS color_secondary,
+          COALESCE(b.color_acento, '#2563EB')    AS color_acento
+        FROM config.cliente c
+        LEFT JOIN config.cliente_branding b ON b.cliente_id = c.id
+        WHERE c.slug = ${slug}
+          AND c.activo
+        LIMIT 1
+      `);
+      if (rows.length === 0) return CLIENTE_FALLBACK;
+      const r = rows[0];
+      return {
+        slug: r.slug,
+        nombre: r.nombre,
+        nombreCorto: r.nombre_corto,
+        entidadPropia: r.entidad_propia_nomb_correg,
+        brand: { primary: r.color_primary, secondary: r.color_secondary, acento: r.color_acento },
+      };
+    },
+    CLIENTE_FALLBACK,
+  );
 }
 
 export async function getDefaultPeerGroup(clienteSlug: string): Promise<string[]> {
-  const rows = await db.execute<{ competidor_nomb_correg: string }>(sql`
-    SELECT pg.competidor_nomb_correg
-    FROM config.peer_group pg
-    JOIN config.cliente c ON c.id = pg.cliente_id
-    WHERE c.slug = ${clienteSlug}
-    ORDER BY pg.orden
-  `);
-  return rows.map((r) => String(r.competidor_nomb_correg));
+  return safeQuery(
+    "getDefaultPeerGroup",
+    async () => {
+      const rows = await db.execute<{ competidor_nomb_correg: string }>(sql`
+        SELECT pg.competidor_nomb_correg
+        FROM config.peer_group pg
+        JOIN config.cliente c ON c.id = pg.cliente_id
+        WHERE c.slug = ${clienteSlug}
+        ORDER BY pg.orden
+      `);
+      return rows.map((r) => String(r.competidor_nomb_correg));
+    },
+    [],
+  );
 }
+
+// Default peer group fallback (si config.peer_group no existe o esta vacio).
+// Usa las 6 entidades del benchmark Caja Arequipa.
+const PEER_GROUP_FALLBACK: Array<{ competidor_nomb_correg: string; orden: number; color_hex: string; label_corto: string }> = [
+  { competidor_nomb_correg: "Financiera Compartamos", orden: 1, color_hex: "#E91E63", label_corto: "Compartamos" },
+  { competidor_nomb_correg: "Mibanco",                orden: 2, color_hex: "#4CAF50", label_corto: "Mibanco" },
+  { competidor_nomb_correg: "CMAC Arequipa",          orden: 3, color_hex: "#0F2A5E", label_corto: "Caja Arequipa" },
+  { competidor_nomb_correg: "CMAC Huancayo",          orden: 4, color_hex: "#F44336", label_corto: "CMAC Huancayo" },
+  { competidor_nomb_correg: "CMAC Cusco",             orden: 5, color_hex: "#8D6E63", label_corto: "CMAC Cusco" },
+  { competidor_nomb_correg: "CMAC Piura",             orden: 6, color_hex: "#42A5F5", label_corto: "CMAC Piura" },
+];
 
 async function buildCompetidores(
   clienteSlug: string,
   peerGroupOverride: string[] | null,
   entidadPropia: string,
 ): Promise<Competidor[]> {
-  // Si hay override (del query param), respetar orden y colores del config
-  // como template; si una entidad nueva no estaba en peer_group, usar color default.
-  const configRows = await db.execute<{
+  const configRows = await safeQuery(
+    "buildCompetidores.configRows",
+    async () =>
+      db.execute<{
+        competidor_nomb_correg: string;
+        orden: number;
+        color_hex: string;
+        label_corto: string | null;
+      }>(sql`
+        SELECT pg.competidor_nomb_correg, pg.orden, pg.color_hex, pg.label_corto
+        FROM config.peer_group pg
+        JOIN config.cliente c ON c.id = pg.cliente_id
+        WHERE c.slug = ${clienteSlug}
+        ORDER BY pg.orden
+      `),
+    PEER_GROUP_FALLBACK as unknown as Array<{
+      competidor_nomb_correg: string;
+      orden: number;
+      color_hex: string;
+      label_corto: string | null;
+    }>,
+  );
+
+  // Si la query exitosa devolvio 0 filas (config.cliente vacio), usar fallback
+  const rowsToUse = configRows.length > 0 ? configRows : (PEER_GROUP_FALLBACK as Array<{
     competidor_nomb_correg: string;
     orden: number;
     color_hex: string;
     label_corto: string | null;
-  }>(sql`
-    SELECT pg.competidor_nomb_correg, pg.orden, pg.color_hex, pg.label_corto
-    FROM config.peer_group pg
-    JOIN config.cliente c ON c.id = pg.cliente_id
-    WHERE c.slug = ${clienteSlug}
-    ORDER BY pg.orden
-  `);
+  }>);
 
   const configByNomb = new Map(
-    configRows.map((r) => [
+    rowsToUse.map((r) => [
       r.competidor_nomb_correg,
       { orden: r.orden, color: r.color_hex, label: r.label_corto ?? r.competidor_nomb_correg },
     ]),
@@ -126,7 +193,7 @@ async function buildCompetidores(
 
   const fallbackPalette = ["#E91E63", "#4CAF50", "#0F2A5E", "#F44336", "#8D6E63", "#42A5F5", "#FF9800", "#9C27B0"];
 
-  const peerList = peerGroupOverride ?? configRows.map((r) => r.competidor_nomb_correg);
+  const peerList = peerGroupOverride ?? rowsToUse.map((r) => r.competidor_nomb_correg);
 
   return peerList.map((nombCorreg, idx) => {
     const cfg = configByNomb.get(nombCorreg);
@@ -160,22 +227,12 @@ type PuntoEqRow = {
 async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[]): Promise<Map<string, PuntoEqRow>> {
   if (entidades.length === 0) return new Map();
 
-  // Intentar leer de la vista; si esta vacia, computar inline.
-  let rows = await db.execute<PuntoEqRow>(sql`
-    SELECT nomb_correg, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
-           pct_gastos_op, pct_gastos_personal, pct_gastos_generales, pct_deprec,
-           pct_otros, pct_punto_eq, pct_margen_neto
-    FROM marts.v_punto_equilibrio_ancho
-    WHERE periodo = ${periodo}
-      AND moneda = 'TOTAL'
-      AND nomb_correg = ANY(${entidades}::text[])
-  `);
+  const map = new Map<string, PuntoEqRow>();
 
-  // Si todas faltan, intentar disparar el compute
-  if (rows.length === 0) {
-    try {
-      await db.execute(sql`SELECT * FROM marts.compute_kpis_punto_equilibrio(${periodo})`);
-      rows = await db.execute<PuntoEqRow>(sql`
+  const rows = await safeQuery<PuntoEqRow[]>(
+    "getPuntoEquilibrioForPeriodo.select",
+    async () => {
+      const r = await db.execute<PuntoEqRow>(sql`
         SELECT nomb_correg, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
                pct_gastos_op, pct_gastos_personal, pct_gastos_generales, pct_deprec,
                pct_otros, pct_punto_eq, pct_margen_neto
@@ -184,16 +241,37 @@ async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[]
           AND moneda = 'TOTAL'
           AND nomb_correg = ANY(${entidades}::text[])
       `);
-    } catch (e) {
-      // Si la function falla (ej. no hay 12 meses historicos), seguimos con vacio
-      console.warn("compute_kpis_punto_equilibrio fallo:", e);
-    }
+      return [...r];
+    },
+    [],
+  );
+
+  if (rows.length > 0) {
+    for (const r of rows) map.set(String(r.nomb_correg), r);
+    return map;
   }
 
-  const map = new Map<string, PuntoEqRow>();
-  for (const r of rows) {
-    map.set(String(r.nomb_correg), r);
-  }
+  // Si esta vacia, intentar disparar el compute (idempotente UPSERT).
+  // Si la function no existe o falla, devolvemos vacio sin romper la UI.
+  const recomputed = await safeQuery<PuntoEqRow[]>(
+    "getPuntoEquilibrioForPeriodo.compute",
+    async () => {
+      await db.execute(sql`SELECT * FROM marts.compute_kpis_punto_equilibrio(${periodo})`);
+      const r = await db.execute<PuntoEqRow>(sql`
+        SELECT nomb_correg, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
+               pct_gastos_op, pct_gastos_personal, pct_gastos_generales, pct_deprec,
+               pct_otros, pct_punto_eq, pct_margen_neto
+        FROM marts.v_punto_equilibrio_ancho
+        WHERE periodo = ${periodo}
+          AND moneda = 'TOTAL'
+          AND nomb_correg = ANY(${entidades}::text[])
+      `);
+      return [...r];
+    },
+    [],
+  );
+
+  for (const r of recomputed) map.set(String(r.nomb_correg), r);
   return map;
 }
 
@@ -246,7 +324,10 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promis
   if (entidades.length === 0) return new Map();
   const prevAnual = periodoMismoMesAnioPrev(periodo);
 
-  const rows = await db.execute<CuadroResumenRow>(sql`
+  const rows = await safeQuery<CuadroResumenRow[]>(
+    "getCuadroResumenRaw",
+    async () => {
+      const r = await db.execute<CuadroResumenRow>(sql`
     WITH
     bg_actual AS (
       SELECT nomb_correg, cta_a4 AS cartera, cta_c AS patrimonio, cta_a AS activos
@@ -283,7 +364,11 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promis
     LEFT JOIN bg_prev bgp ON bgp.nomb_correg = bg.nomb_correg
     LEFT JOIN er_anual er ON er.nomb_correg = bg.nomb_correg
     WHERE bg.nomb_correg = ANY(${entidades}::text[])
-  `);
+      `);
+      return [...r];
+    },
+    [],
+  );
 
   const map = new Map<string, CuadroResumenRow>();
   for (const r of rows) map.set(String(r.nomb_correg), r);
@@ -505,41 +590,51 @@ export async function getInformeData(opts: {
 
 export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}): Promise<number[]> {
   const limit = opts.ultimosN ?? 36;
-  const rows = await db.execute<{ periodo: number }>(sql`
-    SELECT DISTINCT periodo
-    FROM marts.mv_eeff_resultados_ancho
-    ORDER BY periodo DESC
-    LIMIT ${limit}
-  `);
-  return rows.map((r) => Number(r.periodo));
+  return safeQuery(
+    "listPeriodosDisponibles",
+    async () => {
+      const rows = await db.execute<{ periodo: number }>(sql`
+        SELECT DISTINCT periodo
+        FROM marts.mv_eeff_resultados_ancho
+        ORDER BY periodo DESC
+        LIMIT ${limit}
+      `);
+      return rows.map((r) => Number(r.periodo));
+    },
+    [],
+  );
 }
 
 export async function listEntidadesDisponibles(opts: { periodo?: number } = {}): Promise<EntidadDisponible[]> {
-  const filtroPeriodo = opts.periodo ? sql`AND r.periodo = ${opts.periodo}` : sql``;
-
-  const rows = await db.execute<{
-    nomb_correg: string;
-    tipo_entidad: string;
-    microfinanciera: boolean;
-    ultimo_periodo: number;
-  }>(sql`
-    SELECT
-      e.nomb_correg,
-      e.tipo_entidad,
-      e.microfinanciera,
-      MAX(r.periodo) AS ultimo_periodo
-    FROM dw.dim_entidad e
-    JOIN raw.eeff_observacion r ON r.nomb_correg = e.nomb_correg
-    WHERE NOT e.es_total AND NOT e.es_sucursal AND e.activa
-      ${filtroPeriodo}
-    GROUP BY e.nomb_correg, e.tipo_entidad, e.microfinanciera
-    ORDER BY e.nomb_correg
-  `);
-
-  return rows.map((r) => ({
-    nombCorreg: String(r.nomb_correg),
-    tipoEntidad: String(r.tipo_entidad),
-    microfinanciera: Boolean(r.microfinanciera),
-    ultimoPeriodo: Number(r.ultimo_periodo),
-  }));
+  return safeQuery(
+    "listEntidadesDisponibles",
+    async () => {
+      const filtroPeriodo = opts.periodo ? sql`AND r.periodo = ${opts.periodo}` : sql``;
+      const rows = await db.execute<{
+        nomb_correg: string;
+        tipo_entidad: string;
+        microfinanciera: boolean;
+        ultimo_periodo: number;
+      }>(sql`
+        SELECT
+          e.nomb_correg,
+          e.tipo_entidad,
+          e.microfinanciera,
+          MAX(r.periodo) AS ultimo_periodo
+        FROM dw.dim_entidad e
+        JOIN raw.eeff_observacion r ON r.nomb_correg = e.nomb_correg
+        WHERE NOT e.es_total AND NOT e.es_sucursal AND e.activa
+          ${filtroPeriodo}
+        GROUP BY e.nomb_correg, e.tipo_entidad, e.microfinanciera
+        ORDER BY e.nomb_correg
+      `);
+      return rows.map((r) => ({
+        nombCorreg: String(r.nomb_correg),
+        tipoEntidad: String(r.tipo_entidad),
+        microfinanciera: Boolean(r.microfinanciera),
+        ultimoPeriodo: Number(r.ultimo_periodo),
+      }));
+    },
+    [],
+  );
 }
