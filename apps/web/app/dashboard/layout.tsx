@@ -20,16 +20,9 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Gate por status: usuarios suspendidos no pueden entrar
-  const { getUser } = await import("@/lib/domains/users");
-  try {
-    const user = await getUser(session.user.id);
-    if (user.status === "suspended") {
-      redirect("/login?suspended=1");
-    }
-  } catch {
-    // si falla la query no bloqueamos — fail-open para no romper UX
-  }
+  // NOTA: el gate por status='suspended' se movio del layout a /api/me y a
+  // los endpoints sensibles. El layout no debe hacer queries adicionales
+  // porque cualquier excepcion no-redirect rompe TODAS las rutas del dashboard.
 
   return (
     <div className="min-h-screen bg-slate-50">
