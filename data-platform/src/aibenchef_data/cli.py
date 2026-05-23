@@ -1410,6 +1410,100 @@ def import_monthly_eeff(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+@import_grp.command("base-depositos")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="4.BDAhorros")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_depositos(path: str, sheet: str, batch_size: int) -> None:
+    """Bootstrap historico: cargar BASE DEPOSITOS.xlsx a raw.depositos_observacion."""
+    import asyncio
+    from pathlib import Path as _P
+    from aibenchef_data.domains.loading import BaseDepositosImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with connection() as conn:
+                imp = BaseDepositosImporter(conn, batch_size=batch_size)
+                result = await imp.import_file(_P(path), sheet=sheet)
+                await conn.commit()
+                click.echo(
+                    f"# Import {result.source_file}:\n"
+                    f"  rows_inserted: {result.rows_inserted:,}\n"
+                    f"  duration:      {result.duration_seconds:.1f}s\n"
+                    f"  errors:        {len(result.errors)}"
+                )
+        finally:
+            await close_pool()
+    asyncio.run(_run())
+
+
+@import_grp.command("base-castigos")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=str))
+@click.option("--sheet", type=str, default="Castigos")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_castigos(path: str, sheet: str, batch_size: int) -> None:
+    """Bootstrap historico: cargar BASE CASTIGOS.xlsx a raw.castigos_observacion."""
+    import asyncio
+    from pathlib import Path as _P
+    from aibenchef_data.domains.loading import BaseCastigosImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with connection() as conn:
+                imp = BaseCastigosImporter(conn, batch_size=batch_size)
+                result = await imp.import_file(_P(path), sheet=sheet)
+                await conn.commit()
+                click.echo(
+                    f"# Import {result.source_file}:\n"
+                    f"  rows_inserted: {result.rows_inserted:,}\n"
+                    f"  duration:      {result.duration_seconds:.1f}s\n"
+                    f"  errors:        {len(result.errors)}"
+                )
+        finally:
+            await close_pool()
+    asyncio.run(_run())
+
+
+@import_grp.command("base-colocaciones")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+)
+@click.option("--sheet", type=str, default="3.BDCreditos", help="Hoja con los datos tidy")
+@click.option("--batch-size", type=int, default=10_000)
+def import_base_colocaciones(path: str, sheet: str, batch_size: int) -> None:
+    """Bootstrap historico: cargar BASE COLOCACIONES.xlsx a raw.colocaciones_observacion."""
+    import asyncio
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.loading import BaseColocacionesImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with connection() as conn:
+                importer = BaseColocacionesImporter(conn, batch_size=batch_size)
+                result = await importer.import_file(_P(path), sheet=sheet)
+                await conn.commit()
+                click.echo(
+                    f"# Import {result.source_file}:\n"
+                    f"  rows_inserted: {result.rows_inserted:,}\n"
+                    f"  duration:      {result.duration_seconds:.1f}s\n"
+                    f"  errors:        {len(result.errors)}"
+                )
+                for err in result.errors[:20]:
+                    click.echo(f"  ERROR: {err}")
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
+
+
 # ============================================================================
 # inspect — herramienta para entender la estructura de un .xls SBS
 # ============================================================================
