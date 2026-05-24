@@ -111,35 +111,76 @@ def _detect_tipo_entidad(path: Path) -> str:
     return "DESCONOCIDO"
 
 
+def _excel_serial_to_date(serial: float) -> tuple[int, int, int] | None:
+    """Convierte Excel serial date a (anio, mes, dia).
+
+    Excel cuenta dias desde 1899-12-30 (compensa el bug del leap year 1900
+    asumido por Excel). Serial 46112 = 2026-03-31.
+
+    Retorna None si el resultado esta fuera de rango razonable.
+    """
+    if serial is None or serial <= 0:
+        return None
+    try:
+        from datetime import datetime, timedelta
+        epoch = datetime(1899, 12, 30)
+        dt = epoch + timedelta(days=float(serial))
+        if 2000 <= dt.year <= 2050:
+            return (dt.year, dt.month, dt.day)
+    except (ValueError, OverflowError):
+        pass
+    return None
+
+
 def _extract_fecha_cierre(sheet) -> tuple[int, str] | None:
     """Busca la fecha en las primeras 6 filas y devuelve (periodo, fecha_iso).
 
-    El .xls SBS pone la fecha en la fila 2 col 0 con formato "2020-01-31"
-    o "31/01/2020" o datetime objeto Python.
+    Maneja 4 formatos comunes en .xls SBS:
+        - datetime object Python (rare)
+        - String "YYYY-MM-DD" (Bancos)
+        - String "DD/MM/YYYY"
+        - Excel serial number (ej. 46112.0 = 2026-03-31) — CMAC/CRAC
     """
     for r in range(0, 6):
         for c in range(0, 3):
             v = sheet.cell(r, c)
             if v is None:
                 continue
-            # Si ya es datetime
+            # 1) datetime objeto
             if hasattr(v, "year") and hasattr(v, "month"):
                 anio = int(v.year)
                 mes = int(v.month)
                 if 2000 <= anio <= 2050 and 1 <= mes <= 12:
                     return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{v.day:02d}")
+
+            # 2) Excel serial number (float o int "puro" entre 30000 y 60000)
+            #    30000 = ~1982, 60000 = ~2064; serial date razonable.
+            if isinstance(v, (int, float)) and 30000 <= float(v) <= 60000:
+                fecha = _excel_serial_to_date(float(v))
+                if fecha:
+                    anio, mes, dia = fecha
+                    return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{dia:02d}")
+
             s = str(v).strip()
-            # Match YYYY-MM-DD
+
+            # 3) String YYYY-MM-DD
             m = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
             if m:
                 anio, mes, dia = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 if 2000 <= anio <= 2050 and 1 <= mes <= 12:
                     return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{dia:02d}")
-            # Match DD/MM/YYYY
+            # 4) String DD/MM/YYYY
             m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
             if m:
                 dia, mes, anio = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 if 2000 <= anio <= 2050 and 1 <= mes <= 12:
+                    return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{dia:02d}")
+            # 5) String numerico (Excel a veces serializa el serial como texto)
+            m = re.match(r"^\s*(\d{5})(?:\.\d+)?\s*$", s)
+            if m:
+                fecha = _excel_serial_to_date(float(m.group(1)))
+                if fecha:
+                    anio, mes, dia = fecha
                     return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{dia:02d}")
     return None
 
@@ -172,33 +213,61 @@ def _detect_column_layout(sheet) -> dict[str, int] | None:
     main = [sheet.cell(header_row, c) for c in range(0, sheet.n_cols)]
     sub = [sheet.cell(header_row + 1, c) for c in range(0, sheet.n_cols)]
 
+    # Matching fuzzy: los .xls de SBS tienen encoding inconsistente entre
+    # archivos B-* (Bancos) y C-* (Cajas/Edpymes). Los segundos tienen
+    # caracteres rotos (ej. "C\xefdigo de oficina"). En vez de matchear
+    # strings exactos, buscamos por substrings invariantes.
+    def has(s: str, *parts: str) -> bool:
+        """True si TODAS las partes aparecen en s (case-insensitive, post _strip_accents)."""
+        return all(p in s for p in parts)
+
     for c in range(0, len(main)):
         m = _strip_accents(str(main[c] or "")).lower().strip()
         s = _strip_accents(str(sub[c] or "")).lower().strip()
-        if m == "empresa":
+
+        # Empresa: header exacto
+        if m == "empresa" or m.startswith("empresa"):
             layout["empresa"] = c
-        elif s == "departamento":
+        # Departamento / Provincia / Distrito en subheader
+        elif s.startswith("departamento"):
             layout["depto"] = c
-        elif s == "provincia":
+        elif s.startswith("provincia"):
             layout["prov"] = c
-        elif s == "distrito":
+        elif s.startswith("distrito"):
             layout["dist"] = c
-        elif "codigo oficina" in m or "codigo de oficina" in m:
+        # Codigo de oficina: buscamos cualquier variante (incluso con encoding roto)
+        # Ejemplos: "Codigo Oficina", "C?digo de oficina", "Código de oficina"
+        elif "oficina" in m and ("digo" in m or "codigo" in m or "c?digo" in m):
             layout["cod_of"] = c
-        elif "depositos a la vista" in m and "total" in s:
+        # Depositos a la Vista total
+        elif has(m, "vista") and (s == "total" or "total" in s):
             layout["dep_vista_total"] = c
-        elif "depositos de ahorro" in m and "total" in s:
+        # Depositos de Ahorro total
+        elif has(m, "ahorro") and (s == "total" or "total" in s):
             layout["dep_ahorro_total"] = c
-        elif "depositos a plazo" in m and "total" in s:
+        # Depositos a Plazo total
+        elif has(m, "plazo") and (s == "total" or "total" in s):
             layout["dep_plazo_total"] = c
-        elif "total depositos" in m:
+        elif has(m, "total", "depositos") or has(m, "total dep"):
             layout["dep_total"] = c
-        elif "creditos directos" in m and "total" in s:
+        elif has(m, "creditos", "directos") and (s == "total" or "total" in s):
             layout["cred_directos_total"] = c
-        elif "total creditos" in m:
+        elif has(m, "total", "creditos") or has(m, "total cred"):
             layout["cred_total"] = c
 
-    layout["_data_start_row"] = header_row + 2
+    # data_start_row puede ser header_row+2 (caso B-*, fila vacia entre subheader y data)
+    # o header_row+3 (caso C-*, con una fila extra vacia)
+    # Detectamos empiricamente: buscar la primera fila despues del subheader
+    # que tenga algo en la columna Empresa o Codigo Oficina.
+    candidate_data_start = header_row + 2
+    if "cod_of" in layout:
+        for r in range(header_row + 2, min(header_row + 5, sheet.n_rows)):
+            cod = sheet.cell(r, layout["cod_of"])
+            emp = sheet.cell(r, layout["empresa"])
+            if cod is not None or (emp is not None and str(emp).strip()):
+                candidate_data_start = r
+                break
+    layout["_data_start_row"] = candidate_data_start
     return layout if "cod_of" in layout else None
 
 
