@@ -764,7 +764,7 @@ export async function getInformeData(opts: {
 // ============================================================================
 
 export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}): Promise<number[]> {
-  const limit = opts.ultimosN ?? 36;
+  const limit = opts.ultimosN ?? 240;
   return safeQuery(
     "listPeriodosDisponibles",
     async () => {

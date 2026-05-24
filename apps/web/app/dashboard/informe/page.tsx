@@ -50,7 +50,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       ordenOverride: orden,
       consolidar,
     }),
-    listPeriodosDisponibles({ ultimosN: 36 }),
+    listPeriodosDisponibles({ ultimosN: 240 }),
     listEntidadesDisponibles({}),
   ]);
 
