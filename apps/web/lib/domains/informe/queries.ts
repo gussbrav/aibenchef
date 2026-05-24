@@ -321,6 +321,8 @@ type CuadroResumenRow = {
   ingresos_fin_anual: number | null;
   inof_neto_anual: number | null;
   n_oficinas: number | null;
+  n_clientes: number | null;
+  n_personal: number | null;
 };
 
 async function getCuadroResumenRaw(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, CuadroResumenRow>> {
@@ -358,6 +360,20 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_oficinas_por_entidad_canonico")
         : sql.raw("marts.v_oficinas_por_entidad")}
       WHERE periodo = ${periodo}
+    ),
+    clientes AS (
+      SELECT nomb_correg, n_clientes
+      FROM ${consolidar
+        ? sql.raw("marts.v_clientes_por_entidad_canonico")
+        : sql.raw("marts.v_clientes_por_entidad")}
+      WHERE periodo = ${periodo}
+    ),
+    personal AS (
+      SELECT nomb_correg, n_personal
+      FROM ${consolidar
+        ? sql.raw("marts.v_personal_por_entidad_canonico")
+        : sql.raw("marts.v_personal_por_entidad")}
+      WHERE periodo = ${periodo}
     )
     SELECT
       bg.nomb_correg,
@@ -370,11 +386,15 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       er.margen_bruto_anual,
       er.ingresos_fin_anual,
       er.inof_neto_anual,
-      ofi.n_oficinas
+      ofi.n_oficinas,
+      cli.n_clientes,
+      per.n_personal
     FROM bg_actual bg
     LEFT JOIN bg_prev bgp  ON bgp.nomb_correg = bg.nomb_correg
     LEFT JOIN er_anual er  ON er.nomb_correg  = bg.nomb_correg
     LEFT JOIN oficinas ofi ON ofi.nomb_correg = bg.nomb_correg
+    LEFT JOIN clientes cli ON cli.nomb_correg = bg.nomb_correg
+    LEFT JOIN personal per ON per.nomb_correg = bg.nomb_correg
     WHERE bg.nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
       `);
       return [...r];
@@ -412,9 +432,22 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       seccion: "datos_generales",
       valores: mk((r) => (r.n_oficinas == null ? null : Number(r.n_oficinas))),
     },
-    { codigo: "cr_n_clientes", nombre: "N de Clientes (Miles)", unidad: "numero_miles", signo: 1, seccion: "datos_generales", valores: todosNull() },
-    { codigo: "cr_clientes_exclusivos", nombre: "% Clientes Exclusivos", unidad: "pct", signo: 1, seccion: "datos_generales", valores: todosNull() },
-    { codigo: "cr_n_personal", nombre: "N de personal", unidad: "numero", signo: 1, seccion: "datos_generales", valores: todosNull() },
+    {
+      codigo: "cr_n_clientes",
+      nombre: "N de Clientes de Credito",
+      unidad: "numero",
+      signo: 1,
+      seccion: "datos_generales",
+      valores: mk((r) => (r.n_clientes == null ? null : Number(r.n_clientes))),
+    },
+    {
+      codigo: "cr_n_personal",
+      nombre: "N de personal",
+      unidad: "numero",
+      signo: 1,
+      seccion: "datos_generales",
+      valores: mk((r) => (r.n_personal == null ? null : Number(r.n_personal))),
+    },
     { codigo: "cr_part_colocaciones", nombre: "% Part. Colocaciones en SMF", unidad: "pct", signo: 1, seccion: "datos_generales", valores: todosNull() },
     { codigo: "cr_part_depositos", nombre: "% Part. Depositos en SMF", unidad: "pct", signo: 1, seccion: "datos_generales", valores: todosNull() },
 

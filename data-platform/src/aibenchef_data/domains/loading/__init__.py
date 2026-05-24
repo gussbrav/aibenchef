@@ -33,6 +33,8 @@ from .services.base_tasas_pasivas_importer import BaseTasasPasivasImporter
 from .services.dim_cuenta_seeder import DimCuentaSeeder
 from .services.monthly_eeff_importer import MonthlyEeffImporter
 from .services.monthly_oficinas_importer import MonthlyOficinasImporter
+from .services.monthly_clientes_importer import MonthlyClientesImporter
+from .services.monthly_personal_importer import MonthlyPersonalImporter
 
 __all__ = [
     "BaseCastigosImporter",
@@ -53,4 +55,6 @@ __all__ = [
     "ImportResult",
     "MonthlyEeffImporter",
     "MonthlyOficinasImporter",
+    "MonthlyClientesImporter",
+    "MonthlyPersonalImporter",
 ]
