@@ -803,7 +803,9 @@ function SelectoresToolbarConTema(props: {
 }) {
   const sp = useSearchParams();
   const tema = sp.get("tema");
-  return <SelectoresToolbar {...props} temaActual={tema} />;
+  // consolidar: default true; solo es false si la URL tiene ?consolidar=false
+  const consolidar = sp.get("consolidar") !== "false";
+  return <SelectoresToolbar {...props} temaActual={tema} consolidarActual={consolidar} />;
 }
 
 // ============================================================================

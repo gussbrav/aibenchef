@@ -15,6 +15,7 @@ type SearchParams = Promise<{
   entidadPropia?: string;
   tema?: string;
   orden?: string;
+  consolidar?: string;
 }>;
 
 export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
@@ -36,6 +37,8 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   const orden = params.orden
     ? params.orden.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
+  // consolidar: default true. Solo se desactiva si viene "?consolidar=false".
+  const consolidar = params.consolidar !== "false";
 
   const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
     getInformeData({
@@ -45,6 +48,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       entidadPropiaOverride: params.entidadPropia,
       temaOverride: params.tema,
       ordenOverride: orden,
+      consolidar,
     }),
     listPeriodosDisponibles({ ultimosN: 36 }),
     listEntidadesDisponibles({}),

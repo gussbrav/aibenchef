@@ -323,7 +323,7 @@ type CuadroResumenRow = {
   n_oficinas: number | null;
 };
 
-async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promise<Map<string, CuadroResumenRow>> {
+async function getCuadroResumenRaw(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, CuadroResumenRow>> {
   if (entidades.length === 0) return new Map();
   const prevAnual = periodoMismoMesAnioPrev(periodo);
 
@@ -354,7 +354,9 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[]): Promis
     ),
     oficinas AS (
       SELECT nomb_correg, n_oficinas
-      FROM marts.v_oficinas_por_entidad
+      FROM ${consolidar
+        ? sql.raw("marts.v_oficinas_por_entidad_canonico")
+        : sql.raw("marts.v_oficinas_por_entidad")}
       WHERE periodo = ${periodo}
     )
     SELECT
@@ -632,6 +634,7 @@ export async function getInformeData(opts: {
   entidadPropiaOverride?: string;
   temaOverride?: string;
   ordenOverride?: string[];
+  consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
 }): Promise<InformeData> {
   let cliente = await getClienteBySlug(opts.clienteSlug);
 
@@ -683,10 +686,11 @@ export async function getInformeData(opts: {
   const entidadesNombs = competidores.map((c) => c.nombCorreg);
   const periodoPrev = periodoMismoMesAnioPrev(opts.periodo);
 
+  const consolidar = opts.consolidar !== false; // default true
   const [peActual, pePrev, cuadroRaw] = await Promise.all([
     getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs),
     getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs),
-    getCuadroResumenRaw(opts.periodo, entidadesNombs),
+    getCuadroResumenRaw(opts.periodo, entidadesNombs, consolidar),
   ]);
 
   // Detectar cobertura: que entidades del peer group tienen data en MVs

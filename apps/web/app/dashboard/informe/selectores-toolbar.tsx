@@ -12,7 +12,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
-import { Calendar, Users, X, Search, Check, Crown, Palette, GripVertical } from "lucide-react";
+import { Calendar, Users, X, Search, Check, Crown, Palette, GripVertical, Link2, Link2Off } from "lucide-react";
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { TEMAS_PRESET } from "@/lib/domains/informe";
@@ -30,6 +30,7 @@ export function SelectoresToolbar({
   peerGroupActual,
   entidadPropia,
   temaActual,
+  consolidarActual,
   periodosDisponibles,
   entidadesDisponibles,
 }: {
@@ -37,6 +38,7 @@ export function SelectoresToolbar({
   peerGroupActual: string[];
   entidadPropia: string;
   temaActual: string | null;
+  consolidarActual: boolean;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
 }) {
@@ -51,6 +53,7 @@ export function SelectoresToolbar({
     peerGroup?: string[];
     entidadPropia?: string;
     tema?: string | null;
+    consolidar?: boolean;
   }) => {
     const sp = new URLSearchParams(searchParams.toString());
     if (changes.periodo !== undefined) sp.set("periodo", String(changes.periodo));
@@ -61,6 +64,11 @@ export function SelectoresToolbar({
     if (changes.tema !== undefined) {
       if (changes.tema) sp.set("tema", changes.tema);
       else sp.delete("tema");
+    }
+    if (changes.consolidar !== undefined) {
+      // Default es true; solo persistimos "false" en URL para mantenerla limpia.
+      if (changes.consolidar) sp.delete("consolidar");
+      else sp.set("consolidar", "false");
     }
     if (changes.peerGroup !== undefined) {
       // IMPORTANTE: NO filtrar la entidad propia. Su posicion en el array
@@ -112,6 +120,25 @@ export function SelectoresToolbar({
               Editar
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => navegar({ consolidar: !consolidarActual })}
+            disabled={isPending}
+            className={`h-8 px-3 text-xs rounded inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 ${
+              consolidarActual
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
+                : "bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200"
+            }`}
+            title={
+              consolidarActual
+                ? "Consolidando: Financiera Compartamos + Compartamos Banco aparecen como una serie continua. Click para separarlas."
+                : "Separadas: cada renombre histórico aparece como entidad distinta. Click para consolidar."
+            }
+          >
+            {consolidarActual ? <Link2 className="w-3.5 h-3.5" /> : <Link2Off className="w-3.5 h-3.5" />}
+            {consolidarActual ? "Renombres unidos" : "Renombres separados"}
+          </button>
 
           {isPending && (
             <span className="text-xs text-slate-500 inline-flex items-center gap-2 ml-auto">

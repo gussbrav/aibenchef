@@ -48,6 +48,7 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/sql" label="SQL" />
               <NavLink href="/dashboard/catalog" label="Catalog" />
               <NavLink href="/dashboard/admin/archivos" label="Archivos" />
+              <NavLink href="/dashboard/admin/renombres" label="Maestra" />
             </nav>
 
             <div className="flex items-center gap-2 flex-shrink-0">

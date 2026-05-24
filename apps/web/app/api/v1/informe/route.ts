@@ -13,6 +13,7 @@ const querySchema = z.object({
   entidadPropia: z.string().optional(),
   tema: z.string().optional(),
   orden: z.string().optional(),
+  consolidar: z.coerce.boolean().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
       entidadPropiaOverride: parsed.data.entidadPropia,
       temaOverride: parsed.data.tema,
       ordenOverride: orden,
+      consolidar: parsed.data.consolidar,
     });
   });
 }
