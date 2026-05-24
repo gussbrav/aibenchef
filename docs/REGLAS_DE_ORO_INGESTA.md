@@ -290,12 +290,44 @@ la cadena de renombres recursivamente. Si una fusion no esta registrada,
 la entidad fusionada aparece como historia separada y rompe el cuadro
 resumen historico.
 
+**Invariante critica**: `nomb_correg_actual` DEBE existir como canonico en
+`dw.entidad_maestra.nomb_correg_canonico`. Si no existe, el resolver
+devuelve un string huerfano y el cuadro resumen sale vacio. Esta
+invariante esta enforced por el trigger `trg_check_renombre_canonico`
+(V058) — un INSERT/UPDATE con canonico inexistente falla con error
+explicito.
+
 **Casos registrados a la fecha**:
 - `Financiera Compartamos` -> `Compartamos Banco` (conversion, 202303)
 - `Financiera Edyficar` -> `Mibanco` (fusion absorcion, 201503)
 - `Banco Azteca` -> `Alfin Banco` (rebranding, 202209)
-- `Banco Continental` -> `BBVA` (rebranding, 201904)
+- `Banco Continental` -> `Banco BBVA Peru` (rebranding, 201904)
 - `ICBC PERU BANK S.A.` -> `Banco ICBC` (renombre, 201801)
+
+---
+
+## R16. Cuadro resumen es invariante al label del peer group
+
+El backend del cuadro resumen (`getCuadroResumenRaw`) recibe N labels
+de entidades del peer group. Estos pueden ser:
+- Canonico actual (ej. `Banco BBVA Peru`)
+- Label historico (ej. `Banco Continental`)
+- Nombre intermedio en la cadena de renombres
+
+**Comportamiento esperado** (regla):
+- `consolidar=true` (default): cada label se resuelve a su canonico via
+  `dw.resolver_nomb_correg_canonico`. Las MVs se agrupan por canonico.
+  El cuadro devuelve UNA fila por LABEL del peer group, conservando
+  el texto original como columna de header.
+- `consolidar=false`: ningun resolver. Cada label se busca tal cual en
+  las MVs. Si no existe en ese periodo, la entidad sale vacia (correcto
+  cuando se quiere ver historia separada).
+
+**Por que esto importa**: si el peer group fue creado en periodo X con
+nombres canonicos de ese momento, debe seguir funcionando cuando el
+usuario navega 5 anios atras o 5 anios adelante. El label del peer group
+es solo eso: un label de display. La identidad de la entidad la maneja
+el grafo de renombres.
 
 ---
 

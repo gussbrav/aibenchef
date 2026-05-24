@@ -332,8 +332,19 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
   const rows = await safeQuery<CuadroResumenRow[]>(
     "getCuadroResumenRaw",
     async () => {
+      const entidadesArr = sql`ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[]`;
+      // input: una fila por entidad del peer group, mapeando el LABEL original
+      // a su canonico (resolver) si consolidar=true. Esto preserva el label
+      // para que map.get() lo encuentre, sin importar si el peer group guardo
+      // un nombre historico (ej "Financiera Compartamos") o canonico actual
+      // (ej "Compartamos Banco").
       const r = await db.execute<CuadroResumenRow>(sql`
     WITH
+    input AS (
+      SELECT label,
+             ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(label)") : sql.raw("label")} AS canon
+      FROM unnest(${entidadesArr}) AS t(label)
+    ),
     bg_actual AS (
       SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
              SUM(cta_a4) AS cartera, SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
@@ -381,7 +392,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       WHERE periodo = ${periodo}
     )
     SELECT
-      bg.nomb_correg,
+      input.label                                      AS nomb_correg,
       bg.cartera                                       AS cartera_bruta,
       bgp.cartera                                      AS cartera_bruta_prev_anual,
       er.utilidad_anual,
@@ -394,13 +405,13 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       ofi.n_oficinas,
       cli.n_clientes,
       per.n_personal
-    FROM bg_actual bg
-    LEFT JOIN bg_prev bgp  ON bgp.nomb_correg = bg.nomb_correg
-    LEFT JOIN er_anual er  ON er.nomb_correg  = bg.nomb_correg
-    LEFT JOIN oficinas ofi ON ofi.nomb_correg = bg.nomb_correg
-    LEFT JOIN clientes cli ON cli.nomb_correg = bg.nomb_correg
-    LEFT JOIN personal per ON per.nomb_correg = bg.nomb_correg
-    WHERE bg.nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
+    FROM input
+    LEFT JOIN bg_actual bg  ON bg.nomb_correg  = input.canon
+    LEFT JOIN bg_prev   bgp ON bgp.nomb_correg = input.canon
+    LEFT JOIN er_anual  er  ON er.nomb_correg  = input.canon
+    LEFT JOIN oficinas  ofi ON ofi.nomb_correg = input.canon
+    LEFT JOIN clientes  cli ON cli.nomb_correg = input.canon
+    LEFT JOIN personal  per ON per.nomb_correg = input.canon
       `);
       return [...r];
     },
