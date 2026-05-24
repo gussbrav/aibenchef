@@ -243,6 +243,62 @@ Antes de pushear un parser nuevo:
 
 ---
 
+## R14. Clasificacion de Sistema Microfinanciero (SMF) es MENSUAL
+
+**Regla SBS**: una entidad pertenece al Sistema Microfinanciero (SMF) en
+el periodo P si:
+
+```
+(saldo Pequena Empresa + saldo Microempresa) / saldo total cartera >= 50%
+```
+
+**Por que importa**:
+- Es MENSUAL — una entidad puede entrar y salir del SMF segun su mix
+  de cartera. Ej: Mibanco tuvo 89.6% MYPE en Set-2022 (SMF). Bancos como
+  BCP tienen ~10% MYPE (no SMF).
+- Aplica a TODAS las entidades sin importar el tipo (BANCOS, FIN, CMAC,
+  CRAC, EDPYME). Un banco multiple puede ser SMF si su mix MYPE >= 50%.
+
+**Implementacion**:
+- Tabla maestra: `dw.entidad_microfinanciera_periodo (periodo, nomb_correg,
+  pct_cartera_mype, es_microfinanciera, ...)`.
+- Recalculo: `SELECT dw.recalcular_microfinancieras(202504);` despues de
+  cargar un nuevo mes en `raw.colocaciones_observacion`.
+- Llamar a la funcion sin parametro recalcula todos los periodos.
+- Migracion origen: `V057__microfinancieras_historico.sql`.
+
+**Como aplicar**:
+- En cualquier vista marts/* que necesite filtrar entidades del SMF, hacer
+  JOIN con `dw.entidad_microfinanciera_periodo` ON (periodo, nomb_correg)
+  WHERE `es_microfinanciera = TRUE`.
+
+---
+
+## R15. Renombres / fusiones / rebranding van a `dw.entidad_renombre`
+
+Toda fusion, renombre o rebranding de entidad debe registrarse en
+`dw.entidad_renombre` con:
+- `nomb_correg_anterior` y `nomb_correg_actual` (canonicos)
+- `fecha_cambio` + `periodo_cambio` (YYYYMM)
+- `tipo_cambio`: `fusion` / `rebranding` / `conversion` / `renombre`
+- `motivo` claro
+- `consolidar_por_default = TRUE` (default)
+- `fuente`: resolucion SBS, comunicado de prensa, etc.
+
+**Por que**: la funcion `dw.resolver_nomb_correg_canonico(nombre)` sigue
+la cadena de renombres recursivamente. Si una fusion no esta registrada,
+la entidad fusionada aparece como historia separada y rompe el cuadro
+resumen historico.
+
+**Casos registrados a la fecha**:
+- `Financiera Compartamos` -> `Compartamos Banco` (conversion, 202303)
+- `Financiera Edyficar` -> `Mibanco` (fusion absorcion, 201503)
+- `Banco Azteca` -> `Alfin Banco` (rebranding, 202209)
+- `Banco Continental` -> `BBVA` (rebranding, 201904)
+- `ICBC PERU BANK S.A.` -> `Banco ICBC` (renombre, 201801)
+
+---
+
 ## Checklist para parsers nuevos (futuros tópicos)
 
 - [ ] Auto-detecta sheet name (no hardcoded)

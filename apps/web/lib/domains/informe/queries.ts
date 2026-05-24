@@ -335,24 +335,29 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       const r = await db.execute<CuadroResumenRow>(sql`
     WITH
     bg_actual AS (
-      SELECT nomb_correg, cta_a4 AS cartera, cta_c AS patrimonio, cta_a AS activos
+      SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
+             SUM(cta_a4) AS cartera, SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
       WHERE periodo = ${periodo} AND moneda = 'TOTAL'
+      GROUP BY 1
     ),
     bg_prev AS (
-      SELECT nomb_correg, cta_a4 AS cartera, cta_c AS patrimonio, cta_a AS activos
+      SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
+             SUM(cta_a4) AS cartera, SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
       WHERE periodo = ${prevAnual} AND moneda = 'TOTAL'
+      GROUP BY 1
     ),
     er_anual AS (
-      SELECT nomb_correg,
-             cta_17 AS utilidad_anual,
-             cta_3  AS margen_bruto_anual,
-             cta_1  AS ingresos_fin_anual,
-             (COALESCE(cta_10, 0) + COALESCE(cta_12_7, 0) + COALESCE(cta_12_8, 0)) AS gastos_op_anual,
-             (COALESCE(cta_6, 0) - COALESCE(cta_7, 0)) AS inof_neto_anual
+      SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
+             SUM(cta_17) AS utilidad_anual,
+             SUM(cta_3)  AS margen_bruto_anual,
+             SUM(cta_1)  AS ingresos_fin_anual,
+             SUM(COALESCE(cta_10, 0) + COALESCE(cta_12_7, 0) + COALESCE(cta_12_8, 0)) AS gastos_op_anual,
+             SUM(COALESCE(cta_6, 0) - COALESCE(cta_7, 0)) AS inof_neto_anual
       FROM marts.mv_eeff_resultados_ancho
       WHERE periodo = ${periodo} AND moneda = 'TOTAL'
+      GROUP BY 1
     ),
     oficinas AS (
       SELECT nomb_correg, n_oficinas
@@ -434,11 +439,11 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
     },
     {
       codigo: "cr_n_clientes",
-      nombre: "N de Clientes de Credito",
+      nombre: "N de Clientes de Credito (Miles)",
       unidad: "numero",
       signo: 1,
       seccion: "datos_generales",
-      valores: mk((r) => (r.n_clientes == null ? null : Number(r.n_clientes))),
+      valores: mk((r) => (r.n_clientes == null ? null : Number(r.n_clientes) / 1000)),
     },
     {
       codigo: "cr_n_personal",
