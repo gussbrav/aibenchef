@@ -175,6 +175,24 @@ def _extract_fecha_cierre(sheet) -> tuple[int, str] | None:
                 dia, mes, anio = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 if 2000 <= anio <= 2050 and 1 <= mes <= 12:
                     return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{dia:02d}")
+            # 4b) "Al DD de MES de YYYY" (formato pre-2013 BANCA/FINANCIERA)
+            #     y "Al DD MES YYYY", "DD de MES de YYYY"
+            _meses_es = {
+                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+                'julio': 7, 'agosto': 8, 'setiembre': 9, 'septiembre': 9,
+                'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+            }
+            m = re.search(
+                r"(\d{1,2})\s+(?:de\s+)?([A-Za-záéíóúÑñ]+)\s+(?:de\s+)?(\d{4})",
+                _strip_accents(s).lower(),
+            )
+            if m:
+                dia = int(m.group(1))
+                mes_str = m.group(2)
+                anio = int(m.group(3))
+                mes = _meses_es.get(mes_str)
+                if mes and 2000 <= anio <= 2050 and 1 <= dia <= 31:
+                    return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-{dia:02d}")
             # 5) String numerico (Excel a veces serializa el serial como texto)
             m = re.match(r"^\s*(\d{5})(?:\.\d+)?\s*$", s)
             if m:
