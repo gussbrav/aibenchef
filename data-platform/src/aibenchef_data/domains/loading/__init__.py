@@ -6,7 +6,8 @@ Public API:
 - BaseColocacionesImporter: importer del BASE COLOCACIONES.xlsx
 - BaseDepositosImporter: importer del BASE DEPOSITOS.xlsx
 - BaseCastigosImporter: importer del BASE CASTIGOS.xlsx
-- MonthlyEeffImporter: importer de .xls mensuales SBS
+- MonthlyEeffImporter: importer de .xls mensuales SBS (topico 01)
+- MonthlyOficinasImporter: importer de .xls mensuales SBS (topico 08)
 - DimCuentaSeeder: pobla dw.dim_cuenta desde los seeds JSON
 """
 
@@ -31,6 +32,7 @@ from .services.base_tasas_activas_importer import BaseTasasActivasImporter
 from .services.base_tasas_pasivas_importer import BaseTasasPasivasImporter
 from .services.dim_cuenta_seeder import DimCuentaSeeder
 from .services.monthly_eeff_importer import MonthlyEeffImporter
+from .services.monthly_oficinas_importer import MonthlyOficinasImporter
 
 __all__ = [
     "BaseCastigosImporter",
@@ -50,4 +52,5 @@ __all__ = [
     "DimCuentaSeeder",
     "ImportResult",
     "MonthlyEeffImporter",
+    "MonthlyOficinasImporter",
 ]
