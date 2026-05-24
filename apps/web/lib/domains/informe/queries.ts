@@ -323,6 +323,8 @@ type CuadroResumenRow = {
   n_oficinas: number | null;
   n_clientes: number | null;
   n_personal: number | null;
+  pct_part_smf_coloc: number | null;
+  pct_part_smf_dep: number | null;
 };
 
 async function getCuadroResumenRaw(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, CuadroResumenRow>> {
@@ -390,6 +392,16 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_personal_por_entidad_canonico")
         : sql.raw("marts.v_personal_por_entidad")}
       WHERE periodo = ${periodo}
+    ),
+    smf_coloc AS (
+      SELECT nomb_correg, pct_participacion_smf
+      FROM marts.v_participacion_smf_colocaciones
+      WHERE periodo = ${periodo}
+    ),
+    smf_dep AS (
+      SELECT nomb_correg, pct_participacion_smf
+      FROM marts.v_participacion_smf_depositos
+      WHERE periodo = ${periodo}
     )
     SELECT
       input.label                                      AS nomb_correg,
@@ -404,7 +416,9 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       er.inof_neto_anual,
       ofi.n_oficinas,
       cli.n_clientes,
-      per.n_personal
+      per.n_personal,
+      smc.pct_participacion_smf                        AS pct_part_smf_coloc,
+      smd.pct_participacion_smf                        AS pct_part_smf_dep
     FROM input
     LEFT JOIN bg_actual bg  ON bg.nomb_correg  = input.canon
     LEFT JOIN bg_prev   bgp ON bgp.nomb_correg = input.canon
@@ -412,6 +426,8 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
     LEFT JOIN oficinas  ofi ON ofi.nomb_correg = input.canon
     LEFT JOIN clientes  cli ON cli.nomb_correg = input.canon
     LEFT JOIN personal  per ON per.nomb_correg = input.canon
+    LEFT JOIN smf_coloc smc ON smc.nomb_correg = input.canon
+    LEFT JOIN smf_dep   smd ON smd.nomb_correg = input.canon
       `);
       return [...r];
     },
@@ -464,8 +480,22 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       seccion: "datos_generales",
       valores: mk((r) => (r.n_personal == null ? null : Number(r.n_personal))),
     },
-    { codigo: "cr_part_colocaciones", nombre: "% Part. Colocaciones en SMF", unidad: "pct", signo: 1, seccion: "datos_generales", valores: todosNull() },
-    { codigo: "cr_part_depositos", nombre: "% Part. Depositos en SMF", unidad: "pct", signo: 1, seccion: "datos_generales", valores: todosNull() },
+    {
+      codigo: "cr_part_colocaciones",
+      nombre: "% Part. Colocaciones en SMF",
+      unidad: "pct",
+      signo: 1,
+      seccion: "datos_generales",
+      valores: mk((r) => (r.pct_part_smf_coloc == null ? null : Number(r.pct_part_smf_coloc))),
+    },
+    {
+      codigo: "cr_part_depositos",
+      nombre: "% Part. Depositos en SMF",
+      unidad: "pct",
+      signo: 1,
+      seccion: "datos_generales",
+      valores: mk((r) => (r.pct_part_smf_dep == null ? null : Number(r.pct_part_smf_dep))),
+    },
 
     // Cartera
     {
