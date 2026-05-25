@@ -327,6 +327,8 @@ type CuadroResumenRow = {
   pct_part_smf_dep: number | null;
   pct_cartera_mype: number | null;
   pct_mora_global: number | null;
+  pct_mora_global_vc: number | null;
+  pct_cobertura_car: number | null;
 };
 
 async function getCuadroResumenRaw(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, CuadroResumenRow>> {
@@ -411,8 +413,13 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       WHERE periodo = ${periodo}
     ),
     mora AS (
-      SELECT nomb_correg, pct_mora_global
+      SELECT nomb_correg, pct_mora_global, pct_mora_global_vc
       FROM marts.v_mora_global_por_entidad
+      WHERE periodo = ${periodo}
+    ),
+    cob AS (
+      SELECT nomb_correg, pct_cobertura_car
+      FROM marts.v_cobertura_car_por_entidad
       WHERE periodo = ${periodo}
     )
     SELECT
@@ -432,7 +439,9 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       smc.pct_participacion_smf                        AS pct_part_smf_coloc,
       smd.pct_participacion_smf                        AS pct_part_smf_dep,
       my.pct_cartera_mype                              AS pct_cartera_mype,
-      mo.pct_mora_global                               AS pct_mora_global
+      mo.pct_mora_global                               AS pct_mora_global,
+      mo.pct_mora_global_vc                            AS pct_mora_global_vc,
+      cb.pct_cobertura_car                             AS pct_cobertura_car
     FROM input
     LEFT JOIN bg_actual bg  ON bg.nomb_correg  = input.canon
     LEFT JOIN bg_prev   bgp ON bgp.nomb_correg = input.canon
@@ -444,6 +453,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
     LEFT JOIN smf_dep   smd ON smd.nomb_correg = input.canon
     LEFT JOIN mype      my  ON my.nomb_correg  = input.canon
     LEFT JOIN mora      mo  ON mo.nomb_correg  = input.canon
+    LEFT JOIN cob       cb  ON cb.nomb_correg  = input.canon
       `);
       return [...r];
     },
@@ -556,13 +566,28 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
     },
     {
       codigo: "cr_mora_global",
-      nombre: "% Mora Global",
+      nombre: "% Mora Global (sin V/C)",
       unidad: "pct",
       signo: -1,
       seccion: "cartera",
       valores: mk((r) => (r.pct_mora_global == null ? null : Number(r.pct_mora_global))),
     },
-    { codigo: "cr_cobertura_car", nombre: "Cobertura CAR (%)", unidad: "pct", signo: 1, seccion: "cartera", valores: todosNull() },
+    {
+      codigo: "cr_mora_global_vc",
+      nombre: "% Mora Global (con V/C)",
+      unidad: "pct",
+      signo: -1,
+      seccion: "cartera",
+      valores: mk((r) => (r.pct_mora_global_vc == null ? null : Number(r.pct_mora_global_vc))),
+    },
+    {
+      codigo: "cr_cobertura_car",
+      nombre: "Cobertura CAR (%)",
+      unidad: "pct",
+      signo: 1,
+      seccion: "cartera",
+      valores: mk((r) => (r.pct_cobertura_car == null ? null : Number(r.pct_cobertura_car))),
+    },
 
     // Eficiencia
     {
