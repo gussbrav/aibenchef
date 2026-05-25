@@ -323,6 +323,7 @@ type CuadroResumenRow = {
   n_oficinas: number | null;
   n_clientes: number | null;
   n_personal: number | null;
+  n_empleados: number | null;
   pct_part_smf_coloc: number | null;
   pct_part_smf_dep: number | null;
   pct_cartera_mype: number | null;
@@ -360,9 +361,19 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       // (ej "Compartamos Banco").
       const r = await db.execute<CuadroResumenRow>(sql`
     WITH
+    -- input: para cada label del peer group, calcula 'canon' = nombre con que
+    -- se busca en las MVs.
+    --  consolidar=true  -> agrupa todo bajo el canonico actual (resolver hacia
+    --                       adelante por cadena de renombres).
+    --  consolidar=false -> usa el nombre VIGENTE en el periodo. Si el label es
+    --                       el canonico actual pero la entidad existia con otro
+    --                       nombre en ese periodo (ej. Abr 2020 -> 'Financiera
+    --                       Compartamos'), devuelve ese historico.
     input AS (
       SELECT label,
-             ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(label)") : sql.raw("label")} AS canon
+             ${consolidar
+               ? sql.raw("dw.resolver_nomb_correg_canonico(label)")
+               : sql.raw(`dw.nombre_vigente_en_periodo(label, ${periodo})`)} AS canon
       FROM unnest(${entidadesArr}) AS t(label)
     ),
     bg_actual AS (
@@ -409,7 +420,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       WHERE periodo = ${periodo}
     ),
     personal AS (
-      SELECT nomb_correg, n_personal
+      SELECT nomb_correg, n_personal, n_empleados
       FROM ${consolidar
         ? sql.raw("marts.v_personal_por_entidad_canonico")
         : sql.raw("marts.v_personal_por_entidad")}
@@ -462,6 +473,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       ofi.n_oficinas,
       cli.n_clientes,
       per.n_personal,
+      per.n_empleados,
       smc.pct_participacion_smf                        AS pct_part_smf_coloc,
       smd.pct_participacion_smf                        AS pct_part_smf_dep,
       my.pct_cartera_mype                              AS pct_cartera_mype,
@@ -676,9 +688,11 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "moneda_miles",
       signo: 1,
       seccion: "eficiencia",
+      // Excel R36: Cartera_Bruta / N° Empleados (solo categoria 'empleados',
+      // NO incluye gerentes/funcionarios/otros).
       valores: mk((r) => {
-        if (r.cartera_bruta == null || r.n_personal == null || r.n_personal === 0) return null;
-        return Number(r.cartera_bruta) / Number(r.n_personal);
+        if (r.cartera_bruta == null || r.n_empleados == null || r.n_empleados === 0) return null;
+        return Number(r.cartera_bruta) / Number(r.n_empleados);
       }),
     },
     {
@@ -687,9 +701,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "numero",
       signo: 1,
       seccion: "eficiencia",
+      // Excel R37: N_Clientes / N° Empleados (igual que R36, solo empleados).
       valores: mk((r) => {
-        if (r.n_clientes == null || r.n_personal == null || r.n_personal === 0) return null;
-        return Number(r.n_clientes) / Number(r.n_personal);
+        if (r.n_clientes == null || r.n_empleados == null || r.n_empleados === 0) return null;
+        return Number(r.n_clientes) / Number(r.n_empleados);
       }),
     },
 
