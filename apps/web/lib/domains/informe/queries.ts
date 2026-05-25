@@ -533,7 +533,19 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       seccion: "cartera",
       valores: mk((r) => (r.pct_cartera_mype == null ? null : Number(r.pct_cartera_mype))),
     },
-    { codigo: "cr_credito_prom", nombre: "Credito Prom. por Cliente (Miles S/)", unidad: "moneda_miles", signo: 1, seccion: "cartera", valores: todosNull() },
+    {
+      codigo: "cr_credito_prom",
+      nombre: "Credito Prom. por Cliente (Miles S/)",
+      unidad: "moneda_miles",
+      signo: 1,
+      seccion: "cartera",
+      // cartera_bruta esta en miles de S/. n_clientes en personas.
+      // -> credito_prom = miles_S/ por cliente.
+      valores: mk((r) => {
+        if (r.cartera_bruta == null || r.n_clientes == null || r.n_clientes === 0) return null;
+        return Number(r.cartera_bruta) / Number(r.n_clientes);
+      }),
+    },
     { codigo: "cr_mora_global", nombre: "% Mora Global", unidad: "pct", signo: -1, seccion: "cartera", valores: todosNull() },
     { codigo: "cr_cobertura_car", nombre: "Cobertura CAR (%)", unidad: "pct", signo: 1, seccion: "cartera", valores: todosNull() },
 
