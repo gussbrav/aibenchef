@@ -1815,6 +1815,60 @@ def import_monthly_depositos(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+@import_grp.command("monthly-castigos")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, path_type=str),
+)
+@click.option("--batch-size", type=int, default=1_000)
+def import_monthly_castigos(path: str, batch_size: int) -> None:
+    """Cargar .xls mensuales SBS topico castigos (flujo mensual)."""
+    import asyncio
+    import contextlib
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.loading import MonthlyCastigosImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    p = _P(path)
+    files = [p] if p.is_file() else sorted(p.rglob("*.xls"))
+    if not files:
+        click.echo(f"# (no se encontraron .xls bajo {path})")
+        return
+
+    click.echo(f"# {len(files)} archivos a procesar")
+
+    async def _run() -> None:
+        await open_pool()
+        total_inserted = 0
+        total_errors = 0
+        try:
+            async with connection() as conn:
+                importer = MonthlyCastigosImporter(conn, batch_size=batch_size)
+                for i, f in enumerate(files, start=1):
+                    try:
+                        result = await importer.import_file(f)
+                        total_inserted += result.rows_inserted
+                        if result.errors:
+                            total_errors += len(result.errors)
+                        status = "OK" if not result.errors else f"ERR x{len(result.errors)}"
+                        click.echo(
+                            f"  [{i:>3}/{len(files)}] {f.name:<40} "
+                            f"rows={result.rows_inserted:>5}  ({result.duration_seconds:.1f}s)  {status}"
+                        )
+                    except Exception as e:
+                        total_errors += 1
+                        click.echo(f"  [{i:>3}/{len(files)}] {f.name:<40} FATAL: {e}")
+                        with contextlib.suppress(Exception):
+                            await conn.rollback()
+        finally:
+            await close_pool()
+        click.echo("")
+        click.echo(f"# TOTAL: {total_inserted:,} filas insertadas, {total_errors} errores")
+
+    asyncio.run(_run())
+
+
 def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: int) -> None:
     """Helper para correr un importer simple con DB pool + commit."""
     import asyncio
