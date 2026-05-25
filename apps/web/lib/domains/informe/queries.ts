@@ -325,6 +325,7 @@ type CuadroResumenRow = {
   n_personal: number | null;
   pct_part_smf_coloc: number | null;
   pct_part_smf_dep: number | null;
+  pct_cartera_mype: number | null;
 };
 
 async function getCuadroResumenRaw(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, CuadroResumenRow>> {
@@ -402,6 +403,11 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       SELECT nomb_correg, pct_participacion_smf
       FROM marts.v_participacion_smf_depositos
       WHERE periodo = ${periodo}
+    ),
+    mype AS (
+      SELECT nomb_correg, pct_cartera_mype
+      FROM dw.entidad_microfinanciera_periodo
+      WHERE periodo = ${periodo}
     )
     SELECT
       input.label                                      AS nomb_correg,
@@ -418,7 +424,8 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       cli.n_clientes,
       per.n_personal,
       smc.pct_participacion_smf                        AS pct_part_smf_coloc,
-      smd.pct_participacion_smf                        AS pct_part_smf_dep
+      smd.pct_participacion_smf                        AS pct_part_smf_dep,
+      my.pct_cartera_mype                              AS pct_cartera_mype
     FROM input
     LEFT JOIN bg_actual bg  ON bg.nomb_correg  = input.canon
     LEFT JOIN bg_prev   bgp ON bgp.nomb_correg = input.canon
@@ -428,6 +435,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
     LEFT JOIN personal  per ON per.nomb_correg = input.canon
     LEFT JOIN smf_coloc smc ON smc.nomb_correg = input.canon
     LEFT JOIN smf_dep   smd ON smd.nomb_correg = input.canon
+    LEFT JOIN mype      my  ON my.nomb_correg  = input.canon
       `);
       return [...r];
     },
@@ -517,7 +525,14 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
         return Number(r.cartera_bruta) / Number(r.cartera_bruta_prev_anual) - 1;
       }),
     },
-    { codigo: "cr_cartera_mype", nombre: "Cartera MYPE (%)", unidad: "pct", signo: 1, seccion: "cartera", valores: todosNull() },
+    {
+      codigo: "cr_cartera_mype",
+      nombre: "Cartera MYPE (%)",
+      unidad: "pct",
+      signo: 1,
+      seccion: "cartera",
+      valores: mk((r) => (r.pct_cartera_mype == null ? null : Number(r.pct_cartera_mype))),
+    },
     { codigo: "cr_credito_prom", nombre: "Credito Prom. por Cliente (Miles S/)", unidad: "moneda_miles", signo: 1, seccion: "cartera", valores: todosNull() },
     { codigo: "cr_mora_global", nombre: "% Mora Global", unidad: "pct", signo: -1, seccion: "cartera", valores: todosNull() },
     { codigo: "cr_cobertura_car", nombre: "Cobertura CAR (%)", unidad: "pct", signo: 1, seccion: "cartera", valores: todosNull() },
