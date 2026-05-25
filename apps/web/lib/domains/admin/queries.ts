@@ -90,6 +90,57 @@ export async function getArchivosStats(): Promise<ArchivosStats> {
   };
 }
 
+/**
+ * Matriz de archivos al estilo SBS: para cada combinación
+ * (grupo, topico, anio, mes), devuelve el status y el id del archivo.
+ * Esto permite renderizar el dashboard como una grid donde cada celda
+ * representa un archivo descargable y se ve de un vistazo qué cubrimos.
+ */
+export type MatrizCelda = {
+  grupo: string;
+  topico: string;
+  anio: number;
+  mes: number;
+  archivos: number;
+  status: string | null;
+  descargadoEn: string | null;
+  filasInsertadas: number | null;
+};
+
+export async function getArchivosMatriz(opts: { anioMin?: number; anioMax?: number } = {}): Promise<MatrizCelda[]> {
+  const anioMin = opts.anioMin ?? null;
+  const anioMax = opts.anioMax ?? null;
+  const rows = await db.execute<Record<string, unknown>>(sql`
+    SELECT
+      grupo,
+      topico,
+      anio,
+      mes,
+      COUNT(*)::int AS archivos,
+      -- status mas restrictivo (prioridad error > descargado > procesado)
+      (ARRAY_AGG(status ORDER BY
+         CASE status WHEN 'error' THEN 1 WHEN 'descargado' THEN 2 WHEN 'procesado' THEN 3 ELSE 4 END))[1] AS status,
+      TO_CHAR(MAX(descargado_en), 'YYYY-MM-DD HH24:MI') AS "descargadoEn",
+      SUM(filas_insertadas)::int AS "filasInsertadas"
+    FROM raw.archivos_descargados
+    WHERE
+      (${anioMin}::int IS NULL OR anio >= ${anioMin}::int)
+      AND (${anioMax}::int IS NULL OR anio <= ${anioMax}::int)
+    GROUP BY grupo, topico, anio, mes
+    ORDER BY grupo, topico, anio DESC, mes DESC
+  `);
+  return rows.map((r) => ({
+    grupo: String(r.grupo),
+    topico: String(r.topico),
+    anio: Number(r.anio),
+    mes: Number(r.mes),
+    archivos: Number(r.archivos),
+    status: (r.status as string | null) ?? null,
+    descargadoEn: (r.descargadoEn as string | null) ?? null,
+    filasInsertadas: r.filasInsertadas != null ? Number(r.filasInsertadas) : null,
+  }));
+}
+
 function rowToArchivo(r: Record<string, unknown>): ArchivoDescargado {
   return {
     id: String(r.id),

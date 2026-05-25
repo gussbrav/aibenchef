@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Database, FileSpreadsheet, HardDrive } from "lucide-react";
 import { Card } from "@/components/ui";
-import { getArchivosStats, listArchivos } from "@/lib/domains/admin";
+import { getArchivosStats, listArchivos, getArchivosMatriz } from "@/lib/domains/admin";
 import { formatNumber, formatNumberCompact } from "../../_lib/format";
 import { ArchivosFilters } from "./archivos-filters";
 import { ArchivosTable } from "./archivos-table";
+import { MatrizArchivos } from "./matriz-archivos";
 
 export const metadata: Metadata = {
   title: "Archivos SBS",
@@ -30,9 +31,10 @@ export default async function AdminArchivosPage({ searchParams }: PageProps) {
     anio: params.anio ? Number(params.anio) : undefined,
   };
 
-  const [stats, archivos] = await Promise.all([
+  const [stats, archivos, matriz] = await Promise.all([
     getArchivosStats(),
     listArchivos({ ...filter, limit: 200 }),
+    getArchivosMatriz(),
   ]);
 
   const totalMb = stats.totalBytes / 1024 / 1024;
@@ -86,6 +88,21 @@ export default async function AdminArchivosPage({ searchParams }: PageProps) {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <StatsBreakdown title="Por status" data={stats.porStatus} colorMap={statusColors} />
         <StatsBreakdown title="Por grupo" data={stats.porGrupo} />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">Inventario por Grupo / Tópico / Año / Mes</h2>
+        <p className="text-xs text-slate-500">
+          Vista al estilo SBS. Click en cada grupo para expandir.
+          Color: <span className="inline-block px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300 text-[10px]">descargado</span>
+          {" · "}
+          <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px]">procesado</span>
+          {" · "}
+          <span className="inline-block px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 text-[10px]">error</span>
+          {" · "}
+          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] text-slate-300 border border-dashed border-slate-200">sin archivo</span>
+        </p>
+        <MatrizArchivos celdas={matriz} />
       </section>
 
       <section className="space-y-3">

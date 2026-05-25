@@ -3,4 +3,5 @@
  */
 
 export type { ArchivoDescargado, ArchivosFilter, ArchivosStats } from "./types";
-export { listArchivos, getArchivosStats } from "./queries";
+export { listArchivos, getArchivosStats, getArchivosMatriz } from "./queries";
+export type { MatrizCelda } from "./queries";
