@@ -352,15 +352,19 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       FROM unnest(${entidadesArr}) AS t(label)
     ),
     bg_actual AS (
+      -- Cartera BRUTA = Vigentes (A4.1) + Refinanciados (A4.2) + Atrasados (A4.3).
+      -- NO usar cta_a4 (Creditos Netos), que descuenta provisiones e intereses no devengados.
       SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
-             SUM(cta_a4) AS cartera, SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
+             SUM(COALESCE(cta_a4_1,0) + COALESCE(cta_a4_2,0) + COALESCE(cta_a4_3,0)) AS cartera,
+             SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
       WHERE periodo = ${periodo} AND moneda = 'TOTAL'
       GROUP BY 1
     ),
     bg_prev AS (
       SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
-             SUM(cta_a4) AS cartera, SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
+             SUM(COALESCE(cta_a4_1,0) + COALESCE(cta_a4_2,0) + COALESCE(cta_a4_3,0)) AS cartera,
+             SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
       WHERE periodo = ${prevAnual} AND moneda = 'TOTAL'
       GROUP BY 1
@@ -477,8 +481,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
   // Helper para los KPIs aun no computables (n_oficinas, etc.) — todos NULL
   const todosNull = (): KpiValor[] => competidores.map((c) => ({ competidor: c.labelCorto, valor: null }));
 
-  // En millones (cartera viene en S/. raw; convertimos a MM dividiendo por 1e6 si > 1M)
-  const mm = (v: number | null): number | null => (v == null ? null : v / 1_000_000);
+  // Valores raw del SBS estan en MILES de soles. Para mostrar como
+  // "MM S/" (millones de soles) hay que dividir por 1,000.
+  // Ej: cartera_bruta = 2,593,234 miles_S/ -> 2,593 MM_S/.
+  const mm = (v: number | null): number | null => (v == null ? null : v / 1_000);
 
   return [
     // Datos generales
