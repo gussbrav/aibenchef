@@ -329,6 +329,20 @@ type CuadroResumenRow = {
   pct_mora_global: number | null;
   pct_mora_global_vc: number | null;
   pct_cobertura_car: number | null;
+  // Componentes TTM/promedios 12m para Eficiencia + Rentabilidad
+  utilidad_ttm: number | null;
+  patrimonio_prom_12m: number | null;
+  activos_prom_12m: number | null;
+  cta_1_ttm: number | null;
+  cta_2_ttm: number | null;
+  cta_6_ttm: number | null;
+  cta_7_ttm: number | null;
+  cta_10_1_ttm: number | null;
+  cta_10_2_ttm: number | null;
+  cta_10_3_ttm: number | null;
+  cta_10_4_ttm: number | null;
+  cta_12_7_ttm: number | null;
+  cta_12_8_ttm: number | null;
 };
 
 async function getCuadroResumenRaw(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, CuadroResumenRow>> {
@@ -425,6 +439,14 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       SELECT nomb_correg, pct_cobertura_car
       FROM marts.v_cobertura_car_por_entidad
       WHERE periodo = ${periodo}
+    ),
+    kpis AS (
+      SELECT nomb_correg, utilidad_ttm, patrimonio_prom_12m, activos_prom_12m,
+             cta_1_ttm, cta_2_ttm, cta_6_ttm, cta_7_ttm,
+             cta_10_1_ttm, cta_10_2_ttm, cta_10_3_ttm, cta_10_4_ttm,
+             cta_12_7_ttm, cta_12_8_ttm
+      FROM marts.v_kpis_anuales_entidad
+      WHERE periodo = ${periodo}
     )
     SELECT
       input.label                                      AS nomb_correg,
@@ -445,7 +467,13 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       my.pct_cartera_mype                              AS pct_cartera_mype,
       mo.pct_mora_global                               AS pct_mora_global,
       mo.pct_mora_global_vc                            AS pct_mora_global_vc,
-      cb.pct_cobertura_car                             AS pct_cobertura_car
+      cb.pct_cobertura_car                             AS pct_cobertura_car,
+      k.utilidad_ttm                                    AS utilidad_ttm,
+      k.patrimonio_prom_12m,
+      k.activos_prom_12m,
+      k.cta_1_ttm, k.cta_2_ttm, k.cta_6_ttm, k.cta_7_ttm,
+      k.cta_10_1_ttm, k.cta_10_2_ttm, k.cta_10_3_ttm, k.cta_10_4_ttm,
+      k.cta_12_7_ttm, k.cta_12_8_ttm
     FROM input
     LEFT JOIN bg_actual bg  ON bg.nomb_correg  = input.canon
     LEFT JOIN bg_prev   bgp ON bgp.nomb_correg = input.canon
@@ -458,6 +486,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
     LEFT JOIN mype      my  ON my.nomb_correg  = input.canon
     LEFT JOIN mora      mo  ON mo.nomb_correg  = input.canon
     LEFT JOIN cob       cb  ON cb.nomb_correg  = input.canon
+    LEFT JOIN kpis      k   ON k.nomb_correg   = input.canon
       `);
       return [...r];
     },
@@ -595,32 +624,74 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       valores: mk((r) => (r.pct_cobertura_car == null ? null : Number(r.pct_cobertura_car))),
     },
 
-    // Eficiencia
+    // Eficiencia (todos los componentes de gastos/ingresos son TTM)
     {
       codigo: "cr_gastos_op_mg",
       nombre: "Gastos Oper./ Margen Bruto",
       unidad: "pct",
       signo: -1,
       seccion: "eficiencia",
+      // Excel r115: (cta_10_1 + cta_10_2 + cta_10_3 + cta_10_4 + cta_12_7 + cta_12_8)_TTM
+      //          / ((cta_1 - cta_2) + (cta_6 - cta_7))_TTM
       valores: mk((r) => {
-        if (r.gastos_op_anual == null || r.margen_bruto_anual == null || r.margen_bruto_anual === 0) return null;
-        return Number(r.gastos_op_anual) / Number(r.margen_bruto_anual);
+        const num = (Number(r.cta_10_1_ttm) || 0) + (Number(r.cta_10_2_ttm) || 0)
+                  + (Number(r.cta_10_3_ttm) || 0) + (Number(r.cta_10_4_ttm) || 0)
+                  + (Number(r.cta_12_7_ttm) || 0) + (Number(r.cta_12_8_ttm) || 0);
+        const den = ((Number(r.cta_1_ttm) || 0) - (Number(r.cta_2_ttm) || 0))
+                  + ((Number(r.cta_6_ttm) || 0) - (Number(r.cta_7_ttm) || 0));
+        if (!den || num == null) return null;
+        return num / den;
       }),
     },
     {
       codigo: "cr_inof_neto",
-      nombre: "% INOF Neto/ Ingreso Financiero",
+      nombre: "% INOF Neto/ Ingresos Totales",
       unidad: "pct",
       signo: 1,
       seccion: "eficiencia",
+      // Excel r685: (cta_6 - cta_7)_TTM / Ingresos_Totales_TTM
+      // Ingresos Totales ≈ cta_1_TTM + cta_6_TTM (simplificacion sin "dif positiva" otros)
       valores: mk((r) => {
-        if (r.inof_neto_anual == null || r.ingresos_fin_anual == null || r.ingresos_fin_anual === 0) return null;
-        return Number(r.inof_neto_anual) / Number(r.ingresos_fin_anual);
+        const inof = (Number(r.cta_6_ttm) || 0) - (Number(r.cta_7_ttm) || 0);
+        const ing  = (Number(r.cta_1_ttm) || 0) + (Number(r.cta_6_ttm) || 0);
+        if (!ing) return null;
+        return inof / ing;
       }),
     },
-    { codigo: "cr_cartera_x_agencia", nombre: "Cartera x Agencia (Miles S/)", unidad: "moneda_miles", signo: 1, seccion: "eficiencia", valores: todosNull() },
-    { codigo: "cr_cartera_x_empleado", nombre: "Cartera x Empleado (Miles S/)", unidad: "moneda_miles", signo: 1, seccion: "eficiencia", valores: todosNull() },
-    { codigo: "cr_n_clientes_x_empleado", nombre: "N Clientes x Empleado", unidad: "numero", signo: 1, seccion: "eficiencia", valores: todosNull() },
+    {
+      codigo: "cr_cartera_x_agencia",
+      nombre: "Cartera x Agencia (Miles S/)",
+      unidad: "moneda_miles",
+      signo: 1,
+      seccion: "eficiencia",
+      // cartera_bruta esta en miles_S/. n_oficinas en cantidad.
+      valores: mk((r) => {
+        if (r.cartera_bruta == null || r.n_oficinas == null || r.n_oficinas === 0) return null;
+        return Number(r.cartera_bruta) / Number(r.n_oficinas);
+      }),
+    },
+    {
+      codigo: "cr_cartera_x_empleado",
+      nombre: "Cartera x Empleado (Miles S/)",
+      unidad: "moneda_miles",
+      signo: 1,
+      seccion: "eficiencia",
+      valores: mk((r) => {
+        if (r.cartera_bruta == null || r.n_personal == null || r.n_personal === 0) return null;
+        return Number(r.cartera_bruta) / Number(r.n_personal);
+      }),
+    },
+    {
+      codigo: "cr_n_clientes_x_empleado",
+      nombre: "N Clientes x Empleado",
+      unidad: "numero",
+      signo: 1,
+      seccion: "eficiencia",
+      valores: mk((r) => {
+        if (r.n_clientes == null || r.n_personal == null || r.n_personal === 0) return null;
+        return Number(r.n_clientes) / Number(r.n_personal);
+      }),
+    },
 
     // Rentabilidad — computables
     {
@@ -629,7 +700,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "moneda_mm",
       signo: 1,
       seccion: "rentabilidad",
-      valores: mk((r) => mm(r.utilidad_anual)),
+      // utilidad_ttm en miles_S/, mm() divide por 1000 -> MM_S/
+      valores: mk((r) => mm(r.utilidad_ttm)),
     },
     {
       codigo: "cr_roe",
@@ -637,9 +709,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "rentabilidad",
+      // Excel r552: Utilidad_TTM / Patrimonio_prom_12m
       valores: mk((r) => {
-        if (r.utilidad_anual == null || r.patrimonio_prom == null || r.patrimonio_prom === 0) return null;
-        return Number(r.utilidad_anual) / Number(r.patrimonio_prom);
+        if (r.utilidad_ttm == null || r.patrimonio_prom_12m == null || r.patrimonio_prom_12m === 0) return null;
+        return Number(r.utilidad_ttm) / Number(r.patrimonio_prom_12m);
       }),
     },
     {
@@ -648,9 +721,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "rentabilidad",
+      // Excel r558: Utilidad_TTM / Activos_prom_12m
       valores: mk((r) => {
-        if (r.utilidad_anual == null || r.activos_prom == null || r.activos_prom === 0) return null;
-        return Number(r.utilidad_anual) / Number(r.activos_prom);
+        if (r.utilidad_ttm == null || r.activos_prom_12m == null || r.activos_prom_12m === 0) return null;
+        return Number(r.utilidad_ttm) / Number(r.activos_prom_12m);
       }),
     },
   ];
