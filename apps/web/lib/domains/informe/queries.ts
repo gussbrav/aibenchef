@@ -226,49 +226,63 @@ type PuntoEqRow = {
   pct_margen_neto: number | null;
 };
 
-async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[]): Promise<Map<string, PuntoEqRow>> {
+async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[], consolidar: boolean = true): Promise<Map<string, PuntoEqRow>> {
   if (entidades.length === 0) return new Map();
 
   const map = new Map<string, PuntoEqRow>();
 
-  const rows = await safeQuery<PuntoEqRow[]>(
-    "getPuntoEquilibrioForPeriodo.select",
-    async () => {
-      const r = await db.execute<PuntoEqRow>(sql`
+  // Igual que getCuadroResumenRaw: mapeamos cada label del peer group a su
+  // canonico (consolidar=true) o nombre vigente (consolidar=false), y el
+  // SELECT devuelve input.label como nomb_correg para que map.get() siempre
+  // encuentre. Esto garantiza que el cuadro PE muestre data para entidades
+  // cuyo nombre actual difiere del nombre con que aparecen en marts (ej.
+  // peer label "Compartamos" -> canonico "Compartamos Banco" en MVs).
+  const entidadesArr = sql`ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[]`;
+  const runQuery = async () => {
+    const r = await db.execute<PuntoEqRow>(sql`
+      WITH input AS (
+        SELECT label,
+               ${consolidar
+                 ? sql.raw("dw.resolver_nomb_correg_canonico(label)")
+                 : sql.raw(`dw.nombre_vigente_en_periodo(label, ${periodo})`)} AS canon
+        FROM unnest(${entidadesArr}) AS t(label)
+      ),
+      pe AS (
         SELECT nomb_correg, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
                pct_gastos_op, pct_gastos_personal, pct_gastos_generales, pct_deprec,
                pct_otros, pct_punto_eq, pct_margen_neto
         FROM marts.v_punto_equilibrio_ancho
-        WHERE periodo = ${periodo}
-          AND moneda = 'TOTAL'
-          AND nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
-      `);
-      return [...r];
-    },
+        WHERE periodo = ${periodo} AND moneda = 'TOTAL'
+      )
+      SELECT input.label AS nomb_correg,
+             pe.pct_rendimiento, pe.pct_costo_fondeo, pe.pct_provisiones,
+             pe.pct_gastos_op, pe.pct_gastos_personal, pe.pct_gastos_generales, pe.pct_deprec,
+             pe.pct_otros, pe.pct_punto_eq, pe.pct_margen_neto
+      FROM input
+      LEFT JOIN pe ON pe.nomb_correg = input.canon
+    `);
+    return [...r];
+  };
+
+  const rows = await safeQuery<PuntoEqRow[]>(
+    "getPuntoEquilibrioForPeriodo.select",
+    runQuery,
     [],
   );
 
-  if (rows.length > 0) {
+  // Si todas las filas vienen sin valores (pct_rendimiento NULL), intentar
+  // disparar compute para ese periodo y reintentar la query.
+  const haySinData = rows.length === 0 || rows.every((r) => r.pct_rendimiento == null);
+  if (!haySinData) {
     for (const r of rows) map.set(String(r.nomb_correg), r);
     return map;
   }
 
-  // Si esta vacia, intentar disparar el compute (idempotente UPSERT).
-  // Si la function no existe o falla, devolvemos vacio sin romper la UI.
   const recomputed = await safeQuery<PuntoEqRow[]>(
     "getPuntoEquilibrioForPeriodo.compute",
     async () => {
       await db.execute(sql`SELECT * FROM marts.compute_kpis_punto_equilibrio(${periodo})`);
-      const r = await db.execute<PuntoEqRow>(sql`
-        SELECT nomb_correg, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
-               pct_gastos_op, pct_gastos_personal, pct_gastos_generales, pct_deprec,
-               pct_otros, pct_punto_eq, pct_margen_neto
-        FROM marts.v_punto_equilibrio_ancho
-        WHERE periodo = ${periodo}
-          AND moneda = 'TOTAL'
-          AND nomb_correg = ANY(ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[])
-      `);
-      return [...r];
+      return runQuery();
     },
     [],
   );
@@ -948,8 +962,8 @@ export async function getInformeData(opts: {
 
   const consolidar = opts.consolidar !== false; // default true
   const [peActual, pePrev, cuadroRaw] = await Promise.all([
-    getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs),
-    getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs),
+    getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs, consolidar),
+    getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs, consolidar),
     getCuadroResumenRaw(opts.periodo, entidadesNombs, consolidar),
   ]);
 
