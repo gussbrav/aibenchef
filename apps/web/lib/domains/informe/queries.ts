@@ -378,8 +378,11 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
     ),
     bg_actual AS (
       -- Cartera BRUTA = Vigentes (A4.1) + Refinanciados (A4.2) + Atrasados (A4.3).
-      -- NO usar cta_a4 (Creditos Netos), que descuenta provisiones e intereses no devengados.
-      SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
+      -- consolidar=true  -> agrupa al canonico actual.
+      -- consolidar=false -> agrupa por nombre vigente en el periodo (raw_to_vigente).
+      SELECT ${consolidar
+        ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)")
+        : sql.raw(`dw.raw_to_vigente(nomb_correg, ${periodo})`)} AS nomb_correg,
              SUM(COALESCE(cta_a4_1,0) + COALESCE(cta_a4_2,0) + COALESCE(cta_a4_3,0)) AS cartera,
              SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
@@ -387,7 +390,9 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       GROUP BY 1
     ),
     bg_prev AS (
-      SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
+      SELECT ${consolidar
+        ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)")
+        : sql.raw(`dw.raw_to_vigente(nomb_correg, ${periodo})`)} AS nomb_correg,
              SUM(COALESCE(cta_a4_1,0) + COALESCE(cta_a4_2,0) + COALESCE(cta_a4_3,0)) AS cartera,
              SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
@@ -395,7 +400,9 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       GROUP BY 1
     ),
     er_anual AS (
-      SELECT ${consolidar ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)") : sql.raw("nomb_correg")} AS nomb_correg,
+      SELECT ${consolidar
+        ? sql.raw("dw.resolver_nomb_correg_canonico(nomb_correg)")
+        : sql.raw(`dw.raw_to_vigente(nomb_correg, ${periodo})`)} AS nomb_correg,
              SUM(cta_17) AS utilidad_anual,
              SUM(cta_3)  AS margen_bruto_anual,
              SUM(cta_1)  AS ingresos_fin_anual,
@@ -409,46 +416,56 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       SELECT nomb_correg, n_oficinas
       FROM ${consolidar
         ? sql.raw("marts.v_oficinas_por_entidad_canonico")
-        : sql.raw("marts.v_oficinas_por_entidad")}
+        : sql.raw("marts.v_oficinas_por_entidad_historica")}
       WHERE periodo = ${periodo}
     ),
     clientes AS (
       SELECT nomb_correg, n_clientes
       FROM ${consolidar
         ? sql.raw("marts.v_clientes_por_entidad_canonico")
-        : sql.raw("marts.v_clientes_por_entidad")}
+        : sql.raw("marts.v_clientes_por_entidad_historica")}
       WHERE periodo = ${periodo}
     ),
     personal AS (
       SELECT nomb_correg, n_personal, n_empleados
       FROM ${consolidar
         ? sql.raw("marts.v_personal_por_entidad_canonico")
-        : sql.raw("marts.v_personal_por_entidad")}
+        : sql.raw("marts.v_personal_por_entidad_historica")}
       WHERE periodo = ${periodo}
     ),
     smf_coloc AS (
       SELECT nomb_correg, pct_participacion_smf
-      FROM marts.v_participacion_smf_colocaciones
+      FROM ${consolidar
+        ? sql.raw("marts.v_participacion_smf_colocaciones")
+        : sql.raw("marts.v_participacion_smf_coloc_historica")}
       WHERE periodo = ${periodo}
     ),
     smf_dep AS (
       SELECT nomb_correg, pct_participacion_smf
-      FROM marts.v_participacion_smf_depositos
+      FROM ${consolidar
+        ? sql.raw("marts.v_participacion_smf_depositos")
+        : sql.raw("marts.v_participacion_smf_dep_historica")}
       WHERE periodo = ${periodo}
     ),
     mype AS (
       SELECT nomb_correg, pct_cartera_mype
-      FROM dw.entidad_microfinanciera_periodo
+      FROM ${consolidar
+        ? sql.raw("dw.entidad_microfinanciera_periodo")
+        : sql.raw("marts.v_microfinancieras_historica")}
       WHERE periodo = ${periodo}
     ),
     mora AS (
       SELECT nomb_correg, pct_mora_global, pct_mora_global_vc
-      FROM marts.v_mora_global_por_entidad
+      FROM ${consolidar
+        ? sql.raw("marts.v_mora_global_por_entidad")
+        : sql.raw("marts.v_mora_global_historica")}
       WHERE periodo = ${periodo}
     ),
     cob AS (
       SELECT nomb_correg, pct_cobertura_car
-      FROM marts.v_cobertura_car_por_entidad
+      FROM ${consolidar
+        ? sql.raw("marts.v_cobertura_car_por_entidad")
+        : sql.raw("marts.v_cobertura_car_historica")}
       WHERE periodo = ${periodo}
     ),
     kpis AS (
@@ -456,7 +473,9 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
              cta_1_ttm, cta_2_ttm, cta_6_ttm, cta_7_ttm,
              cta_10_1_ttm, cta_10_2_ttm, cta_10_3_ttm, cta_10_4_ttm,
              cta_12_7_ttm, cta_12_8_ttm
-      FROM marts.v_kpis_anuales_entidad
+      FROM ${consolidar
+        ? sql.raw("marts.v_kpis_anuales_entidad")
+        : sql.raw("marts.v_kpis_anuales_historica")}
       WHERE periodo = ${periodo}
     )
     SELECT
