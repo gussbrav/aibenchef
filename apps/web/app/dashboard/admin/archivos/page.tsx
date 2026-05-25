@@ -6,6 +6,7 @@ import { formatNumber, formatNumberCompact } from "../../_lib/format";
 import { ArchivosFilters } from "./archivos-filters";
 import { ArchivosTable } from "./archivos-table";
 import { MatrizArchivos } from "./matriz-archivos";
+import { SyncSbsPanel } from "./sync-sbs-panel";
 
 export const metadata: Metadata = {
   title: "Archivos SBS",
@@ -89,6 +90,8 @@ export default async function AdminArchivosPage({ searchParams }: PageProps) {
         <StatsBreakdown title="Por status" data={stats.porStatus} colorMap={statusColors} />
         <StatsBreakdown title="Por grupo" data={stats.porGrupo} />
       </section>
+
+      <SyncSbsPanel />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">Inventario por Grupo / Tópico / Año / Mes</h2>

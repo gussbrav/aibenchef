@@ -2148,5 +2148,145 @@ def inspect_xls_all(directory: str, rows: int, cols: int) -> None:
         click.echo("\n" + "=" * 100 + "\n")
 
 
+@main.group("sbs")
+def sbs_group() -> None:
+    """Comandos de sincronizacion con la SBS (cola de jobs + cron)."""
+
+
+@sbs_group.command("work-jobs")
+@click.option("--max-jobs", type=int, default=5, help="Numero maximo de jobs a procesar.")
+def sbs_work_jobs(max_jobs: int) -> None:
+    """Procesa jobs pendientes en admin.sync_jobs.
+
+    Cron mensual recomendado en EasyPanel:
+        0 3 25 * *  aibenchef sbs work-jobs
+
+    Tambien lo dispara el dashboard /admin/archivos via boton 'Sincronizar SBS'.
+    Por cada job:
+      1. status -> 'running'
+      2. ejecuta scrape para el rango periodos+topicos+grupos
+      3. computa md5 de archivos descargados; compara con md5 previo en
+         raw.archivos_descargados para detectar cambios
+      4. ejecuta storage scan (registra) e imports correspondientes
+      5. status -> 'completed' con metricas, o 'failed' con error_mensaje
+    """
+    import psycopg
+    import subprocess
+    import time
+    from datetime import datetime
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    def _update(conn, job_id: int, **fields):
+        cols = ", ".join(f"{k} = %s" for k in fields)
+        vals = list(fields.values()) + [job_id]
+        with conn.cursor() as cur:
+            cur.execute(f"UPDATE admin.sync_jobs SET {cols} WHERE id = %s", vals)
+        conn.commit()
+
+    procesados = 0
+    with psycopg.connect(url, connect_timeout=10) as conn:
+        for _ in range(max_jobs):
+            # Tomar el job pending mas antiguo
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, periodo_desde, periodo_hasta, topicos, grupos "
+                    "FROM admin.sync_jobs WHERE status='pending' "
+                    "ORDER BY requested_at LIMIT 1 FOR UPDATE SKIP LOCKED"
+                )
+                row = cur.fetchone()
+            if not row:
+                click.echo(f"# No hay jobs pendientes (procesados={procesados})")
+                break
+
+            job_id, desde, hasta, topicos, grupos = row
+            click.echo(f"# Procesando job {job_id}: {desde}-{hasta} topicos={topicos} grupos={grupos}")
+            _update(conn, job_id, status="running", started_at=datetime.utcnow())
+
+            log_lines: list[str] = []
+            ok = True
+            try:
+                # Ejecutar scrape (sin --topico -> todos)
+                cmd = ["aibenchef", "scrape", "--desde", str(desde), "--hasta", str(hasta)]
+                if topicos:
+                    for t in topicos:
+                        cmd_t = cmd + ["--topico", t]
+                        log_lines.append(f"$ {' '.join(cmd_t)}")
+                        r = subprocess.run(cmd_t, capture_output=True, text=True, timeout=1800)
+                        log_lines.append(r.stdout[-500:] if r.stdout else "")
+                        if r.returncode != 0:
+                            log_lines.append(f"ERROR rc={r.returncode}: {r.stderr[-500:]}")
+                            ok = False
+                else:
+                    log_lines.append(f"$ {' '.join(cmd)}")
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+                    log_lines.append(r.stdout[-500:] if r.stdout else "")
+                    if r.returncode != 0:
+                        log_lines.append(f"ERROR rc={r.returncode}: {r.stderr[-500:]}")
+                        ok = False
+
+                # Storage scan (registra archivos + actualiza md5)
+                log_lines.append("$ aibenchef storage scan --root ./local-data/raw")
+                r = subprocess.run(
+                    ["aibenchef", "storage", "scan", "--root", "./local-data/raw"],
+                    capture_output=True, text=True, timeout=1800,
+                )
+                log_lines.append(r.stdout[-500:] if r.stdout else "")
+
+                if ok:
+                    _update(conn, job_id,
+                        status="completed",
+                        completed_at=datetime.utcnow(),
+                        log_text="\n".join(log_lines)[:8000])
+                    procesados += 1
+                    click.echo(f"  job {job_id} OK")
+                else:
+                    _update(conn, job_id,
+                        status="failed",
+                        completed_at=datetime.utcnow(),
+                        log_text="\n".join(log_lines)[:8000],
+                        error_mensaje="Algun scrape fallo (ver log)")
+                    click.echo(f"  job {job_id} FAILED")
+            except Exception as e:
+                log_lines.append(f"EXCEPTION: {e}")
+                _update(conn, job_id,
+                    status="failed",
+                    completed_at=datetime.utcnow(),
+                    log_text="\n".join(log_lines)[:8000],
+                    error_mensaje=str(e)[:500])
+                click.echo(f"  job {job_id} EXCEPTION: {e}")
+
+    click.echo(f"# Terminado: {procesados} jobs procesados")
+
+
+@sbs_group.command("queue-monthly")
+def sbs_queue_monthly() -> None:
+    """Encola un job 'cron' para sincronizar el mes anterior.
+
+    Recomendado en cron: 0 2 25 * *  aibenchef sbs queue-monthly && aibenchef sbs work-jobs
+    """
+    import psycopg
+    from datetime import datetime
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    now = datetime.now()
+    # Mes anterior
+    if now.month == 1:
+        anio, mes = now.year - 1, 12
+    else:
+        anio, mes = now.year, now.month - 1
+    periodo = anio * 100 + mes
+
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO admin.sync_jobs (periodo_desde, periodo_hasta, triggered_by) "
+            "VALUES (%s, %s, 'cron') RETURNING id",
+            (periodo, periodo),
+        )
+        job_id = cur.fetchone()[0]
+        conn.commit()
+    click.echo(f"# Encolado job {job_id} para periodo {periodo}")
+
+
 if __name__ == "__main__":
     main()
