@@ -20,11 +20,13 @@ export async function GET() {
 
     const [entRows, perRows] = await Promise.all([
       db.execute<{ nomb_correg: string; tipo_entidad: string }>(sql`
-        SELECT DISTINCT nomb_correg, tipo_entidad
-        FROM marts.mv_eeff_resultados_ancho
-        WHERE nomb_correg IS NOT NULL
-        ORDER BY tipo_entidad,
-                 CASE tipo_entidad
+        SELECT nomb_correg, tipo_entidad
+        FROM (
+          SELECT DISTINCT nomb_correg, tipo_entidad
+          FROM marts.mv_eeff_resultados_ancho
+          WHERE nomb_correg IS NOT NULL
+        ) t
+        ORDER BY CASE tipo_entidad
                    WHEN 'BANCOS' THEN 1
                    WHEN 'FINANCIERAS' THEN 2
                    WHEN 'CMAC' THEN 3
@@ -32,6 +34,7 @@ export async function GET() {
                    WHEN 'EDPYMES' THEN 5
                    ELSE 9
                  END,
+                 tipo_entidad,
                  nomb_correg
       `),
       db.execute<{ periodo: number }>(sql`
