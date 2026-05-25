@@ -40,6 +40,7 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard" label="Resumen" exact />
               <NavLink href="/dashboard/informe" label="Informe ✨" />
               <NavLink href="/dashboard/eeff" label="Estados Financieros" />
+              <NavLink href="/dashboard/eeff/acumulado" label="ER Acumulado 📊" />
               <NavLink href="/dashboard/tableros" label="Tableros" />
               <NavLink href="/dashboard/analisis" label="Analisis" />
               <NavLink href="/dashboard/notebooks" label="Notebooks" />
