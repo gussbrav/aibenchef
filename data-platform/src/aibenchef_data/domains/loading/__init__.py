@@ -38,6 +38,7 @@ from .services.monthly_personal_importer import MonthlyPersonalImporter
 from .services.monthly_colocaciones_importer import MonthlyColocacionesImporter
 from .services.monthly_depositos_importer import MonthlyDepositosImporter
 from .services.monthly_castigos_importer import MonthlyCastigosImporter
+from .services.monthly_clientes_ahorro_importer import MonthlyClientesAhorroImporter
 
 __all__ = [
     "BaseCastigosImporter",
@@ -63,4 +64,5 @@ __all__ = [
     "MonthlyColocacionesImporter",
     "MonthlyDepositosImporter",
     "MonthlyCastigosImporter",
+    "MonthlyClientesAhorroImporter",
 ]
