@@ -132,9 +132,32 @@ def _extract_fecha_cierre(sheet) -> tuple[int, str] | None:
     return None
 
 
-def _detect_layout(sheet) -> dict[str, int] | None:
-    """Detecta header_row, col_empresas, col_total buscando palabras clave."""
-    layout: dict[str, int] = {}
+# Mapeo de strings de productos a forma canonica
+_PRODUCTOS_PATRONES = [
+    ("Corporativo",       ["corporativ"]),
+    ("Grandes Empresas",  ["grandes"]),
+    ("Medianas Empresas", ["mediana"]),
+    ("Pequeña Empresa",   ["peque"]),
+    ("Microempresa",      ["micro", "mes"]),
+    ("Consumo",           ["consumo"]),
+    ("Hipotecario",       ["hipotec"]),
+    ("Comerciales",       ["comercial"]),
+]
+
+
+def _producto_canonico(raw: str) -> str | None:
+    if not raw:
+        return None
+    s = _strip_accents(raw).lower().strip()
+    for canon, pats in _PRODUCTOS_PATRONES:
+        if any(p in s for p in pats):
+            return canon
+    return None
+
+
+def _detect_layout(sheet) -> dict | None:
+    """Detecta header_row, col_empresas, col_total, productos por columna."""
+    layout: dict = {}
     header_row = None
 
     # Buscar "Empresa" o "Empresas" en columna 0 de las primeras 12 filas
@@ -150,20 +173,28 @@ def _detect_layout(sheet) -> dict[str, int] | None:
         return None
 
     # En esa fila, mapear columnas
+    productos_cols: list[tuple[str, int]] = []
     for c in range(0, sheet.n_cols):
         v = sheet.cell(header_row, c)
         if v is None:
             continue
-        s = _strip_accents(str(v)).lower().strip()
+        s_raw = str(v)
+        s = _strip_accents(s_raw).lower().strip()
         # Columna de nombre de entidad
         if s in ("empresa", "empresas"):
             layout["empresa"] = c
-        # Columna Total: matches "total", "total de deudores", "total2/", etc.
+        # Columna Total
         elif s.startswith("total") or "total de deudores" in s or "total2" in s:
             layout["total"] = c
+        else:
+            # Intentar matchear producto
+            canon = _producto_canonico(s_raw)
+            if canon and not any(c == col for _, col in productos_cols):
+                productos_cols.append((canon, c))
 
+    layout["productos"] = productos_cols
     layout["_header_row"] = header_row
-    layout["_data_start_row"] = header_row + 1  # data inmediatamente despues (a veces con fila vacia)
+    layout["_data_start_row"] = header_row + 1
 
     return layout if "empresa" in layout and "total" in layout else None
 
@@ -213,6 +244,7 @@ class MonthlyClientesImporter:
         data_start = int(layout["_data_start_row"])
         c_emp = layout["empresa"]
         c_tot = layout["total"]
+        productos_cols = layout.get("productos", [])
 
         rows: list[tuple] = []
         skipped = 0
@@ -242,12 +274,25 @@ class MonthlyClientesImporter:
                     skipped += 1
                     continue
 
+                # Fila TOTAL (agregado)
                 rows.append((
                     periodo, fecha_iso,
                     emp, None, tipo_entidad, None, None,
                     "TOTAL", total,
                     path.name,
                 ))
+
+                # Filas por cada producto canonico detectado en header
+                for canon, col in productos_cols:
+                    n = _to_int(sheet.cell(r, col))
+                    if n is None or n <= 0:
+                        continue
+                    rows.append((
+                        periodo, fecha_iso,
+                        emp, None, tipo_entidad, None, None,
+                        canon, n,
+                        path.name,
+                    ))
             except Exception as e:
                 errors.append(f"row {r}: {e}")
                 if len(errors) > 30:
@@ -269,12 +314,13 @@ class MonthlyClientesImporter:
             INSERT INTO raw.clientes_creditos (
                 periodo, fecha_cierre, empresa, empresa_benchmark,
                 tipo_entidad, clasificacion, mayor_50_pct_cb,
-                producto, n_clientes, source_file
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                producto, n_clientes, source, source_file
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'monthly_clientes_creditos',%s)
             ON CONFLICT (periodo, empresa, producto, clasificacion)
             DO UPDATE SET
                 tipo_entidad = EXCLUDED.tipo_entidad,
                 n_clientes = EXCLUDED.n_clientes,
+                source = EXCLUDED.source,
                 source_file = EXCLUDED.source_file,
                 loaded_at = now()
         """
