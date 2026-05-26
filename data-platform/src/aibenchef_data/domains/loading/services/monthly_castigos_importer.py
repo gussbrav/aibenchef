@@ -40,13 +40,16 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 
 
 _PRODUCTOS_PATRONES: list[tuple[str, list[str]]] = [
+    # Layout moderno (2010-07+): clasificacion granular SBS Res. 11356-2008
     ("Corporativo",       ["corporativ"]),
     ("Grandes Empresas",  ["grandes"]),
     ("Medianas Empresas", ["mediana"]),
     ("Pequeña Empresa",   ["peque"]),
-    ("Microempresa",      ["micro"]),
+    ("Microempresa",      ["micro", "mes"]),  # "mes" = layout viejo (Microempresa)
     ("Consumo",           ["consumo"]),
     ("Hipotecario",       ["hipotec"]),
+    # Layout viejo (2009-2010 Jun): clasificacion agregada
+    ("Comerciales",       ["comercial"]),
 ]
 
 
@@ -120,6 +123,39 @@ def _extract_fecha(sheet) -> tuple[int, str] | None:
     return None
 
 
+# Meses abreviados SBS en filenames: B-2369-<mes><año>.xls
+_MES_ABREV_SBS = {
+    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
+    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+}
+
+
+def _extract_fecha_from_filename(path: Path) -> tuple[int, str] | None:
+    """Fallback: extrae fecha del filename SBS standard.
+
+    Patrones:
+      B-2369-ma2010.xls    -> (201003, '2010-03-31')
+      C-1253-di2014.xls    -> (201412, '2014-12-31')
+    """
+    name = path.stem.lower()
+    m = re.search(r"-([a-z]{2})(\d{4})$", name)
+    if not m:
+        return None
+    mes_abrev, anio_str = m.group(1), m.group(2)
+    mes = _MES_ABREV_SBS.get(mes_abrev)
+    if not mes:
+        return None
+    anio = int(anio_str)
+    if not (2000 <= anio <= 2050):
+        return None
+    # Calcular ultimo dia del mes
+    if mes == 12:
+        eom = datetime(anio + 1, 1, 1) - timedelta(days=1)
+    else:
+        eom = datetime(anio, mes + 1, 1) - timedelta(days=1)
+    return (anio * 100 + mes, eom.strftime("%Y-%m-%d"))
+
+
 def _detect_tipo_entidad(path: Path) -> str:
     for part in path.parts:
         n = part.lower()
@@ -158,37 +194,69 @@ class MonthlyCastigosImporter:
 
         fecha = _extract_fecha(sheet)
         if not fecha:
-            raise ValidationError(f"No pude extraer fecha de {path}")
+            # Fallback: extraer del nombre del archivo (estándar SBS B-XXXX-<mes><año>.xls)
+            fecha = _extract_fecha_from_filename(path)
+        if not fecha:
+            raise ValidationError(
+                f"No pude extraer fecha de {path} (ni del contenido ni del filename)"
+            )
         periodo, fecha_iso = fecha
 
-        # Detectar producto -> columna (header sub-row contiene productos)
-        header_row = None
-        for r in range(0, 10):
-            v = _safe_text(sheet.cell(r, 0))
-            if v and _strip_accents(v).lower().strip() in ("empresa", "empresas", "empresas*"):
-                header_row = r
-                break
-        if header_row is None:
-            raise ValidationError(f"No pude detectar header en {path}")
-
-        # Mapear cada columna >=1 a su producto
+        # Detectar header buscando el ROW DE PRODUCTOS directamente.
+        # Recorremos las primeras 10 filas y para cada una contamos cuántas
+        # columnas mapean a productos canonicos. La fila con mas matches es
+        # el header de productos. Empresa col se infiere: col 0 si tiene texto
+        # tipo entidad despues del header, sino col 1.
         producto_cols: list[tuple[str, int]] = []
-        sub_header_row = header_row + 1
-        for c in range(1, sheet.n_cols):
-            v = _safe_text(sheet.cell(sub_header_row, c))
-            if v:
-                canon = _producto_canonico(v)
-                if canon:
-                    producto_cols.append((canon, c))
-        if not producto_cols:
+        sub_header_row = None
+        best_matches = 0
+        for r in range(0, 12):
+            cur_matches: list[tuple[str, int]] = []
+            for c in range(0, sheet.n_cols):
+                v = _safe_text(sheet.cell(r, c))
+                if v:
+                    canon = _producto_canonico(v)
+                    if canon and not any(c == col for _, col in cur_matches):
+                        cur_matches.append((canon, c))
+            if len(cur_matches) > best_matches:
+                best_matches = len(cur_matches)
+                producto_cols = cur_matches
+                sub_header_row = r
+        if not producto_cols or sub_header_row is None:
             raise ValidationError(f"No detecte productos en {path}")
+
+        # Detectar empresa_col: prueba col 0 y col 1 en la primera fila de data,
+        # quedate con la que tenga texto que no sea numero.
+        empresa_col = 0
+        for try_col in (0, 1):
+            v = _safe_text(sheet.cell(sub_header_row + 1, try_col))
+            if v and not _to_num(v):
+                empresa_col = try_col
+                break
+        # Fallback: si la primera fila de data esta vacia en col 0, buscar
+        # la primera fila no-vacia y reintentar.
+        if not _safe_text(sheet.cell(sub_header_row + 1, empresa_col)):
+            for r2 in range(sub_header_row + 1, min(sub_header_row + 6, sheet.n_rows)):
+                for try_col in (0, 1):
+                    v = _safe_text(sheet.cell(r2, try_col))
+                    if v and not _to_num(v) and len(v) >= 3:
+                        empresa_col = try_col
+                        break
+                else:
+                    continue
+                break
 
         tipo_entidad = _detect_tipo_entidad(path)
         data_start = sub_header_row + 1
 
         rows: list[tuple] = []
+        # Buscar empresas en cualquier fila después del header. En layout viejo
+        # las empresas están en col 1; usamos empresa_col detectado arriba pero
+        # con fallback: si col 0 está vacía, intentar col 1.
         for r in range(data_start, sheet.n_rows):
-            emp = _safe_text(sheet.cell(r, 0))
+            emp = _safe_text(sheet.cell(r, empresa_col))
+            if not emp and empresa_col == 0:
+                emp = _safe_text(sheet.cell(r, 1))
             if not emp:
                 continue
             emp_low = _strip_accents(emp).lower()
@@ -213,13 +281,48 @@ class MonthlyCastigosImporter:
                 errors=("sin filas",),
             )
 
-        # Dedup mismo grupo
-        async with self._conn.cursor() as cur:
-            await cur.execute(
-                "DELETE FROM raw.castigos_observacion "
-                "WHERE periodo=%s AND tipo_entidad=%s AND source='monthly_castigos'",
-                (periodo, tipo_entidad),
+        # ----------------------------------------------------------------
+        # REGLA DE NEGOCIO: Hasta 2015 la SBS publicaba castigos TRIMESTRAL
+        # (Mar/Jun/Sep/Dic). A partir de 2016 publica MENSUAL. Para mantener
+        # serie continua, distribuimos uniformemente el flujo trimestral en
+        # los 3 meses del trimestre (cada mes recibe saldo_castigos / 3).
+        #
+        # Ej: Dic-2009 con 300 -> Oct-2009 100 + Nov-2009 100 + Dic-2009 100.
+        # ----------------------------------------------------------------
+        es_trimestral = periodo <= 201512 and (periodo % 100) in (3, 6, 9, 12)
+        if es_trimestral:
+            periodos_target = [
+                _periodo_minus_months(periodo, 2),
+                _periodo_minus_months(periodo, 1),
+                periodo,
+            ]
+            fechas_target = [_periodo_to_eom_iso(p) for p in periodos_target]
+            expanded: list[tuple] = []
+            for r in rows:
+                # row: (periodo, fecha_iso, emp, emp, tipo_entidad, canon, saldo, source, source_file)
+                base_saldo = r[6]
+                tercio = base_saldo / 3
+                for pt, ft in zip(periodos_target, fechas_target, strict=True):
+                    expanded.append((pt, ft, r[2], r[3], r[4], r[5], tercio, r[7], r[8]))
+            rows = expanded
+            log.info(
+                "monthly_castigos.trimestral_distribuido",
+                periodo_origen=periodo,
+                periodos_target=periodos_target,
+                filas_expandidas=len(rows),
             )
+
+        # Dedup mismo grupo — borrar para todos los periodos que vamos a insertar
+        # (asi si re-corremos un trimestre vie jo borra los 3 meses sinteticos antes
+        # de re-insertar).
+        periodos_a_borrar = sorted({r[0] for r in rows})
+        async with self._conn.cursor() as cur:
+            for p in periodos_a_borrar:
+                await cur.execute(
+                    "DELETE FROM raw.castigos_observacion "
+                    "WHERE periodo=%s AND tipo_entidad=%s AND source='monthly_castigos'",
+                    (p, tipo_entidad),
+                )
 
         insert_sql = """
             INSERT INTO raw.castigos_observacion (
@@ -235,10 +338,35 @@ class MonthlyCastigosImporter:
             await self._conn.commit()
             inserted += len(batch)
 
-        log.info("monthly_castigos.done", inserted=inserted, periodo=periodo)
+        log.info(
+            "monthly_castigos.done",
+            inserted=inserted, periodo_origen=periodo,
+            es_trimestral=es_trimestral,
+        )
         return ImportResult(
             source="monthly_castigos", source_file=path.name,
             rows_inserted=inserted, rows_skipped=0,
             duration_seconds=time.perf_counter() - start,
             errors=(),
         )
+
+
+def _periodo_minus_months(periodo: int, n: int) -> int:
+    """Resta n meses a YYYYMM. Ej: (200912, 2) -> 200910."""
+    anio, mes = divmod(periodo, 100)
+    mes_target = mes - n
+    while mes_target <= 0:
+        mes_target += 12
+        anio -= 1
+    return anio * 100 + mes_target
+
+
+def _periodo_to_eom_iso(periodo: int) -> str:
+    """Convierte YYYYMM a fecha de fin de mes ISO YYYY-MM-DD."""
+    anio, mes = divmod(periodo, 100)
+    if mes == 12:
+        siguiente = datetime(anio + 1, 1, 1)
+    else:
+        siguiente = datetime(anio, mes + 1, 1)
+    eom = siguiente - timedelta(days=1)
+    return eom.strftime("%Y-%m-%d")
