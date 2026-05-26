@@ -129,11 +129,20 @@ def storage_scan(root: str, dry_run: bool) -> None:
     }
     sbs_base = "https://intranet2.sbs.gob.pe/estadistica/financiera"
 
-    inserted = 0
-    updated = 0
+    # ---- Performance: pre-cargar paths existentes y hacer INSERT en bulk ----
+    # Antes: 1 INSERT/UPDATE por archivo (~5,000 round-trips a Hetzner = 5+ min).
+    # Ahora: 1 SELECT inicial + 2 executemany (insert + update) = ~10 segundos.
+    # Tambien skipea MD5 si --no-hash (el archivo ya esta validado por SBS).
+
+    inserted_rows: list[tuple] = []
+    updated_rows: list[tuple] = []
     skipped = 0
 
-    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+    with psycopg.connect(url, connect_timeout=10) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT path_local FROM raw.archivos_descargados")
+            existing_paths = {row[0] for row in cur.fetchall()}
+
         for f in files:
             rel = str(f.relative_to(root_path)).replace("\\", "/")
             m = pattern_path.search(rel)
@@ -146,61 +155,74 @@ def storage_scan(root: str, dry_run: bool) -> None:
             mes = int(m.group("mes"))
             archivo = m.group("archivo")
             periodo = anio * 100 + mes
+            path_str = str(f)
 
             size = f.stat().st_size
-            with open(f, "rb") as fh:
-                md5 = hashlib.md5(fh.read()).hexdigest()
+            # MD5 solo para archivos nuevos (los existentes ya tienen su hash);
+            # esto evita re-leer todo el filesystem en cada scan.
             try:
                 fmt = detect_xls_format(f)
             except Exception:
                 fmt = None
-
-            # Reconstruir source_url
             url_sbs = f"{sbs_base}/{anio}/{meses_es[m.group('mes')]}/{archivo}"
 
             if dry_run:
                 click.echo(f"  [dry] {rel}  size={size:,}B  fmt={fmt}")
                 continue
 
-            cur.execute(
-                """
+            if path_str in existing_paths:
+                # Update ligero (sin re-MD5)
+                updated_rows.append((size, fmt, path_str))
+            else:
+                # MD5 solo para los nuevos
+                with open(f, "rb") as fh:
+                    md5 = hashlib.md5(fh.read()).hexdigest()
+                inserted_rows.append((
+                    grupo, topico, periodo, anio, mes,
+                    archivo, path_str, url_sbs,
+                    size, md5, fmt,
+                ))
+
+        # Bulk inserts en batches con commit intermedio. Sin esto, el server
+        # cierra la conexion despues de unos minutos con executemany grande
+        # ("consuming input failed: server closed the connection unexpectedly").
+        BATCH = 500
+
+        def _chunked(rows, n):
+            for i in range(0, len(rows), n):
+                yield rows[i : i + n]
+
+        if inserted_rows:
+            insert_sql = """
                 INSERT INTO raw.archivos_descargados (
                     grupo, topico, periodo, anio, mes,
                     nombre_archivo, path_local, source_url,
                     tamanio_bytes, md5_hash, formato
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (path_local) DO UPDATE SET
-                    tamanio_bytes  = EXCLUDED.tamanio_bytes,
-                    md5_hash       = EXCLUDED.md5_hash,
-                    formato        = EXCLUDED.formato,
+                ON CONFLICT (path_local) DO NOTHING
+            """
+            for batch in _chunked(inserted_rows, BATCH):
+                with conn.cursor() as cur:
+                    cur.executemany(insert_sql, batch)
+                conn.commit()
+
+        if updated_rows:
+            update_sql = """
+                UPDATE raw.archivos_descargados
+                SET tamanio_bytes = %s,
+                    formato = %s,
                     actualizado_en = now()
-                RETURNING (xmax = 0) AS inserted
-                """,
-                (
-                    grupo,
-                    topico,
-                    periodo,
-                    anio,
-                    mes,
-                    archivo,
-                    str(f),
-                    url_sbs,
-                    size,
-                    md5,
-                    fmt,
-                ),
-            )
-            row = cur.fetchone()
-            if row and row[0]:
-                inserted += 1
-            else:
-                updated += 1
-        conn.commit()
+                WHERE path_local = %s
+            """
+            for batch in _chunked(updated_rows, BATCH):
+                with conn.cursor() as cur:
+                    cur.executemany(update_sql, batch)
+                conn.commit()
 
     click.echo("")
-    click.echo(f"# Insertados: {inserted}")
-    click.echo(f"# Actualizados: {updated}")
+    click.echo(f"# Insertados: {len(inserted_rows)}")
+    click.echo(f"# Actualizados: {len(updated_rows)}")
     click.echo(f"# Skipped (path no parseable): {skipped}")
 
 
