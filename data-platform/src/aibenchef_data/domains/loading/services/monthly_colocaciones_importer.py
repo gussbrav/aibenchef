@@ -358,13 +358,23 @@ class MonthlyColocacionesImporter:
                 errors=(f"sin rows extraidas con layout={layout}",),
             )
 
-        # UPSERT
+        # UPSERT idempotente
         insert_sql = """
             INSERT INTO raw.colocaciones_observacion (
                 periodo, fecha_cierre, empresa, tipo_entidad, producto,
                 saldo_vigente, saldo_reest_refin, saldo_atrasado, saldo_total,
                 source, source_file
             ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (periodo, empresa, producto, clasificacion, prod_consumo)
+            DO UPDATE SET
+                tipo_entidad = EXCLUDED.tipo_entidad,
+                saldo_vigente = EXCLUDED.saldo_vigente,
+                saldo_reest_refin = EXCLUDED.saldo_reest_refin,
+                saldo_atrasado = EXCLUDED.saldo_atrasado,
+                saldo_total = EXCLUDED.saldo_total,
+                source = EXCLUDED.source,
+                source_file = EXCLUDED.source_file,
+                loaded_at = now()
         """
         rows_tuples = [
             (periodo, fecha_iso, r["empresa"], tipo_entidad, r["producto"],
