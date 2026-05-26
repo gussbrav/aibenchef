@@ -440,14 +440,19 @@ class MonthlyOficinasImporter:
                 tipo_entidad, clasificacion, mayor_50_pct_cb,
                 departamento, provincia, distrito, departamento_distrito,
                 region_caqp, region_caqp_sp, codigo_oficina,
-                producto, saldo_mn, saldo_me, saldo_total, source_file
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                producto, saldo_mn, saldo_me, saldo_total,
+                source, source_file
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                      'monthly_oficinas',%s)
             ON CONFLICT (periodo, empresa_sbs, codigo_oficina, producto, departamento_distrito)
             DO UPDATE SET
                 tipo_entidad = EXCLUDED.tipo_entidad,
                 provincia = EXCLUDED.provincia,
                 distrito = EXCLUDED.distrito,
+                saldo_mn = EXCLUDED.saldo_mn,
+                saldo_me = EXCLUDED.saldo_me,
                 saldo_total = EXCLUDED.saldo_total,
+                source = EXCLUDED.source,
                 source_file = EXCLUDED.source_file,
                 loaded_at = now()
         """
