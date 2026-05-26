@@ -402,6 +402,8 @@ class MonthlyEeffImporter:
                 ON CONFLICT (periodo, nomb_correg, moneda, tipo_estado, cuenta_codigo)
                 DO UPDATE SET
                     valor       = EXCLUDED.valor,
+                    source      = EXCLUDED.source,
+                    source_file = EXCLUDED.source_file,
                     loaded_at   = now()
                 """
             )
