@@ -206,6 +206,172 @@ class MonthlyClientesAhorroImporter:
         self._conn = conn
         self._batch_size = batch_size
 
+    async def _import_inverted_layout(
+        self,
+        sheet,
+        path: Path,
+        periodo: int,
+        fecha_iso: str,
+        start: float,
+    ) -> ImportResult:
+        """Layout 2009-2010 Jun: persona-type en OUTER row, productos en INNER row.
+
+        R3: "Empresas | | Personas Naturales | | | | Personas Juridicas... | ..."
+        R4: "        | | Ahorro | Plazo | Total | | Ahorro | Plazo | Total | ..."
+        R6+ data. El layout viejo SOLO tiene Ahorro+Plazo (no Vista, no CTS).
+        """
+        # Buscar persona-row: la primera row donde aparezcan canónicos de persona
+        persona_row = None
+        persona_cols: list[tuple[str, int]] = []
+        for r in range(0, 12):
+            cur: list[tuple[str, int]] = []
+            for c in range(0, sheet.n_cols):
+                v = _safe_text(sheet.cell(r, c))
+                if v:
+                    canon = _subcol_canonica(v)
+                    if canon and not any(c == col for _, col in cur):
+                        cur.append((canon, c))
+            if len(cur) >= 2:  # al menos 2 tipos de persona detectados
+                persona_row = r
+                persona_cols = cur
+                break
+        if persona_row is None or not persona_cols:
+            raise ValidationError(f"No detecte sub-columnas (Pers Nat/PJ) en {path}")
+
+        # Producto row es la siguiente (R4 en el ejemplo)
+        prod_row = persona_row + 1
+        # Detectar columnas de productos
+        prod_cols: list[tuple[str, int]] = []
+        for c in range(0, sheet.n_cols):
+            v = _safe_text(sheet.cell(prod_row, c))
+            if v:
+                canon = _producto_canonico(v)
+                if canon:
+                    prod_cols.append((canon, c))
+        if not prod_cols:
+            raise ValidationError(
+                f"Layout invertido detectado pero no productos en row {prod_row} de {path}"
+            )
+
+        # Mapear (persona_canon, producto_canon) -> col_index. Cada persona span
+        # va desde su col hasta la col del siguiente persona.
+        persona_cols_sorted = sorted(persona_cols, key=lambda x: x[1])
+        spans: dict[str, tuple[int, int]] = {}
+        for i, (pc, col) in enumerate(persona_cols_sorted):
+            end = persona_cols_sorted[i + 1][1] if i + 1 < len(persona_cols_sorted) else 999
+            spans[pc] = (col, end)
+
+        per_persona_prod: dict[str, dict[str, int]] = {}  # persona -> {producto -> col}
+        for persona_canon, (lo, hi) in spans.items():
+            mapping: dict[str, int] = {}
+            for prod_canon, prod_col in prod_cols:
+                if lo <= prod_col < hi and prod_canon not in mapping:
+                    mapping[prod_canon] = prod_col
+            per_persona_prod[persona_canon] = mapping
+
+        tipo_entidad = _detect_tipo_entidad(path)
+        data_start = prod_row + 1
+
+        # Empresa col: probar col 0 y col 1
+        empresa_col = 0
+        for r2 in range(data_start, min(data_start + 6, sheet.n_rows)):
+            for try_col in (0, 1):
+                v = _safe_text(sheet.cell(r2, try_col))
+                if v and not _to_int(v) and len(v) >= 3:
+                    empresa_col = try_col
+                    break
+            else:
+                continue
+            break
+
+        rows: list[tuple] = []
+        for r in range(data_start, sheet.n_rows):
+            emp = _safe_text(sheet.cell(r, empresa_col))
+            if not emp:
+                continue
+            emp_low = _strip_accents(emp).lower()
+            if (
+                emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
+                or len(emp) < 3
+            ):
+                continue
+
+            # Para cada producto canonico (Ahorro, Plazo en layout viejo),
+            # juntar valor de cada persona-type.
+            productos_disponibles: set[str] = set()
+            for pmap in per_persona_prod.values():
+                productos_disponibles.update(pmap.keys())
+
+            for prod_canon in productos_disponibles:
+                pn = _to_int(sheet.cell(r, per_persona_prod.get("pers_nat", {}).get(prod_canon, -1)))
+                pjl = _to_int(
+                    sheet.cell(r, per_persona_prod.get("pers_jur_no_lucro", {}).get(prod_canon, -1))
+                )
+                opj = _to_int(
+                    sheet.cell(r, per_persona_prod.get("otras_pers_jur", {}).get(prod_canon, -1))
+                )
+                vals = [v for v in (pn, pjl, opj) if v is not None]
+                if not vals:
+                    continue
+                total = sum(vals)
+                if total <= 0:
+                    continue
+                rows.append((
+                    periodo, fecha_iso, emp, None,
+                    tipo_entidad, None, None, prod_canon,
+                    pn, pjl, opj, total,
+                    "monthly_clientes_ahorro", path.name,
+                ))
+
+        if not rows:
+            return ImportResult(
+                source="monthly_clientes_ahorro", source_file=path.name,
+                rows_inserted=0, rows_skipped=0,
+                duration_seconds=time.perf_counter() - start,
+                errors=("sin filas (layout invertido)",),
+            )
+
+        periodos_a_borrar = sorted({r[0] for r in rows})
+        async with self._conn.cursor() as cur:
+            for p in periodos_a_borrar:
+                await cur.execute(
+                    "DELETE FROM raw.clientes_ahorros "
+                    "WHERE periodo=%s AND tipo_entidad=%s AND source='monthly_clientes_ahorro'",
+                    (p, tipo_entidad),
+                )
+
+        insert_sql = """
+            INSERT INTO raw.clientes_ahorros (
+                periodo, fecha_cierre, empresa, empresa_benchmark,
+                tipo_entidad, clasificacion, mayor_50_pct_mype, producto,
+                n_pers_nat, n_pers_jur_no_lucro, n_otras_pers_jur, n_total,
+                source, source_file
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (periodo, empresa, producto, clasificacion) DO UPDATE SET
+                tipo_entidad = EXCLUDED.tipo_entidad,
+                n_pers_nat = EXCLUDED.n_pers_nat,
+                n_pers_jur_no_lucro = EXCLUDED.n_pers_jur_no_lucro,
+                n_otras_pers_jur = EXCLUDED.n_otras_pers_jur,
+                n_total = EXCLUDED.n_total,
+                source = EXCLUDED.source,
+                source_file = EXCLUDED.source_file,
+                loaded_at = now()
+        """
+        inserted = 0
+        for i in range(0, len(rows), self._batch_size):
+            batch = rows[i:i + self._batch_size]
+            async with self._conn.cursor() as cur:
+                await cur.executemany(insert_sql, batch)
+            await self._conn.commit()
+            inserted += len(batch)
+
+        return ImportResult(
+            source="monthly_clientes_ahorro", source_file=path.name,
+            rows_inserted=inserted, rows_skipped=0,
+            duration_seconds=time.perf_counter() - start,
+            errors=(),
+        )
+
     async def import_file(self, path: Path) -> ImportResult:
         start = time.perf_counter()
         log.info("monthly_clie_aho.start", path=str(path))
@@ -252,7 +418,12 @@ class MonthlyClientesAhorroImporter:
                 if canon:
                     subcols_in_row.append((canon, c))
         if not subcols_in_row:
-            raise ValidationError(f"No detecte sub-columnas (Pers Nat/PJ) en {path}")
+            # Layout VIEJO (2009-2010 Jun): personas en OUTER, productos en INNER.
+            # Ejemplo R3: "Empresas |  | Personas Naturales |  |  |  | PJ no lucro | ..."
+            #         R4: "        |  | Ahorro | Plazo | Total | | Ahorro | Plazo |..."
+            return await self._import_inverted_layout(
+                sheet, path, periodo, fecha_iso, start,
+            )
 
         # Para cada producto, mapear sub-col -> col_index:
         # subcols_in_row tiene una secuencia (pers_nat, pers_jur_no_lucro, otras_pers_jur)

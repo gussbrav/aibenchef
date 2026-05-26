@@ -41,6 +41,19 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 }
 
 
+_MESES_ES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+_MES_ABREV_SBS = {
+    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
+    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+}
+
+
 def _strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
@@ -87,7 +100,37 @@ def _extract_fecha(sheet) -> tuple[int, str] | None:
                 dt = _excel_serial_to_date(float(m.group(1)))
                 if dt:
                     return (dt.year * 100 + dt.month, dt.strftime("%Y-%m-%d"))
+            # Texto en español: "Saldos al 28 de Febrero de 2015"
+            m = re.search(
+                r"(\d{1,2})?\s*(?:de\s+)?([A-Za-záéíóúÑñ]+)\s+(?:de\s+)?(\d{4})",
+                _strip_accents(s).lower(),
+            )
+            if m:
+                mes_str = m.group(2)
+                anio = int(m.group(3))
+                mes = _MESES_ES.get(mes_str)
+                if mes and 2000 <= anio <= 2050:
+                    return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-01")
     return None
+
+
+def _extract_fecha_from_filename(path: Path) -> tuple[int, str] | None:
+    """Fallback: extrae fecha del filename SBS standard B-XXXX-<mes><año>.xls."""
+    name = path.stem.lower()
+    m = re.search(r"-([a-z]{2})(\d{4})$", name)
+    if not m:
+        return None
+    mes = _MES_ABREV_SBS.get(m.group(1))
+    if not mes:
+        return None
+    anio = int(m.group(2))
+    if not (2000 <= anio <= 2050):
+        return None
+    if mes == 12:
+        eom = datetime(anio + 1, 1, 1) - timedelta(days=1)
+    else:
+        eom = datetime(anio, mes + 1, 1) - timedelta(days=1)
+    return (anio * 100 + mes, eom.strftime("%Y-%m-%d"))
 
 
 def _detect_tipo_entidad(path: Path) -> str:
@@ -98,12 +141,35 @@ def _detect_tipo_entidad(path: Path) -> str:
     return "DESCONOCIDO"
 
 
-def _find_header_row(sheet) -> int | None:
-    """Busca fila donde col 0 sea 'Empresas' (header de entidades)."""
+def _find_header_row(sheet) -> tuple[int, int] | None:
+    """Busca fila del header. Devuelve (header_row, empresa_col).
+
+    Layout moderno: 'Empresas' literal en col 0.
+    Layout 2009-2010 BANCOS: sin texto 'Empresas', empresa en col 1; el header
+    se identifica por la fila con productos 'Depositos Vista/Ahorro/Plazo/CTS'.
+    """
     for r in range(0, 10):
-        v = _safe_text(sheet.cell(r, 0))
-        if v and _strip_accents(v).lower().strip() in ("empresa", "empresas", "empresas*"):
-            return r
+        for c_try in (0, 1, 2):
+            v = _safe_text(sheet.cell(r, c_try))
+            if v and _strip_accents(v).lower().strip() in ("empresa", "empresas", "empresas*"):
+                return (r, c_try)
+    # Layout viejo: buscar fila con tipos de deposito y inferir empresa_col
+    for r in range(0, 10):
+        productos_found = 0
+        for c in range(0, sheet.n_cols):
+            v = _safe_text(sheet.cell(r, c))
+            if v:
+                s = _strip_accents(v).lower()
+                if any(p in s for p in ("vista", "ahorro", "plazo", "cts")):
+                    productos_found += 1
+        if productos_found >= 3:
+            # empresa col es la primera col con texto en la primera fila de data
+            for r_data in range(r + 2, min(r + 6, sheet.n_rows)):
+                for c_try in (0, 1):
+                    v = _safe_text(sheet.cell(r_data, c_try))
+                    if v and len(v) >= 3:
+                        return (r, c_try)
+            return (r, 0)
     return None
 
 
@@ -126,23 +192,24 @@ class MonthlyDepositosImporter:
             raise ValidationError(f"Sin hojas en {path}")
         sheet = sheets[0]
 
-        fecha = _extract_fecha(sheet)
+        fecha = _extract_fecha(sheet) or _extract_fecha_from_filename(path)
         if not fecha:
             raise ValidationError(f"No pude extraer fecha de {path}")
         periodo, fecha_iso = fecha
 
-        header_row = _find_header_row(sheet)
-        if header_row is None:
+        header_info = _find_header_row(sheet)
+        if header_info is None:
             raise ValidationError(f"No pude detectar header en {path}")
+        header_row, empresa_col = header_info
 
         tipo_entidad = _detect_tipo_entidad(path)
         # Data empieza 2-3 filas despues del header (entre medio hay sub-header)
         data_start = header_row + 2
 
-        # Suma TODAS las cols numericas (>= col 1) por fila
+        # Suma TODAS las cols numericas (cols posteriores a empresa_col) por fila
         rows: list[tuple] = []
         for r in range(data_start, sheet.n_rows):
-            emp = _safe_text(sheet.cell(r, 0))
+            emp = _safe_text(sheet.cell(r, empresa_col))
             if not emp:
                 continue
             emp_low = _strip_accents(emp).lower()
@@ -151,7 +218,7 @@ class MonthlyDepositosImporter:
                 continue
             saldo_total = 0.0
             valid = False
-            for c in range(1, sheet.n_cols):
+            for c in range(empresa_col + 1, sheet.n_cols):
                 v = sheet.cell(r, c)
                 if isinstance(v, (int, float)):
                     saldo_total += float(v)

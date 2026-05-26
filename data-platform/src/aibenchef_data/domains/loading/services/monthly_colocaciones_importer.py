@@ -45,6 +45,19 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 }
 
 
+_MESES_ES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+_MES_ABREV_SBS = {
+    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
+    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+}
+
+
 # Productos canonicos -> patrones de match (case insensitive, sin tildes)
 _PRODUCTOS_CANON: list[tuple[str, list[str]]] = [
     ("Corporativo",       ["corporativ"]),
@@ -54,7 +67,12 @@ _PRODUCTOS_CANON: list[tuple[str, list[str]]] = [
     ("Microempresa",      ["micro"]),  # "microempresa" / "micro empresas"
     ("Consumo",           ["consumo"]),
     ("Hipotecario",       ["hipotec"]),
+    # Layout 2009-2010 Jun (legacy aggregate): "Comerciales", "Actividades empresariales"
+    ("Comerciales",       ["comercial", "actividades empresar"]),
 ]
+
+
+_EMPRESA_HEADER_WORDS = ("empresa", "empresas", "empresas*", "entidad", "entidades")
 
 
 def _strip_accents(s: str) -> str:
@@ -90,7 +108,7 @@ def _excel_serial_to_date(serial: float):
 
 
 def _extract_fecha(sheet) -> tuple[int, str] | None:
-    """Busca la fecha en filas 0-5. Soporta serial, ISO string, datetime."""
+    """Busca la fecha en filas 0-5. Soporta serial, ISO string, datetime, español."""
     for r in range(0, 6):
         for c in range(0, 3):
             v = sheet.cell(r, c)
@@ -115,7 +133,37 @@ def _extract_fecha(sheet) -> tuple[int, str] | None:
                 dt = _excel_serial_to_date(float(m.group(1)))
                 if dt:
                     return (dt.year * 100 + dt.month, dt.strftime("%Y-%m-%d"))
+            # Texto en español: "Al 31 de Marzo de 2013"
+            m = re.search(
+                r"(\d{1,2})?\s*(?:de\s+)?([A-Za-záéíóúÑñ]+)\s+(?:de\s+)?(\d{4})",
+                _strip_accents(s).lower(),
+            )
+            if m:
+                mes_str = m.group(2)
+                anio = int(m.group(3))
+                mes = _MESES_ES.get(mes_str)
+                if mes and 2000 <= anio <= 2050:
+                    return (anio * 100 + mes, f"{anio:04d}-{mes:02d}-01")
     return None
+
+
+def _extract_fecha_from_filename(path: Path) -> tuple[int, str] | None:
+    """Fallback: extrae fecha del filename SBS standard B-XXXX-<mes><año>.xls."""
+    name = path.stem.lower()
+    m = re.search(r"-([a-z]{2})(\d{4})$", name)
+    if not m:
+        return None
+    mes = _MES_ABREV_SBS.get(m.group(1))
+    if not mes:
+        return None
+    anio = int(m.group(2))
+    if not (2000 <= anio <= 2050):
+        return None
+    if mes == 12:
+        eom = datetime(anio + 1, 1, 1) - timedelta(days=1)
+    else:
+        eom = datetime(anio, mes + 1, 1) - timedelta(days=1)
+    return (anio * 100 + mes, eom.strftime("%Y-%m-%d"))
 
 
 def _detect_tipo_entidad(path: Path) -> str:
@@ -145,14 +193,25 @@ def _detect_layout(sheet) -> str | None:
         b = _safe_text(sheet.cell(r, 1))
         if a and "tipo" in _strip_accents(a).lower() and b and "situaci" in _strip_accents(b).lower():
             return "transpuesto"
-    # En horizontal, R5 col 0 = 'Empresas' y col 1 = 'Corporativo' (o similar).
+    # En horizontal, "Empresas" suele estar en col 0 (layout 2015+) o col 1
+    # (layout BANCOS/FINANCIERA 2009-2014 con codigo numerico en col 0).
+    # En el layout 2009 los productos son legacy ("Comerciales / A Microempresas /
+    # Consumo / Hipotecarios"), no la taxonomia 2010+ ("Corporativo / Grandes / ...").
     for r in range(0, 8):
-        a = _safe_text(sheet.cell(r, 0))
-        if a and _strip_accents(a).lower().strip() in ("empresa", "empresas", "empresas*"):
-            for c in range(1, sheet.n_cols):
-                v = _safe_text(sheet.cell(r, c))
-                if v and "corporativ" in _strip_accents(v).lower():
-                    return "horizontal"
+        for c_emp in (0, 1):
+            a = _safe_text(sheet.cell(r, c_emp))
+            if a and _strip_accents(a).lower().strip() in _EMPRESA_HEADER_WORDS:
+                for c in range(c_emp + 1, sheet.n_cols):
+                    v = _safe_text(sheet.cell(r, c))
+                    if not v:
+                        continue
+                    v_low = _strip_accents(v).lower()
+                    if ("corporativ" in v_low
+                        or "comercial" in v_low
+                        or "microempresa" in v_low
+                        or v_low == "consumo"
+                        or "hipotec" in v_low):
+                        return "horizontal"
     return None
 
 
@@ -162,19 +221,24 @@ def _detect_layout(sheet) -> str | None:
 def _parse_horizontal(sheet) -> tuple[list[dict], int]:
     """Devuelve (rows, header_data_start) donde rows = list de
     {empresa, producto, saldo_vig, saldo_ref, saldo_atr, saldo_total}."""
-    # Encontrar fila header productos (col 0 = 'Empresas')
+    # Encontrar fila header productos. 'Empresas' puede estar en col 0 o col 1.
     header_row = None
+    empresa_col = 0
     for r in range(0, 8):
-        a = _safe_text(sheet.cell(r, 0))
-        if a and _strip_accents(a).lower().strip() in ("empresa", "empresas", "empresas*"):
-            header_row = r
+        for c_try in (0, 1):
+            a = _safe_text(sheet.cell(r, c_try))
+            if a and _strip_accents(a).lower().strip() in _EMPRESA_HEADER_WORDS:
+                header_row = r
+                empresa_col = c_try
+                break
+        if header_row is not None:
             break
     if header_row is None:
         return [], -1
 
     # Mapear cada producto a su columna de inicio (donde aparece el nombre en header_row)
     producto_cols: list[tuple[str, int]] = []
-    for c in range(1, sheet.n_cols):
+    for c in range(empresa_col + 1, sheet.n_cols):
         v = _safe_text(sheet.cell(header_row, c))
         if v:
             canon = _producto_canonico(v)
@@ -200,7 +264,7 @@ def _parse_horizontal(sheet) -> tuple[list[dict], int]:
 
     rows: list[dict] = []
     for r in range(data_start, sheet.n_rows):
-        emp = _safe_text(sheet.cell(r, 0))
+        emp = _safe_text(sheet.cell(r, empresa_col))
         if not emp:
             continue
         emp_low = _strip_accents(emp).lower()
@@ -334,7 +398,7 @@ class MonthlyColocacionesImporter:
             raise ValidationError(f"Sin hojas en {path}")
         sheet = sheets[0]
 
-        fecha = _extract_fecha(sheet)
+        fecha = _extract_fecha(sheet) or _extract_fecha_from_filename(path)
         if not fecha:
             raise ValidationError(f"No pude extraer fecha de {path}")
         periodo, fecha_iso = fecha

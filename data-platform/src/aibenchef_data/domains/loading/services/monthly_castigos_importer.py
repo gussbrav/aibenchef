@@ -250,6 +250,7 @@ class MonthlyCastigosImporter:
         data_start = sub_header_row + 1
 
         rows: list[tuple] = []
+        empresas_validas = 0  # estructura OK aunque los valores sean 0
         # Buscar empresas en cualquier fila después del header. En layout viejo
         # las empresas están en col 1; usamos empresa_col detectado arriba pero
         # con fallback: si col 0 está vacía, intentar col 1.
@@ -263,6 +264,7 @@ class MonthlyCastigosImporter:
             if (emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
                 or len(emp) < 3):
                 continue
+            empresas_validas += 1
             for canon, c in producto_cols:
                 v = _to_num(sheet.cell(r, c))
                 if v is None or v <= 0:
@@ -274,6 +276,15 @@ class MonthlyCastigosImporter:
                 ))
 
         if not rows:
+            # Si encontramos empresas pero todos sus valores son 0/null, el
+            # archivo es valido — simplemente no hubo castigos ese mes.
+            if empresas_validas > 0:
+                return ImportResult(
+                    source="monthly_castigos", source_file=path.name,
+                    rows_inserted=0, rows_skipped=empresas_validas,
+                    duration_seconds=time.perf_counter() - start,
+                    errors=(),
+                )
             return ImportResult(
                 source="monthly_castigos", source_file=path.name,
                 rows_inserted=0, rows_skipped=0,

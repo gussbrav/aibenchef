@@ -156,18 +156,26 @@ def _producto_canonico(raw: str) -> str | None:
 
 
 def _detect_layout(sheet) -> dict | None:
-    """Detecta header_row, col_empresas, col_total, productos por columna."""
+    """Detecta header_row, col_empresas, col_total, productos por columna.
+
+    Busca "Empresa"/"Empresas" en cualquier columna 0-2 (pre-2015 BANCOS
+    tiene la palabra en col 1, layout moderno en col 0).
+    """
     layout: dict = {}
     header_row = None
+    empresa_col_in_header = 0
 
-    # Buscar "Empresa" o "Empresas" en columna 0 de las primeras 12 filas
     for r in range(0, 12):
-        v = sheet.cell(r, 0)
-        if v is None:
-            continue
-        s = _strip_accents(str(v)).lower().strip()
-        if s in ("empresa", "empresas"):
-            header_row = r
+        for c_try in (0, 1, 2):
+            v = sheet.cell(r, c_try)
+            if v is None:
+                continue
+            s = _strip_accents(str(v)).lower().strip()
+            if s in ("empresa", "empresas"):
+                header_row = r
+                empresa_col_in_header = c_try
+                break
+        if header_row is not None:
             break
     if header_row is None:
         return None
@@ -192,9 +200,26 @@ def _detect_layout(sheet) -> dict | None:
             if canon and not any(c == col for _, col in productos_cols):
                 productos_cols.append((canon, c))
 
+    # Algunos layouts BANCOS 2010-2014 tienen los nombres de productos en
+    # una fila ABOVE el header de "Empresas" (r4 vs r6 en B-230803). Si no
+    # detectamos productos en la header_row, buscamos en las 4 filas previas.
+    if not productos_cols:
+        for r_back in range(max(0, header_row - 4), header_row):
+            tmp_cols: list[tuple[str, int]] = []
+            for c in range(0, sheet.n_cols):
+                v = sheet.cell(r_back, c)
+                if v is None:
+                    continue
+                canon = _producto_canonico(str(v))
+                if canon and not any(c == col for _, col in tmp_cols):
+                    tmp_cols.append((canon, c))
+            if len(tmp_cols) > len(productos_cols):
+                productos_cols = tmp_cols
+
     layout["productos"] = productos_cols
     layout["_header_row"] = header_row
     layout["_data_start_row"] = header_row + 1
+    layout["_empresa_col_in_header"] = empresa_col_in_header
 
     return layout if "empresa" in layout and "total" in layout else None
 

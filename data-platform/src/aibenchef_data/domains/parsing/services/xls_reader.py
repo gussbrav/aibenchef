@@ -69,15 +69,66 @@ def read_xls(path: Path) -> list[XlsSheet]:
 
 def _read_biff(path: Path) -> list[XlsSheet]:
     import xlrd
+    import xlrd.biffh
+    import xlrd.book
+    import xlrd.sheet
 
-    book = xlrd.open_workbook(str(path), formatting_info=False)
+    # xlrd asume UTF-16 LE para BIFF8, pero algunos archivos SBS viejos
+    # (especialmente C-1231 de CMAC pre-2017) tienen surrogates UTF-16
+    # invalidos que rompen el decode. Intentamos varios encoding_override
+    # progresivamente, y si todo falla parchamos xlrd.{biffh,book,sheet}.unicode
+    # (que es `lambda b, enc: b.decode(enc)` via timemachine) para usar
+    # errors='replace' en utf_16_le.
+    book = None
+    last_err: Exception | None = None
+    for enc in (None, "cp1252", "latin-1", "utf-8"):
+        try:
+            kwargs = {"formatting_info": False, "ignore_workbook_corruption": True}
+            if enc:
+                kwargs["encoding_override"] = enc
+            book = xlrd.open_workbook(str(path), **kwargs)
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if book is None:
+        modules = (xlrd.biffh, xlrd.book, xlrd.sheet)
+        originals = {m: m.unicode for m in modules}  # type: ignore[attr-defined]
+
+        def _patched_unicode(b: bytes, enc: str) -> str:
+            e = enc.lower().replace("-", "_")
+            if e in ("utf_16_le", "utf_16le", "utf_16"):
+                return b.decode(enc, errors="replace")
+            try:
+                return b.decode(enc)
+            except UnicodeDecodeError:
+                return b.decode(enc, errors="replace")
+
+        try:
+            for m in modules:
+                m.unicode = _patched_unicode  # type: ignore[attr-defined]
+            try:
+                book = xlrd.open_workbook(
+                    str(path),
+                    formatting_info=False,
+                    ignore_workbook_corruption=True,
+                )
+            finally:
+                for m, orig in originals.items():
+                    m.unicode = orig  # type: ignore[attr-defined]
+        except Exception as e:
+            raise last_err or e
+
     sheets: list[XlsSheet] = []
     for sheet in book.sheets():
         rows: list[list[Cell]] = []
         for r in range(sheet.nrows):
             row_cells: list[Cell] = []
             for c in range(sheet.ncols):
-                row_cells.append(_normalize_xlrd_cell(sheet, r, c))
+                try:
+                    row_cells.append(_normalize_xlrd_cell(sheet, r, c))
+                except (UnicodeDecodeError, UnicodeError):
+                    row_cells.append(None)
             rows.append(row_cells)
         sheets.append(XlsSheet(name=sheet.name, n_rows=sheet.nrows, n_cols=sheet.ncols, rows=rows))
     return sheets

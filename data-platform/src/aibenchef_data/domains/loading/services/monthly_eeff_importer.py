@@ -68,21 +68,28 @@ def _classify_sheet(sheet: XlsSheet) -> str | None:
         return "balance"
     if name_lower.startswith(_ER_SHEET_PREFIXES):
         return "resultados"
+    # 2009-2015 SBS usa "05-BG (P)" / "05-GyP (P)" / "01-BG", etc.
+    if "-bg" in name_lower or name_lower.startswith("bg") or name_lower.endswith("bg"):
+        return "balance"
+    if "-gyp" in name_lower or "-er" in name_lower or "gyp" in name_lower:
+        return "resultados"
 
     # Heuristica por contenido. Las primeras filas contienen el titulo.
+    # Buscamos en cols 0-3 porque algunos layouts viejos lo ponen en col 1.
     for r in range(0, 5):
-        v = sheet.cell(r, 0)
-        if v is None:
-            continue
-        text = str(v).strip().lower()
-        if "balance general" in text:
-            return "balance"
-        if (
-            "estado de ganancias" in text
-            or "estado de resultados" in text
-            or "estado de perdidas" in text  # acentos pueden venir mal
-        ):
-            return "resultados"
+        for c in range(0, 4):
+            v = sheet.cell(r, c)
+            if v is None:
+                continue
+            text = str(v).strip().lower()
+            if "balance general" in text:
+                return "balance"
+            if (
+                "estado de ganancias" in text
+                or "estado de resultados" in text
+                or "estado de perdidas" in text  # acentos pueden venir mal
+            ):
+                return "resultados"
     return None
 
 
@@ -468,12 +475,17 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
 
     periodo_yyyymm = fecha_cierre.year * 100 + fecha_cierre.month
 
-    # Localizar fila de monedas: la primera fila (rows 5-8) cuya col 1 sea "MN"
+    # Localizar fila de monedas: la primera fila (rows 4-10) donde alguna celda
+    # de las primeras 6 cols sea "MN". El layout moderno tiene MN en col 1; el
+    # layout 2009-2015 BANCOS/FINANCIERAS tiene MN en col 2 (col 1 es cuentas).
     monedas_row = -1
     for candidate in range(4, 10):
-        v = _cell_str(sheet, candidate, 1)
-        if v and v.upper() == "MN":
-            monedas_row = candidate
+        for c_try in range(1, 6):
+            v = _cell_str(sheet, candidate, c_try)
+            if v and v.upper() == "MN":
+                monedas_row = candidate
+                break
+        if monedas_row >= 0:
             break
     if monedas_row < 0:
         raise ValidationError("No se pudo detectar fila de monedas (MN/ME)")
