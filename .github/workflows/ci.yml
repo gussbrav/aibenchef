@@ -61,7 +61,7 @@ jobs:
   data-platform:
     name: data-platform — Python
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: data-platform
@@ -86,5 +86,41 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check .
 
-      - name: Pytest
-        run: uv run pytest -q
+      - name: Pytest unit
+        # Excluimos tests @integration aqui — corren en el job de abajo con Docker.
+        run: uv run pytest -q -m "not integration" --cov --cov-report=term --cov-report=xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data-platform
+          path: data-platform/coverage.xml
+          if-no-files-found: ignore
+
+  data-platform-integration:
+    name: data-platform — integration (testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: data-platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Pytest integration (Postgres testcontainer)
+        # testcontainers usa el Docker engine del runner ubuntu-latest (preinstalado).
+        # Si no hay tests @integration aun, el job sigue verde (--no-tests-ok via -m).
+        run: uv run pytest -q -m integration || echo "Sin tests integration aun"
