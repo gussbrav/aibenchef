@@ -1712,6 +1712,76 @@ def import_monthly_personal(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+@import_grp.command("monthly-indicadores")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, path_type=str),
+)
+@click.option("--batch-size", type=int, default=1_000)
+def import_monthly_indicadores(path: str, batch_size: int) -> None:
+    """Cargar .xls mensuales SBS topico indicadores prudenciales (topico 10).
+
+    Procesa el reporte SBS consolidado de indicadores financieros (B-2401,
+    B-3301, C-1301, C-2301, C-4301) a raw.indicadores_prudenciales en
+    formato long: 1 fila por (periodo, tipo_entidad, entidad, indicador).
+
+    Cubre las 5 secciones: SOLVENCIA, CALIDAD_ACTIVOS, EFICIENCIA,
+    RENTABILIDAD, LIQUIDEZ.
+    """
+    import asyncio
+    import contextlib
+    from pathlib import Path as _P
+
+    from aibenchef_data.domains.loading import MonthlyIndicadoresImporter
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    p = _P(path)
+    if p.is_file():
+        files = [p]
+    elif p.is_dir():
+        files = sorted(p.rglob("*.xls"))
+    else:
+        raise click.ClickException(f"Path no es archivo ni directorio: {path}")
+
+    if not files:
+        click.echo(f"# (no se encontraron .xls bajo {path})")
+        return
+
+    click.echo(f"# {len(files)} archivos a procesar")
+
+    async def _run() -> None:
+        await open_pool()
+        total_inserted = 0
+        total_errors = 0
+        try:
+            async with connection() as conn:
+                importer = MonthlyIndicadoresImporter(conn, batch_size=batch_size)
+                for i, f in enumerate(files, start=1):
+                    try:
+                        result = await importer.import_file(f)
+                        total_inserted += result.rows_inserted
+                        if result.errors:
+                            total_errors += len(result.errors)
+                        status = "OK" if not result.errors else f"ERR x{len(result.errors)}"
+                        click.echo(
+                            f"  [{i:>3}/{len(files)}] {f.name:<40} "
+                            f"rows={result.rows_inserted:>5}  ({result.duration_seconds:.1f}s)  {status}"
+                        )
+                        for err in result.errors[:3]:
+                            click.echo(f"      ! {err}")
+                    except Exception as e:
+                        total_errors += 1
+                        click.echo(f"  [{i:>3}/{len(files)}] {f.name:<40} FATAL: {e}")
+                        with contextlib.suppress(Exception):
+                            await conn.rollback()
+        finally:
+            await close_pool()
+        click.echo("")
+        click.echo(f"# TOTAL: {total_inserted:,} filas insertadas, {total_errors} errores")
+
+    asyncio.run(_run())
+
+
 @import_grp.command("monthly-colocaciones")
 @click.argument(
     "path",

@@ -33,6 +33,7 @@ IMPORTERS = {
     "depositos": ("aibenchef_data.domains.loading", "MonthlyDepositosImporter"),
     "eeff": ("aibenchef_data.domains.loading", "MonthlyEeffImporter"),
     "oficinas": ("aibenchef_data.domains.loading", "MonthlyOficinasImporter"),
+    "indicadores": ("aibenchef_data.domains.loading", "MonthlyIndicadoresImporter"),
 }
 
 
