@@ -189,6 +189,25 @@ def _indicador_slug(nombre: str) -> str:
     return s
 
 
+def _find_entity_row(sheet: XlsSheet) -> int | None:
+    """Detecta dinamicamente la fila donde aparecen los nombres de entidades.
+
+    Layout BANCOS/FINANCIERAS: entidades en r5 (header en r0-3 + spacer en r4).
+    Layout CMAC/CRAC/EDPYMES: entidades en r4 (un header menos).
+
+    Estrategia: buscar la primera fila en rows 3-7 donde col 0 esta vacia y al
+    menos 3 cols >0 tienen texto. Asi excluimos las filas de titulo (que tienen
+    contenido en col 0) y nos quedamos con la fila de entidades.
+    """
+    for r in range(3, 8):
+        if _safe_text(sheet.cell(r, 0)) is not None:
+            continue  # filas con texto en col 0 son de titulo/fecha/seccion
+        n_with_text = sum(1 for c in range(1, sheet.n_cols) if _safe_text(sheet.cell(r, c)))
+        if n_with_text >= 2:
+            return r
+    return None
+
+
 def _detect_entity_blocks(sheet: XlsSheet) -> list[tuple[int, list[tuple[str, int]]]]:
     """Detecta los bloques horizontales de entidades.
 
@@ -199,11 +218,14 @@ def _detect_entity_blocks(sheet: XlsSheet) -> list[tuple[int, list[tuple[str, in
     SBS estructura: |indicador|ent1|ent2|...|ent8|  |indicador|ent9|...|ent16|...
     Los bloques se separan por una columna en blanco.
     """
-    # Primero, obtenemos nombres de entidades en row 5 (a veces overflow a row 6)
+    entity_row = _find_entity_row(sheet)
+    if entity_row is None:
+        return []
+    # Nombres de entidades en entity_row + overflow a la siguiente fila (line-wrap visual)
     entity_cols: dict[int, str] = {}
     for c in range(0, sheet.n_cols):
         name_parts: list[str] = []
-        for r in (5, 6):
+        for r in (entity_row, entity_row + 1):
             v = _safe_text(sheet.cell(r, c))
             if v:
                 name_parts.append(v)
@@ -268,6 +290,10 @@ class MonthlyIndicadoresImporter:
         if not bloques:
             raise ValidationError(f"No detecte bloques de entidades en {path}")
 
+        entity_row = _find_entity_row(sheet)
+        # Data inicia dos filas debajo del header de entidades (entidades + overflow)
+        data_start = (entity_row + 2) if entity_row is not None else 7
+
         tipo_entidad = _detect_tipo_entidad(path)
 
         # Recorrer las filas: si col 0 tiene seccion canonica, actualizar contexto.
@@ -277,7 +303,7 @@ class MonthlyIndicadoresImporter:
         seccion_actual: str | None = None
         seen_keys: set[tuple[str, str]] = set()  # dedup (entidad, indicador_slug)
 
-        for r in range(7, sheet.n_rows):
+        for r in range(data_start, sheet.n_rows):
             v_col0 = _safe_text(sheet.cell(r, 0))
             if not v_col0:
                 continue

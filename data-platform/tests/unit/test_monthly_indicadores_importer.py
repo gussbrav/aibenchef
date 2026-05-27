@@ -18,6 +18,7 @@ from aibenchef_data.domains.loading.services.monthly_indicadores_importer import
     _detect_entity_blocks,
     _extract_fecha,
     _extract_fecha_from_filename,
+    _find_entity_row,
     _indicador_slug,
     _seccion_canonica,
 )
@@ -95,6 +96,39 @@ class TestIndicadorSlug:
 # ===========================================================================
 # _detect_entity_blocks
 # ===========================================================================
+
+
+class TestFindEntityRow:
+    def test_layout_bancos_row_5(self):
+        """BANCOS/FINANCIERAS: entidades en r5 (titulo en r1-3, spacer r4)."""
+        rows = [[None] * 4 for _ in range(7)]
+        rows[1][0] = "Indicadores Financieros"
+        rows[2][0] = "2024-12-31"
+        rows[5] = [None, "BCP", "BBVA", "Scotiabank"]
+        sheet = _sheet(rows)
+        assert _find_entity_row(sheet) == 5
+
+    def test_layout_cmac_row_4(self):
+        """CMAC/CRAC/EDPYMES: entidades en r4 (un header menos que BANCOS)."""
+        rows = [[None] * 4 for _ in range(7)]
+        rows[1][0] = "Indicadores Financieros"
+        rows[2][0] = "45657"  # serial Excel
+        rows[4] = [None, "CMAC Arequipa", "CMAC Cusco", "CMAC Piura"]
+        sheet = _sheet(rows)
+        assert _find_entity_row(sheet) == 4
+
+    def test_no_entity_row_retorna_none(self):
+        sheet = _sheet([[None] * 4 for _ in range(8)])
+        assert _find_entity_row(sheet) is None
+
+    def test_no_confunde_titulo_con_entidades(self):
+        """REGRESION: si col 0 tiene texto, NO es la fila de entidades."""
+        rows = [[None] * 4 for _ in range(7)]
+        rows[3] = ["Algun titulo", "Texto", "Otro texto", None]
+        rows[5] = [None, "BCP", "BBVA", "Scotia"]
+        sheet = _sheet(rows)
+        # Debe encontrar r5, NO r3 (porque r3 tiene texto en col 0)
+        assert _find_entity_row(sheet) == 5
 
 
 class TestDetectEntityBlocks:
