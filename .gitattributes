@@ -1,7 +1,11 @@
-# Asegurar line endings LF para scripts que corren en Linux
+# Asegurar line endings LF para scripts y codigo que corren en Linux/CI.
+# Evita falsos positivos del pre-push hook (ruff format) en Windows con autocrlf=true.
+*.py        text eol=lf
 *.sh        text eol=lf
 *.yml       text eol=lf
 *.yaml      text eol=lf
 *.sql       text eol=lf
+*.toml      text eol=lf
+*.md        text eol=lf
 Dockerfile  text eol=lf
 .env*       text eol=lf
