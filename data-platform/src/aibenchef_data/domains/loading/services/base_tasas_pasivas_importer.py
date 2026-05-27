@@ -135,11 +135,19 @@ class BaseTasasPasivasImporter:
                     tasa = to_numeric(row.get(col))
                     if tasa is None:
                         continue
-                    rows.append((
-                        periodo, fc, empresa, bench, tipo, smf,
-                        producto, tasa,
-                        path.name,
-                    ))
+                    rows.append(
+                        (
+                            periodo,
+                            fc,
+                            empresa,
+                            bench,
+                            tipo,
+                            smf,
+                            producto,
+                            tasa,
+                            path.name,
+                        )
+                    )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -149,8 +157,10 @@ class BaseTasasPasivasImporter:
 
         if not rows:
             return ImportResult(
-                source="base_tasas_pasivas", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_tasas_pasivas",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -171,14 +181,16 @@ class BaseTasasPasivasImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("tasas_pas.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_tasas_pasivas", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_tasas_pasivas",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

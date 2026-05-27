@@ -46,29 +46,49 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 
 
 _MESES_ES = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
-    "noviembre": 11, "diciembre": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 
 _MES_ABREV_SBS = {
-    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
-    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+    "en": 1,
+    "fe": 2,
+    "ma": 3,
+    "ab": 4,
+    "my": 5,
+    "jn": 6,
+    "jl": 7,
+    "ag": 8,
+    "se": 9,
+    "oc": 10,
+    "no": 11,
+    "di": 12,
 }
 
 
 # Productos canonicos -> patrones de match (case insensitive, sin tildes)
 _PRODUCTOS_CANON: list[tuple[str, list[str]]] = [
-    ("Corporativo",       ["corporativ"]),
-    ("Grandes Empresas",  ["grandes empresa"]),
+    ("Corporativo", ["corporativ"]),
+    ("Grandes Empresas", ["grandes empresa"]),
     ("Medianas Empresas", ["medianas empresa"]),
-    ("Pequeña Empresa",   ["peque"]),  # "pequenas empresas" / "pequena empresa"
-    ("Microempresa",      ["micro"]),  # "microempresa" / "micro empresas"
-    ("Consumo",           ["consumo"]),
-    ("Hipotecario",       ["hipotec"]),
+    ("Pequeña Empresa", ["peque"]),  # "pequenas empresas" / "pequena empresa"
+    ("Microempresa", ["micro"]),  # "microempresa" / "micro empresas"
+    ("Consumo", ["consumo"]),
+    ("Hipotecario", ["hipotec"]),
     # Layout 2009-2010 Jun (legacy aggregate): "Comerciales", "Actividades empresariales"
-    ("Comerciales",       ["comercial", "actividades empresar"]),
+    ("Comerciales", ["comercial", "actividades empresar"]),
 ]
 
 
@@ -191,7 +211,12 @@ def _detect_layout(sheet) -> str | None:
     for r in range(0, 6):
         a = _safe_text(sheet.cell(r, 0))
         b = _safe_text(sheet.cell(r, 1))
-        if a and "tipo" in _strip_accents(a).lower() and b and "situaci" in _strip_accents(b).lower():
+        if (
+            a
+            and "tipo" in _strip_accents(a).lower()
+            and b
+            and "situaci" in _strip_accents(b).lower()
+        ):
             return "transpuesto"
     # En horizontal, "Empresas" suele estar en col 0 (layout 2015+) o col 1
     # (layout BANCOS/FINANCIERA 2009-2014 con codigo numerico en col 0).
@@ -206,11 +231,13 @@ def _detect_layout(sheet) -> str | None:
                     if not v:
                         continue
                     v_low = _strip_accents(v).lower()
-                    if ("corporativ" in v_low
+                    if (
+                        "corporativ" in v_low
                         or "comercial" in v_low
                         or "microempresa" in v_low
                         or v_low == "consumo"
-                        or "hipotec" in v_low):
+                        or "hipotec" in v_low
+                    ):
                         return "horizontal"
     return None
 
@@ -268,9 +295,14 @@ def _parse_horizontal(sheet) -> tuple[list[dict], int]:
         if not emp:
             continue
         emp_low = _strip_accents(emp).lower()
-        if (emp_low.startswith("total") or emp_low.startswith("nota") or
-            emp_low.startswith("fuente") or emp_low.startswith("(") or
-            emp_low.startswith("elaborac") or len(emp) < 3):
+        if (
+            emp_low.startswith("total")
+            or emp_low.startswith("nota")
+            or emp_low.startswith("fuente")
+            or emp_low.startswith("(")
+            or emp_low.startswith("elaborac")
+            or len(emp) < 3
+        ):
             continue
         for canon, c in producto_cols:
             vig = _to_num(sheet.cell(r, c))
@@ -282,11 +314,16 @@ def _parse_horizontal(sheet) -> tuple[list[dict], int]:
             total = vig + ref + atr
             if total <= 0:
                 continue
-            rows.append({
-                "empresa": emp, "producto": canon,
-                "saldo_vigente": vig, "saldo_reest_refin": ref,
-                "saldo_atrasado": atr, "saldo_total": total,
-            })
+            rows.append(
+                {
+                    "empresa": emp,
+                    "producto": canon,
+                    "saldo_vigente": vig,
+                    "saldo_reest_refin": ref,
+                    "saldo_atrasado": atr,
+                    "saldo_total": total,
+                }
+            )
     return rows, data_start
 
 
@@ -301,9 +338,12 @@ def _parse_transpuesto(sheet) -> tuple[list[dict], int]:
     for r in range(0, 8):
         a = _safe_text(sheet.cell(r, 0))
         b = _safe_text(sheet.cell(r, 1))
-        if (a and b
+        if (
+            a
+            and b
             and "tipo" in _strip_accents(a).lower()
-            and "situaci" in _strip_accents(b).lower()):
+            and "situaci" in _strip_accents(b).lower()
+        ):
             header_row = r
             break
     if header_row is None:
@@ -339,7 +379,11 @@ def _parse_transpuesto(sheet) -> tuple[list[dict], int]:
                 current_producto = canon
             else:
                 # Otra fila (Total, Nota, etc.) — termina seccion
-                if _strip_accents(col0).lower().startswith(("total", "nota", "fuente", "elaborac", "http", "*")):
+                if (
+                    _strip_accents(col0)
+                    .lower()
+                    .startswith(("total", "nota", "fuente", "elaborac", "http", "*"))
+                ):
                     current_producto = None
                     continue
 
@@ -370,11 +414,16 @@ def _parse_transpuesto(sheet) -> tuple[list[dict], int]:
         total = vals["vig"] + vals["ref"] + vals["atr"]
         if total <= 0:
             continue
-        rows.append({
-            "empresa": emp, "producto": prod,
-            "saldo_vigente": vals["vig"], "saldo_reest_refin": vals["ref"],
-            "saldo_atrasado": vals["atr"], "saldo_total": total,
-        })
+        rows.append(
+            {
+                "empresa": emp,
+                "producto": prod,
+                "saldo_vigente": vals["vig"],
+                "saldo_reest_refin": vals["ref"],
+                "saldo_atrasado": vals["atr"],
+                "saldo_total": total,
+            }
+        )
     return rows, header_row + 1
 
 
@@ -416,8 +465,10 @@ class MonthlyColocacionesImporter:
 
         if not parsed:
             return ImportResult(
-                source="monthly_colocaciones", source_file=path.name,
-                rows_inserted=0, rows_skipped=0,
+                source="monthly_colocaciones",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=0,
                 duration_seconds=time.perf_counter() - start,
                 errors=(f"sin rows extraidas con layout={layout}",),
             )
@@ -441,9 +492,19 @@ class MonthlyColocacionesImporter:
                 loaded_at = now()
         """
         rows_tuples = [
-            (periodo, fecha_iso, r["empresa"], tipo_entidad, r["producto"],
-             r["saldo_vigente"], r["saldo_reest_refin"], r["saldo_atrasado"],
-             r["saldo_total"], "monthly_colocaciones", path.name)
+            (
+                periodo,
+                fecha_iso,
+                r["empresa"],
+                tipo_entidad,
+                r["producto"],
+                r["saldo_vigente"],
+                r["saldo_reest_refin"],
+                r["saldo_atrasado"],
+                r["saldo_total"],
+                "monthly_colocaciones",
+                path.name,
+            )
             for r in parsed
         ]
 
@@ -455,12 +516,19 @@ class MonthlyColocacionesImporter:
             await self._conn.commit()
             inserted += len(batch)
 
-        log.info("monthly_coloc.done", inserted=inserted, periodo=periodo,
-                 layout=layout, duration_s=round(time.perf_counter() - start, 2))
+        log.info(
+            "monthly_coloc.done",
+            inserted=inserted,
+            periodo=periodo,
+            layout=layout,
+            duration_s=round(time.perf_counter() - start, 2),
+        )
 
         return ImportResult(
-            source="monthly_colocaciones", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=0,
+            source="monthly_colocaciones",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=0,
             duration_seconds=time.perf_counter() - start,
             errors=(),
         )

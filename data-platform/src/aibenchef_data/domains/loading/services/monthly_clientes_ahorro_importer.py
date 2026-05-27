@@ -45,29 +45,49 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 }
 
 _MESES_ES = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
-    "noviembre": 11, "diciembre": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 _MES_ABREV_SBS = {
-    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
-    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+    "en": 1,
+    "fe": 2,
+    "ma": 3,
+    "ab": 4,
+    "my": 5,
+    "jn": 6,
+    "jl": 7,
+    "ag": 8,
+    "se": 9,
+    "oc": 10,
+    "no": 11,
+    "di": 12,
 }
 
 # Productos canonicos -> patrones de match
 _PRODUCTOS_PATRONES = [
-    ("Vista",  ["vista"]),
+    ("Vista", ["vista"]),
     ("Ahorro", ["ahorro"]),
-    ("Plazo",  ["plazo"]),
-    ("CTS",    ["cts"]),
+    ("Plazo", ["plazo"]),
+    ("CTS", ["cts"]),
 ]
 
 # Sub-columnas dentro de cada producto (orden: PN, PJ no lucro, Otras PJ)
 _SUBCOLS_PATRONES = [
-    ("pers_nat",          ["naturales", "natural"]),
+    ("pers_nat", ["naturales", "natural"]),
     ("pers_jur_no_lucro", ["fines de lucro", "sin fines", "no lucro"]),
-    ("otras_pers_jur",    ["otras personas"]),
+    ("otras_pers_jur", ["otras personas"]),
 ]
 
 
@@ -191,10 +211,7 @@ def _periodo_minus_months(periodo: int, n: int) -> int:
 
 def _periodo_to_eom_iso(periodo: int) -> str:
     anio, mes = divmod(periodo, 100)
-    if mes == 12:
-        siguiente = datetime(anio + 1, 1, 1)
-    else:
-        siguiente = datetime(anio, mes + 1, 1)
+    siguiente = datetime(anio + 1, 1, 1) if mes == 12 else datetime(anio, mes + 1, 1)
     eom = siguiente - timedelta(days=1)
     return eom.strftime("%Y-%m-%d")
 
@@ -303,7 +320,9 @@ class MonthlyClientesAhorroImporter:
                 productos_disponibles.update(pmap.keys())
 
             for prod_canon in productos_disponibles:
-                pn = _to_int(sheet.cell(r, per_persona_prod.get("pers_nat", {}).get(prod_canon, -1)))
+                pn = _to_int(
+                    sheet.cell(r, per_persona_prod.get("pers_nat", {}).get(prod_canon, -1))
+                )
                 pjl = _to_int(
                     sheet.cell(r, per_persona_prod.get("pers_jur_no_lucro", {}).get(prod_canon, -1))
                 )
@@ -316,17 +335,31 @@ class MonthlyClientesAhorroImporter:
                 total = sum(vals)
                 if total <= 0:
                     continue
-                rows.append((
-                    periodo, fecha_iso, emp, None,
-                    tipo_entidad, None, None, prod_canon,
-                    pn, pjl, opj, total,
-                    "monthly_clientes_ahorro", path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fecha_iso,
+                        emp,
+                        None,
+                        tipo_entidad,
+                        None,
+                        None,
+                        prod_canon,
+                        pn,
+                        pjl,
+                        opj,
+                        total,
+                        "monthly_clientes_ahorro",
+                        path.name,
+                    )
+                )
 
         if not rows:
             return ImportResult(
-                source="monthly_clientes_ahorro", source_file=path.name,
-                rows_inserted=0, rows_skipped=0,
+                source="monthly_clientes_ahorro",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=0,
                 duration_seconds=time.perf_counter() - start,
                 errors=("sin filas (layout invertido)",),
             )
@@ -359,15 +392,17 @@ class MonthlyClientesAhorroImporter:
         """
         inserted = 0
         for i in range(0, len(rows), self._batch_size):
-            batch = rows[i:i + self._batch_size]
+            batch = rows[i : i + self._batch_size]
             async with self._conn.cursor() as cur:
                 await cur.executemany(insert_sql, batch)
             await self._conn.commit()
             inserted += len(batch)
 
         return ImportResult(
-            source="monthly_clientes_ahorro", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=0,
+            source="monthly_clientes_ahorro",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=0,
             duration_seconds=time.perf_counter() - start,
             errors=(),
         )
@@ -422,7 +457,11 @@ class MonthlyClientesAhorroImporter:
             # Ejemplo R3: "Empresas |  | Personas Naturales |  |  |  | PJ no lucro | ..."
             #         R4: "        |  | Ahorro | Plazo | Total | | Ahorro | Plazo |..."
             return await self._import_inverted_layout(
-                sheet, path, periodo, fecha_iso, start,
+                sheet,
+                path,
+                periodo,
+                fecha_iso,
+                start,
             )
 
         # Para cada producto, mapear sub-col -> col_index:
@@ -437,17 +476,14 @@ class MonthlyClientesAhorroImporter:
         producto_subcols: dict[str, dict[str, int]] = {}
         for i, (canon_prod, prod_col) in enumerate(producto_cols_sorted):
             next_prod_col = (
-                producto_cols_sorted[i + 1][1]
-                if i + 1 < len(producto_cols_sorted)
-                else 999
+                producto_cols_sorted[i + 1][1] if i + 1 < len(producto_cols_sorted) else 999
             )
             # tomar las sub-cols entre prod_col y next_prod_col
             local_subs: dict[str, int] = {}
             for canon_sub, sub_col in subcols_sorted:
-                if prod_col <= sub_col < next_prod_col:
-                    # Solo nos quedamos con la PRIMERA aparicion de cada subcol_canon
-                    if canon_sub not in local_subs:
-                        local_subs[canon_sub] = sub_col
+                # Solo nos quedamos con la PRIMERA aparicion de cada subcol_canon
+                if prod_col <= sub_col < next_prod_col and canon_sub not in local_subs:
+                    local_subs[canon_sub] = sub_col
             producto_subcols[canon_prod] = local_subs
 
         tipo_entidad = _detect_tipo_entidad(path)
@@ -471,14 +507,26 @@ class MonthlyClientesAhorroImporter:
             if not emp:
                 continue
             emp_low = _strip_accents(emp).lower()
-            if (emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
-                or len(emp) < 3):
+            if (
+                emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
+                or len(emp) < 3
+            ):
                 continue
 
             for prod_canon, subs in producto_subcols.items():
-                pn  = _to_int(sheet.cell(r, subs.get("pers_nat", -1))) if "pers_nat" in subs else None
-                pjl = _to_int(sheet.cell(r, subs.get("pers_jur_no_lucro", -1))) if "pers_jur_no_lucro" in subs else None
-                opj = _to_int(sheet.cell(r, subs.get("otras_pers_jur", -1))) if "otras_pers_jur" in subs else None
+                pn = (
+                    _to_int(sheet.cell(r, subs.get("pers_nat", -1))) if "pers_nat" in subs else None
+                )
+                pjl = (
+                    _to_int(sheet.cell(r, subs.get("pers_jur_no_lucro", -1)))
+                    if "pers_jur_no_lucro" in subs
+                    else None
+                )
+                opj = (
+                    _to_int(sheet.cell(r, subs.get("otras_pers_jur", -1)))
+                    if "otras_pers_jur" in subs
+                    else None
+                )
                 # n_total = suma de los 3 (si todos None, skip)
                 vals = [v for v in (pn, pjl, opj) if v is not None]
                 if not vals:
@@ -486,20 +534,34 @@ class MonthlyClientesAhorroImporter:
                 total = sum(vals)
                 if total <= 0:
                     continue
-                rows.append((
-                    periodo, fecha_iso, emp, None,
-                    tipo_entidad, None, None, prod_canon,
-                    pn, pjl, opj, total,
-                    "monthly_clientes_ahorro", path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fecha_iso,
+                        emp,
+                        None,
+                        tipo_entidad,
+                        None,
+                        None,
+                        prod_canon,
+                        pn,
+                        pjl,
+                        opj,
+                        total,
+                        "monthly_clientes_ahorro",
+                        path.name,
+                    )
+                )
 
         # Nota: clientes_ahorro SBS viene MENSUAL desde 2009 — NO requiere
         # distribucion trimestral (a diferencia de castigos que sí lo necesita).
 
         if not rows:
             return ImportResult(
-                source="monthly_clientes_ahorro", source_file=path.name,
-                rows_inserted=0, rows_skipped=0,
+                source="monthly_clientes_ahorro",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=0,
                 duration_seconds=time.perf_counter() - start,
                 errors=("sin filas",),
             )
@@ -532,15 +594,17 @@ class MonthlyClientesAhorroImporter:
         """
         inserted = 0
         for i in range(0, len(rows), self._batch_size):
-            batch = rows[i:i + self._batch_size]
+            batch = rows[i : i + self._batch_size]
             async with self._conn.cursor() as cur:
                 await cur.executemany(insert_sql, batch)
             await self._conn.commit()
             inserted += len(batch)
 
         return ImportResult(
-            source="monthly_clientes_ahorro", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=0,
+            source="monthly_clientes_ahorro",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=0,
             duration_seconds=time.perf_counter() - start,
             errors=(),
         )

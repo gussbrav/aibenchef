@@ -30,8 +30,11 @@ log = get_logger(__name__)
 
 # Columnas que NO son tasas (son dimensiones)
 _DIM_COLS_LOWER = {
-    "fecha", "tipo de entidad", "microfinanciera",
-    "nombre sbs", "nomb_correg",
+    "fecha",
+    "tipo de entidad",
+    "microfinanciera",
+    "nombre sbs",
+    "nomb_correg",
 }
 
 
@@ -41,7 +44,7 @@ _SEGMENTOS_HEADERS = [
     "Grandes Empresas",
     "Medianas Empresas",
     "Pequenas Empresas",
-    "Pequeñas Empresas",   # variante con tilde
+    "Pequeñas Empresas",  # variante con tilde
     "Microempresas",
     "Consumo",
     "Hipotecarios",
@@ -161,11 +164,20 @@ class BaseTasasActivasImporter:
                     if tasa is None:
                         continue
                     seg, top = segmento_tipo_op.split("|", 1)
-                    rows.append((
-                        periodo, fc, empresa, nomb_correg, tipo, microfin,
-                        seg, top, tasa,
-                        path.name,
-                    ))
+                    rows.append(
+                        (
+                            periodo,
+                            fc,
+                            empresa,
+                            nomb_correg,
+                            tipo,
+                            microfin,
+                            seg,
+                            top,
+                            tasa,
+                            path.name,
+                        )
+                    )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -175,8 +187,10 @@ class BaseTasasActivasImporter:
 
         if not rows:
             return ImportResult(
-                source="base_tasas_activas", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_tasas_activas",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -197,14 +211,16 @@ class BaseTasasActivasImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("tasas_act.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_tasas_activas", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_tasas_activas",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

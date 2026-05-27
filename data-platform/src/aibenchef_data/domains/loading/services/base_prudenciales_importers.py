@@ -65,16 +65,20 @@ class BasePatrimonioImporter:
                 if not empresa:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc, empresa,
-                    normalizar_tipo(safe_text(row.get("Tipo"))),
-                    to_numeric(row.get("Nivel_1")),
-                    to_numeric(row.get("Nivel_2")),
-                    to_numeric(row.get("Nivel_3")),
-                    to_numeric(row.get("Total")),
-                    to_numeric(row.get("Nivel_1_Soles")),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa,
+                        normalizar_tipo(safe_text(row.get("Tipo"))),
+                        to_numeric(row.get("Nivel_1")),
+                        to_numeric(row.get("Nivel_2")),
+                        to_numeric(row.get("Nivel_3")),
+                        to_numeric(row.get("Total")),
+                        to_numeric(row.get("Nivel_1_Soles")),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -82,8 +86,10 @@ class BasePatrimonioImporter:
 
         if not rows:
             return ImportResult(
-                source="base_patrimonio", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_patrimonio",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -107,14 +113,16 @@ class BasePatrimonioImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("patrimonio.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_patrimonio", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_patrimonio",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )
@@ -149,17 +157,21 @@ class BaseRatioLiquidezImporter:
                 if not empresa:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc, empresa,
-                    normalizar_tipo(safe_text(row.get("Tipo"))),
-                    to_numeric(row.get("Activo")),
-                    to_numeric(row.get("Pasivo")),
-                    to_numeric(row.get("RL")),
-                    to_numeric(row.get("ActivoE")),
-                    to_numeric(row.get("PasivoE")),
-                    to_numeric(row.get("RLE")),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa,
+                        normalizar_tipo(safe_text(row.get("Tipo"))),
+                        to_numeric(row.get("Activo")),
+                        to_numeric(row.get("Pasivo")),
+                        to_numeric(row.get("RL")),
+                        to_numeric(row.get("ActivoE")),
+                        to_numeric(row.get("PasivoE")),
+                        to_numeric(row.get("RLE")),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -167,8 +179,10 @@ class BaseRatioLiquidezImporter:
 
         if not rows:
             return ImportResult(
-                source="base_ratio_liquidez", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_ratio_liquidez",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -194,14 +208,16 @@ class BaseRatioLiquidezImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("liquidez.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_ratio_liquidez", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_ratio_liquidez",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )
@@ -237,21 +253,25 @@ class BaseRcgImporter:
                 if not empresa:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc, empresa,
-                    normalizar_tipo(safe_text(row.get("Tipo"))),
-                    to_numeric(row.get("Creditos")),
-                    to_numeric(row.get("Mercado")),
-                    to_numeric(row.get("Operacional")),
-                    to_numeric(row.get("Total")),
-                    to_numeric(row.get("Creditos_A")),
-                    to_numeric(row.get("Mercado_A")),
-                    to_numeric(row.get("Operacional_A")),
-                    to_numeric(row.get("Total_A")),
-                    to_numeric(row.get("Patrimonio")),
-                    to_numeric(row.get("RCG")),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa,
+                        normalizar_tipo(safe_text(row.get("Tipo"))),
+                        to_numeric(row.get("Creditos")),
+                        to_numeric(row.get("Mercado")),
+                        to_numeric(row.get("Operacional")),
+                        to_numeric(row.get("Total")),
+                        to_numeric(row.get("Creditos_A")),
+                        to_numeric(row.get("Mercado_A")),
+                        to_numeric(row.get("Operacional_A")),
+                        to_numeric(row.get("Total_A")),
+                        to_numeric(row.get("Patrimonio")),
+                        to_numeric(row.get("RCG")),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -259,8 +279,10 @@ class BaseRcgImporter:
 
         if not rows:
             return ImportResult(
-                source="base_rcg", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_rcg",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -290,14 +312,16 @@ class BaseRcgImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("rcg.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_rcg", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_rcg",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )
@@ -360,21 +384,24 @@ class BasePersonalImporter:
                 if not empresa_sbs:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc,
-                    empresa_sbs,
-                    safe_text(row.get(col_map.get("empresa_bd"))),
-                    normalizar_tipo(safe_text(row.get(col_map.get("tipo_entidad")))),
-                    safe_text(row.get(col_map.get("microfin"))),
-                    safe_text(row.get(col_map.get("nacional"))),
-                    safe_text(row.get(col_map.get("mype50"))),
-                    to_int(row.get(col_map.get("gerentes"))),
-                    to_int(row.get(col_map.get("funcionarios"))),
-                    to_int(row.get(col_map.get("empleados"))),
-                    to_int(row.get(col_map.get("otros"))),
-                    to_int(row.get(col_map.get("total"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa_sbs,
+                        safe_text(row.get(col_map.get("empresa_bd"))),
+                        normalizar_tipo(safe_text(row.get(col_map.get("tipo_entidad")))),
+                        safe_text(row.get(col_map.get("microfin"))),
+                        safe_text(row.get(col_map.get("nacional"))),
+                        safe_text(row.get(col_map.get("mype50"))),
+                        to_int(row.get(col_map.get("gerentes"))),
+                        to_int(row.get(col_map.get("funcionarios"))),
+                        to_int(row.get(col_map.get("empleados"))),
+                        to_int(row.get(col_map.get("otros"))),
+                        to_int(row.get(col_map.get("total"))),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -382,8 +409,10 @@ class BasePersonalImporter:
 
         if not rows:
             return ImportResult(
-                source="base_personal", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_personal",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -411,14 +440,16 @@ class BasePersonalImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("personal.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_personal", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_personal",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

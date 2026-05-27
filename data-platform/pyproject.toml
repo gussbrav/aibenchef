@@ -68,6 +68,8 @@ ignore = [
     "E501",  # line too long (formatter se encarga)
     "B008",  # function call in default arg (click usa esto)
     "RUF012", # mutable class attributes (innecesario aqui)
+    "RUF002", # Unicode ambiguo en docstrings — preferimos × correcto en castellano
+    "RUF003", # idem en comentarios
 ]
 
 [tool.ruff.lint.per-file-ignores]

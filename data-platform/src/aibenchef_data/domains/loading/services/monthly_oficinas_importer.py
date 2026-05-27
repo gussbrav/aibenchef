@@ -88,9 +88,7 @@ def _to_numeric(v) -> float | None:
 
 def _strip_accents(s: str) -> str:
     """Quitar tildes para matching robusto de headers."""
-    return "".join(
-        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
-    )
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 
 def _detect_tipo_entidad(path: Path) -> str:
@@ -123,6 +121,7 @@ def _excel_serial_to_date(serial: float) -> tuple[int, int, int] | None:
         return None
     try:
         from datetime import datetime, timedelta
+
         epoch = datetime(1899, 12, 30)
         dt = epoch + timedelta(days=float(serial))
         if 2000 <= dt.year <= 2050:
@@ -178,9 +177,19 @@ def _extract_fecha_cierre(sheet) -> tuple[int, str] | None:
             # 4b) "Al DD de MES de YYYY" (formato pre-2013 BANCA/FINANCIERA)
             #     y "Al DD MES YYYY", "DD de MES de YYYY"
             _meses_es = {
-                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-                'julio': 7, 'agosto': 8, 'setiembre': 9, 'septiembre': 9,
-                'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+                "enero": 1,
+                "febrero": 2,
+                "marzo": 3,
+                "abril": 4,
+                "mayo": 5,
+                "junio": 6,
+                "julio": 7,
+                "agosto": 8,
+                "setiembre": 9,
+                "septiembre": 9,
+                "octubre": 10,
+                "noviembre": 11,
+                "diciembre": 12,
             }
             m = re.search(
                 r"(\d{1,2})\s+(?:de\s+)?([A-Za-záéíóúÑñ]+)\s+(?:de\s+)?(\d{4})",
@@ -349,11 +358,11 @@ class MonthlyOficinasImporter:
         c_pro = layout.get("prov", -1)
         c_dis = layout.get("dist", -1)
         c_cod = layout["cod_of"]
-        c_dvt = layout.get("dep_vista_total", -1)
-        c_dat = layout.get("dep_ahorro_total", -1)
-        c_dpt = layout.get("dep_plazo_total", -1)
+        layout.get("dep_vista_total", -1)
+        layout.get("dep_ahorro_total", -1)
+        layout.get("dep_plazo_total", -1)
         c_dtot = layout.get("dep_total", -1)
-        c_cdt = layout.get("cred_directos_total", -1)
+        layout.get("cred_directos_total", -1)
         c_ctot = layout.get("cred_total", -1)
 
         for r in range(data_start, sheet.n_rows):
@@ -413,7 +422,9 @@ class MonthlyOficinasImporter:
                         "TOTAL",  # producto - una sola fila por oficina sumando todo
                         None,  # saldo_mn (no separado por moneda en este parser inicial)
                         None,  # saldo_me
-                        dep_total if dep_total is not None else cred_total,  # saldo_total como proxy
+                        dep_total
+                        if dep_total is not None
+                        else cred_total,  # saldo_total como proxy
                         path.name,
                     )
                 )

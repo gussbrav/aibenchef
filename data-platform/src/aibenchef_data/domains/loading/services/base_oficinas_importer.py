@@ -46,6 +46,7 @@ class BaseOficinasImporter:
         if sheet.lower() in ("auto", "all"):
             try:
                 from openpyxl import load_workbook
+
                 wb = load_workbook(path, read_only=True, data_only=True)
                 sheets_to_read = [s for s in wb.sheetnames if s.lower().startswith("datasf")]
                 wb.close()
@@ -150,27 +151,30 @@ class BaseOficinasImporter:
                     distrito = safe_text(row.get(col_map.get("distrito"))) or "(sin)"
                     depto_dist = f"{depto}_{distrito}"
 
-                rows.append((
-                    periodo, fc,
-                    empresa_sbs,
-                    safe_text(row.get(col_map.get("empresa"))),
-                    safe_text(row.get(col_map.get("benchmark"))),
-                    normalizar_tipo(safe_text(row.get(col_map.get("tipo")))),
-                    safe_text(row.get(col_map.get("clasificacion"))),
-                    safe_text(row.get(col_map.get("cb50"))),
-                    depto,
-                    safe_text(row.get(col_map.get("provincia"))),
-                    safe_text(row.get(col_map.get("distrito"))),
-                    depto_dist,
-                    safe_text(row.get(col_map.get("region"))),
-                    safe_text(row.get(col_map.get("region_sp"))),
-                    to_int(row.get(col_map.get("cod_oficina"))),
-                    producto,
-                    to_numeric(row.get(col_map.get("mn"))),
-                    to_numeric(row.get(col_map.get("me"))),
-                    to_numeric(row.get(col_map.get("total"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa_sbs,
+                        safe_text(row.get(col_map.get("empresa"))),
+                        safe_text(row.get(col_map.get("benchmark"))),
+                        normalizar_tipo(safe_text(row.get(col_map.get("tipo")))),
+                        safe_text(row.get(col_map.get("clasificacion"))),
+                        safe_text(row.get(col_map.get("cb50"))),
+                        depto,
+                        safe_text(row.get(col_map.get("provincia"))),
+                        safe_text(row.get(col_map.get("distrito"))),
+                        depto_dist,
+                        safe_text(row.get(col_map.get("region"))),
+                        safe_text(row.get(col_map.get("region_sp"))),
+                        to_int(row.get(col_map.get("cod_oficina"))),
+                        producto,
+                        to_numeric(row.get(col_map.get("mn"))),
+                        to_numeric(row.get(col_map.get("me"))),
+                        to_numeric(row.get(col_map.get("total"))),
+                        path.name,
+                    )
+                )
 
                 # Log progress cada 100K
                 if len(rows) % 100_000 == 0:
@@ -184,8 +188,10 @@ class BaseOficinasImporter:
 
         if not rows:
             return ImportResult(
-                source="base_oficinas", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_oficinas",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -220,7 +226,7 @@ class BaseOficinasImporter:
         # que si se interrumpe, podemos re-correr y solo se actualizan
         # las filas ya presentes.
         for i in range(0, len(rows), self._batch_size):
-            batch = rows[i:i + self._batch_size]
+            batch = rows[i : i + self._batch_size]
             async with self._conn.cursor() as cur:
                 await cur.executemany(sql, batch)
             await self._conn.commit()
@@ -233,8 +239,10 @@ class BaseOficinasImporter:
                 )
 
         return ImportResult(
-            source="base_oficinas", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_oficinas",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

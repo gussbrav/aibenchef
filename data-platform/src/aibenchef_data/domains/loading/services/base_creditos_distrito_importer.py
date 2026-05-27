@@ -93,24 +93,27 @@ class BaseCreditosDistritoImporter:
                 if not depto or not tipo_cred:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc,
-                    safe_text(row.get(col_map.get("nom_bd"))),
-                    depto,
-                    safe_text(row.get(col_map.get("provincia"))),
-                    safe_text(row.get(col_map.get("distrito"))) or "(sin distrito)",
-                    safe_text(row.get(col_map.get("region"))),
-                    tipo_cred,
-                    safe_text(row.get(col_map.get("tipo_base"))),
-                    to_numeric(row.get(col_map.get("bancos"))),
-                    to_numeric(row.get(col_map.get("financieras"))),
-                    to_numeric(row.get(col_map.get("cmac"))),
-                    to_numeric(row.get(col_map.get("crac"))),
-                    to_numeric(row.get(col_map.get("edpymes"))),
-                    to_numeric(row.get(col_map.get("total_tipo"))),
-                    to_numeric(row.get(col_map.get("total_directos"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        safe_text(row.get(col_map.get("nom_bd"))),
+                        depto,
+                        safe_text(row.get(col_map.get("provincia"))),
+                        safe_text(row.get(col_map.get("distrito"))) or "(sin distrito)",
+                        safe_text(row.get(col_map.get("region"))),
+                        tipo_cred,
+                        safe_text(row.get(col_map.get("tipo_base"))),
+                        to_numeric(row.get(col_map.get("bancos"))),
+                        to_numeric(row.get(col_map.get("financieras"))),
+                        to_numeric(row.get(col_map.get("cmac"))),
+                        to_numeric(row.get(col_map.get("crac"))),
+                        to_numeric(row.get(col_map.get("edpymes"))),
+                        to_numeric(row.get(col_map.get("total_tipo"))),
+                        to_numeric(row.get(col_map.get("total_directos"))),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -120,8 +123,10 @@ class BaseCreditosDistritoImporter:
 
         if not rows:
             return ImportResult(
-                source="base_creditos_distrito", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_creditos_distrito",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -151,14 +156,16 @@ class BaseCreditosDistritoImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("creditos_dist.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_creditos_distrito", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_creditos_distrito",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

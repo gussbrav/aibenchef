@@ -117,7 +117,7 @@ def _read_biff(path: Path) -> list[XlsSheet]:
                 for m, orig in originals.items():
                     m.unicode = orig  # type: ignore[attr-defined]
         except Exception as e:
-            raise last_err or e
+            raise (last_err or e) from e
 
     sheets: list[XlsSheet] = []
     for sheet in book.sheets():

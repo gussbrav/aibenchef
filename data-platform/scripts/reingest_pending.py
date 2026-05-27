@@ -18,11 +18,12 @@ if sys.platform == "win32":
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+import contextlib
+
 import psycopg
 
 from aibenchef_data.env import settings
 from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
-
 
 IMPORTERS = {
     "castigos": ("aibenchef_data.domains.loading", "MonthlyCastigosImporter"),
@@ -37,18 +38,17 @@ IMPORTERS = {
 
 def _fetch_pending(topico: str) -> list[Path]:
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
-    with psycopg.connect(url) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT path_local
                 FROM raw.archivos_descargados
                 WHERE topico = %s AND status = 'descargado'
                 ORDER BY anio, mes
                 """,
-                (topico,),
-            )
-            return [Path(row[0]) for row in cur.fetchall()]
+            (topico,),
+        )
+        return [Path(row[0]) for row in cur.fetchall()]
 
 
 def _mark_procesado(paths: list[Path]) -> int:
@@ -136,16 +136,16 @@ async def _run(topico: str) -> None:
                     msg = f"{type(e).__name__}: {e}"
                     print(f"  [{i:>4}/{len(files)}] {f.name:<40} FATAL: {msg[:120]}")
                     _mark_error(f, msg)
-                    try:
+                    with contextlib.suppress(Exception):
                         await conn.rollback()
-                    except Exception:
-                        pass
     finally:
         await close_pool()
 
     n = _mark_procesado(ok_paths)
     print("")
-    print(f"# TOTAL {topico}: {total_inserted:,} filas insertadas, {total_err} errores, {n} marcados procesado")
+    print(
+        f"# TOTAL {topico}: {total_inserted:,} filas insertadas, {total_err} errores, {n} marcados procesado"
+    )
 
 
 def main() -> None:

@@ -92,6 +92,7 @@ def _excel_serial_to_date(serial: float) -> tuple[int, int, int] | None:
         return None
     try:
         from datetime import datetime, timedelta
+
         epoch = datetime(1899, 12, 30)
         dt = epoch + timedelta(days=float(serial))
         if 2000 <= dt.year <= 2050:
@@ -134,14 +135,14 @@ def _extract_fecha_cierre(sheet) -> tuple[int, str] | None:
 
 # Mapeo de strings de productos a forma canonica
 _PRODUCTOS_PATRONES = [
-    ("Corporativo",       ["corporativ"]),
-    ("Grandes Empresas",  ["grandes"]),
+    ("Corporativo", ["corporativ"]),
+    ("Grandes Empresas", ["grandes"]),
     ("Medianas Empresas", ["mediana"]),
-    ("Pequeña Empresa",   ["peque"]),
-    ("Microempresa",      ["micro", "mes"]),
-    ("Consumo",           ["consumo"]),
-    ("Hipotecario",       ["hipotec"]),
-    ("Comerciales",       ["comercial"]),
+    ("Pequeña Empresa", ["peque"]),
+    ("Microempresa", ["micro", "mes"]),
+    ("Consumo", ["consumo"]),
+    ("Hipotecario", ["hipotec"]),
+    ("Comerciales", ["comercial"]),
 ]
 
 
@@ -300,24 +301,40 @@ class MonthlyClientesImporter:
                     continue
 
                 # Fila TOTAL (agregado)
-                rows.append((
-                    periodo, fecha_iso,
-                    emp, None, tipo_entidad, None, None,
-                    "TOTAL", total,
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fecha_iso,
+                        emp,
+                        None,
+                        tipo_entidad,
+                        None,
+                        None,
+                        "TOTAL",
+                        total,
+                        path.name,
+                    )
+                )
 
                 # Filas por cada producto canonico detectado en header
                 for canon, col in productos_cols:
                     n = _to_int(sheet.cell(r, col))
                     if n is None or n <= 0:
                         continue
-                    rows.append((
-                        periodo, fecha_iso,
-                        emp, None, tipo_entidad, None, None,
-                        canon, n,
-                        path.name,
-                    ))
+                    rows.append(
+                        (
+                            periodo,
+                            fecha_iso,
+                            emp,
+                            None,
+                            tipo_entidad,
+                            None,
+                            None,
+                            canon,
+                            n,
+                            path.name,
+                        )
+                    )
             except Exception as e:
                 errors.append(f"row {r}: {e}")
                 if len(errors) > 30:

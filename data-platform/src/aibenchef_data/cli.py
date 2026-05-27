@@ -177,11 +177,21 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 # MD5 solo para los nuevos
                 with open(f, "rb") as fh:
                     md5 = hashlib.md5(fh.read()).hexdigest()
-                inserted_rows.append((
-                    grupo, topico, periodo, anio, mes,
-                    archivo, path_str, url_sbs,
-                    size, md5, fmt,
-                ))
+                inserted_rows.append(
+                    (
+                        grupo,
+                        topico,
+                        periodo,
+                        anio,
+                        mes,
+                        archivo,
+                        path_str,
+                        url_sbs,
+                        size,
+                        md5,
+                        fmt,
+                    )
+                )
 
         # Bulk inserts en batches con commit intermedio. Sin esto, el server
         # cierra la conexion despues de unos minutos con executemany grande
@@ -386,7 +396,6 @@ def db_refresh_mvs(concurrently: bool) -> None:
 @db.command("status")
 def db_status() -> None:
     """Resumen del estado de cada dominio SBS cargado en la DB."""
-    import time
 
     import psycopg
 
@@ -1949,6 +1958,7 @@ def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: i
     """Helper para correr un importer simple con DB pool + commit."""
     import asyncio
     from pathlib import Path as _P
+
     from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
 
     async def _run() -> None:
@@ -1983,6 +1993,7 @@ def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: i
 def import_base_patrimonio(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE PATRIMONIO EFECTIVO.xlsx a raw.patrimonio_efectivo."""
     from aibenchef_data.domains.loading import BasePatrimonioImporter
+
     _run_simple_import(BasePatrimonioImporter, path, sheet, batch_size)
 
 
@@ -1993,6 +2004,7 @@ def import_base_patrimonio(path: str, sheet: str, batch_size: int) -> None:
 def import_base_ratio_liquidez(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE_RATIO_LIQUIDEZ.xlsx a raw.ratio_liquidez."""
     from aibenchef_data.domains.loading import BaseRatioLiquidezImporter
+
     _run_simple_import(BaseRatioLiquidezImporter, path, sheet, batch_size)
 
 
@@ -2003,6 +2015,7 @@ def import_base_ratio_liquidez(path: str, sheet: str, batch_size: int) -> None:
 def import_base_rcg(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE_RCG.xlsx a raw.ratio_capital_global (Basilea III)."""
     from aibenchef_data.domains.loading import BaseRcgImporter
+
     _run_simple_import(BaseRcgImporter, path, sheet, batch_size)
 
 
@@ -2013,6 +2026,7 @@ def import_base_rcg(path: str, sheet: str, batch_size: int) -> None:
 def import_base_personal(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE PERSONAL.xlsx a raw.personal_observacion (headcount)."""
     from aibenchef_data.domains.loading import BasePersonalImporter
+
     _run_simple_import(BasePersonalImporter, path, sheet, batch_size)
 
 
@@ -2023,6 +2037,7 @@ def import_base_personal(path: str, sheet: str, batch_size: int) -> None:
 def import_base_clientes_ahorros(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE CLIENTES AHORROS.xlsx a raw.clientes_ahorros."""
     from aibenchef_data.domains.loading import BaseClientesAhorrosImporter
+
     _run_simple_import(BaseClientesAhorrosImporter, path, sheet, batch_size)
 
 
@@ -2033,6 +2048,7 @@ def import_base_clientes_ahorros(path: str, sheet: str, batch_size: int) -> None
 def import_base_clientes_creditos(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE CLIENTES CREDITOS.xlsx a raw.clientes_creditos."""
     from aibenchef_data.domains.loading import BaseClientesCreditosImporter
+
     _run_simple_import(BaseClientesCreditosImporter, path, sheet, batch_size)
 
 
@@ -2053,6 +2069,7 @@ def import_base_oficinas(path: str, sheet: str, batch_size: int) -> None:
     supera el limite de Excel se parte en varias hojas).
     """
     from aibenchef_data.domains.loading import BaseOficinasImporter
+
     _run_simple_import(BaseOficinasImporter, path, sheet, batch_size)
 
 
@@ -2063,6 +2080,7 @@ def import_base_oficinas(path: str, sheet: str, batch_size: int) -> None:
 def import_base_creditos_distrito(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE_Creditos_por_tipo_distrito.xlsx a raw.creditos_distrito."""
     from aibenchef_data.domains.loading import BaseCreditosDistritoImporter
+
     _run_simple_import(BaseCreditosDistritoImporter, path, sheet, batch_size)
 
 
@@ -2073,6 +2091,7 @@ def import_base_creditos_distrito(path: str, sheet: str, batch_size: int) -> Non
 def import_base_tasas_activas(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE TASAS ACTIVAS.xlsx a raw.tasas_activas (con unpivot)."""
     from aibenchef_data.domains.loading import BaseTasasActivasImporter
+
     _run_simple_import(BaseTasasActivasImporter, path, sheet, batch_size)
 
 
@@ -2083,6 +2102,7 @@ def import_base_tasas_activas(path: str, sheet: str, batch_size: int) -> None:
 def import_base_tasas_pasivas(path: str, sheet: str, batch_size: int) -> None:
     """Cargar BASE TASAS PASIVAS.xlsx a raw.tasas_pasivas (con unpivot, header row 2)."""
     from aibenchef_data.domains.loading import BaseTasasPasivasImporter
+
     _run_simple_import(BaseTasasPasivasImporter, path, sheet, batch_size)
 
 
@@ -2094,6 +2114,7 @@ def import_base_depositos(path: str, sheet: str, batch_size: int) -> None:
     """Bootstrap historico: cargar BASE DEPOSITOS.xlsx a raw.depositos_observacion."""
     import asyncio
     from pathlib import Path as _P
+
     from aibenchef_data.domains.loading import BaseDepositosImporter
     from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
 
@@ -2112,6 +2133,7 @@ def import_base_depositos(path: str, sheet: str, batch_size: int) -> None:
                 )
         finally:
             await close_pool()
+
     asyncio.run(_run())
 
 
@@ -2123,6 +2145,7 @@ def import_base_castigos(path: str, sheet: str, batch_size: int) -> None:
     """Bootstrap historico: cargar BASE CASTIGOS.xlsx a raw.castigos_observacion."""
     import asyncio
     from pathlib import Path as _P
+
     from aibenchef_data.domains.loading import BaseCastigosImporter
     from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
 
@@ -2141,6 +2164,7 @@ def import_base_castigos(path: str, sheet: str, batch_size: int) -> None:
                 )
         finally:
             await close_pool()
+
     asyncio.run(_run())
 
 
@@ -2246,16 +2270,16 @@ def sbs_work_jobs(max_jobs: int) -> None:
       4. ejecuta storage scan (registra) e imports correspondientes
       5. status -> 'completed' con metricas, o 'failed' con error_mensaje
     """
-    import psycopg
     import subprocess
-    import time
     from datetime import datetime
+
+    import psycopg
 
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
 
     def _update(conn, job_id: int, **fields):
         cols = ", ".join(f"{k} = %s" for k in fields)
-        vals = list(fields.values()) + [job_id]
+        vals = [*list(fields.values()), job_id]
         with conn.cursor() as cur:
             cur.execute(f"UPDATE admin.sync_jobs SET {cols} WHERE id = %s", vals)
         conn.commit()
@@ -2276,7 +2300,9 @@ def sbs_work_jobs(max_jobs: int) -> None:
                 break
 
             job_id, desde, hasta, topicos, grupos = row
-            click.echo(f"# Procesando job {job_id}: {desde}-{hasta} topicos={topicos} grupos={grupos}")
+            click.echo(
+                f"# Procesando job {job_id}: {desde}-{hasta} topicos={topicos} grupos={grupos}"
+            )
             _update(conn, job_id, status="running", started_at=datetime.utcnow())
 
             log_lines: list[str] = []
@@ -2286,7 +2312,7 @@ def sbs_work_jobs(max_jobs: int) -> None:
                 cmd = ["aibenchef", "scrape", "--desde", str(desde), "--hasta", str(hasta)]
                 if topicos:
                     for t in topicos:
-                        cmd_t = cmd + ["--topico", t]
+                        cmd_t = [*cmd, "--topico", t]
                         log_lines.append(f"$ {' '.join(cmd_t)}")
                         r = subprocess.run(cmd_t, capture_output=True, text=True, timeout=1800)
                         log_lines.append(r.stdout[-500:] if r.stdout else "")
@@ -2305,31 +2331,42 @@ def sbs_work_jobs(max_jobs: int) -> None:
                 log_lines.append("$ aibenchef storage scan --root ./local-data/raw")
                 r = subprocess.run(
                     ["aibenchef", "storage", "scan", "--root", "./local-data/raw"],
-                    capture_output=True, text=True, timeout=1800,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
                 )
                 log_lines.append(r.stdout[-500:] if r.stdout else "")
 
                 if ok:
-                    _update(conn, job_id,
+                    _update(
+                        conn,
+                        job_id,
                         status="completed",
                         completed_at=datetime.utcnow(),
-                        log_text="\n".join(log_lines)[:8000])
+                        log_text="\n".join(log_lines)[:8000],
+                    )
                     procesados += 1
                     click.echo(f"  job {job_id} OK")
                 else:
-                    _update(conn, job_id,
+                    _update(
+                        conn,
+                        job_id,
                         status="failed",
                         completed_at=datetime.utcnow(),
                         log_text="\n".join(log_lines)[:8000],
-                        error_mensaje="Algun scrape fallo (ver log)")
+                        error_mensaje="Algun scrape fallo (ver log)",
+                    )
                     click.echo(f"  job {job_id} FAILED")
             except Exception as e:
                 log_lines.append(f"EXCEPTION: {e}")
-                _update(conn, job_id,
+                _update(
+                    conn,
+                    job_id,
                     status="failed",
                     completed_at=datetime.utcnow(),
                     log_text="\n".join(log_lines)[:8000],
-                    error_mensaje=str(e)[:500])
+                    error_mensaje=str(e)[:500],
+                )
                 click.echo(f"  job {job_id} EXCEPTION: {e}")
 
     click.echo(f"# Terminado: {procesados} jobs procesados")
@@ -2341,8 +2378,9 @@ def sbs_queue_monthly() -> None:
 
     Recomendado en cron: 0 2 25 * *  aibenchef sbs queue-monthly && aibenchef sbs work-jobs
     """
-    import psycopg
     from datetime import datetime
+
+    import psycopg
 
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
     now = datetime.now()

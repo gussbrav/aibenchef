@@ -41,22 +41,32 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 
 _PRODUCTOS_PATRONES: list[tuple[str, list[str]]] = [
     # Layout moderno (2010-07+): clasificacion granular SBS Res. 11356-2008
-    ("Corporativo",       ["corporativ"]),
-    ("Grandes Empresas",  ["grandes"]),
+    ("Corporativo", ["corporativ"]),
+    ("Grandes Empresas", ["grandes"]),
     ("Medianas Empresas", ["mediana"]),
-    ("Pequeña Empresa",   ["peque"]),
-    ("Microempresa",      ["micro", "mes"]),  # "mes" = layout viejo (Microempresa)
-    ("Consumo",           ["consumo"]),
-    ("Hipotecario",       ["hipotec"]),
+    ("Pequeña Empresa", ["peque"]),
+    ("Microempresa", ["micro", "mes"]),  # "mes" = layout viejo (Microempresa)
+    ("Consumo", ["consumo"]),
+    ("Hipotecario", ["hipotec"]),
     # Layout viejo (2009-2010 Jun): clasificacion agregada
-    ("Comerciales",       ["comercial"]),
+    ("Comerciales", ["comercial"]),
 ]
 
 
 _MESES_ES = {
-    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-    'julio': 7, 'agosto': 8, 'setiembre': 9, 'septiembre': 9,
-    'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "setiembre": 9,
+    "septiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 
@@ -65,18 +75,24 @@ def _strip_accents(s: str) -> str:
 
 
 def _safe_text(v):
-    if v is None: return None
+    if v is None:
+        return None
     s = str(v).strip()
     return s if s else None
 
 
 def _to_num(v):
-    if v is None: return None
-    if isinstance(v, (int, float)): return float(v)
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
     s = str(v).strip()
-    if not s or s == '-': return None
-    try: return float(s.replace(",", ""))
-    except (ValueError, TypeError): return None
+    if not s or s == "-":
+        return None
+    try:
+        return float(s.replace(",", ""))
+    except (ValueError, TypeError):
+        return None
 
 
 def _excel_serial_to_date(serial: float):
@@ -125,8 +141,18 @@ def _extract_fecha(sheet) -> tuple[int, str] | None:
 
 # Meses abreviados SBS en filenames: B-2369-<mes><año>.xls
 _MES_ABREV_SBS = {
-    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
-    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+    "en": 1,
+    "fe": 2,
+    "ma": 3,
+    "ab": 4,
+    "my": 5,
+    "jn": 6,
+    "jl": 7,
+    "ag": 8,
+    "se": 9,
+    "oc": 10,
+    "no": 11,
+    "di": 12,
 }
 
 
@@ -165,7 +191,8 @@ def _detect_tipo_entidad(path: Path) -> str:
 
 
 def _producto_canonico(raw: str) -> str | None:
-    if not raw: return None
+    if not raw:
+        return None
     s = _strip_accents(raw).lower().strip()
     for canon, pats in _PRODUCTOS_PATRONES:
         if any(p in s for p in pats):
@@ -261,33 +288,47 @@ class MonthlyCastigosImporter:
             if not emp:
                 continue
             emp_low = _strip_accents(emp).lower()
-            if (emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
-                or len(emp) < 3):
+            if (
+                emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
+                or len(emp) < 3
+            ):
                 continue
             empresas_validas += 1
             for canon, c in producto_cols:
                 v = _to_num(sheet.cell(r, c))
                 if v is None or v <= 0:
                     continue
-                rows.append((
-                    periodo, fecha_iso, emp, emp,  # entidad, entidad_final (same en monthly)
-                    tipo_entidad, canon, v,
-                    "monthly_castigos", path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fecha_iso,
+                        emp,
+                        emp,  # entidad, entidad_final (same en monthly)
+                        tipo_entidad,
+                        canon,
+                        v,
+                        "monthly_castigos",
+                        path.name,
+                    )
+                )
 
         if not rows:
             # Si encontramos empresas pero todos sus valores son 0/null, el
             # archivo es valido — simplemente no hubo castigos ese mes.
             if empresas_validas > 0:
                 return ImportResult(
-                    source="monthly_castigos", source_file=path.name,
-                    rows_inserted=0, rows_skipped=empresas_validas,
+                    source="monthly_castigos",
+                    source_file=path.name,
+                    rows_inserted=0,
+                    rows_skipped=empresas_validas,
                     duration_seconds=time.perf_counter() - start,
                     errors=(),
                 )
             return ImportResult(
-                source="monthly_castigos", source_file=path.name,
-                rows_inserted=0, rows_skipped=0,
+                source="monthly_castigos",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=0,
                 duration_seconds=time.perf_counter() - start,
                 errors=("sin filas",),
             )
@@ -351,12 +392,15 @@ class MonthlyCastigosImporter:
 
         log.info(
             "monthly_castigos.done",
-            inserted=inserted, periodo_origen=periodo,
+            inserted=inserted,
+            periodo_origen=periodo,
             es_trimestral=es_trimestral,
         )
         return ImportResult(
-            source="monthly_castigos", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=0,
+            source="monthly_castigos",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=0,
             duration_seconds=time.perf_counter() - start,
             errors=(),
         )
@@ -375,9 +419,6 @@ def _periodo_minus_months(periodo: int, n: int) -> int:
 def _periodo_to_eom_iso(periodo: int) -> str:
     """Convierte YYYYMM a fecha de fin de mes ISO YYYY-MM-DD."""
     anio, mes = divmod(periodo, 100)
-    if mes == 12:
-        siguiente = datetime(anio + 1, 1, 1)
-    else:
-        siguiente = datetime(anio, mes + 1, 1)
+    siguiente = datetime(anio + 1, 1, 1) if mes == 12 else datetime(anio, mes + 1, 1)
     eom = siguiente - timedelta(days=1)
     return eom.strftime("%Y-%m-%d")

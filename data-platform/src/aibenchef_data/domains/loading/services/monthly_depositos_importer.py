@@ -42,15 +42,35 @@ _TIPO_ENTIDAD_BY_FOLDER = {
 
 
 _MESES_ES = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
-    "noviembre": 11, "diciembre": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 
 _MES_ABREV_SBS = {
-    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
-    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+    "en": 1,
+    "fe": 2,
+    "ma": 3,
+    "ab": 4,
+    "my": 5,
+    "jn": 6,
+    "jl": 7,
+    "ag": 8,
+    "se": 9,
+    "oc": 10,
+    "no": 11,
+    "di": 12,
 }
 
 
@@ -213,8 +233,10 @@ class MonthlyDepositosImporter:
             if not emp:
                 continue
             emp_low = _strip_accents(emp).lower()
-            if (emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
-                or len(emp) < 3):
+            if (
+                emp_low.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
+                or len(emp) < 3
+            ):
                 continue
             saldo_total = 0.0
             valid = False
@@ -232,17 +254,25 @@ class MonthlyDepositosImporter:
                         pass
             if not valid or saldo_total <= 0:
                 continue
-            rows.append((
-                periodo, fecha_iso, emp, tipo_entidad,
-                "TOTAL",  # producto = TOTAL (consolida los 4 tipos de deposito)
-                saldo_total,
-                "monthly_depositos", path.name,
-            ))
+            rows.append(
+                (
+                    periodo,
+                    fecha_iso,
+                    emp,
+                    tipo_entidad,
+                    "TOTAL",  # producto = TOTAL (consolida los 4 tipos de deposito)
+                    saldo_total,
+                    "monthly_depositos",
+                    path.name,
+                )
+            )
 
         if not rows:
             return ImportResult(
-                source="monthly_depositos", source_file=path.name,
-                rows_inserted=0, rows_skipped=0,
+                source="monthly_depositos",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=0,
                 duration_seconds=time.perf_counter() - start,
                 errors=("sin filas extraidas",),
             )
@@ -270,12 +300,18 @@ class MonthlyDepositosImporter:
             await self._conn.commit()
             inserted += len(batch)
 
-        log.info("monthly_dep.done", inserted=inserted, periodo=periodo,
-                 duration_s=round(time.perf_counter() - start, 2))
+        log.info(
+            "monthly_dep.done",
+            inserted=inserted,
+            periodo=periodo,
+            duration_s=round(time.perf_counter() - start, 2),
+        )
 
         return ImportResult(
-            source="monthly_depositos", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=0,
+            source="monthly_depositos",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=0,
             duration_seconds=time.perf_counter() - start,
             errors=(),
         )

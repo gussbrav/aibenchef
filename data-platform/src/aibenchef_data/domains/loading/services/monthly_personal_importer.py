@@ -82,6 +82,7 @@ def _excel_serial_to_date(serial: float) -> tuple[int, int, int] | None:
         return None
     try:
         from datetime import datetime, timedelta
+
         epoch = datetime(1899, 12, 30)
         dt = epoch + timedelta(days=float(serial))
         if 2000 <= dt.year <= 2050:
@@ -254,12 +255,24 @@ class MonthlyPersonalImporter:
                 empleados = _to_int(sheet.cell(r, c_emp_cat)) if c_emp_cat is not None else None
                 otros = _to_int(sheet.cell(r, c_otr)) if c_otr is not None else None
 
-                rows.append((
-                    periodo, fecha_iso,
-                    emp, None, tipo_entidad, None, None, None,
-                    gerentes, funcionarios, empleados, otros, total,
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fecha_iso,
+                        emp,
+                        None,
+                        tipo_entidad,
+                        None,
+                        None,
+                        None,
+                        gerentes,
+                        funcionarios,
+                        empleados,
+                        otros,
+                        total,
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {r}: {e}")
                 if len(errors) > 30:

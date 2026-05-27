@@ -10,9 +10,7 @@ Procesa la hoja '3.BDCreditos' del archivo consolidado:
 
 from __future__ import annotations
 
-import contextlib
 import time
-from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -140,9 +138,7 @@ class BaseColocacionesImporter:
         try:
             df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
         except Exception as e:
-            raise ValidationError(
-                f"No se pudo leer hoja '{sheet}' de {path}: {e}"
-            ) from e
+            raise ValidationError(f"No se pudo leer hoja '{sheet}' de {path}: {e}") from e
 
         log.info(
             "colocaciones.import.read",
@@ -233,14 +229,28 @@ class BaseColocacionesImporter:
 
                 obs = _safe_text(row.get(col_map.get("observaciones"), None))
 
-                rows_to_insert.append((
-                    periodo, fecha_cierre, empresa, empresa_benchmark,
-                    tipo_entidad, clasificacion, mayor_50,
-                    producto, prod_consumo,
-                    id_emp, id_sis, id_prod,
-                    vigente, reest, atrasado, total,
-                    obs, path.name,
-                ))
+                rows_to_insert.append(
+                    (
+                        periodo,
+                        fecha_cierre,
+                        empresa,
+                        empresa_benchmark,
+                        tipo_entidad,
+                        clasificacion,
+                        mayor_50,
+                        producto,
+                        prod_consumo,
+                        id_emp,
+                        id_sis,
+                        id_prod,
+                        vigente,
+                        reest,
+                        atrasado,
+                        total,
+                        obs,
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:

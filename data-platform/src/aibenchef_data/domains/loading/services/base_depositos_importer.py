@@ -16,10 +16,16 @@ from ..entities.import_result import ImportResult
 log = get_logger(__name__)
 
 _TIPO_NORMALIZADO = {
-    "BANCOS": "BANCOS", "FINANCIERAS": "FINANCIERAS",
-    "CMACS": "CMAC", "CMAC": "CMAC", "CAJAS MUNICIPALES": "CMAC",
-    "CRACS": "CRAC", "CRAC": "CRAC", "CAJAS RURALES": "CRAC",
-    "EDPYMES": "EDPYMES", "EDPYME": "EDPYMES",
+    "BANCOS": "BANCOS",
+    "FINANCIERAS": "FINANCIERAS",
+    "CMACS": "CMAC",
+    "CMAC": "CMAC",
+    "CAJAS MUNICIPALES": "CMAC",
+    "CRACS": "CRAC",
+    "CRAC": "CRAC",
+    "CAJAS RURALES": "CRAC",
+    "EDPYMES": "EDPYMES",
+    "EDPYME": "EDPYMES",
 }
 
 
@@ -138,20 +144,23 @@ class BaseDepositosImporter:
                 if not empresa or not producto:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc,
-                    empresa,
-                    _safe_text(row.get(col_map.get("empresa_benchmark"))),
-                    _normalizar_tipo(_safe_text(row[col_map["tipo"]])),
-                    _safe_text(row.get(col_map.get("clasificacion"))),
-                    _safe_text(row.get(col_map.get("mayor_50"))),
-                    producto,
-                    _to_numeric(row.get(col_map.get("pers_nat"))),
-                    _to_numeric(row.get(col_map.get("pers_jur_nl"))),
-                    _to_numeric(row.get(col_map.get("otras_jur"))),
-                    _to_numeric(row.get(col_map.get("total"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa,
+                        _safe_text(row.get(col_map.get("empresa_benchmark"))),
+                        _normalizar_tipo(_safe_text(row[col_map["tipo"]])),
+                        _safe_text(row.get(col_map.get("clasificacion"))),
+                        _safe_text(row.get(col_map.get("mayor_50"))),
+                        producto,
+                        _to_numeric(row.get(col_map.get("pers_nat"))),
+                        _to_numeric(row.get(col_map.get("pers_jur_nl"))),
+                        _to_numeric(row.get(col_map.get("otras_jur"))),
+                        _to_numeric(row.get(col_map.get("total"))),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -161,8 +170,10 @@ class BaseDepositosImporter:
 
         if not rows:
             return ImportResult(
-                source="base_depositos", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_depositos",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -188,14 +199,16 @@ class BaseDepositosImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("depositos.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_depositos", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_depositos",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

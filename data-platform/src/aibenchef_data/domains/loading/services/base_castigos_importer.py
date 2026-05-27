@@ -16,10 +16,16 @@ from ..entities.import_result import ImportResult
 log = get_logger(__name__)
 
 _TIPO_NORMALIZADO = {
-    "BANCOS": "BANCOS", "FINANCIERAS": "FINANCIERAS",
-    "CMACS": "CMAC", "CMAC": "CMAC", "CAJAS MUNICIPALES": "CMAC",
-    "CRACS": "CRAC", "CRAC": "CRAC", "CAJAS RURALES": "CRAC",
-    "EDPYMES": "EDPYMES", "EDPYME": "EDPYMES",
+    "BANCOS": "BANCOS",
+    "FINANCIERAS": "FINANCIERAS",
+    "CMACS": "CMAC",
+    "CMAC": "CMAC",
+    "CAJAS MUNICIPALES": "CMAC",
+    "CRACS": "CRAC",
+    "CRAC": "CRAC",
+    "CAJAS RURALES": "CRAC",
+    "EDPYMES": "EDPYMES",
+    "EDPYME": "EDPYMES",
 }
 
 
@@ -156,21 +162,24 @@ class BaseCastigosImporter:
                 if not entidad or not producto:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc,
-                    entidad,
-                    _safe_text(row.get(col_map.get("entidad_final"))),
-                    _safe_text(row.get(col_map.get("empresa_benchmark"))),
-                    _normalizar_tipo(_safe_text(row[col_map["tipo"]])),
-                    _safe_text(row.get(col_map.get("clasificacion"))),
-                    _safe_text(row.get(col_map.get("mayor_50"))),
-                    producto,
-                    _to_int(row.get(col_map.get("id_empresa"))),
-                    _to_int(row.get(col_map.get("id_sistema"))),
-                    _to_int(row.get(col_map.get("id_producto"))),
-                    _to_numeric(row.get(col_map.get("castigos"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        entidad,
+                        _safe_text(row.get(col_map.get("entidad_final"))),
+                        _safe_text(row.get(col_map.get("empresa_benchmark"))),
+                        _normalizar_tipo(_safe_text(row[col_map["tipo"]])),
+                        _safe_text(row.get(col_map.get("clasificacion"))),
+                        _safe_text(row.get(col_map.get("mayor_50"))),
+                        producto,
+                        _to_int(row.get(col_map.get("id_empresa"))),
+                        _to_int(row.get(col_map.get("id_sistema"))),
+                        _to_int(row.get(col_map.get("id_producto"))),
+                        _to_numeric(row.get(col_map.get("castigos"))),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -180,8 +189,10 @@ class BaseCastigosImporter:
 
         if not rows:
             return ImportResult(
-                source="base_castigos", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_castigos",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -208,14 +219,16 @@ class BaseCastigosImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("castigos.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_castigos", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_castigos",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )

@@ -84,19 +84,23 @@ class BaseClientesAhorrosImporter:
                 if not empresa or not producto:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc, empresa,
-                    safe_text(row.get(col_map.get("benchmark"))),
-                    normalizar_tipo(safe_text(row.get(col_map.get("tipo")))),
-                    safe_text(row.get(col_map.get("clasificacion"))),
-                    safe_text(row.get(col_map.get("mype50"))),
-                    producto,
-                    to_int(row.get(col_map.get("pn"))),
-                    to_int(row.get(col_map.get("pj_nl"))),
-                    to_int(row.get(col_map.get("otras_pj"))),
-                    to_int(row.get(col_map.get("total"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa,
+                        safe_text(row.get(col_map.get("benchmark"))),
+                        normalizar_tipo(safe_text(row.get(col_map.get("tipo")))),
+                        safe_text(row.get(col_map.get("clasificacion"))),
+                        safe_text(row.get(col_map.get("mype50"))),
+                        producto,
+                        to_int(row.get(col_map.get("pn"))),
+                        to_int(row.get(col_map.get("pj_nl"))),
+                        to_int(row.get(col_map.get("otras_pj"))),
+                        to_int(row.get(col_map.get("total"))),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -104,8 +108,10 @@ class BaseClientesAhorrosImporter:
 
         if not rows:
             return ImportResult(
-                source="base_clientes_ahorros", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_clientes_ahorros",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -130,14 +136,16 @@ class BaseClientesAhorrosImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("clie_aho.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_clientes_ahorros", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_clientes_ahorros",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )
@@ -192,16 +200,20 @@ class BaseClientesCreditosImporter:
                 if not empresa or not producto:
                     skipped += 1
                     continue
-                rows.append((
-                    periodo, fc, empresa,
-                    safe_text(row.get(col_map.get("benchmark"))),
-                    normalizar_tipo(safe_text(row.get(col_map.get("tipo")))),
-                    safe_text(row.get(col_map.get("clasificacion"))),
-                    safe_text(row.get(col_map.get("cb50"))),
-                    producto,
-                    to_int(row.get(col_map.get("n_clientes"))),
-                    path.name,
-                ))
+                rows.append(
+                    (
+                        periodo,
+                        fc,
+                        empresa,
+                        safe_text(row.get(col_map.get("benchmark"))),
+                        normalizar_tipo(safe_text(row.get(col_map.get("tipo")))),
+                        safe_text(row.get(col_map.get("clasificacion"))),
+                        safe_text(row.get(col_map.get("cb50"))),
+                        producto,
+                        to_int(row.get(col_map.get("n_clientes"))),
+                        path.name,
+                    )
+                )
             except Exception as e:
                 errors.append(f"row {idx}: {e}")
                 if len(errors) > 100:
@@ -209,8 +221,10 @@ class BaseClientesCreditosImporter:
 
         if not rows:
             return ImportResult(
-                source="base_clientes_creditos", source_file=path.name,
-                rows_inserted=0, rows_skipped=skipped,
+                source="base_clientes_creditos",
+                source_file=path.name,
+                rows_inserted=0,
+                rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
             )
@@ -231,14 +245,16 @@ class BaseClientesCreditosImporter:
         inserted = 0
         async with self._conn.cursor() as cur:
             for i in range(0, len(rows), self._batch_size):
-                batch = rows[i:i + self._batch_size]
+                batch = rows[i : i + self._batch_size]
                 await cur.executemany(sql, batch)
                 inserted += len(batch)
                 log.info("clie_cred.import.batch_ok", total=inserted)
 
         return ImportResult(
-            source="base_clientes_creditos", source_file=path.name,
-            rows_inserted=inserted, rows_skipped=skipped,
+            source="base_clientes_creditos",
+            source_file=path.name,
+            rows_inserted=inserted,
+            rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
         )
