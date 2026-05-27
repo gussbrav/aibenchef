@@ -280,6 +280,19 @@ class MonthlyEeffImporter:
             codigo: str | None = None
             cuenta_nombre_canonico: str | None = None
 
+            # FIX issue #15: detectar footnotes EXTRA (no en cabecera_maestra)
+            # ANTES de mirar position_lookup. Si la fila parece anotacion
+            # SBS variable por periodo ("* Mediante Resolucion SBS N° ..."),
+            # decrementar orden y skip para mantener sincronia con cabecera.
+            #
+            # Importante: hacer ANTES de position_lookup.has() porque cabecera
+            # puede tener un NULL entry en este orden con OTRO nombre. Si
+            # confiamos solo en position_lookup, el offset entre archivo real
+            # y cabecera se acumula silenciosamente.
+            if _is_annotation_or_footnote_extra(nombre_raw):
+                orden -= 1
+                continue
+
             # 1) Maestra posicional: si existe entrada para este orden, es
             #    autoritativa. NULL codigo => fila conocida no-cuenta (skip).
             if position_lookup.has(orden):
@@ -784,6 +797,35 @@ def _infer_tipo_entidad_from_path(path: Path) -> str | None:
         if key in _PATH_GROUP_TO_TIPO:
             return _PATH_GROUP_TO_TIPO[key]
     return None
+
+
+def _is_annotation_or_footnote_extra(nombre_raw: str) -> bool:
+    """Detecta filas EXTRA que no están en cabecera_maestra y deben skipearse
+    sin contar como orden — son anotaciones/footnotes que SBS publicó
+    inconsistentemente entre periodos.
+
+    Las filas ya listadas en cabecera_maestra (orden con codigo=NULL) se
+    manejan por la ruta normal. Esta funcion solo aplica cuando
+    position_lookup.has(orden) es False.
+
+    Patrones detectados (issue #15):
+    - "* Mediante Resolución SBS N° ...": notas al pie de SBS con texto
+      variable por año. Algunos archivos las tienen (ej. B-2201-jn2019.xls
+      tiene Resolucion 1286-2019 entre TOTAL ACTIVO y Balance General header).
+    - "** Mediante Resolución..." (variant)
+    - Numerated footnotes "1/", "2/" cuando NO están en cabecera para ese orden.
+
+    NO incluye patterns ya cubiertos por cabecera_maestra (Tipo de Cambio,
+    Balance General por..., etc) porque esas SÍ están listadas con NULL.
+    """
+    n = nombre_raw.strip()
+    if not n:
+        return False
+    # Notas SBS de resoluciones — texto variable por periodo
+    if n.startswith(("*", "**")):
+        return True
+    # Footnote numerada (1/ Incluye..., 2/ Las cifras..., etc)
+    return bool(re.match(r"^\d+/\s", n))
 
 
 def _normalize(s: str) -> str:
