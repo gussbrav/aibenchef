@@ -28,7 +28,10 @@ import type {
 const STAGES_TRACKED: StageName[] = ["scrape", "import", "refresh-mvs", "detectar-cambios"];
 
 export async function getPipelineHealth(): Promise<PipelineHealth> {
-  // Última corrida por stage.
+  // Última corrida por stage. Hardcodeamos las stages como literal SQL porque
+  // pasar un JS array via `${arr}::text[]` falla en postgres-js (intenta castear
+  // record → text[], code 42846). La lista de stages es enum cerrado, asi que
+  // hardcodear es seguro y elimina serialization issues.
   const rows = await db.execute<Record<string, unknown>>(sql`
     SELECT DISTINCT ON (stage)
       stage,
@@ -36,7 +39,7 @@ export async function getPipelineHealth(): Promise<PipelineHealth> {
       started_at,
       EXTRACT(EPOCH FROM (finished_at - started_at))::numeric AS duration_s
     FROM raw.carga_log
-    WHERE stage = ANY(${STAGES_TRACKED as unknown as string}::text[])
+    WHERE stage IN ('scrape', 'import', 'refresh-mvs', 'detectar-cambios')
     ORDER BY stage, started_at DESC
   `);
 
