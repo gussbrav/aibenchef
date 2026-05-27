@@ -6,6 +6,8 @@ from pathlib import Path
 
 from aibenchef_data.domains.loading.services.monthly_oficinas_grid_importer import (
     _detect_departamentos,
+    _detect_entidades_transpuesto,
+    _detect_layout,
     _detect_tipo_entidad,
     _extract_fecha,
     _extract_fecha_from_filename,
@@ -20,6 +22,69 @@ def _sheet(rows: list[list]) -> XlsSheet:
     n_cols = max(len(r) for r in rows)
     padded = [r + [None] * (n_cols - len(r)) for r in rows]
     return XlsSheet(name="t", n_rows=len(rows), n_cols=n_cols, rows=padded)
+
+
+class TestDetectLayout:
+    """REGRESION issue #4: layouts pre-2015 transpuesto + asterisco en header."""
+
+    def test_layout_horizontal_moderno(self):
+        sheet = _sheet(
+            [
+                ["Distribucion de Oficinas"],
+                [None],
+                [None],
+                [None],
+                [None],
+                ["Empresas", "Amazonas", "Ancash"],
+                [None],
+                ["B. Continental", 5, 3],
+            ]
+        )
+        assert _detect_layout(sheet) == ("horizontal", 5)
+
+    def test_layout_horizontal_con_asterisco(self):
+        """FINANCIERA 2022-11/12 usa 'Empresas*' con asterisco de nota."""
+        sheet = _sheet(
+            [
+                ["Distribucion"],
+                [None],
+                [None],
+                [None],
+                [None],
+                ["Empresas*", "Amazonas", "Ancash"],
+                [None],
+                ["Crediscotia", 5, 3],
+            ]
+        )
+        result = _detect_layout(sheet)
+        assert result == ("horizontal", 5)
+
+    def test_layout_transpuesto_pre_2015(self):
+        """FINANCIERA 2009-2015: col 0 = 'Departamento', entidades como cols."""
+        sheet = _sheet(
+            [
+                [None],
+                [None],
+                ["Distribucion de Oficinas"],
+                ["Al 31 de Enero de 2009"],
+                [None],
+                ["Departamento", "Crediscotia", "Edyficar", "TFC"],
+                ["Ancash", 2, 8, 2],
+                ["Arequipa", 6, 5, 1],
+            ]
+        )
+        assert _detect_layout(sheet) == ("transpuesto", 5)
+
+    def test_layout_no_detectable(self):
+        sheet = _sheet([["foo", "bar"]] * 8)
+        assert _detect_layout(sheet) is None
+
+
+class TestDetectEntidadesTranspuesto:
+    def test_entidades_excluyendo_total(self):
+        sheet = _sheet([["Departamento", "Crediscotia", "Edyficar", "Total"]])
+        entidades = _detect_entidades_transpuesto(sheet, 0)
+        assert entidades == [("Crediscotia", 1), ("Edyficar", 2)]
 
 
 class TestFindHeaderRow:

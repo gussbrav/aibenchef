@@ -150,38 +150,87 @@ def _detect_tipo_entidad(path: Path) -> str:
     return "DESCONOCIDO"
 
 
-def _find_header_row(sheet: XlsSheet) -> int | None:
-    """Busca la fila donde col 0 = 'Empresas' y col 1+ tiene nombres de departamentos.
+def _norm_header(s: str) -> str:
+    """Normaliza un header: lowercase, sin tildes, sin asteriscos/anotaciones."""
+    return _strip_accents(s).lower().strip().rstrip("*").strip()
 
-    Layout puede variar: en BANCOS/FINANCIERAS/CMAC suele ser r3 o r5; en CRAC
-    es r3. El detector escanea las primeras 8 filas.
+
+def _is_empresa_header(s: str | None) -> bool:
+    return s is not None and _norm_header(s) in ("empresa", "empresas", "entidad", "entidades")
+
+
+def _is_departamento_header(s: str | None) -> bool:
+    return s is not None and _norm_header(s) in ("departamento", "departamentos", "depto")
+
+
+def _detect_layout(sheet: XlsSheet) -> tuple[str, int] | None:
+    """Detecta el layout del archivo de oficinas.
+
+    Devuelve (layout, header_row) donde layout es 'horizontal' o 'transpuesto'.
+
+    - **horizontal** (moderno 2015+, BANCOS desde 2009): col 0 = 'Empresas',
+      col 1+ = departamentos. Una fila por empresa.
+    - **transpuesto** (FINANCIERAS pre-2015): col 0 = 'Departamento',
+      col 1+ = entidades. Una fila por departamento.
+
+    Tolera asteriscos en el header ("Empresas*") y escanea cols 0-2 + rows 0-8.
     """
     for r in range(0, 8):
-        v = _safe_text(sheet.cell(r, 0))
-        if v is None:
-            continue
-        norm = _strip_accents(v).lower().strip()
-        if norm in ("empresa", "empresas"):
-            # Validar que col 1 tenga texto (un departamento)
-            v1 = _safe_text(sheet.cell(r, 1))
-            if v1 and not _to_int(v1):
-                return r
+        for c_try in (0, 1):
+            v = _safe_text(sheet.cell(r, c_try))
+            if v is None:
+                continue
+            if _is_empresa_header(v):
+                # Validar siguiente col tenga texto (un departamento)
+                v_next = _safe_text(sheet.cell(r, c_try + 1))
+                if v_next and not _to_int(v_next):
+                    return ("horizontal", r)
+            if _is_departamento_header(v):
+                v_next = _safe_text(sheet.cell(r, c_try + 1))
+                if v_next and not _to_int(v_next):
+                    return ("transpuesto", r)
     return None
 
 
+def _find_header_row(sheet: XlsSheet) -> int | None:
+    """Compat: devuelve header_row si es layout horizontal, None si no.
+
+    Para el detector completo (incluye transpuesto), usar `_detect_layout`.
+    """
+    layout = _detect_layout(sheet)
+    if layout is None or layout[0] != "horizontal":
+        return None
+    return layout[1]
+
+
 def _detect_departamentos(sheet: XlsSheet, header_row: int) -> list[tuple[str, int]]:
-    """Lista los departamentos (nombre, col) del header. Excluye Total."""
+    """Lista los departamentos (nombre, col) del header horizontal. Excluye Total."""
     deptos: list[tuple[str, int]] = []
     for c in range(1, sheet.n_cols):
         v = _safe_text(sheet.cell(header_row, c))
         if not v:
             continue
-        norm = _strip_accents(v).lower().strip()
-        # Excluir columna "Total" / "Total Nacional" / "TOTAL"
+        norm = _norm_header(v)
         if norm.startswith("total"):
             continue
         deptos.append((v, c))
     return deptos
+
+
+def _detect_entidades_transpuesto(sheet: XlsSheet, header_row: int) -> list[tuple[str, int]]:
+    """En layout transpuesto, las ENTIDADES estan en el header (col 1+).
+    Excluye columna 'Total'.
+    """
+    entidades: list[tuple[str, int]] = []
+    for c in range(1, sheet.n_cols):
+        v = _safe_text(sheet.cell(header_row, c))
+        if not v:
+            continue
+        norm = _norm_header(v)
+        if norm.startswith("total"):
+            continue
+        entidades.append((v, c))
+    return entidades
 
 
 class MonthlyOficinasGridImporter:
@@ -208,51 +257,82 @@ class MonthlyOficinasGridImporter:
             raise ValidationError(f"No pude extraer fecha de {path}")
         periodo, fecha_iso = fecha
 
-        header_row = _find_header_row(sheet)
-        if header_row is None:
-            raise ValidationError(f"No detecte header 'Empresas' en {path}")
-
-        deptos = _detect_departamentos(sheet, header_row)
-        if not deptos:
-            raise ValidationError(f"No detecte departamentos en header de {path}")
-
+        layout_info = _detect_layout(sheet)
+        if layout_info is None:
+            raise ValidationError(f"No detecte header 'Empresas' ni 'Departamento' en {path}")
+        layout_kind, header_row = layout_info
         tipo_entidad = _detect_tipo_entidad(path)
         data_start = header_row + 1
 
         rows: list[tuple] = []
-        empresas_vistas: set[str] = set()
-        for r in range(data_start, sheet.n_rows):
-            empresa = _safe_text(sheet.cell(r, 0))
-            if not empresa:
-                continue
-            emp_norm = _strip_accents(empresa).lower()
-            # Skip filas de totales/notas/sub-headers
-            if (
-                emp_norm.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
-                or len(empresa) < 3
-            ):
-                continue
-            # Dedup mismas empresas (algunos archivos repiten)
-            if empresa in empresas_vistas:
-                continue
-            empresas_vistas.add(empresa)
-
-            for depto_nombre, depto_col in deptos:
-                val = _to_int(sheet.cell(r, depto_col))
-                if val is None:
+        if layout_kind == "horizontal":
+            deptos = _detect_departamentos(sheet, header_row)
+            if not deptos:
+                raise ValidationError(f"No detecte departamentos en header de {path}")
+            empresas_vistas: set[str] = set()
+            for r in range(data_start, sheet.n_rows):
+                empresa = _safe_text(sheet.cell(r, 0))
+                if not empresa:
                     continue
-                # Permite n_oficinas = 0 (informacion valida: empresa sin oficinas en ese depto)
-                rows.append(
-                    (
-                        periodo,
-                        fecha_iso,
-                        tipo_entidad,
-                        empresa,
-                        depto_nombre,
-                        val,
-                        path.name,
+                emp_norm = _strip_accents(empresa).lower()
+                if (
+                    emp_norm.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
+                    or len(empresa) < 3
+                ):
+                    continue
+                if empresa in empresas_vistas:
+                    continue
+                empresas_vistas.add(empresa)
+                for depto_nombre, depto_col in deptos:
+                    val = _to_int(sheet.cell(r, depto_col))
+                    if val is None:
+                        continue
+                    rows.append(
+                        (
+                            periodo,
+                            fecha_iso,
+                            tipo_entidad,
+                            empresa,
+                            depto_nombre,
+                            val,
+                            path.name,
+                        )
                     )
-                )
+        else:  # transpuesto
+            entidades = _detect_entidades_transpuesto(sheet, header_row)
+            if not entidades:
+                raise ValidationError(f"No detecte entidades en header de {path}")
+            deptos_vistos: set[str] = set()
+            for r in range(data_start, sheet.n_rows):
+                depto_nombre = _safe_text(sheet.cell(r, 0))
+                if not depto_nombre:
+                    continue
+                depto_norm = _strip_accents(depto_nombre).lower()
+                if (
+                    depto_norm.startswith(("total", "nota", "fuente", "(", "elaborac", "http", "*"))
+                    or len(depto_nombre) < 3
+                ):
+                    continue
+                if depto_nombre in deptos_vistos:
+                    continue
+                deptos_vistos.add(depto_nombre)
+                for entidad_nombre, entidad_col in entidades:
+                    val = _to_int(sheet.cell(r, entidad_col))
+                    if val is None:
+                        continue
+                    rows.append(
+                        (
+                            periodo,
+                            fecha_iso,
+                            tipo_entidad,
+                            entidad_nombre,
+                            depto_nombre,
+                            val,
+                            path.name,
+                        )
+                    )
+            # Compat con flujo abajo
+            empresas_vistas = deptos_vistos
 
         if not rows:
             return ImportResult(
@@ -289,8 +369,8 @@ class MonthlyOficinasGridImporter:
             inserted=inserted,
             periodo=periodo,
             tipo_entidad=tipo_entidad,
-            empresas=len(empresas_vistas),
-            departamentos=len(deptos),
+            layout=layout_kind,
+            n_dims=len(empresas_vistas),
             duration_s=round(time.perf_counter() - start, 2),
         )
         return ImportResult(
