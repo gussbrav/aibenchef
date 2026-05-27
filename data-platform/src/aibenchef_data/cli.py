@@ -1535,7 +1535,7 @@ def import_monthly_eeff(path: str, batch_size: int) -> None:
                 importer = MonthlyEeffImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="eeff")
                         await conn.commit()
                         total_inserted += result.rows_inserted
                         if result.errors:
@@ -1600,7 +1600,7 @@ def import_monthly_oficinas_grid(path: str, batch_size: int) -> None:
                 importer = MonthlyOficinasGridImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="oficinas")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -1671,7 +1671,7 @@ def import_monthly_oficinas(path: str, batch_size: int) -> None:
                 importer = MonthlyOficinasImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="oficinas")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -1740,7 +1740,9 @@ def import_monthly_clientes(path: str, batch_size: int) -> None:
                 importer = MonthlyClientesImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(
+                            importer, f, topico="clientes_credito"
+                        )
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -1809,7 +1811,7 @@ def import_monthly_personal(path: str, batch_size: int) -> None:
                 importer = MonthlyPersonalImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="personal")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -1879,7 +1881,7 @@ def import_monthly_indicadores(path: str, batch_size: int) -> None:
                 importer = MonthlyIndicadoresImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="indicadores")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -1947,7 +1949,7 @@ def import_monthly_colocaciones(path: str, batch_size: int) -> None:
                 importer = MonthlyColocacionesImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="colocaciones")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -2013,7 +2015,7 @@ def import_monthly_depositos(path: str, batch_size: int) -> None:
                 importer = MonthlyDepositosImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="depositos")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -2069,7 +2071,9 @@ def import_monthly_clientes_ahorro(path: str, batch_size: int) -> None:
                 importer = MonthlyClientesAhorroImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(
+                            importer, f, topico="clientes_ahorro"
+                        )
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -2123,7 +2127,7 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
                 importer = MonthlyCastigosImporter(conn, batch_size=batch_size)
                 for i, f in enumerate(files, start=1):
                     try:
-                        result = await importer.import_file(f)
+                        result = await _import_file_with_audit(importer, f, topico="castigos")
                         total_inserted += result.rows_inserted
                         if result.errors:
                             total_errors += len(result.errors)
@@ -2175,6 +2179,149 @@ def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: i
             await close_pool()
 
     asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# Helper compartido para monthly imports con audit trail (issue #18, G1+G2).
+# ---------------------------------------------------------------------------
+
+
+def _extract_periodo_from_path(path: Path) -> int | None:
+    """Extrae periodo YYYYMM del filename SBS estándar.
+
+    Patrón: -<mes_abrev><anio>.xls (ej. B-2369-ma2010.xls → 201003).
+    Retorna None si no matchea (caller decide si loggear o ignorar).
+    """
+    import re as _re
+
+    mes_abrev_to_num = {
+        "en": 1,
+        "fe": 2,
+        "ma": 3,
+        "ab": 4,
+        "my": 5,
+        "ju": 6,
+        "jl": 7,
+        "ag": 8,
+        "se": 9,
+        "oc": 10,
+        "no": 11,
+        "di": 12,
+    }
+    name = path.stem.lower()
+    m = _re.search(r"-([a-z]{2})(\d{4})$", name)
+    if not m:
+        return None
+    mes = mes_abrev_to_num.get(m.group(1))
+    anio = int(m.group(2))
+    if not mes or not (2000 <= anio <= 2050):
+        return None
+    return anio * 100 + mes
+
+
+async def _import_file_with_audit(
+    importer,
+    file: Path,
+    *,
+    topico: str,
+    triggered_by: str = "cli",
+    sync_job_id: int | None = None,
+):
+    """Wrapper para import_file que escribe audit trail (issue #18).
+
+    Hace 3 cosas que el importer no hace por sí solo:
+    1. Crea fila en raw.carga_log con stage='import', status='running' (G2)
+    2. Llama importer.import_file(file) y guarda contadores en el row
+    3. UPDATE raw.archivos_descargados.status='procesado'|'error' (G1)
+    4. UPDATE carga_log al estado final con metadata (layout, sheets, errors)
+
+    Diseñado para usarse DENTRO del loop del importer en cada
+    `import_monthly_*` command de la CLI:
+
+        result = await _import_file_with_audit(importer, f, topico='eeff')
+
+    En lugar de:
+
+        result = await importer.import_file(f)
+    """
+    import time
+
+    from aibenchef_data.domains.shared import (
+        carga_log_context,
+        mark_archivo_error,
+        mark_archivo_procesado,
+        resolve_archivo_id,
+    )
+    from aibenchef_data.infrastructure.db import connection
+
+    # Resolver archivo_id (puede ser None si el archivo no está en
+    # raw.archivos_descargados — ej. import puntual de un xls local).
+    async with connection() as conn_lookup:
+        archivo_id = await resolve_archivo_id(conn_lookup, path_local=str(file))
+
+    periodo = _extract_periodo_from_path(file)
+
+    async with carga_log_context(
+        connection,
+        stage="import",
+        topico=topico,
+        periodo=periodo,
+        archivo_id=archivo_id,
+        triggered_by=triggered_by,
+        sync_job_id=sync_job_id,
+        source_file=file.name,
+    ) as log:
+        try:
+            t0 = time.monotonic()
+            result = await importer.import_file(file)
+            duration = time.monotonic() - t0
+        except Exception as exc:
+            # Marca archivo como error antes de re-raise (carga_log_context
+            # marca su row como failed automáticamente).
+            if archivo_id is not None:
+                try:
+                    async with connection() as conn_err:
+                        await mark_archivo_error(
+                            conn_err,
+                            archivo_id=archivo_id,
+                            error_mensaje=f"{type(exc).__name__}: {exc}",
+                        )
+                        await conn_err.commit()
+                except Exception:
+                    pass  # best-effort
+            raise
+
+        # Importer terminó OK (con o sin errores parciales en result.errors)
+        log.rows_inserted = result.rows_inserted
+        log.rows_skipped = getattr(result, "rows_skipped", 0)
+        log.metadata["duration_s"] = round(duration, 2)
+        if result.errors:
+            log.metadata["errors"] = [str(e)[:200] for e in result.errors[:5]]
+            log.metadata["n_errors"] = len(result.errors)
+
+        # G1: marca archivo como procesado solo si NO hubo errores parciales
+        # (si los hay, queda en 'error' para inspección humana).
+        if archivo_id is not None:
+            try:
+                async with connection() as conn_mark:
+                    if result.errors:
+                        await mark_archivo_error(
+                            conn_mark,
+                            archivo_id=archivo_id,
+                            error_mensaje=f"Parsed con {len(result.errors)} errores; rows_inserted={result.rows_inserted}",
+                        )
+                    else:
+                        await mark_archivo_procesado(
+                            conn_mark,
+                            archivo_id=archivo_id,
+                            filas_insertadas=result.rows_inserted,
+                        )
+                    await conn_mark.commit()
+            except Exception:
+                # Best-effort. Si el UPDATE falla no es razón para fallar el import.
+                pass
+
+        return result
 
 
 @import_grp.command("base-patrimonio")
@@ -2437,6 +2584,174 @@ def inspect_xls_all(directory: str, rows: int, cols: int) -> None:
     for f in files:
         click.echo(inspector.inspect(f))
         click.echo("\n" + "=" * 100 + "\n")
+
+
+# ============================================================================
+# pipeline — Comandos de observabilidad del pipeline de datos (issue #18)
+# ============================================================================
+
+
+@main.group("pipeline")
+def pipeline_grp() -> None:
+    """Observabilidad del pipeline: post-import-check, audit, status."""
+
+
+@pipeline_grp.command("post-import-check")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM del periodo a validar contra dw.cabecera_maestra.",
+)
+@click.option(
+    "--grupo",
+    type=click.Choice(["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES"]),
+    multiple=True,
+    default=None,
+    help="Validar solo estos grupos. Vacio = todos.",
+)
+@click.option(
+    "--triggered-by",
+    type=str,
+    default="cli",
+    help="Origen del run: cron | manual:<email> | cli:<user>.",
+)
+def pipeline_post_import_check(
+    periodo: str,
+    grupo: tuple[str, ...],
+    triggered_by: str,
+) -> None:
+    """Compara archivos del periodo vs cabecera_maestra y PERSISTE diffs.
+
+    Diferencia vs `catalog detectar-cambios`: este comando guarda los
+    resultados en admin.estructura_diffs para que el dashboard
+    /admin/pipeline pueda mostrarlos y el operador marcar como revisados.
+
+    Idealmente se invoca automaticamente tras el sync mensual SBS:
+
+        aibenchef sbs work-jobs   # scrape + import
+        aibenchef pipeline post-import-check --periodo 202604 --triggered-by cron
+
+    Cierra G3 del audit de observabilidad (issue #18). Cada corrida del
+    detector queda registrada en raw.carga_log con stage='detectar-cambios'.
+    """
+    import asyncio
+    from pathlib import Path as _P
+
+    import psycopg as _ps
+
+    from aibenchef_data.domains.catalog.services import (
+        compare_periodo_vs_cabecera,
+    )
+    from aibenchef_data.domains.shared import (
+        carga_log_context,
+    )
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    p = Periodo.from_yyyymm(periodo)
+    grupos_filter = list(grupo) if grupo else None
+    storage_root = _P("./local-data/raw").resolve()
+
+    if not storage_root.is_dir():
+        raise click.ClickException(
+            f"Storage root no existe: {storage_root}. "
+            "Corre `aibenchef scrape ...` primero o ajusta RAW_STORAGE_DIR."
+        )
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with carga_log_context(
+                connection,
+                stage="detectar-cambios",
+                periodo=p.to_int(),
+                triggered_by=triggered_by,
+                initial_metadata={"grupos": grupos_filter},
+            ) as log:
+                # Conexion sincrona para la comparacion (read-only del schema dw).
+                with _ps.connect(url, connect_timeout=10) as sync_conn:
+                    diffs = compare_periodo_vs_cabecera(
+                        sync_conn,
+                        periodo=p.to_int(),
+                        storage_root=storage_root,
+                        grupos=grupos_filter,
+                    )
+
+                # Persistir cada diff en admin.estructura_diffs.
+                total_diffs_count = 0
+                total_warning_count = 0
+                total_critical_count = 0
+
+                async with connection() as conn_write:
+                    async with conn_write.cursor() as cur:
+                        for d in diffs:
+                            await cur.execute(
+                                """
+                                INSERT INTO admin.estructura_diffs (
+                                    periodo, grupo, topico, tipo_estado,
+                                    carga_log_id,
+                                    n_renames, n_extras, n_missing,
+                                    severity, payload
+                                )
+                                VALUES (
+                                    %s, %s, 'eeff', %s,
+                                    %s,
+                                    %s, %s, %s,
+                                    %s, %s
+                                )
+                                """,
+                                (
+                                    d.periodo,
+                                    d.grupo,
+                                    d.tipo_estado,
+                                    log.log_id,
+                                    d.n_renames,
+                                    d.n_extras,
+                                    d.n_missing,
+                                    d.severity,
+                                    _Json(d.to_payload()),
+                                ),
+                            )
+                            total_diffs_count += d.total_diffs
+                            if d.severity == "warning":
+                                total_warning_count += 1
+                            elif d.severity == "critical":
+                                total_critical_count += 1
+
+                            click.echo(
+                                f"  [{d.grupo:<12} {d.tipo_estado:<11}] "
+                                f"{d.archivo:<25}  "
+                                f"renames={d.n_renames:>2}  "
+                                f"extras={d.n_extras:>2}  "
+                                f"missing={d.n_missing:>2}  "
+                                f"severity={d.severity}"
+                            )
+                    await conn_write.commit()
+
+                log.rows_inserted = len(diffs)
+                log.metadata["total_diffs"] = total_diffs_count
+                log.metadata["warning_count"] = total_warning_count
+                log.metadata["critical_count"] = total_critical_count
+
+                click.echo("")
+                click.echo(
+                    f"# Persisted {len(diffs)} diff rows for periodo {periodo}: "
+                    f"{total_warning_count} warning, {total_critical_count} critical."
+                )
+                if total_warning_count or total_critical_count:
+                    click.echo(
+                        "# Revisa: SELECT * FROM admin.estructura_diffs "
+                        "WHERE reviewed_at IS NULL AND severity != 'info';"
+                    )
+        finally:
+            await close_pool()
+
+    # Import lazy del Json psycopg para evitar problemas en tiempo de carga del módulo.
+    from psycopg.types.json import Json as _Json
+
+    asyncio.run(_run())
 
 
 @main.group("sbs")
