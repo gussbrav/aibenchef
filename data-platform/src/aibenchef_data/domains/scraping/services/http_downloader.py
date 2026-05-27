@@ -123,12 +123,22 @@ class HttpxDownloader:
         size = tmp.stat().st_size
         if size < _MIN_VALID_SIZE_BYTES:
             tmp.unlink(missing_ok=True)
+            # SBS devuelve HTTP 200 con un HTML de error (~165 bytes) cuando
+            # un periodo no fue publicado. Semanticamente equivalente al 404
+            # — los marcamos como NOT_PUBLISHED para que el dashboard lo
+            # diferencie de un FAILED real (issue #3).
+            log.info(
+                "download.not_published",
+                url=target.url,
+                reason="html_error_response",
+                size=size,
+            )
             return DownloadResult(
                 target=target,
-                status=DownloadStatus.FAILED,
+                status=DownloadStatus.NOT_PUBLISHED,
                 bytes_written=size,
                 http_status=200,
-                error_message=f"archivo demasiado pequeno ({size} bytes) — posible HTML de error",
+                error_message=f"SBS no publico este periodo (HTML de error, {size} bytes)",
                 duration_seconds=time.perf_counter() - start,
             )
 
