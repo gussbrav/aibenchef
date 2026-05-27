@@ -1360,10 +1360,72 @@ async def _run_scrape(
 
     succeeded = DownloaderService.succeeded(results)
     failed = DownloaderService.failed(results)
-    click.echo(f"  -> {len(succeeded)} OK, {len(failed)} fallidos.")
+    not_published = [r for r in results if r.status.value == "not_published"]
+    click.echo(
+        f"  -> {len(succeeded)} OK, {len(failed)} fallidos, {len(not_published)} no publicados."
+    )
     for r in failed:
         click.echo(f"     FALLO {r.target.url}: {r.error_message}")
+
+    # Registrar los archivos no publicados por SBS en archivos_descargados
+    # con status='no_publicado_sbs'. Esto desambigua el gap silencioso en el
+    # dashboard (issue #3) — el usuario ve que SBS no publico vs descarga fallo.
+    if not_published:
+        _registrar_no_publicados(not_published)
+
     return len(succeeded), len(failed)
+
+
+def _registrar_no_publicados(results: list) -> None:
+    """Inserta en raw.archivos_descargados los archivos que SBS no publico.
+
+    Idempotente: ON CONFLICT (path_local) DO UPDATE solo si status sigue siendo
+    'no_publicado_sbs' (no pisa archivos que despues fueron descargados manualmente).
+    """
+    import psycopg
+
+    from aibenchef_data.env import settings as _settings
+
+    url = _settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    insert_sql = """
+        INSERT INTO raw.archivos_descargados (
+            grupo, topico, periodo, anio, mes, nombre_archivo, path_local,
+            source_url, tamanio_bytes, formato, status, error_mensaje,
+            descargado_en, actualizado_en
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, 0, 'no_publicado', 'no_publicado_sbs', %s,
+            NOW(), NOW()
+        )
+        ON CONFLICT (path_local) DO UPDATE
+        SET status = 'no_publicado_sbs',
+            error_mensaje = EXCLUDED.error_mensaje,
+            actualizado_en = NOW()
+        WHERE raw.archivos_descargados.status NOT IN ('procesado', 'descargado')
+    """
+    rows = []
+    for r in results:
+        t = r.target
+        ref = t.ref
+        rows.append(
+            (
+                ref.grupo.value,
+                ref.topico.value,
+                ref.periodo.anio * 100 + ref.periodo.mes,
+                ref.periodo.anio,
+                ref.periodo.mes,
+                t.dest.name,
+                str(t.dest),
+                t.url,
+                r.error_message or "SBS no publico este periodo",
+            )
+        )
+    try:
+        with psycopg.connect(url) as conn, conn.cursor() as cur:
+            cur.executemany(insert_sql, rows)
+            conn.commit()
+    except Exception as e:
+        # No bloquear el scrape si DB falla — solo log
+        click.echo(f"     WARN: no pude registrar no-publicados en DB: {e}")
 
 
 # ============================================================================

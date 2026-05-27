@@ -134,11 +134,21 @@ function CeldaArchivo({ mes, celda }: { mes: number; celda: MatrizCelda | undefi
     procesado: "bg-emerald-100 text-emerald-800 border-emerald-300",
     error: "bg-rose-100 text-rose-800 border-rose-300",
     omitido: "bg-slate-100 text-slate-600 border-slate-300",
+    no_publicado_sbs: "bg-slate-50 text-slate-400 border-slate-200 italic",
   };
-  const color = colorByStatus[celda.status ?? "descargado"] ?? "bg-slate-100 text-slate-700 border-slate-300";
+  const labelByStatus: Record<string, string> = {
+    no_publicado_sbs: "SBS no publico este periodo",
+    descargado: "Descargado (pendiente de procesar)",
+    procesando: "Procesando",
+    procesado: "Procesado",
+    error: "Error en ingesta",
+    omitido: "Omitido",
+  };
+  const status = celda.status ?? "descargado";
+  const color = colorByStatus[status] ?? "bg-slate-100 text-slate-700 border-slate-300";
   const tooltip = [
     MES_LABEL[mes - 1] + " " + celda.anio,
-    `Status: ${celda.status ?? "?"}`,
+    labelByStatus[status] ?? `Status: ${status}`,
     celda.archivos > 1 ? `${celda.archivos} archivos` : null,
     celda.descargadoEn ? `Descargado: ${celda.descargadoEn}` : null,
     celda.filasInsertadas != null ? `${celda.filasInsertadas.toLocaleString()} filas` : null,
