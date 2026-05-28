@@ -21,12 +21,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
 
-import type {
-  EeffInspectorData,
-  EeffRow,
-  EntidadOption,
-  Moneda,
-} from "./types";
+import type { EeffInspectorData, EeffRow, EntidadOption } from "./types";
 
 /** Lista entidades con data en el periodo (para dropdown). */
 export async function listEntidadesPorPeriodo(periodo: number): Promise<EntidadOption[]> {
@@ -65,12 +60,12 @@ export async function listAllPeriodos(): Promise<number[]> {
 
 /**
  * Fetch principal del inspector: BG + ER iterando la cabecera-base con
- * LEFT JOIN a raw para los valores. Driver = cabecera, no raw.
+ * LEFT JOIN a raw para los valores en MN, ME y TOTAL simultaneamente.
+ * Driver = cabecera, no raw.
  */
 export async function getEeffInspectorData(
   entidad: string,
   periodo: number,
-  moneda: Moneda,
 ): Promise<EeffInspectorData | null> {
   // Resolver tipo_entidad + periodo previo desde la entidad.
   const meta = await db.execute<{ tipo_entidad: string; periodo_prev: number | null }>(sql`
@@ -89,12 +84,11 @@ export async function getEeffInspectorData(
   const tipoEntidad = meta[0].tipo_entidad;
   const periodoPrev = meta[0].periodo_prev;
 
-  // Iterar cabecera_maestra para balance y resultados.
+  // Iterar cabecera_maestra para balance y resultados con 3 monedas.
   const balance = await fetchByTipoEstado(
     entidad,
     periodo,
     periodoPrev,
-    moneda,
     "balance",
     tipoEntidad,
   );
@@ -102,20 +96,13 @@ export async function getEeffInspectorData(
     entidad,
     periodo,
     periodoPrev,
-    moneda,
     "resultados",
     tipoEntidad,
   );
 
   // Extras: filas en raw que NO estan en cabecera-base (drift detectado).
-  const extrasBalance = await fetchExtras(entidad, periodo, moneda, "balance", tipoEntidad);
-  const extrasResultados = await fetchExtras(
-    entidad,
-    periodo,
-    moneda,
-    "resultados",
-    tipoEntidad,
-  );
+  const extrasBalance = await fetchExtras(entidad, periodo, "balance", tipoEntidad);
+  const extrasResultados = await fetchExtras(entidad, periodo, "resultados", tipoEntidad);
 
   // Quality summary
   const qcRows = await db.execute<Record<string, unknown>>(sql`
@@ -164,7 +151,6 @@ export async function getEeffInspectorData(
     entidad,
     periodo,
     periodoPrevio: periodoPrev,
-    moneda,
     tipoEntidad,
     balance,
     resultados,
@@ -183,48 +169,56 @@ async function fetchByTipoEstado(
   entidad: string,
   periodo: number,
   periodoPrev: number | null,
-  moneda: Moneda,
   tipoEstado: "balance" | "resultados",
   tipoEntidad: string,
 ): Promise<EeffRow[]> {
-  // Driver: cabecera_maestra. Para cada orden, hacer LEFT JOIN con raw del
-  // periodo solicitado y con raw del periodo previo (para delta).
-  // Solo joineamos cuando codigo IS NOT NULL — las filas-marker (codigo
-  // NULL en cabecera) no tienen valor propio.
+  // Driver: cabecera_maestra. Por cada orden hacemos pivote de las 3 monedas
+  // (MN, ME, TOTAL) en una sola pasada via FILTER WHERE. Mas eficiente que
+  // 3 LEFT JOIN separados, y devuelve las 3 columnas listas para la UI.
   const rows = await db.execute<Record<string, unknown>>(sql`
     SELECT
       cm.orden,
-      cm.codigo                AS cuenta_codigo,
-      cm.nombre                AS nombre_canonico,
+      cm.codigo                                   AS cuenta_codigo,
+      cm.nombre                                   AS nombre_canonico,
       cm.nivel,
       cm.es_header,
       cm.es_total,
       cm.es_seccion,
-      eo.cuenta_nombre         AS nombre_archivo,
-      eo.valor,
-      prev.valor               AS valor_prev,
-      (eo.valor - prev.valor)  AS delta_abs,
+      eo.nombre_archivo,
+      eo.valor_mn,
+      eo.valor_me,
+      eo.valor_total,
+      prev.valor_total                            AS valor_prev,
+      (eo.valor_total - prev.valor_total)         AS delta_abs,
       CASE
-        WHEN prev.valor IS NULL OR prev.valor = 0 THEN NULL
-        ELSE (eo.valor - prev.valor) / ABS(prev.valor)
-      END                      AS delta_pct,
-      COALESCE(q.qstatus, 'ok') AS quality_status
+        WHEN prev.valor_total IS NULL OR prev.valor_total = 0 THEN NULL
+        ELSE (eo.valor_total - prev.valor_total) / ABS(prev.valor_total)
+      END                                         AS delta_pct,
+      COALESCE(q.qstatus, 'ok')                   AS quality_status
     FROM dw.cabecera_maestra cm
-    LEFT JOIN raw.eeff_observacion eo
-      ON cm.codigo IS NOT NULL
-     AND eo.cuenta_codigo = cm.codigo
-     AND eo.nomb_correg   = ${entidad}
-     AND eo.periodo       = ${periodo}
-     AND eo.tipo_estado   = cm.tipo_estado
-     AND eo.moneda        = ${moneda}
-    LEFT JOIN raw.eeff_observacion prev
-      ON cm.codigo IS NOT NULL
-     AND ${periodoPrev !== null}::boolean
-     AND prev.cuenta_codigo = cm.codigo
-     AND prev.nomb_correg   = ${entidad}
-     AND prev.periodo       = ${periodoPrev ?? 0}
-     AND prev.tipo_estado   = cm.tipo_estado
-     AND prev.moneda        = ${moneda}
+    LEFT JOIN LATERAL (
+      SELECT
+        MAX(cuenta_nombre)                              AS nombre_archivo,
+        MAX(valor) FILTER (WHERE moneda='MN')           AS valor_mn,
+        MAX(valor) FILTER (WHERE moneda='ME')           AS valor_me,
+        MAX(valor) FILTER (WHERE moneda='TOTAL')        AS valor_total
+      FROM raw.eeff_observacion
+      WHERE cm.codigo IS NOT NULL
+        AND cuenta_codigo = cm.codigo
+        AND nomb_correg   = ${entidad}
+        AND periodo       = ${periodo}
+        AND tipo_estado   = cm.tipo_estado
+    ) eo ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT MAX(valor) FILTER (WHERE moneda='TOTAL') AS valor_total
+      FROM raw.eeff_observacion
+      WHERE cm.codigo IS NOT NULL
+        AND ${periodoPrev !== null}::boolean
+        AND cuenta_codigo = cm.codigo
+        AND nomb_correg   = ${entidad}
+        AND periodo       = ${periodoPrev ?? 0}
+        AND tipo_estado   = cm.tipo_estado
+    ) prev ON TRUE
     LEFT JOIN LATERAL (
       SELECT
         CASE
@@ -251,14 +245,6 @@ async function fetchByTipoEstado(
     const esHeader = Boolean(r.es_header);
     const esTotal = Boolean(r.es_total);
     const esSeccion = Boolean(r.es_seccion);
-    // faltaEnRaw: solo levanta cuando la fila tiene codigo asignado
-    // (es cuenta contable real) y no esta en raw.
-    //
-    // Filas marker (anotaciones SBS, "Tipo de Cambio", fechas) quedan con
-    // codigo=NULL tras V098 y por tanto NO levantan "falta".
-    //
-    // Headers con codigo (ej. A1 DISPONIBLE, sumatoria de A1.1+A1.2+...)
-    // SI esperan valor — solo excluimos secciones marker (Activo/Pasivo).
     const esperaValor = codigo !== null && !esSeccion;
     const faltaEnRaw = esperaValor && nombreArchivo === null;
     return {
@@ -269,7 +255,9 @@ async function fetchByTipoEstado(
       nombreMismatch:
         nombreArchivo != null && normalize(nombreArchivo) !== normalize(nombreCanonica),
       faltaEnRaw,
-      valor: r.valor != null ? Number(r.valor) : null,
+      valorMN: r.valor_mn != null ? Number(r.valor_mn) : null,
+      valorME: r.valor_me != null ? Number(r.valor_me) : null,
+      valorTotal: r.valor_total != null ? Number(r.valor_total) : null,
       valorPrev: r.valor_prev != null ? Number(r.valor_prev) : null,
       deltaPct: r.delta_pct != null ? Number(r.delta_pct) : null,
       deltaAbs: r.delta_abs != null ? Number(r.delta_abs) : null,
@@ -282,21 +270,33 @@ async function fetchByTipoEstado(
   });
 }
 
-/** Filas en raw.eeff_observacion que NO estan en la cabecera-base. */
+/** Filas en raw.eeff_observacion que NO estan en la cabecera-base.
+ *  Devuelve las 3 monedas pivoteadas por cuenta_codigo. */
 async function fetchExtras(
   entidad: string,
   periodo: number,
-  moneda: Moneda,
   tipoEstado: "balance" | "resultados",
   tipoEntidad: string,
-): Promise<{ cuentaCodigo: string; cuentaNombre: string; valor: number | null }[]> {
+): Promise<
+  {
+    cuentaCodigo: string;
+    cuentaNombre: string;
+    valorMN: number | null;
+    valorME: number | null;
+    valorTotal: number | null;
+  }[]
+> {
   const rows = await db.execute<Record<string, unknown>>(sql`
-    SELECT eo.cuenta_codigo, eo.cuenta_nombre, eo.valor
+    SELECT
+      eo.cuenta_codigo,
+      MAX(eo.cuenta_nombre)                              AS cuenta_nombre,
+      MAX(eo.valor) FILTER (WHERE eo.moneda='MN')        AS valor_mn,
+      MAX(eo.valor) FILTER (WHERE eo.moneda='ME')        AS valor_me,
+      MAX(eo.valor) FILTER (WHERE eo.moneda='TOTAL')     AS valor_total
     FROM raw.eeff_observacion eo
     WHERE eo.nomb_correg = ${entidad}
       AND eo.periodo = ${periodo}
       AND eo.tipo_estado = ${tipoEstado}
-      AND eo.moneda = ${moneda}
       AND NOT EXISTS (
         SELECT 1 FROM dw.cabecera_maestra cm
         WHERE cm.tipo_estado = ${tipoEstado}
@@ -304,13 +304,16 @@ async function fetchExtras(
           AND cm.codigo = eo.cuenta_codigo
           AND cm.valido_hasta IS NULL
       )
+    GROUP BY eo.cuenta_codigo
     ORDER BY eo.cuenta_codigo
   `);
 
   return rows.map((r) => ({
     cuentaCodigo: r.cuenta_codigo as string,
     cuentaNombre: r.cuenta_nombre as string,
-    valor: r.valor != null ? Number(r.valor) : null,
+    valorMN: r.valor_mn != null ? Number(r.valor_mn) : null,
+    valorME: r.valor_me != null ? Number(r.valor_me) : null,
+    valorTotal: r.valor_total != null ? Number(r.valor_total) : null,
   }));
 }
 

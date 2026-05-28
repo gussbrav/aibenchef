@@ -628,31 +628,31 @@ describe.skipIf(SKIP_INTEGRATION)("listAllPeriodos", () => {
 describe.skipIf(SKIP_INTEGRATION)("getEeffInspectorData — driver cabecera_maestra", () => {
   it("retorna BG iterando cabecera (no raw)", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     expect(data).not.toBeNull();
     expect(data!.balance.length).toBe(3); // 3 cabeceras balance BANCOS
     expect(data!.balance[0].cuentaCodigo).toBe("A1");
     expect(data!.balance[0].cuentaNombreCanonica).toBe("DISPONIBLE");
-    expect(data!.balance[0].valor).toBe(110);
+    expect(data!.balance[0].valorTotal).toBe(110);
     expect(data!.balance[0].valorPrev).toBe(100);
     expect(data!.balance[0].deltaPct).toBeCloseTo(0.1, 5);
   });
 
   it("retorna ER iterando cabecera", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     expect(data!.resultados.length).toBe(2);
     expect(data!.resultados[0].cuentaCodigo).toBe("1");
-    expect(data!.resultados[0].valor).toBe(5000);
+    expect(data!.resultados[0].valorTotal).toBe(5000);
   });
 
   it("marca faltaEnRaw cuando cabecera espera valor pero raw no lo tiene", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     // A3 esta en cabecera pero NO en raw fixture
     const a3 = data!.balance.find((r) => r.cuentaCodigo === "A3");
     expect(a3?.faltaEnRaw).toBe(true);
-    expect(a3?.valor).toBeNull();
+    expect(a3?.valorTotal).toBeNull();
 
     // A1 sí tiene valor — no falta
     const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
@@ -661,7 +661,7 @@ describe.skipIf(SKIP_INTEGRATION)("getEeffInspectorData — driver cabecera_maes
 
   it("retorna extras (filas en raw que NO estan en cabecera)", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     expect(data!.extrasBalance.length).toBe(1);
     expect(data!.extrasBalance[0].cuentaCodigo).toBe("ZZ");
     expect(data!.extrasBalance[0].cuentaNombre).toBe("CUENTA EXTRA FUERA DE CABECERA");
@@ -669,7 +669,7 @@ describe.skipIf(SKIP_INTEGRATION)("getEeffInspectorData — driver cabecera_maes
 
   it("computa deltaPct vs periodo previo correctamente", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     expect(data!.periodoPrevio).toBe(202602);
     const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
     // 110 vs 100 → +10%
@@ -679,16 +679,59 @@ describe.skipIf(SKIP_INTEGRATION)("getEeffInspectorData — driver cabecera_maes
 
   it("retorna null para entidad sin data en el periodo", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Inexistente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Inexistente", 202603);
     expect(data).toBeNull();
   });
 
   it("respeta el flag esHeader/esTotal/esSeccion de la cabecera", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
     expect(a1?.esHeader).toBe(true);
     expect(a1?.nivel).toBe(2);
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* EEFF Inspector 3 monedas pivot (issue #34)                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector — 3 monedas MN/ME/TOTAL", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await seedFixtures(testDbUrl);
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // Insertar las 3 monedas para A1 de Banco Existente 202603
+      await sql.unsafe(`
+        INSERT INTO raw.eeff_observacion
+          (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, cuenta_nombre, valor)
+        VALUES
+          (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'MN',    'A1', 'DISPONIBLE', 60),
+          (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'ME',    'A1', 'DISPONIBLE', 50)
+        ON CONFLICT DO NOTHING;
+      `);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("Inspector retorna valorMN + valorME + valorTotal pivoteados por cuenta", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
+    const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
+    expect(a1?.valorMN).toBe(60);
+    expect(a1?.valorME).toBe(50);
+    // El seed inicial tiene A1 TOTAL = 110 — pivot lo trae junto
+    expect(a1?.valorTotal).toBe(110);
+  });
+
+  it("Inspector NO requiere parametro moneda (eliminado)", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    // Verifica que la signature acepta (entidad, periodo) sin tercer arg
+    const data = await getEeffInspectorData("Banco Existente", 202603);
+    expect(data).not.toBeNull();
   });
 });
 
@@ -1025,7 +1068,7 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector marker rows (V098)", () => {
 
   it("Cuenta real con codigo sin valor en raw → faltaEnRaw=true", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     const z9 = data!.balance.find((r) => r.cuentaCodigo === "Z9");
     expect(z9).toBeDefined();
     expect(z9?.faltaEnRaw).toBe(true);
@@ -1033,7 +1076,7 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector marker rows (V098)", () => {
 
   it("Marker (es_header con codigo NULL) NO levanta faltaEnRaw", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     const marker = data!.balance.find((r) => r.cuentaNombreCanonica.includes("anotacion"));
     expect(marker).toBeDefined();
     expect(marker?.faltaEnRaw).toBe(false);
@@ -1045,7 +1088,7 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector marker rows (V098)", () => {
     // cuentas reales que SBS publica con valor. Si raw no las tiene es
     // legitimo flag de falta (parser bug, formato cambio, etc).
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     const total = data!.balance.find((r) => r.cuentaCodigo === "Z10");
     expect(total).toBeDefined();
     expect(total?.esTotal).toBe(true);
@@ -1054,7 +1097,7 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector marker rows (V098)", () => {
 
   it("Seccion (es_seccion=true) NO levanta faltaEnRaw", async () => {
     const { getEeffInspectorData } = await import("./eeff-inspector");
-    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
     const sec = data!.balance.find((r) => r.cuentaNombreCanonica.includes("PATRIMONIO seccion"));
     expect(sec).toBeDefined();
     expect(sec?.faltaEnRaw).toBe(false);

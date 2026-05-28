@@ -147,8 +147,12 @@ export type TipoEstado = "balance" | "resultados";
  * Una fila del inspector — driver es dw.cabecera_maestra (las cabeceras-base
  * que definio el operador), con valores LEFT JOIN desde raw.eeff_observacion.
  *
+ * Cada fila muestra los 3 valores monetarios simultaneamente (MN/ME/TOTAL)
+ * para replicar exactamente la vista del archivo SBS original. Delta vs
+ * periodo previo se computa sobre el TOTAL.
+ *
  * Si nombreArchivo es NULL: la cabecera espera esta fila pero el parser NO la
- * persistio (puede ser fila sin codigo o bug del parser).
+ * persistio.
  */
 export type EeffRow = {
   /** Orden visual segun la cabecera-base (1, 2, 3, ...). */
@@ -163,34 +167,58 @@ export type EeffRow = {
   nombreMismatch: boolean;
   /** True si la cabecera espera valor pero no esta en raw.eeff_observacion. */
   faltaEnRaw: boolean;
-  valor: number | null;
+
+  /** Valor en Moneda Nacional (S/). */
+  valorMN: number | null;
+  /** Valor en Moneda Extranjera (USD equivalente en miles). */
+  valorME: number | null;
+  /** Valor consolidado (MN + ME convertido a soles). */
+  valorTotal: number | null;
+
+  /** Valor TOTAL del periodo anterior — para delta. */
   valorPrev: number | null;
-  /** Δ% vs periodo anterior. NULL si no hay valor previo o valorPrev = 0. */
+  /** Δ% sobre TOTAL vs periodo anterior. NULL si no hay valor previo o = 0. */
   deltaPct: number | null;
-  /** Δ absoluto vs periodo anterior. */
+  /** Δ absoluto sobre TOTAL vs periodo anterior. */
   deltaAbs: number | null;
   /** Indica si esta cuenta tiene quality_checks con status critical/warning. */
   qualityStatus: "ok" | "warning" | "critical";
 
   /** Flags de renderizado segun dw.cabecera_maestra. */
-  nivel: number;           // 0/1/2/3 — profundidad para indentar
-  esHeader: boolean;       // es cabecera de seccion (bold, sin valor propio)
-  esTotal: boolean;        // es fila de total (resaltada)
-  esSeccion: boolean;      // marker tipo "ACTIVO" / "PASIVO" / "PATRIMONIO"
+  nivel: number;
+  esHeader: boolean;
+  esTotal: boolean;
+  esSeccion: boolean;
 };
 
-/** Response del endpoint /api/v1/admin/pipeline/eeff. */
+/** Response del endpoint /api/v1/admin/pipeline/eeff.
+ *
+ * No incluye campo `moneda` — devuelve siempre las 3 (MN/ME/TOTAL)
+ * en cada fila para que el operador valide simultaneamente como en el
+ * archivo SBS original.
+ */
 export type EeffInspectorData = {
   entidad: string;
   periodo: number;
   periodoPrevio: number | null;
-  moneda: Moneda;
   tipoEntidad: string | null;
   balance: EeffRow[];
   resultados: EeffRow[];
   /** Filas en raw.eeff_observacion que NO estan en la cabecera-base (drift SBS). */
-  extrasBalance: { cuentaCodigo: string; cuentaNombre: string; valor: number | null }[];
-  extrasResultados: { cuentaCodigo: string; cuentaNombre: string; valor: number | null }[];
+  extrasBalance: {
+    cuentaCodigo: string;
+    cuentaNombre: string;
+    valorMN: number | null;
+    valorME: number | null;
+    valorTotal: number | null;
+  }[];
+  extrasResultados: {
+    cuentaCodigo: string;
+    cuentaNombre: string;
+    valorMN: number | null;
+    valorME: number | null;
+    valorTotal: number | null;
+  }[];
   qualitySummary: {
     balance: { critical: number; warning: number; ok: number };
     outliers: { critical: number; warning: number; ok: number };

@@ -2,49 +2,39 @@
 
 /**
  * Client component del EEFF Inspector — selectores + 2 tablas (BG y ER) +
- * extras + quality summary.
+ * 3 columnas monedas (MN/ME/TOTAL) + export CSV + extras + quality summary.
  */
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { AlertTriangle, ExternalLink, FileText } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, FileText } from "lucide-react";
 
 import type {
   EeffInspectorData,
   EeffRow,
   EntidadOption,
-  Moneda,
 } from "@/lib/domains/pipeline";
-
-const MONEDAS: { value: Moneda; label: string }[] = [
-  { value: "TOTAL", label: "Total (MN+ME)" },
-  { value: "MN", label: "Moneda Nacional" },
-  { value: "ME", label: "Moneda Extranjera" },
-];
 
 export function EeffInspectorClient({
   periodos,
   entidades,
   currentPeriodo,
   currentEntidad,
-  currentMoneda,
   data,
 }: {
   periodos: number[];
   entidades: EntidadOption[];
   currentPeriodo: number;
   currentEntidad: string;
-  currentMoneda: Moneda;
   data: EeffInspectorData | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const navigate = (newParams: Partial<{ entidad: string; periodo: number; moneda: Moneda }>) => {
+  const navigate = (newParams: Partial<{ entidad: string; periodo: number }>) => {
     const params = new URLSearchParams();
     params.set("entidad", newParams.entidad ?? currentEntidad);
     params.set("periodo", String(newParams.periodo ?? currentPeriodo));
-    params.set("moneda", newParams.moneda ?? currentMoneda);
     startTransition(() => {
       router.push(`/dashboard/admin/eeff-inspector?${params}` as never);
     });
@@ -70,14 +60,17 @@ export function EeffInspectorClient({
           onChange={(v) => navigate({ periodo: Number(v) })}
           options={periodos.map((p) => ({ value: String(p), label: formatPeriodo(p) }))}
         />
-        <SelectField
-          label="Moneda"
-          value={currentMoneda}
-          onChange={(v) => navigate({ moneda: v as Moneda })}
-          options={MONEDAS.map((m) => ({ value: m.value, label: m.label }))}
-        />
+        {data && (
+          <button
+            onClick={() => downloadCsv(data)}
+            className="ml-auto px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1"
+            type="button"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar CSV
+          </button>
+        )}
         {data?.periodoPrevio != null && (
-          <div className="text-[11px] text-slate-500 ml-auto">
+          <div className="text-[11px] text-slate-500">
             Periodo previo: <code className="font-mono">{data.periodoPrevio}</code>
           </div>
         )}
@@ -89,10 +82,7 @@ export function EeffInspectorClient({
         </p>
       ) : (
         <>
-          {/* Quality summary cards */}
           <QualitySummaryRow data={data} />
-
-          {/* Tabla Balance General */}
           <EeffTable
             title="Balance General"
             rows={data.balance}
@@ -100,8 +90,6 @@ export function EeffInspectorClient({
             periodoActual={data.periodo}
             periodoPrevio={data.periodoPrevio}
           />
-
-          {/* Tabla Estado de Resultados */}
           <EeffTable
             title="Estado de Resultados (PyG)"
             rows={data.resultados}
@@ -109,8 +97,6 @@ export function EeffInspectorClient({
             periodoActual={data.periodo}
             periodoPrevio={data.periodoPrevio}
           />
-
-          {/* Archivos descargados */}
           {data.archivos.length > 0 && (
             <section className="border-t border-slate-200 pt-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
@@ -204,19 +190,24 @@ function EeffTable({
         <table className="text-xs border-collapse w-full">
           <thead>
             <tr className="bg-slate-100 border-b">
-              <th className="text-right p-2 font-semibold text-slate-700 w-12">#</th>
-              <th className="text-left p-2 font-semibold text-slate-700 w-20">Código</th>
-              <th className="text-left p-2 font-semibold text-slate-700">
+              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-12 border-r">#</th>
+              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 w-20 border-r">Código</th>
+              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 border-r">
                 Cuenta (cabecera-base)
               </th>
-              <th className="text-right p-2 font-semibold text-slate-700 w-32">
-                Valor {periodoActual}
+              <th colSpan={3} className="text-center p-1 font-semibold text-slate-700 border-r bg-slate-200 text-[11px]">
+                {periodoActual}
               </th>
-              <th className="text-right p-2 font-semibold text-slate-700 w-32">
-                {periodoPrevio ?? "Previo"}
+              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-24 border-r">
+                Total {periodoPrevio ?? "Previo"}
               </th>
-              <th className="text-right p-2 font-semibold text-slate-700 w-20">Δ%</th>
-              <th className="text-left p-2 font-semibold text-slate-700 w-32">Diag.</th>
+              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-16 border-r">Δ%</th>
+              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 w-24">Diag.</th>
+            </tr>
+            <tr className="bg-slate-100 border-b">
+              <th className="text-right p-1 font-semibold text-slate-600 w-20 text-[10px]">MN</th>
+              <th className="text-right p-1 font-semibold text-slate-600 w-20 text-[10px]">ME</th>
+              <th className="text-right p-1 font-semibold text-slate-700 w-24 text-[11px] bg-slate-50 border-r">TOTAL</th>
             </tr>
           </thead>
           <tbody>
@@ -242,7 +233,9 @@ function EeffTable({
               <tr className="text-amber-900">
                 <th className="text-left p-1">Código</th>
                 <th className="text-left p-1">Nombre en archivo</th>
-                <th className="text-right p-1">Valor</th>
+                <th className="text-right p-1 w-20">MN</th>
+                <th className="text-right p-1 w-20">ME</th>
+                <th className="text-right p-1 w-24">TOTAL</th>
               </tr>
             </thead>
             <tbody>
@@ -250,7 +243,9 @@ function EeffTable({
                 <tr key={e.cuentaCodigo} className="border-t border-amber-200">
                   <td className="p-1 font-mono">{e.cuentaCodigo}</td>
                   <td className="p-1">{e.cuentaNombre}</td>
-                  <td className="p-1 text-right font-mono">{fmt(e.valor)}</td>
+                  <td className="p-1 text-right font-mono">{fmt(e.valorMN)}</td>
+                  <td className="p-1 text-right font-mono">{fmt(e.valorME)}</td>
+                  <td className="p-1 text-right font-mono font-semibold">{fmt(e.valorTotal)}</td>
                 </tr>
               ))}
             </tbody>
@@ -262,7 +257,6 @@ function EeffTable({
 }
 
 function EeffRowComponent({ row }: { row: EeffRow }) {
-  // Estilo según tipo de fila
   const isSection = row.esSeccion;
   const isHeader = row.esHeader;
   const isTotal = row.esTotal;
@@ -283,7 +277,6 @@ function EeffRowComponent({ row }: { row: EeffRow }) {
     nombreClass = "text-slate-900 font-semibold";
   }
 
-  // Indicador de issue
   const diag: string[] = [];
   if (row.faltaEnRaw) diag.push("❌ falta");
   if (row.nombreMismatch) diag.push("⚠️ nombre");
@@ -292,9 +285,9 @@ function EeffRowComponent({ row }: { row: EeffRow }) {
 
   return (
     <tr className={rowClass}>
-      <td className="p-2 text-right text-slate-400">{row.orden}</td>
-      <td className={`p-2 ${codigoClass}`}>{row.cuentaCodigo ?? "—"}</td>
-      <td className={`p-2 ${nombreClass}`} style={{ paddingLeft: 8 + indent }}>
+      <td className="p-2 text-right text-slate-400 border-r">{row.orden}</td>
+      <td className={`p-2 border-r ${codigoClass}`}>{row.cuentaCodigo ?? "—"}</td>
+      <td className={`p-2 border-r ${nombreClass}`} style={{ paddingLeft: 8 + indent }}>
         <span>{row.cuentaNombreCanonica}</span>
         {row.nombreMismatch && row.cuentaNombreArchivo && (
           <span
@@ -306,10 +299,14 @@ function EeffRowComponent({ row }: { row: EeffRow }) {
           </span>
         )}
       </td>
-      <td className="p-2 text-right font-mono">{fmt(row.valor)}</td>
-      <td className="p-2 text-right font-mono text-slate-500">{fmt(row.valorPrev)}</td>
+      <td className="p-2 text-right font-mono text-slate-600">{fmt(row.valorMN)}</td>
+      <td className="p-2 text-right font-mono text-slate-600">{fmt(row.valorME)}</td>
+      <td className="p-2 text-right font-mono font-semibold bg-slate-50 border-r">
+        {fmt(row.valorTotal)}
+      </td>
+      <td className="p-2 text-right font-mono text-slate-500 border-r">{fmt(row.valorPrev)}</td>
       <td
-        className={`p-2 text-right font-mono ${
+        className={`p-2 text-right font-mono border-r ${
           row.deltaPct == null
             ? ""
             : row.deltaPct > 0
@@ -373,4 +370,135 @@ function formatPeriodo(p: number): string {
   const y = Math.floor(p / 100);
   const m = p % 100;
   return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Export CSV                                                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+function downloadCsv(data: EeffInspectorData): void {
+  const lines: string[] = [];
+  // Header
+  lines.push(
+    [
+      "Seccion",
+      "Orden",
+      "Codigo",
+      "Nombre (cabecera-base)",
+      "Nombre (archivo SBS)",
+      "Nivel",
+      "es_header",
+      "es_total",
+      "es_seccion",
+      "Valor MN",
+      "Valor ME",
+      `Valor TOTAL ${data.periodo}`,
+      `Valor TOTAL ${data.periodoPrevio ?? "Previo"}`,
+      "Delta abs",
+      "Delta pct",
+      "Quality status",
+      "Falta en raw",
+      "Nombre mismatch",
+    ]
+      .map(csvEscape)
+      .join(","),
+  );
+
+  const dump = (seccion: string, rows: EeffRow[]) => {
+    for (const r of rows) {
+      lines.push(
+        [
+          seccion,
+          String(r.orden),
+          r.cuentaCodigo ?? "",
+          r.cuentaNombreCanonica,
+          r.cuentaNombreArchivo ?? "",
+          String(r.nivel),
+          String(r.esHeader),
+          String(r.esTotal),
+          String(r.esSeccion),
+          r.valorMN != null ? String(r.valorMN) : "",
+          r.valorME != null ? String(r.valorME) : "",
+          r.valorTotal != null ? String(r.valorTotal) : "",
+          r.valorPrev != null ? String(r.valorPrev) : "",
+          r.deltaAbs != null ? String(r.deltaAbs) : "",
+          r.deltaPct != null ? String(r.deltaPct) : "",
+          r.qualityStatus,
+          String(r.faltaEnRaw),
+          String(r.nombreMismatch),
+        ]
+          .map(csvEscape)
+          .join(","),
+      );
+    }
+  };
+
+  dump("BALANCE", data.balance);
+  dump("RESULTADOS", data.resultados);
+
+  // Extras
+  if (data.extrasBalance.length > 0 || data.extrasResultados.length > 0) {
+    lines.push("");
+    lines.push("# EXTRAS (filas en raw fuera de cabecera-base)");
+    lines.push(
+      ["Seccion", "Codigo", "Nombre archivo", "MN", "ME", "TOTAL"]
+        .map(csvEscape)
+        .join(","),
+    );
+    for (const e of data.extrasBalance) {
+      lines.push(
+        [
+          "BALANCE_EXTRA",
+          e.cuentaCodigo,
+          e.cuentaNombre,
+          e.valorMN != null ? String(e.valorMN) : "",
+          e.valorME != null ? String(e.valorME) : "",
+          e.valorTotal != null ? String(e.valorTotal) : "",
+        ]
+          .map(csvEscape)
+          .join(","),
+      );
+    }
+    for (const e of data.extrasResultados) {
+      lines.push(
+        [
+          "RESULTADOS_EXTRA",
+          e.cuentaCodigo,
+          e.cuentaNombre,
+          e.valorMN != null ? String(e.valorMN) : "",
+          e.valorME != null ? String(e.valorME) : "",
+          e.valorTotal != null ? String(e.valorTotal) : "",
+        ]
+          .map(csvEscape)
+          .join(","),
+      );
+    }
+  }
+
+  const csv = lines.join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `eeff_${slug(data.entidad)}_${data.periodo}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(s: string): string {
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function slug(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }

@@ -19,7 +19,6 @@ import {
   listAllPeriodos,
   listEntidadesPorPeriodo,
 } from "@/lib/domains/pipeline";
-import type { Moneda } from "@/lib/domains/pipeline";
 
 import { EeffInspectorClient } from "./inspector-client";
 
@@ -29,13 +28,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-const MONEDAS_VALIDAS: Moneda[] = ["MN", "ME", "TOTAL"];
-
 interface PageProps {
   searchParams: Promise<{
     entidad?: string;
     periodo?: string;
-    moneda?: string;
   }>;
 }
 
@@ -79,12 +75,7 @@ export default async function EeffInspectorPage({ searchParams }: PageProps) {
       ? entidadParam
       : entidades[0].nombCorreg;
 
-  const moneda: Moneda =
-    params.moneda && (MONEDAS_VALIDAS as string[]).includes(params.moneda)
-      ? (params.moneda as Moneda)
-      : "TOTAL";
-
-  const data = await getEeffInspectorData(entidad, periodoNum, moneda);
+  const data = await getEeffInspectorData(entidad, periodoNum);
 
   return (
     <div className="space-y-6 px-4 lg:px-6">
@@ -94,7 +85,6 @@ export default async function EeffInspectorPage({ searchParams }: PageProps) {
         entidades={entidades}
         currentPeriodo={periodoNum}
         currentEntidad={entidad}
-        currentMoneda={moneda}
         data={data}
       />
     </div>
