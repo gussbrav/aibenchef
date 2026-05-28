@@ -2877,6 +2877,58 @@ def pipeline_quality_check(periodo: str, triggered_by: str) -> None:
                         )
                         click.echo(f"  Check 3 (subcuentas):  {cur.rowcount} anomalías")
 
+                    # --- Auto-resolve de anomalias stale (issue #43) ---
+                    # Cualquier check previo (carga_log_id != log_id actual) que ya no
+                    # se reproduce en esta corrida significa que el re-ingest corrigio
+                    # el problema. Se marca como resuelto en lugar de borrar, para
+                    # preservar trazabilidad historica.
+                    #   - auto_resolved   : la anomalia desaparecio (mismo key no esta
+                    #                       en el run actual).
+                    #   - auto_superseded : la anomalia sigue existiendo pero hay un
+                    #                       row mas reciente en esta corrida.
+                    n_auto_resolved = 0
+                    n_auto_superseded = 0
+                    review_notes_msg = (
+                        f"Run carga_log_id={log.log_id} refresco el periodo. "
+                        "Anomalia previa ya no aplica o fue reemplazada."
+                    )
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            UPDATE admin.data_quality_checks AS prev
+                               SET reviewed_at   = now(),
+                                   reviewed_by   = 'system:quality-check',
+                                   review_action = CASE WHEN EXISTS (
+                                       SELECT 1
+                                         FROM admin.data_quality_checks AS run
+                                        WHERE run.carga_log_id = %s
+                                          AND run.periodo      = prev.periodo
+                                          AND run.nomb_correg  = prev.nomb_correg
+                                          AND run.check_type   = prev.check_type
+                                          AND COALESCE(run.cuenta_codigo, '') =
+                                              COALESCE(prev.cuenta_codigo, '')
+                                   ) THEN 'auto_superseded'
+                                     ELSE 'auto_resolved'
+                                   END,
+                                   review_notes  = %s
+                             WHERE prev.periodo       = %s
+                               AND prev.reviewed_at  IS NULL
+                               AND prev.carga_log_id IS DISTINCT FROM %s
+                             RETURNING review_action
+                            """,
+                            (log.log_id, review_notes_msg, p.to_int(), log.log_id),
+                        )
+                        for (action,) in await cur.fetchall():
+                            if action == "auto_resolved":
+                                n_auto_resolved += 1
+                            elif action == "auto_superseded":
+                                n_auto_superseded += 1
+                        if n_auto_resolved or n_auto_superseded:
+                            click.echo(
+                                f"  Auto-resolve: {n_auto_resolved} resueltas, "
+                                f"{n_auto_superseded} reemplazadas (issue #43)"
+                            )
+
                     # Counts finales
                     async with conn.cursor() as cur:
                         await cur.execute(
@@ -2902,6 +2954,8 @@ def pipeline_quality_check(periodo: str, triggered_by: str) -> None:
                 log.metadata["warning_count"] = n_warning
                 log.metadata["critical_count"] = n_critical
                 log.metadata["ok_count"] = n_ok
+                log.metadata["auto_resolved_count"] = n_auto_resolved
+                log.metadata["auto_superseded_count"] = n_auto_superseded
 
                 click.echo("")
                 click.echo(
