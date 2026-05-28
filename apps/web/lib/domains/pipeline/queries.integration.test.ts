@@ -880,6 +880,34 @@ describe.skipIf(SKIP_INTEGRATION)("V100 quality check balance + subcuentas para 
     }
   });
 
+  it("V101: codigo D para CONTINGENTES y T para TOTAL PASIVO Y PATRIMONIO en cabecera", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      await sql.unsafe(`
+        INSERT INTO dw.cabecera_maestra
+          (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, es_header, es_total, valido_desde)
+        VALUES
+          ('balance', 'BANCOS', 9201, 'D', 'CONTINGENTES', 2, true, false, 200801),
+          ('balance', 'BANCOS', 9200, 'T', 'TOTAL PASIVO Y PATRIMONIO', 1, false, true, 200801)
+        ON CONFLICT DO NOTHING;
+      `);
+      const rows = await sql<{ codigo: string; es_header: boolean; es_total: boolean }[]>`
+        SELECT codigo, es_header, es_total
+        FROM dw.cabecera_maestra
+        WHERE codigo IN ('D','T') AND tipo_entidad='BANCOS' AND valido_hasta IS NULL
+        ORDER BY codigo
+      `;
+      expect(rows.length).toBeGreaterThanOrEqual(2);
+      const d = rows.find((r) => r.codigo === "D");
+      const t = rows.find((r) => r.codigo === "T");
+      expect(d?.es_header).toBe(true);
+      expect(t?.es_total).toBe(true);
+    } finally {
+      await sql.end();
+    }
+  });
+
   it("v_dq_balance usa fallback SUM(A[1-9]) si codigo A no esta en raw", async () => {
     const { default: postgres } = await import("postgres");
     const sql = postgres(testDbUrl, { max: 1 });
