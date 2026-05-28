@@ -686,3 +686,215 @@ describe.skipIf(SKIP_INTEGRATION)("getEeffInspectorData — driver cabecera_maes
     expect(a1?.nivel).toBe(2);
   });
 });
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Cabecera Aligner (issue #28)                                              */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+async function setupAlignerFixtures(url: string): Promise<void> {
+  const { default: postgres } = await import("postgres");
+  const sql = postgres(url, { max: 1 });
+  try {
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS admin.cabecera_audit_log (
+        id BIGSERIAL PRIMARY KEY,
+        tipo_estado TEXT NOT NULL,
+        tipo_entidad TEXT NOT NULL,
+        codigo TEXT,
+        nombre TEXT NOT NULL,
+        orden INT NOT NULL,
+        accion TEXT NOT NULL CHECK (accion IN ('insert','update','delete','reorder')),
+        payload_before JSONB,
+        payload_after JSONB,
+        performed_by TEXT NOT NULL,
+        performed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        motivo TEXT
+      );
+      ALTER TABLE dw.cabecera_maestra ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    `);
+
+    await sql.unsafe(`
+      DROP VIEW IF EXISTS marts.v_cabecera_diff CASCADE;
+      CREATE VIEW marts.v_cabecera_diff AS
+      WITH raw_codigos AS (
+          SELECT DISTINCT eo.tipo_estado, eo.tipo_entidad, eo.periodo, eo.cuenta_codigo,
+                 MIN(eo.cuenta_nombre) AS cuenta_nombre_raw,
+                 COUNT(DISTINCT eo.nomb_correg) AS n_entidades
+          FROM raw.eeff_observacion eo
+          WHERE eo.moneda = 'TOTAL'
+          GROUP BY eo.tipo_estado, eo.tipo_entidad, eo.periodo, eo.cuenta_codigo
+      ),
+      cab_codigos AS (
+          SELECT tipo_estado, tipo_entidad, codigo, nombre AS cuenta_nombre_canonica, orden, nivel
+          FROM dw.cabecera_maestra
+          WHERE valido_hasta IS NULL AND codigo IS NOT NULL
+      )
+      SELECT rc.tipo_estado, rc.tipo_entidad, rc.periodo, rc.cuenta_codigo,
+             rc.cuenta_nombre_raw, rc.n_entidades,
+             cc.cuenta_nombre_canonica, cc.orden AS orden_cabecera,
+             cc.nivel AS nivel_cabecera,
+             CASE WHEN cc.codigo IS NULL THEN 'missing_in_cabecera' ELSE 'in_cabecera' END AS status
+      FROM raw_codigos rc
+      LEFT JOIN cab_codigos cc
+        ON cc.tipo_estado = rc.tipo_estado
+       AND cc.tipo_entidad = rc.tipo_entidad
+       AND cc.codigo = rc.cuenta_codigo;
+    `);
+
+    await sql.unsafe(`
+      CREATE OR REPLACE FUNCTION dw.align_cabecera(
+          p_tipo_estado TEXT, p_tipo_entidad TEXT, p_codigos TEXT[],
+          p_periodo_src INT, p_performed_by TEXT, p_motivo TEXT DEFAULT NULL
+      ) RETURNS INT AS $func$
+      DECLARE
+          v_codigo TEXT; v_nombre TEXT; v_orden INT; v_n INT := 0;
+      BEGIN
+          FOREACH v_codigo IN ARRAY p_codigos LOOP
+              IF EXISTS (SELECT 1 FROM dw.cabecera_maestra
+                         WHERE tipo_estado=p_tipo_estado AND tipo_entidad=p_tipo_entidad
+                           AND codigo=v_codigo AND valido_hasta IS NULL) THEN
+                  CONTINUE;
+              END IF;
+              SELECT cuenta_nombre INTO v_nombre FROM raw.eeff_observacion
+              WHERE tipo_estado=p_tipo_estado AND tipo_entidad=p_tipo_entidad
+                AND cuenta_codigo=v_codigo AND moneda='TOTAL' LIMIT 1;
+              IF v_nombre IS NULL THEN CONTINUE; END IF;
+              SELECT orden INTO v_orden FROM dw.cabecera_maestra
+              WHERE tipo_estado=p_tipo_estado AND tipo_entidad=p_tipo_entidad
+                AND codigo IS NULL AND valido_hasta IS NULL
+                AND lower(regexp_replace(nombre,'[^a-zA-Z0-9 ]','','g')) = lower(regexp_replace(v_nombre,'[^a-zA-Z0-9 ]','','g'))
+              LIMIT 1;
+              IF v_orden IS NOT NULL THEN
+                  UPDATE dw.cabecera_maestra SET codigo=v_codigo
+                  WHERE tipo_estado=p_tipo_estado AND tipo_entidad=p_tipo_entidad
+                    AND orden=v_orden AND valido_hasta IS NULL;
+                  INSERT INTO admin.cabecera_audit_log
+                      (tipo_estado, tipo_entidad, codigo, nombre, orden, accion, performed_by, motivo)
+                  VALUES (p_tipo_estado, p_tipo_entidad, v_codigo, v_nombre, v_orden, 'update', p_performed_by, p_motivo);
+                  v_n := v_n + 1;
+                  CONTINUE;
+              END IF;
+              SELECT COALESCE(MAX(orden),0)+1 INTO v_orden FROM dw.cabecera_maestra
+              WHERE tipo_estado=p_tipo_estado AND tipo_entidad=p_tipo_entidad AND valido_hasta IS NULL;
+              INSERT INTO dw.cabecera_maestra
+                  (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+              VALUES (p_tipo_estado, p_tipo_entidad, v_orden, v_codigo, v_nombre, 2, 200801);
+              INSERT INTO admin.cabecera_audit_log
+                  (tipo_estado, tipo_entidad, codigo, nombre, orden, accion, performed_by, motivo)
+              VALUES (p_tipo_estado, p_tipo_entidad, v_codigo, v_nombre, v_orden, 'insert', p_performed_by, p_motivo);
+              v_n := v_n + 1;
+          END LOOP;
+          RETURN v_n;
+      END;
+      $func$ LANGUAGE plpgsql;
+    `);
+
+    await sql.unsafe(`
+      INSERT INTO dw.cabecera_maestra (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+      VALUES
+        ('balance', 'BANCOS', 100, 'B1.3.3', 'C.T.S.', 3, 200801),
+        ('balance', 'BANCOS', 101, NULL, 'Otros', 3, 200801),
+        ('balance', 'BANCOS', 102, NULL, 'Depositos Restringidos', 2, 200801)
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO raw.eeff_observacion
+        (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, cuenta_nombre, valor)
+      VALUES
+        (202603, '2026-03-31', 'balance', 'Banco Alfin', 'BANCOS', 'TOTAL', 'B1.3.4', 'Otros', 0),
+        (202603, '2026-03-31', 'balance', 'Banco Alfin', 'BANCOS', 'TOTAL', 'B1.4', 'Depositos Restringidos', 5700),
+        (202603, '2026-03-31', 'balance', 'Banco Alfin', 'BANCOS', 'TOTAL', 'B1.99', 'Cuenta Inventada', 999);
+    `);
+  } finally {
+    await sql.end();
+  }
+}
+
+describe.skipIf(SKIP_INTEGRATION)("Cabecera Aligner — listCabeceraDiff", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await setupAlignerFixtures(testDbUrl);
+  });
+
+  it("retorna codigos missing en cabecera para BANCOS", async () => {
+    const { listCabeceraDiff } = await import("./cabecera-aligner");
+    const diff = await listCabeceraDiff("balance", "BANCOS", 202603, true);
+    const codigos = diff.map((r) => r.cuentaCodigo).sort();
+    expect(codigos).toContain("B1.3.4");
+    expect(codigos).toContain("B1.4");
+    expect(codigos).toContain("B1.99");
+    diff.forEach((r) => expect(r.status).toBe("missing_in_cabecera"));
+  });
+});
+
+describe.skipIf(SKIP_INTEGRATION)("Cabecera Aligner — alignCabecera", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await setupAlignerFixtures(testDbUrl);
+  });
+
+  it("caso B: UPDATE codigo en fila con codigo=NULL y nombre similar", async () => {
+    const { alignCabecera } = await import("./cabecera-aligner");
+    const { changes } = await alignCabecera(
+      "balance", "BANCOS", ["B1.3.4"], 202603, "test@aibenchef.com",
+      "test caso B"
+    );
+    expect(changes).toBe(1);
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      const rows = await sql`SELECT codigo FROM dw.cabecera_maestra
+        WHERE tipo_estado='balance' AND tipo_entidad='BANCOS' AND orden=101`;
+      expect(rows[0].codigo).toBe("B1.3.4");
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("caso C: INSERT cuando no hay nombre similar", async () => {
+    const { alignCabecera } = await import("./cabecera-aligner");
+    const { changes } = await alignCabecera(
+      "balance", "BANCOS", ["B1.99"], 202603, "test@aibenchef.com"
+    );
+    expect(changes).toBe(1);
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      const rows = await sql`SELECT orden, codigo, nombre FROM dw.cabecera_maestra
+        WHERE codigo='B1.99'`;
+      expect(rows.length).toBe(1);
+      expect(rows[0].nombre).toBe("Cuenta Inventada");
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("idempotente: re-llamar con mismo codigo retorna changes=0", async () => {
+    const { alignCabecera } = await import("./cabecera-aligner");
+    await alignCabecera("balance", "BANCOS", ["B1.3.4"], 202603, "test");
+    const { changes } = await alignCabecera(
+      "balance", "BANCOS", ["B1.3.4"], 202603, "test"
+    );
+    expect(changes).toBe(0);
+  });
+
+  it("audit log registra cada cambio", async () => {
+    const { alignCabecera, listCabeceraAuditLog } = await import("./cabecera-aligner");
+    await alignCabecera(
+      "balance", "BANCOS", ["B1.3.4", "B1.99"], 202603, "audit@test.com",
+      "test audit"
+    );
+    const log = await listCabeceraAuditLog("balance", "BANCOS");
+    expect(log.length).toBeGreaterThanOrEqual(2);
+    const acciones = log.map((l) => l.accion);
+    expect(acciones).toContain("update");
+    expect(acciones).toContain("insert");
+  });
+
+  it("array vacio retorna changes=0 sin tocar DB", async () => {
+    const { alignCabecera } = await import("./cabecera-aligner");
+    const { changes } = await alignCabecera(
+      "balance", "BANCOS", [], 202603, "test"
+    );
+    expect(changes).toBe(0);
+  });
+});

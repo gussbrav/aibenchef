@@ -204,3 +204,30 @@ export type EntidadOption = {
   nombCorreg: string;
   tipoEntidad: string;
 };
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Cabecera Aligner (issue #28)                                              */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+export type CabeceraDiffStatus = "in_cabecera" | "missing_in_cabecera";
+
+export type CabeceraDiffRow = {
+  tipoEstado: TipoEstado;
+  tipoEntidad: string;
+  periodo: number;
+  cuentaCodigo: string;
+  cuentaNombreRaw: string | null;
+  nEntidades: number;
+  cuentaNombreCanonica: string | null;
+  ordenCabecera: number | null;
+  nivelCabecera: number | null;
+  status: CabeceraDiffStatus;
+};
+
+export type CabeceraAlignInput = {
+  tipoEstado: TipoEstado;
+  tipoEntidad: string;
+  codigos: string[];
+  periodoSrc: number;
+  motivo?: string;
+};

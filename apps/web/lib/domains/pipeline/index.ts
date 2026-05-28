@@ -1,5 +1,6 @@
 export * from "./queries";
 export * from "./eeff-inspector";
+export * from "./cabecera-aligner";
 export type {
   AnomaliaReviewInput,
   AnomaliaRow,
@@ -19,4 +20,7 @@ export type {
   StageName,
   TimelineEntry,
   TipoEstado,
+  CabeceraDiffRow,
+  CabeceraDiffStatus,
+  CabeceraAlignInput,
 } from "./types";
