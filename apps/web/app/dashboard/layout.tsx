@@ -52,6 +52,7 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/admin/renombres" label="Maestra" />
               <NavLink href="/dashboard/admin/pipeline" label="Pipeline" />
               <NavLink href="/dashboard/admin/eeff-inspector" label="EEFF Inspector" />
+              <NavLink href="/dashboard/admin/cabecera-aligner" label="Aligner" />
             </nav>
 
             <div className="flex items-center gap-2 flex-shrink-0">
