@@ -3,9 +3,12 @@
 Util para validar coherencia tras un cambio mayor en cabecera/parser (V099,
 V100, V101) o periodicamente como cron mensual.
 
-Reemplaza data_quality_checks existentes (NO duplica) — si se invoca dos
-veces seguidas, las anomalias del mismo (periodo, entidad, check_type,
-cuenta_codigo) se solapan al RUN_NUMBER=1 via dedup view.
+Cada run del CLI ahora hace auto-resolve de anomalias previas que ya no
+aplican (issue #43): los rows con `carga_log_id` de runs viejos se marcan
+como `auto_resolved` (la anomalia desaparecio) o `auto_superseded` (la
+anomalia sigue, pero hay un row nuevo). El Inspector solo muestra rows con
+`reviewed_at IS NULL`, asi que el backlog se limpia naturalmente sin
+intervencion manual.
 
 Uso:
     uv run python scripts/quality_check_all_periodos.py [--from YYYYMM] [--to YYYYMM]
