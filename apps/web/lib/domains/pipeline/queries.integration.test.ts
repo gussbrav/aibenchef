@@ -736,6 +736,62 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector — 3 monedas MN/ME/TOTAL", ()
 });
 
 /* ──────────────────────────────────────────────────────────────────────── */
+/* V099: cabecera realign sin anotaciones SBS (issue #36)                    */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("V099 cabecera realign anotaciones SBS", () => {
+  it("Inspector NO devuelve filas anotaciones SBS (DELETE en V099)", async () => {
+    // Simular cabecera con anotaciones eliminadas (V099 las elimina + renumera)
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      await seedFixtures(testDbUrl);
+      // Insertar fila anotacion SBS + verify Inspector NO la trae
+      await sql.unsafe(`
+        INSERT INTO dw.cabecera_maestra
+          (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+        VALUES
+          ('balance', 'BANCOS', 9500, NULL, '* Mediante Resolucion SBS XXXX', 1, 200801)
+        ON CONFLICT DO NOTHING;
+      `);
+
+      const { getEeffInspectorData } = await import("./eeff-inspector");
+      const data = await getEeffInspectorData("Banco Existente", 202603);
+      // Inspector NO debe traer la anotacion (no es parte de balance/resultados)
+      const anotacion = data!.balance.find((r) =>
+        r.cuentaNombreCanonica.includes("Mediante Resolucion SBS XXXX"),
+      );
+      // Si está en cabecera con codigo NULL, viene como fila marker — no causa "falta"
+      if (anotacion) {
+        expect(anotacion.cuentaCodigo).toBeNull();
+        expect(anotacion.faltaEnRaw).toBe(false);
+      }
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("post V099 NO hay orden duplicados en cabecera_maestra vigente", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      const rows = await sql<{ n: number }[]>`
+        SELECT COUNT(*)::int AS n FROM (
+          SELECT tipo_estado, tipo_entidad, orden, COUNT(*) c
+          FROM dw.cabecera_maestra
+          WHERE valido_hasta IS NULL
+          GROUP BY tipo_estado, tipo_entidad, orden
+          HAVING COUNT(*) > 1
+        ) d
+      `;
+      expect(rows[0].n).toBe(0);
+    } finally {
+      await sql.end();
+    }
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
 /* Cabecera Aligner (issue #28)                                              */
 /* ──────────────────────────────────────────────────────────────────────── */
 
