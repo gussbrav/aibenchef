@@ -182,6 +182,11 @@ async function setupSchema(url: string): Promise<void> {
         valido_hasta INT,
         PRIMARY KEY (tipo_estado, tipo_entidad, orden, valido_desde)
       );
+
+      -- V097: UNIQUE INDEX parcial para prevenir codigos duplicados (issue #30)
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_cabecera_codigo_vigente
+        ON dw.cabecera_maestra (tipo_estado, tipo_entidad, codigo)
+        WHERE valido_hasta IS NULL AND codigo IS NOT NULL;
     `);
 
     await sql.unsafe(`
@@ -896,5 +901,88 @@ describe.skipIf(SKIP_INTEGRATION)("Cabecera Aligner — alignCabecera", () => {
       "balance", "BANCOS", [], 202603, "test"
     );
     expect(changes).toBe(0);
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* V097: UNIQUE INDEX previene codigos duplicados (issue #30)                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("V097 unique index codigo vigente", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await seedFixtures(testDbUrl);
+    // Pre-existente: 'B', 'BANCOS', codigo 'A1' en orden 1
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      await sql.unsafe(`
+        INSERT INTO dw.cabecera_maestra
+          (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+        VALUES ('balance', 'BANCOS', 9001, 'TEST_CODE_X', 'first row', 2, 200801)
+        ON CONFLICT DO NOTHING;
+      `);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("rechaza INSERT con codigo duplicado en cabecera vigente", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      await expect(
+        sql.unsafe(`
+          INSERT INTO dw.cabecera_maestra
+            (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+          VALUES ('balance', 'BANCOS', 9002, 'TEST_CODE_X', 'duplicate', 2, 200801);
+        `),
+      ).rejects.toThrow(/uq_cabecera_codigo_vigente|duplicate key/);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("permite multiples filas con codigo NULL (markers/secciones)", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // Insertar 2 filas con codigo NULL — no debe fallar
+      await sql.unsafe(`
+        INSERT INTO dw.cabecera_maestra
+          (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+        VALUES
+          ('balance', 'BANCOS', 9003, NULL, 'marker A', 1, 200801),
+          ('balance', 'BANCOS', 9004, NULL, 'marker B', 1, 200801);
+      `);
+      const rows = await sql`
+        SELECT COUNT(*) AS n FROM dw.cabecera_maestra
+        WHERE tipo_entidad='BANCOS' AND codigo IS NULL AND orden IN (9003, 9004)
+      `;
+      expect(Number(rows[0].n)).toBe(2);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("permite mismo codigo en diferentes (tipo_estado, tipo_entidad)", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // Mismo codigo 'TEST_CODE_X' en otro tipo_entidad → OK
+      await sql.unsafe(`
+        INSERT INTO dw.cabecera_maestra
+          (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, valido_desde)
+        VALUES ('balance', 'CMAC', 9005, 'TEST_CODE_X', 'other entidad', 2, 200801);
+      `);
+      const rows = await sql`
+        SELECT COUNT(*) AS n FROM dw.cabecera_maestra
+        WHERE codigo='TEST_CODE_X' AND valido_hasta IS NULL
+      `;
+      // Existe en BANCOS (seed) y ahora en CMAC = 2
+      expect(Number(rows[0].n)).toBeGreaterThanOrEqual(2);
+    } finally {
+      await sql.end();
+    }
   });
 });
