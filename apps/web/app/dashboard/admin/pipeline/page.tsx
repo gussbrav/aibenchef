@@ -13,19 +13,22 @@
  */
 
 import type { Metadata } from "next";
-import { Activity, AlertTriangle, Calendar, ListChecks, Sparkles } from "lucide-react";
+import { Activity, AlertTriangle, Calendar, ListChecks, ShieldCheck, Sparkles } from "lucide-react";
 
 import {
   getCobertura,
   getPipelineHealth,
+  getQualitySummary,
   getTimeline,
   getUltimoPeriodoConArchivos,
   listAnomalias,
   listEntidadesDelta,
+  listQualityChecks,
 } from "@/lib/domains/pipeline";
 
 import { AnomaliasTable } from "./anomalias-table";
 import { CoberturaSection } from "./cobertura-section";
+import { CoherenciaSection } from "./coherencia-section";
 import { EntidadesDeltaSection } from "./entidades-delta-section";
 import { SaludGeneralSection } from "./salud-general-section";
 import { TimelineSection } from "./timeline-section";
@@ -39,13 +42,16 @@ export const dynamic = "force-dynamic";
 export default async function PipelinePage() {
   const periodo = await getUltimoPeriodoConArchivos();
 
-  const [health, cobertura, anomalias, entidadesDelta, timeline] = await Promise.all([
-    getPipelineHealth(),
-    periodo ? getCobertura(periodo) : Promise.resolve([]),
-    listAnomalias({ periodo: periodo ?? undefined, unreviewed: true, limit: 50 }),
-    listEntidadesDelta(),
-    getTimeline(20),
-  ]);
+  const [health, cobertura, anomalias, entidadesDelta, timeline, qualitySummary, qualityRows] =
+    await Promise.all([
+      getPipelineHealth(),
+      periodo ? getCobertura(periodo) : Promise.resolve([]),
+      listAnomalias({ periodo: periodo ?? undefined, unreviewed: true, limit: 50 }),
+      listEntidadesDelta(),
+      getTimeline(20),
+      getQualitySummary(periodo ?? undefined),
+      listQualityChecks({ periodo: periodo ?? undefined, unreviewed: true, limit: 100 }),
+    ]);
 
   return (
     <div className="space-y-8 px-4 lg:px-6">
@@ -92,7 +98,16 @@ export default async function PipelinePage() {
         <EntidadesDeltaSection entidades={entidadesDelta} />
       </section>
 
-      {/* SECCIÓN 5 — TIMELINE */}
+      {/* SECCIÓN 5 — COHERENCIA DE DATOS (V2 Data Quality, issue #24) */}
+      <section className="space-y-3">
+        <SectionHeader
+          icon={ShieldCheck}
+          title={`Coherencia de datos — periodo ${qualitySummary.periodo || "(sin checks)"}`}
+        />
+        <CoherenciaSection summary={qualitySummary} rows={qualityRows} />
+      </section>
+
+      {/* SECCIÓN 6 — TIMELINE */}
       <section className="space-y-3">
         <SectionHeader icon={Calendar} title="Timeline — últimas 20 corridas" />
         <TimelineSection entries={timeline} />

@@ -96,3 +96,42 @@ export type AnomaliaReviewInput = {
   action: "ignored" | "cabecera_updated" | "rename_added" | "falsa_alarma" | "otro";
   notes?: string;
 };
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* V2 Data Quality (issue #24)                                               */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+export type DataQualityCheckType = "balance_contable" | "outlier_zscore" | "suma_subcuentas";
+
+/** Una fila de admin.data_quality_checks. */
+export type QualityCheckRow = {
+  id: number;
+  periodo: number;
+  nombCorreg: string;
+  checkType: DataQualityCheckType;
+  cuentaCodigo: string | null;
+  detectedAt: string; // ISO
+  status: Severity;
+  expectedValue: number | null;
+  actualValue: number | null;
+  deltaAbs: number | null;
+  deltaPct: number | null;
+  zScore: number | null;
+  payload: Record<string, unknown>;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewAction: string | null;
+};
+
+/** Summary counts por (periodo, check_type). */
+export type QualitySummary = {
+  periodo: number;
+  byCheckType: {
+    checkType: DataQualityCheckType;
+    critical: number;
+    warning: number;
+    ok: number;
+  }[];
+  totalCritical: number;
+  totalWarning: number;
+};

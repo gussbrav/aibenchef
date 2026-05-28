@@ -116,6 +116,28 @@ async function setupSchema(url: string): Promise<void> {
         review_action TEXT,
         review_notes TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS admin.data_quality_checks (
+        id BIGSERIAL PRIMARY KEY,
+        periodo INT NOT NULL,
+        nomb_correg TEXT NOT NULL,
+        check_type TEXT NOT NULL
+          CHECK (check_type IN ('balance_contable', 'outlier_zscore', 'suma_subcuentas')),
+        cuenta_codigo TEXT,
+        detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        carga_log_id BIGINT REFERENCES raw.carga_log(id) ON DELETE SET NULL,
+        status TEXT NOT NULL CHECK (status IN ('ok', 'warning', 'critical')),
+        expected_value NUMERIC,
+        actual_value NUMERIC,
+        delta_abs NUMERIC,
+        delta_pct NUMERIC,
+        z_score NUMERIC,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        reviewed_at TIMESTAMPTZ,
+        reviewed_by TEXT,
+        review_action TEXT,
+        review_notes TEXT
+      );
     `);
 
     // Minimal dw.entidad_nombre + raw.eeff_observacion for v_entidades_delta + freshness
@@ -191,6 +213,7 @@ async function seedFixtures(url: string): Promise<void> {
     await sql.unsafe(`
       TRUNCATE raw.eeff_observacion CASCADE;
       TRUNCATE admin.estructura_diffs CASCADE;
+      TRUNCATE admin.data_quality_checks RESTART IDENTITY CASCADE;
       TRUNCATE raw.carga_log RESTART IDENTITY CASCADE;
       TRUNCATE raw.archivos_descargados CASCADE;
       TRUNCATE dw.entidad_nombre CASCADE;
@@ -240,6 +263,22 @@ async function seedFixtures(url: string): Promise<void> {
         (202602, '2026-02-28', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A1', 100),
         (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A1', 110),
         (202603, '2026-03-31', 'balance', 'Banco Nuevo SA',  'BANCOS', 'TOTAL', 'A1', 50);
+    `);
+
+    // data_quality_checks — fixtures para los 3 tipos de check.
+    await sql.unsafe(`
+      INSERT INTO admin.data_quality_checks
+        (periodo, nomb_correg, check_type, cuenta_codigo, status,
+         expected_value, actual_value, delta_pct, z_score, payload)
+      VALUES
+        (202603, 'Mibanco', 'balance_contable', NULL, 'critical',
+         11000000, 13000000, 0.18, NULL, '{"tipo_entidad":"BANCOS"}'::jsonb),
+        (202603, 'Mibanco', 'outlier_zscore', 'C1', 'critical',
+         NULL, 12500000, NULL, 10.5, '{"media_11m":1900000,"stddev_11m":50000}'::jsonb),
+        (202603, 'Banco BCP', 'suma_subcuentas', 'A3', 'warning',
+         35000000, 32000000, 0.085, NULL, '{}'::jsonb),
+        (202602, 'Mibanco', 'balance_contable', NULL, 'ok',
+         11000000, 11050000, 0.005, NULL, '{}'::jsonb);
     `);
   } finally {
     await sql.end();
@@ -408,5 +447,109 @@ describe.skipIf(SKIP_INTEGRATION)("getTimeline", () => {
     const { getTimeline } = await import("./queries");
     const rows = await getTimeline(2);
     expect(rows).toHaveLength(2);
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* V2 Data Quality (issue #24)                                               */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("getQualitySummary", () => {
+  it("agrupa counts por check_type para el periodo", async () => {
+    const { getQualitySummary } = await import("./queries");
+    const summary = await getQualitySummary(202603);
+    expect(summary.periodo).toBe(202603);
+    expect(summary.byCheckType.length).toBeGreaterThan(0);
+
+    const balance = summary.byCheckType.find((r) => r.checkType === "balance_contable");
+    expect(balance?.critical).toBe(1);
+
+    const outlier = summary.byCheckType.find((r) => r.checkType === "outlier_zscore");
+    expect(outlier?.critical).toBe(1);
+
+    expect(summary.totalCritical).toBe(2);
+    expect(summary.totalWarning).toBe(1);
+  });
+
+  it("si no se pasa periodo, usa el ultimo con checks", async () => {
+    const { getQualitySummary } = await import("./queries");
+    const summary = await getQualitySummary();
+    // 202603 es el max periodo con quality_checks en fixtures
+    expect(summary.periodo).toBe(202603);
+  });
+
+  it("retorna summary vacio si no hay checks", async () => {
+    const { getQualitySummary } = await import("./queries");
+    const summary = await getQualitySummary(190001);
+    expect(summary.byCheckType).toEqual([]);
+    expect(summary.totalCritical).toBe(0);
+  });
+});
+
+describe.skipIf(SKIP_INTEGRATION)("listQualityChecks", () => {
+  it("filtra por checkType correctamente", async () => {
+    const { listQualityChecks } = await import("./queries");
+    const rows = await listQualityChecks({ checkType: "outlier_zscore" });
+    expect(rows.length).toBe(1);
+    expect(rows[0].checkType).toBe("outlier_zscore");
+    expect(rows[0].zScore).toBeCloseTo(10.5);
+  });
+
+  it("filtra por severity correctamente", async () => {
+    const { listQualityChecks } = await import("./queries");
+    const rows = await listQualityChecks({ status: "critical" });
+    expect(rows.length).toBe(2);
+    rows.forEach((r) => expect(r.status).toBe("critical"));
+  });
+
+  it("filtra unreviewed=true excluye revisadas", async () => {
+    const { listQualityChecks, reviewQualityCheck } = await import("./queries");
+    const before = await listQualityChecks({ unreviewed: true });
+    const targetId = before[0].id;
+    await reviewQualityCheck(targetId, "admin@test", "ignored");
+    const after = await listQualityChecks({ unreviewed: true });
+    expect(after.find((r) => r.id === targetId)).toBeUndefined();
+    expect(after.length).toBe(before.length - 1);
+  });
+
+  it("ordena por severity desc + z_score abs desc", async () => {
+    const { listQualityChecks } = await import("./queries");
+    const rows = await listQualityChecks({ periodo: 202603 });
+    // criticals primero
+    expect(rows[0].status).toBe("critical");
+    expect(rows[1].status).toBe("critical");
+    // warning despues
+    if (rows.length >= 3) {
+      expect(rows[2].status).toBe("warning");
+    }
+  });
+});
+
+describe.skipIf(SKIP_INTEGRATION)("reviewQualityCheck", () => {
+  it("marca como revisado con email + action", async () => {
+    const { listQualityChecks, reviewQualityCheck } = await import("./queries");
+    const before = await listQualityChecks({ unreviewed: true });
+    const target = before[0];
+    const { updated } = await reviewQualityCheck(
+      target.id,
+      "gus@aibenchef.com",
+      "falsa_alarma",
+      "structure-by-design",
+    );
+    expect(updated).toBe(1);
+
+    const after = await listQualityChecks({});
+    const reviewed = after.find((r) => r.id === target.id);
+    expect(reviewed?.reviewedBy).toBe("gus@aibenchef.com");
+    expect(reviewed?.reviewAction).toBe("falsa_alarma");
+  });
+
+  it("review duplicado es idempotente (updated=0)", async () => {
+    const { listQualityChecks, reviewQualityCheck } = await import("./queries");
+    const before = await listQualityChecks({ unreviewed: true });
+    const target = before[0];
+    await reviewQualityCheck(target.id, "admin@test", "fixed");
+    const second = await reviewQualityCheck(target.id, "admin@test", "fixed");
+    expect(second.updated).toBe(0);
   });
 });
