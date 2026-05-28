@@ -1040,13 +1040,16 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector marker rows (V098)", () => {
     expect(marker?.esHeader).toBe(true);
   });
 
-  it("Total (es_total=true) NO levanta faltaEnRaw aunque tenga codigo", async () => {
+  it("Total (es_total=true) CON codigo y sin valor SI levanta faltaEnRaw (los totales son cuentas reales)", async () => {
+    // Decision de diseño: codigos como A=TOTAL ACTIVO, B=TOTAL PASIVO son
+    // cuentas reales que SBS publica con valor. Si raw no las tiene es
+    // legitimo flag de falta (parser bug, formato cambio, etc).
     const { getEeffInspectorData } = await import("./eeff-inspector");
     const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
     const total = data!.balance.find((r) => r.cuentaCodigo === "Z10");
     expect(total).toBeDefined();
-    expect(total?.faltaEnRaw).toBe(false);
     expect(total?.esTotal).toBe(true);
+    expect(total?.faltaEnRaw).toBe(true);
   });
 
   it("Seccion (es_seccion=true) NO levanta faltaEnRaw", async () => {
