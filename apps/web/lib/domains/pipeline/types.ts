@@ -135,3 +135,72 @@ export type QualitySummary = {
   totalCritical: number;
   totalWarning: number;
 };
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* EEFF Inspector (issue #26)                                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+export type Moneda = "MN" | "ME" | "TOTAL";
+export type TipoEstado = "balance" | "resultados";
+
+/**
+ * Una fila del inspector — driver es dw.cabecera_maestra (las cabeceras-base
+ * que definio el operador), con valores LEFT JOIN desde raw.eeff_observacion.
+ *
+ * Si nombreArchivo es NULL: la cabecera espera esta fila pero el parser NO la
+ * persistio (puede ser fila sin codigo o bug del parser).
+ */
+export type EeffRow = {
+  /** Orden visual segun la cabecera-base (1, 2, 3, ...). */
+  orden: number;
+  /** Codigo contable (A1, A1.1, ...). NULL si la cabecera lista la fila sin codigo. */
+  cuentaCodigo: string | null;
+  /** Nombre canonico segun dw.cabecera_maestra (la verdad-base del operador). */
+  cuentaNombreCanonica: string;
+  /** Nombre tal cual viene del archivo SBS (puede diferir). NULL si no hay match. */
+  cuentaNombreArchivo: string | null;
+  /** True si nombreArchivo difiere del canonico (warning, posible drift SBS). */
+  nombreMismatch: boolean;
+  /** True si la cabecera espera valor pero no esta en raw.eeff_observacion. */
+  faltaEnRaw: boolean;
+  valor: number | null;
+  valorPrev: number | null;
+  /** Δ% vs periodo anterior. NULL si no hay valor previo o valorPrev = 0. */
+  deltaPct: number | null;
+  /** Δ absoluto vs periodo anterior. */
+  deltaAbs: number | null;
+  /** Indica si esta cuenta tiene quality_checks con status critical/warning. */
+  qualityStatus: "ok" | "warning" | "critical";
+
+  /** Flags de renderizado segun dw.cabecera_maestra. */
+  nivel: number;           // 0/1/2/3 — profundidad para indentar
+  esHeader: boolean;       // es cabecera de seccion (bold, sin valor propio)
+  esTotal: boolean;        // es fila de total (resaltada)
+  esSeccion: boolean;      // marker tipo "ACTIVO" / "PASIVO" / "PATRIMONIO"
+};
+
+/** Response del endpoint /api/v1/admin/pipeline/eeff. */
+export type EeffInspectorData = {
+  entidad: string;
+  periodo: number;
+  periodoPrevio: number | null;
+  moneda: Moneda;
+  tipoEntidad: string | null;
+  balance: EeffRow[];
+  resultados: EeffRow[];
+  /** Filas en raw.eeff_observacion que NO estan en la cabecera-base (drift SBS). */
+  extrasBalance: { cuentaCodigo: string; cuentaNombre: string; valor: number | null }[];
+  extrasResultados: { cuentaCodigo: string; cuentaNombre: string; valor: number | null }[];
+  qualitySummary: {
+    balance: { critical: number; warning: number; ok: number };
+    outliers: { critical: number; warning: number; ok: number };
+    subcuentas: { critical: number; warning: number; ok: number };
+  };
+  archivos: { topico: string; pathLocal: string; sourceUrl: string }[];
+};
+
+/** Items del dropdown de entidades disponibles para un periodo. */
+export type EntidadOption = {
+  nombCorreg: string;
+  tipoEntidad: string;
+};

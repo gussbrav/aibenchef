@@ -164,7 +164,23 @@ async function setupSchema(url: string): Promise<void> {
         tipo_entidad TEXT NOT NULL,
         moneda TEXT NOT NULL,
         cuenta_codigo TEXT NOT NULL,
+        cuenta_nombre TEXT,
         valor NUMERIC
+      );
+
+      CREATE TABLE IF NOT EXISTS dw.cabecera_maestra (
+        tipo_estado TEXT NOT NULL,
+        tipo_entidad TEXT NOT NULL,
+        orden INT NOT NULL,
+        codigo TEXT,
+        nombre TEXT NOT NULL,
+        nivel INT NOT NULL DEFAULT 0,
+        es_header BOOLEAN NOT NULL DEFAULT false,
+        es_total BOOLEAN NOT NULL DEFAULT false,
+        es_seccion BOOLEAN NOT NULL DEFAULT false,
+        valido_desde INT NOT NULL DEFAULT 200801,
+        valido_hasta INT,
+        PRIMARY KEY (tipo_estado, tipo_entidad, orden, valido_desde)
       );
     `);
 
@@ -218,6 +234,7 @@ async function seedFixtures(url: string): Promise<void> {
       TRUNCATE raw.archivos_descargados CASCADE;
       TRUNCATE dw.entidad_nombre CASCADE;
       TRUNCATE dw.entidad_maestra RESTART IDENTITY CASCADE;
+      DELETE FROM dw.cabecera_maestra;
     `);
 
     // archivos_descargados — 5 archivos distintos states para cobertura
@@ -258,11 +275,26 @@ async function seedFixtures(url: string): Promise<void> {
     // Forzamos una "nueva" entidad en 202603 que no estaba en 202602.
     await sql.unsafe(`
       INSERT INTO raw.eeff_observacion
-        (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, valor)
+        (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, cuenta_nombre, valor)
       VALUES
-        (202602, '2026-02-28', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A1', 100),
-        (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A1', 110),
-        (202603, '2026-03-31', 'balance', 'Banco Nuevo SA',  'BANCOS', 'TOTAL', 'A1', 50);
+        (202602, '2026-02-28', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A1', 'DISPONIBLE', 100),
+        (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A1', 'DISPONIBLE', 110),
+        (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'A2', 'FONDOS INTERBANCARIOS', 200),
+        (202603, '2026-03-31', 'resultados', 'Banco Existente', 'BANCOS', 'TOTAL', '1', 'INGRESOS FINANCIEROS', 5000),
+        (202603, '2026-03-31', 'balance', 'Banco Nuevo SA',  'BANCOS', 'TOTAL', 'A1', 'DISPONIBLE', 50),
+        (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'ZZ', 'CUENTA EXTRA FUERA DE CABECERA', 999);
+    `);
+
+    // cabecera_maestra — fixture minimal para EEFF Inspector
+    await sql.unsafe(`
+      INSERT INTO dw.cabecera_maestra
+        (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, es_header, es_total, es_seccion)
+      VALUES
+        ('balance', 'BANCOS', 1, 'A1', 'DISPONIBLE', 2, true, false, false),
+        ('balance', 'BANCOS', 2, 'A2', 'FONDOS INTERBANCARIOS', 2, true, false, false),
+        ('balance', 'BANCOS', 3, 'A3', 'INVERSIONES NETAS', 2, true, false, false),
+        ('resultados', 'BANCOS', 1, '1', 'INGRESOS FINANCIEROS', 1, true, false, false),
+        ('resultados', 'BANCOS', 2, '2', 'GASTOS FINANCIEROS', 1, true, false, false);
     `);
 
     // data_quality_checks — fixtures para los 3 tipos de check.
@@ -551,5 +583,106 @@ describe.skipIf(SKIP_INTEGRATION)("reviewQualityCheck", () => {
     await reviewQualityCheck(target.id, "admin@test", "fixed");
     const second = await reviewQualityCheck(target.id, "admin@test", "fixed");
     expect(second.updated).toBe(0);
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* EEFF Inspector (issue #26)                                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("listEntidadesPorPeriodo", () => {
+  it("retorna entidades distintas del periodo", async () => {
+    const { listEntidadesPorPeriodo } = await import("./eeff-inspector");
+    const ents = await listEntidadesPorPeriodo(202603);
+    expect(ents.length).toBeGreaterThanOrEqual(2);
+    const names = ents.map((e) => e.nombCorreg);
+    expect(names).toContain("Banco Existente");
+    expect(names).toContain("Banco Nuevo SA");
+  });
+
+  it("retorna [] para periodo sin data", async () => {
+    const { listEntidadesPorPeriodo } = await import("./eeff-inspector");
+    const ents = await listEntidadesPorPeriodo(190001);
+    expect(ents).toEqual([]);
+  });
+});
+
+describe.skipIf(SKIP_INTEGRATION)("listAllPeriodos", () => {
+  it("retorna periodos ordenados desc", async () => {
+    const { listAllPeriodos } = await import("./eeff-inspector");
+    const periodos = await listAllPeriodos();
+    expect(periodos).toContain(202602);
+    expect(periodos).toContain(202603);
+    // Orden desc
+    for (let i = 0; i < periodos.length - 1; i++) {
+      expect(periodos[i]).toBeGreaterThanOrEqual(periodos[i + 1]);
+    }
+  });
+});
+
+describe.skipIf(SKIP_INTEGRATION)("getEeffInspectorData — driver cabecera_maestra", () => {
+  it("retorna BG iterando cabecera (no raw)", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    expect(data).not.toBeNull();
+    expect(data!.balance.length).toBe(3); // 3 cabeceras balance BANCOS
+    expect(data!.balance[0].cuentaCodigo).toBe("A1");
+    expect(data!.balance[0].cuentaNombreCanonica).toBe("DISPONIBLE");
+    expect(data!.balance[0].valor).toBe(110);
+    expect(data!.balance[0].valorPrev).toBe(100);
+    expect(data!.balance[0].deltaPct).toBeCloseTo(0.1, 5);
+  });
+
+  it("retorna ER iterando cabecera", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    expect(data!.resultados.length).toBe(2);
+    expect(data!.resultados[0].cuentaCodigo).toBe("1");
+    expect(data!.resultados[0].valor).toBe(5000);
+  });
+
+  it("marca faltaEnRaw cuando cabecera espera valor pero raw no lo tiene", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    // A3 esta en cabecera pero NO en raw fixture
+    const a3 = data!.balance.find((r) => r.cuentaCodigo === "A3");
+    expect(a3?.faltaEnRaw).toBe(true);
+    expect(a3?.valor).toBeNull();
+
+    // A1 sí tiene valor — no falta
+    const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
+    expect(a1?.faltaEnRaw).toBe(false);
+  });
+
+  it("retorna extras (filas en raw que NO estan en cabecera)", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    expect(data!.extrasBalance.length).toBe(1);
+    expect(data!.extrasBalance[0].cuentaCodigo).toBe("ZZ");
+    expect(data!.extrasBalance[0].cuentaNombre).toBe("CUENTA EXTRA FUERA DE CABECERA");
+  });
+
+  it("computa deltaPct vs periodo previo correctamente", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    expect(data!.periodoPrevio).toBe(202602);
+    const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
+    // 110 vs 100 → +10%
+    expect(a1?.deltaPct).toBeCloseTo(0.1, 5);
+    expect(a1?.deltaAbs).toBeCloseTo(10, 5);
+  });
+
+  it("retorna null para entidad sin data en el periodo", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Inexistente", 202603, "TOTAL");
+    expect(data).toBeNull();
+  });
+
+  it("respeta el flag esHeader/esTotal/esSeccion de la cabecera", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
+    expect(a1?.esHeader).toBe(true);
+    expect(a1?.nivel).toBe(2);
   });
 });
