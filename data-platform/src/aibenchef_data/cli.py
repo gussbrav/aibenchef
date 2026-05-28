@@ -2754,6 +2754,172 @@ def pipeline_post_import_check(
     asyncio.run(_run())
 
 
+@pipeline_grp.command("quality-check")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM del periodo a chequear.",
+)
+@click.option(
+    "--triggered-by",
+    type=str,
+    default="cli",
+    help="Origen del run: cron | manual:<email> | cli:<user>.",
+)
+def pipeline_quality_check(periodo: str, triggered_by: str) -> None:
+    """Corre los 3 chequeos de data quality V2 y persiste en admin.data_quality_checks.
+
+    Cierra el gap V2 (issue #24): valida coherencia SEMANTICA de los EEFF
+    despues del import, no solo coherencia estructural.
+
+    Checks:
+      1. balance_contable — Activos = Pasivos + Patrimonio (BANCOS + FIN)
+      2. outlier_zscore  — valor actual vs media+stddev 11m previos
+      3. suma_subcuentas — padre = SUM(hijos directos) (BANCOS + FIN)
+
+    Cada resultado queda persistido con status (ok/warning/critical) y
+    payload JSONB para inspeccion en /dashboard/admin/pipeline.
+
+    Ideal correr automaticamente tras `aibenchef sbs work-jobs`:
+
+        aibenchef sbs work-jobs                                # scrape + import
+        aibenchef pipeline post-import-check --periodo 202604  # G3: estructura
+        aibenchef pipeline quality-check --periodo 202604      # V2: semantica
+    """
+    import asyncio
+
+    from aibenchef_data.domains.shared import carga_log_context
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    p = Periodo.from_yyyymm(periodo)
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with carga_log_context(
+                connection,
+                stage="detectar-cambios",  # reusa stage existente (V1)
+                periodo=p.to_int(),
+                triggered_by=triggered_by,
+                initial_metadata={"v2_quality_check": True},
+            ) as log:
+                async with connection() as conn:
+                    # Para cada check ejecutamos la vista correspondiente,
+                    # filtramos solo status != 'ok' (los OK no se persisten
+                    # para no saturar la tabla) y bulk-insertamos.
+                    n_ok = 0
+                    n_warning = 0
+                    n_critical = 0
+
+                    # --- Check 1: balance_contable ---
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO admin.data_quality_checks
+                                (periodo, nomb_correg, check_type, carga_log_id,
+                                 status, expected_value, actual_value, delta_abs,
+                                 delta_pct, payload)
+                            SELECT
+                                %s, nomb_correg, 'balance_contable', %s,
+                                status, expected_value, actual_value, delta_abs,
+                                delta_pct,
+                                jsonb_build_object(
+                                    'tipo_entidad', tipo_entidad,
+                                    'activos', activos,
+                                    'pasivos', pasivos,
+                                    'patrimonio', patrimonio
+                                )
+                            FROM marts.v_dq_balance
+                            WHERE periodo = %s AND status != 'ok'
+                            """,
+                            (p.to_int(), log.log_id, p.to_int()),
+                        )
+                        click.echo(f"  Check 1 (balance):     {cur.rowcount} anomalías")
+
+                    # --- Check 2: outlier_zscore ---
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO admin.data_quality_checks
+                                (periodo, nomb_correg, check_type, cuenta_codigo,
+                                 carga_log_id, status, actual_value, z_score, payload)
+                            SELECT
+                                %s, nomb_correg, 'outlier_zscore', cuenta_codigo,
+                                %s, status, valor, z_score,
+                                jsonb_build_object(
+                                    'media_11m', media_11m,
+                                    'stddev_11m', stddev_11m
+                                )
+                            FROM marts.v_dq_outliers
+                            WHERE periodo = %s AND status != 'ok'
+                            """,
+                            (p.to_int(), log.log_id, p.to_int()),
+                        )
+                        click.echo(f"  Check 2 (outliers):    {cur.rowcount} anomalías")
+
+                    # --- Check 3: suma_subcuentas ---
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            INSERT INTO admin.data_quality_checks
+                                (periodo, nomb_correg, check_type, cuenta_codigo,
+                                 carga_log_id, status, expected_value, actual_value,
+                                 delta_abs, delta_pct, payload)
+                            SELECT
+                                %s, nomb_correg, 'suma_subcuentas', cuenta_codigo,
+                                %s, status, expected_value, actual_value,
+                                delta_abs, delta_pct, '{}'::jsonb
+                            FROM marts.v_dq_subcuentas
+                            WHERE periodo = %s AND status != 'ok'
+                            """,
+                            (p.to_int(), log.log_id, p.to_int()),
+                        )
+                        click.echo(f"  Check 3 (subcuentas):  {cur.rowcount} anomalías")
+
+                    # Counts finales
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            SELECT status, count(*)
+                            FROM admin.data_quality_checks
+                            WHERE periodo = %s AND carga_log_id = %s
+                            GROUP BY status
+                            """,
+                            (p.to_int(), log.log_id),
+                        )
+                        for row in await cur.fetchall():
+                            if row[0] == "warning":
+                                n_warning = row[1]
+                            elif row[0] == "critical":
+                                n_critical = row[1]
+                            else:
+                                n_ok = row[1]
+
+                    await conn.commit()
+
+                log.rows_inserted = n_warning + n_critical
+                log.metadata["warning_count"] = n_warning
+                log.metadata["critical_count"] = n_critical
+                log.metadata["ok_count"] = n_ok
+
+                click.echo("")
+                click.echo(
+                    f"# Quality check periodo {periodo}: "
+                    f"{n_warning} warning, {n_critical} critical."
+                )
+                if n_critical > 0:
+                    click.echo(
+                        "# Revisa: SELECT * FROM admin.data_quality_checks "
+                        f"WHERE periodo={p.to_int()} AND status='critical' "
+                        "AND reviewed_at IS NULL;"
+                    )
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
+
+
 @main.group("sbs")
 def sbs_group() -> None:
     """Comandos de sincronizacion con la SBS (cola de jobs + cron)."""

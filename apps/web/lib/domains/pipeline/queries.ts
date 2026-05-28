@@ -12,8 +12,11 @@ import { db } from "@/lib/infrastructure/db";
 import type {
   AnomaliaRow,
   CoberturaRow,
+  DataQualityCheckType,
   EntidadDelta,
   PipelineHealth,
+  QualityCheckRow,
+  QualitySummary,
   TimelineEntry,
   StageName,
   Severity,
@@ -294,4 +297,130 @@ export async function getTimeline(limit = 20): Promise<TimelineEntry[]> {
     triggeredBy: (r.triggered_by as string | null) ?? null,
     errorMessage: (r.error_message as string | null) ?? null,
   }));
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* V2 Data Quality (issue #24)                                               */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+/** Resumen por check_type para el periodo solicitado (o el ultimo si null). */
+export async function getQualitySummary(periodo?: number): Promise<QualitySummary> {
+  const effPeriodo =
+    periodo ??
+    ((
+      await db.execute<{ p: number | null }>(
+        sql`SELECT MAX(periodo)::int AS p FROM admin.data_quality_checks`,
+      )
+    )[0]?.p ??
+      null);
+
+  if (effPeriodo == null) {
+    return { periodo: 0, byCheckType: [], totalCritical: 0, totalWarning: 0 };
+  }
+
+  const rows = await db.execute<Record<string, unknown>>(sql`
+    SELECT
+      check_type,
+      COUNT(*) FILTER (WHERE status = 'critical')::int AS critical,
+      COUNT(*) FILTER (WHERE status = 'warning')::int AS warning,
+      COUNT(*) FILTER (WHERE status = 'ok')::int AS ok
+    FROM admin.data_quality_checks
+    WHERE periodo = ${effPeriodo}
+    GROUP BY check_type
+    ORDER BY check_type
+  `);
+
+  const byCheckType = rows.map((r) => ({
+    checkType: r.check_type as DataQualityCheckType,
+    critical: Number(r.critical),
+    warning: Number(r.warning),
+    ok: Number(r.ok),
+  }));
+
+  return {
+    periodo: effPeriodo,
+    byCheckType,
+    totalCritical: byCheckType.reduce((acc, r) => acc + r.critical, 0),
+    totalWarning: byCheckType.reduce((acc, r) => acc + r.warning, 0),
+  };
+}
+
+/** Detalle de quality checks filtrable por periodo/check_type/status/limit. */
+export async function listQualityChecks(opts: {
+  periodo?: number;
+  checkType?: DataQualityCheckType;
+  status?: Severity;
+  unreviewed?: boolean;
+  limit?: number;
+} = {}): Promise<QualityCheckRow[]> {
+  const limit = opts.limit ?? 100;
+  const rows = await db.execute<Record<string, unknown>>(sql`
+    SELECT
+      id::int,
+      periodo,
+      nomb_correg AS "nombCorreg",
+      check_type AS "checkType",
+      cuenta_codigo AS "cuentaCodigo",
+      detected_at,
+      status,
+      expected_value AS "expectedValue",
+      actual_value AS "actualValue",
+      delta_abs AS "deltaAbs",
+      delta_pct AS "deltaPct",
+      z_score AS "zScore",
+      payload,
+      reviewed_at,
+      reviewed_by AS "reviewedBy",
+      review_action AS "reviewAction"
+    FROM admin.data_quality_checks
+    WHERE
+      (${opts.periodo ?? null}::int    IS NULL OR periodo  = ${opts.periodo ?? null}::int)
+      AND (${opts.checkType ?? null}::text IS NULL OR check_type = ${opts.checkType ?? null}::text)
+      AND (${opts.status ?? null}::text    IS NULL OR status = ${opts.status ?? null}::text)
+      AND (${opts.unreviewed ?? false}::boolean = FALSE OR reviewed_at IS NULL)
+    ORDER BY
+      CASE status WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+      ABS(COALESCE(z_score, delta_pct, 0)) DESC NULLS LAST,
+      detected_at DESC
+    LIMIT ${limit}
+  `);
+
+  return rows.map((r) => ({
+    id: Number(r.id),
+    periodo: Number(r.periodo),
+    nombCorreg: r.nombCorreg as string,
+    checkType: r.checkType as DataQualityCheckType,
+    cuentaCodigo: (r.cuentaCodigo as string | null) ?? null,
+    detectedAt: new Date(r.detected_at as string).toISOString(),
+    status: r.status as Severity,
+    expectedValue: r.expectedValue != null ? Number(r.expectedValue) : null,
+    actualValue: r.actualValue != null ? Number(r.actualValue) : null,
+    deltaAbs: r.deltaAbs != null ? Number(r.deltaAbs) : null,
+    deltaPct: r.deltaPct != null ? Number(r.deltaPct) : null,
+    zScore: r.zScore != null ? Number(r.zScore) : null,
+    payload: (r.payload as Record<string, unknown>) ?? {},
+    reviewedAt: r.reviewed_at ? new Date(r.reviewed_at as string).toISOString() : null,
+    reviewedBy: (r.reviewedBy as string | null) ?? null,
+    reviewAction: (r.reviewAction as string | null) ?? null,
+  }));
+}
+
+/** Marca un quality check como revisado (idempotente). */
+export async function reviewQualityCheck(
+  id: number,
+  reviewedBy: string,
+  action: string,
+  notes?: string,
+): Promise<{ updated: number }> {
+  const rows = await db.execute<{ id: number }>(sql`
+    UPDATE admin.data_quality_checks
+       SET reviewed_at = NOW(),
+           reviewed_by = ${reviewedBy},
+           review_action = ${action},
+           review_notes = ${notes ?? null}
+     WHERE id = ${id}
+       AND reviewed_at IS NULL
+     RETURNING id
+  `);
+  return { updated: rows.length };
 }
