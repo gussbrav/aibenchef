@@ -986,3 +986,75 @@ describe.skipIf(SKIP_INTEGRATION)("V097 unique index codigo vigente", () => {
     }
   });
 });
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* V098: Marker rows en EEFF Inspector (issue #32)                           */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector marker rows (V098)", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await seedFixtures(testDbUrl);
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // Insertar 3 tipos de fila en cabecera:
+      // 1) Cuenta real (codigo Z9, es_header=false) sin valor en raw → faltaEnRaw=true
+      // 2) Marker es_header (codigo NULL, anotacion fecha) → faltaEnRaw=false
+      // 3) Total es_total=true → faltaEnRaw=false aunque no haya valor en raw
+      await sql.unsafe(`
+        INSERT INTO dw.cabecera_maestra
+          (tipo_estado, tipo_entidad, orden, codigo, nombre, nivel, es_header, es_total, es_seccion, valido_desde)
+        VALUES
+          ('balance', 'BANCOS', 9101, 'Z9',   'Cuenta real sin valor',     2, false, false, false, 200801),
+          ('balance', 'BANCOS', 9102, NULL,   '2026-03-31 anotacion',     1, true,  false, false, 200801),
+          ('balance', 'BANCOS', 9103, 'Z10',  'TOTAL ALGO (sin valor)',   2, false, true,  false, 200801),
+          ('balance', 'BANCOS', 9104, NULL,   'PATRIMONIO seccion test',  1, false, false, true,  200801)
+        ON CONFLICT DO NOTHING;
+
+        INSERT INTO raw.eeff_observacion
+          (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, cuenta_nombre, valor)
+        VALUES
+          (202603, '2026-03-31', 'balance', 'Banco Existente', 'BANCOS', 'TOTAL', 'Z9.exists', 'Cuenta que SI tiene valor', 100)
+        ON CONFLICT DO NOTHING;
+      `);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("Cuenta real con codigo sin valor en raw → faltaEnRaw=true", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const z9 = data!.balance.find((r) => r.cuentaCodigo === "Z9");
+    expect(z9).toBeDefined();
+    expect(z9?.faltaEnRaw).toBe(true);
+  });
+
+  it("Marker (es_header con codigo NULL) NO levanta faltaEnRaw", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const marker = data!.balance.find((r) => r.cuentaNombreCanonica.includes("anotacion"));
+    expect(marker).toBeDefined();
+    expect(marker?.faltaEnRaw).toBe(false);
+    expect(marker?.esHeader).toBe(true);
+  });
+
+  it("Total (es_total=true) NO levanta faltaEnRaw aunque tenga codigo", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const total = data!.balance.find((r) => r.cuentaCodigo === "Z10");
+    expect(total).toBeDefined();
+    expect(total?.faltaEnRaw).toBe(false);
+    expect(total?.esTotal).toBe(true);
+  });
+
+  it("Seccion (es_seccion=true) NO levanta faltaEnRaw", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603, "TOTAL");
+    const sec = data!.balance.find((r) => r.cuentaNombreCanonica.includes("PATRIMONIO seccion"));
+    expect(sec).toBeDefined();
+    expect(sec?.faltaEnRaw).toBe(false);
+    expect(sec?.esSeccion).toBe(true);
+  });
+});

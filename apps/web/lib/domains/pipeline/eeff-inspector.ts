@@ -251,10 +251,12 @@ async function fetchByTipoEstado(
     const esHeader = Boolean(r.es_header);
     const esTotal = Boolean(r.es_total);
     const esSeccion = Boolean(r.es_seccion);
-    // faltaEnRaw: la cabecera espera valor (no es seccion ni header sin codigo)
-    // pero el parser no lo persistio (nombreArchivo = NULL).
-    const esperaValor = codigo !== null && !esSeccion;
-    const faltaEnRaw = esperaValor && nombreArchivo === null;
+    // faltaEnRaw: solo es "falta" cuando la fila tiene codigo asignado
+    // (es una cuenta REAL contable) y el parser no la persistio. Los markers
+    // (es_header / es_total / es_seccion) o filas sin codigo no levantan
+    // "falta" porque no se esperan valores raw para ellos.
+    const esCuentaReal = codigo !== null && !esHeader && !esTotal && !esSeccion;
+    const faltaEnRaw = esCuentaReal && nombreArchivo === null;
     return {
       orden: Number(r.orden),
       cuentaCodigo: codigo,
