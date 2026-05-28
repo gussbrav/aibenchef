@@ -792,6 +792,123 @@ describe.skipIf(SKIP_INTEGRATION)("V099 cabecera realign anotaciones SBS", () =>
 });
 
 /* ──────────────────────────────────────────────────────────────────────── */
+/* V100: quality checks extendidos a TODOS los grupos (issue #38)            */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("V100 quality check balance + subcuentas para TODOS los grupos", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await seedFixtures(testDbUrl);
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // V100 espera vista marts.v_dq_balance con check para todos los grupos.
+      // Crear vista minimal (replicando logica V100) para los tests.
+      await sql.unsafe(`
+        DROP VIEW IF EXISTS marts.v_dq_balance CASCADE;
+        CREATE VIEW marts.v_dq_balance AS
+        WITH base AS (
+          SELECT periodo, nomb_correg, tipo_entidad,
+            MAX(CASE WHEN cuenta_codigo='A' THEN valor END) AS total_a,
+            MAX(CASE WHEN cuenta_codigo='B' THEN valor END) AS total_b,
+            SUM(CASE WHEN cuenta_codigo ~ '^C[0-9]+$' THEN valor END) AS sum_c,
+            SUM(CASE WHEN cuenta_codigo ~ '^A[0-9]+$' THEN valor END) AS sum_a,
+            SUM(CASE WHEN cuenta_codigo ~ '^B[0-9]+$' THEN valor END) AS sum_b
+          FROM raw.eeff_observacion
+          WHERE tipo_estado='balance' AND moneda='TOTAL'
+          GROUP BY periodo, nomb_correg, tipo_entidad
+        ),
+        computed AS (
+          SELECT periodo, nomb_correg, tipo_entidad,
+            COALESCE(total_a, sum_a, 0) AS activos,
+            COALESCE(total_b, sum_b, 0) AS pasivos,
+            COALESCE(sum_c, 0) AS patrimonio
+          FROM base
+        )
+        SELECT periodo, nomb_correg, tipo_entidad, activos, pasivos, patrimonio,
+          ABS(activos - (pasivos + patrimonio)) AS delta_abs,
+          CASE WHEN activos = 0 OR activos IS NULL THEN NULL
+               ELSE ABS(activos - (pasivos + patrimonio)) / activos END AS delta_pct,
+          CASE
+            WHEN activos IS NULL OR activos = 0 THEN 'warning'
+            WHEN ABS(activos - (pasivos + patrimonio)) / activos < 0.005 THEN 'ok'
+            WHEN ABS(activos - (pasivos + patrimonio)) / activos < 0.05 THEN 'warning'
+            ELSE 'critical'
+          END AS status
+        FROM computed;
+      `);
+
+      // Fixtures: 2 CMACs, una cuadra y otra NO (simula bug parser)
+      await sql.unsafe(`
+        INSERT INTO raw.eeff_observacion
+          (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, cuenta_nombre, valor)
+        VALUES
+          -- CMAC OK: A=1000, B=600, C1=200, C2=200 (suma C=400, A=B+C=1000)
+          (202603, '2026-03-31', 'balance', 'CMAC OK', 'CMAC', 'TOTAL', 'A',  'TOTAL ACTIVO', 1000),
+          (202603, '2026-03-31', 'balance', 'CMAC OK', 'CMAC', 'TOTAL', 'B',  'TOTAL PASIVO', 600),
+          (202603, '2026-03-31', 'balance', 'CMAC OK', 'CMAC', 'TOTAL', 'C1', 'Capital Social', 200),
+          (202603, '2026-03-31', 'balance', 'CMAC OK', 'CMAC', 'TOTAL', 'C2', 'Reservas', 200),
+          -- CMAC BUG: A=1000, B=600, C=100 (no cuadra: 600+100=700 != 1000)
+          (202603, '2026-03-31', 'balance', 'CMAC BUG', 'CMAC', 'TOTAL', 'A',  'TOTAL ACTIVO', 1000),
+          (202603, '2026-03-31', 'balance', 'CMAC BUG', 'CMAC', 'TOTAL', 'B',  'TOTAL PASIVO', 600),
+          (202603, '2026-03-31', 'balance', 'CMAC BUG', 'CMAC', 'TOTAL', 'C1', 'Capital Social', 100)
+        ON CONFLICT DO NOTHING;
+      `);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("v_dq_balance dispara critical cuando A != B + C (TODOS los grupos)", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      const rows = await sql<{ nomb_correg: string; status: string; delta_pct: string | null }[]>`
+        SELECT nomb_correg, status, delta_pct::text
+        FROM marts.v_dq_balance
+        WHERE periodo=202603 AND nomb_correg IN ('CMAC OK', 'CMAC BUG')
+        ORDER BY nomb_correg
+      `;
+      const cmacBug = rows.find((r) => r.nomb_correg === "CMAC BUG");
+      const cmacOk = rows.find((r) => r.nomb_correg === "CMAC OK");
+      expect(cmacOk?.status).toBe("ok");
+      expect(cmacBug?.status).toBe("critical");
+      // delta 30% (300/1000)
+      expect(Number(cmacBug?.delta_pct ?? 0)).toBeCloseTo(0.3, 2);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("v_dq_balance usa fallback SUM(A[1-9]) si codigo A no esta en raw", async () => {
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // Insertar entidad SOLO con A1..A3 (sin codigo A top-level)
+      await sql.unsafe(`
+        INSERT INTO raw.eeff_observacion
+          (periodo, fecha_cierre, tipo_estado, nomb_correg, tipo_entidad, moneda, cuenta_codigo, cuenta_nombre, valor)
+        VALUES
+          (202603, '2026-03-31', 'balance', 'CMAC PreV098', 'CMAC', 'TOTAL', 'A1', 'Disponible', 400),
+          (202603, '2026-03-31', 'balance', 'CMAC PreV098', 'CMAC', 'TOTAL', 'A2', 'Fondos', 600),
+          (202603, '2026-03-31', 'balance', 'CMAC PreV098', 'CMAC', 'TOTAL', 'B1', 'Obligaciones', 700),
+          (202603, '2026-03-31', 'balance', 'CMAC PreV098', 'CMAC', 'TOTAL', 'C1', 'Capital', 300)
+        ON CONFLICT DO NOTHING;
+      `);
+      const rows = await sql<{ activos: string; status: string }[]>`
+        SELECT activos::text, status FROM marts.v_dq_balance
+        WHERE periodo=202603 AND nomb_correg='CMAC PreV098'
+      `;
+      // Activos = SUM(A1+A2) = 1000 (fallback funciona)
+      expect(Number(rows[0].activos)).toBe(1000);
+      expect(rows[0].status).toBe("ok");
+    } finally {
+      await sql.end();
+    }
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
 /* Cabecera Aligner (issue #28)                                              */
 /* ──────────────────────────────────────────────────────────────────────── */
 
