@@ -1020,9 +1020,12 @@ def _normalize(s: str) -> str:
     Aplica:
     - strip de espacios (BANCOS indenta con '   Caja', CMAC sin indentar)
     - quita asterisco final ('Vigentes*' -> 'Vigentes')
-    - colapsa espacios multiples internos
     - quita acentos
     - lowercase
+    - reemplaza puntuacion / paren / brackets / asteriscos por espacio
+    - colapsa espacios multiples internos
+    - DEBE COINCIDIR con la normalizacion del SQL en V108:
+      LOWER(REGEXP_REPLACE(unaccent(s), '[^a-z0-9]+', ' ', 'g'))
     """
     s = s.strip()
     if s.endswith("*"):
@@ -1030,7 +1033,9 @@ def _normalize(s: str) -> str:
     s = unicodedata.normalize("NFD", s)
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
     s = s.lower()
-    s = re.sub(r"\s+", " ", s)
+    # Reemplazar punctuation/paren/bracket/etc por espacio (matches SQL regex)
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
     return s
 
 
