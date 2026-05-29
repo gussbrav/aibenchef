@@ -199,7 +199,7 @@ async function setupSchema(url: string): Promise<void> {
         PRIMARY KEY (tipo_estado, alias_norm)
       );
 
-      -- V113: eeff_celda_cruda — cells del .xls SBS para validar extraccion (issue #65)
+      -- V113 + V114: eeff_celda_cruda — cells del .xls SBS para validar extraccion (issue #65)
       CREATE TABLE IF NOT EXISTS raw.eeff_celda_cruda (
         id BIGSERIAL PRIMARY KEY,
         periodo INTEGER NOT NULL,
@@ -215,6 +215,7 @@ async function setupSchema(url: string): Promise<void> {
         valor_total NUMERIC(20, 4),
         archivo_id UUID REFERENCES raw.archivos_descargados(id) ON DELETE SET NULL,
         source_file TEXT,
+        cuenta_codigo TEXT,
         imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         CONSTRAINT eeff_celda_cruda_uniq
           UNIQUE (periodo, nomb_correg, tipo_estado, orden)
@@ -779,23 +780,24 @@ describe.skipIf(SKIP_INTEGRATION)("V113 Excel SBS crudo + diff", () => {
     const { default: postgres } = await import("postgres");
     const sql = postgres(testDbUrl, { max: 1 });
     try {
-      // Caso 1 — match exacto (extraido = crudo). diffTotal debe ser NULL.
-      // Caso 2 — diff real: parser persistio TOTAL=110, archivo tenia 115.
+      // V114: JOIN del inspector es por cuenta_codigo (no por orden).
+      // Caso 1 — A1 match exacto (extraido = crudo). diffTotal debe ser NULL.
+      // Caso 2 — A2 diff real: parser persistio TOTAL=200, archivo dice 205.
       //          La UI debe pintar la fila en rojo.
-      // Caso 3 — sin row crudo (orden=3 A3 INVERSIONES NETAS): xlsValor* = NULL,
-      //          diff = NULL (no se puede comparar sin fuente cruda).
+      // Caso 3 — A3 sin row crudo: xlsValor* = NULL, diff = NULL.
       await sql.unsafe(`
         INSERT INTO raw.eeff_celda_cruda
           (periodo, nomb_correg, tipo_entidad, tipo_estado, orden, es_header,
-           nombre_archivo, valor_mn, valor_me, valor_total, source_file)
+           nombre_archivo, valor_mn, valor_me, valor_total, source_file,
+           cuenta_codigo)
         VALUES
-          -- orden=1 A1: match exacto vs eeff_observacion (TOTAL=110)
+          -- A1: match exacto vs eeff_observacion (TOTAL=110)
           (202603, 'Banco Existente', 'BANCOS', 'balance', 1, true,
-           'DISPONIBLE', 60, 50, NULL, 'B-test.xls'),
-          -- orden=2 A2: diff de 5 — parser tiene 200, archivo dice 205
+           'DISPONIBLE', 60, 50, NULL, 'B-test.xls', 'A1'),
+          -- A2: diff de 5 — parser tiene 200, archivo dice 205
           (202603, 'Banco Existente', 'BANCOS', 'balance', 2, true,
-           'FONDOS INTERBANCARIOS', 150, 55, 205, 'B-test.xls');
-        -- orden=3 NO insertado: simula gap parser-vs-archivo (raw esta vacio)
+           'FONDOS INTERBANCARIOS', 150, 55, 205, 'B-test.xls', 'A2');
+        -- A3 NO insertado: simula gap parser-vs-archivo
       `);
     } finally {
       await sql.end();

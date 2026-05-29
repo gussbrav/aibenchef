@@ -61,6 +61,7 @@ async def setup_celda_cruda_schema(pg_dsn: str) -> AsyncIterator[str]:
                     valor_total NUMERIC(20, 4),
                     archivo_id UUID REFERENCES raw.archivos_descargados(id) ON DELETE SET NULL,
                     source_file TEXT,
+                    cuenta_codigo TEXT,
                     imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     CONSTRAINT eeff_celda_cruda_uniq
                         UNIQUE (periodo, nomb_correg, tipo_estado, orden)
@@ -98,6 +99,7 @@ async def test_copy_batch_celdas_inserta_filas(setup_celda_cruda_schema: str):
                     None,  # BANCOS no publica TOTAL
                     None,
                     "B-test.xls",
+                    "A1",  # cuenta_codigo (V114)
                 ),
                 (
                     202604,
@@ -112,6 +114,7 @@ async def test_copy_batch_celdas_inserta_filas(setup_celda_cruda_schema: str):
                     900.0,  # CMAC sí publica TOTAL crudo
                     None,
                     "C-test.xls",
+                    "A1",  # cuenta_codigo (V114)
                 ),
             ]
         )
@@ -166,6 +169,7 @@ async def test_copy_batch_celdas_upsert_actualiza_valores(
                     None,
                     None,
                     "first.xls",
+                    "A1.1",
                 ),
             ]
         )
@@ -185,6 +189,7 @@ async def test_copy_batch_celdas_upsert_actualiza_valores(
                     None,
                     None,
                     "second.xls",
+                    "A1.1",
                 ),
             ]
         )

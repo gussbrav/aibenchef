@@ -170,10 +170,12 @@ async function fetchByTipoEstado(
   // (MN, ME, TOTAL) en una sola pasada via FILTER WHERE. Mas eficiente que
   // 3 LEFT JOIN separados, y devuelve las 3 columnas listas para la UI.
   //
-  // raw.eeff_celda_cruda (issue #65) hace JOIN por (periodo, nomb_correg,
-  // tipo_estado, orden) — orden posicional del archivo que matchea con
-  // cabecera_maestra.orden. Esto detecta cuando el parser dropea una fila
-  // (eo.* NULL pero cc.* tiene valor).
+  // raw.eeff_celda_cruda (issue #65) hace JOIN por cuenta_codigo (V114).
+  // El orden de cabecera_maestra es por codigo_sort_key (V112) mientras que
+  // el orden de celda_cruda es posicional del archivo — son distintos.
+  // El codigo es la clave estable de negocio que matchea ambos lados.
+  // Usamos LATERAL + LIMIT 1 porque el importer puede haber dedupeado
+  // multiples filas archivo al mismo codigo y aun asi grabar ambas en cruda.
   const rows = await db.execute<Record<string, unknown>>(sql`
     SELECT
       cm.orden,
@@ -214,11 +216,17 @@ async function fetchByTipoEstado(
         AND periodo       = ${periodo}
         AND tipo_estado   = cm.tipo_estado
     ) eo ON TRUE
-    LEFT JOIN raw.eeff_celda_cruda cc
-      ON cc.periodo     = ${periodo}
-     AND cc.nomb_correg = ${entidad}
-     AND cc.tipo_estado = cm.tipo_estado
-     AND cc.orden       = cm.orden
+    LEFT JOIN LATERAL (
+      SELECT valor_mn, valor_me, valor_total
+      FROM raw.eeff_celda_cruda
+      WHERE cm.codigo IS NOT NULL
+        AND cuenta_codigo = cm.codigo
+        AND nomb_correg   = ${entidad}
+        AND periodo       = ${periodo}
+        AND tipo_estado   = cm.tipo_estado
+      ORDER BY orden
+      LIMIT 1
+    ) cc ON TRUE
     LEFT JOIN LATERAL (
       SELECT MAX(valor) FILTER (WHERE moneda='TOTAL') AS valor_total
       FROM raw.eeff_observacion
