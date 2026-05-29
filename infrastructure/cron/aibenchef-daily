@@ -1,0 +1,10 @@
+# aibenchef daily sync — 3x por dia para capturar publicaciones SBS rapido
+# Horarios Lima (UTC-5): 06:00, 14:00, 22:00
+# = UTC:              11:00, 19:00, 03:00 (proximo dia)
+# Refs #42 (operational automation)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 11 * * * root /usr/local/bin/aibenchef-daily-sync.sh
+0 19 * * * root /usr/local/bin/aibenchef-daily-sync.sh
+0 3  * * * root /usr/local/bin/aibenchef-daily-sync.sh
