@@ -7,7 +7,7 @@ Sincronización automática diaria de archivos SBS — scrape + import + quality
 | Archivo | Path en server | Propósito |
 |---|---|---|
 | `aibenchef-daily-sync.sh` | `/usr/local/bin/aibenchef-daily-sync.sh` | Script principal que orquesta el sync |
-| `aibenchef-daily` (cron) | `/etc/cron.d/aibenchef-daily` | Schedule `0 11 * * *` (11:00 UTC = 06:00 Lima) |
+| `aibenchef-daily` (cron) | `/etc/cron.d/aibenchef-daily` | Schedule **3x al día**: 06:00, 14:00, 22:00 Lima (= 11, 19, 03 UTC) |
 | `aibenchef` (logrotate) | `/etc/logrotate.d/aibenchef` | Rotación mensual de logs, retiene 12 meses |
 | Logs | `/var/log/aibenchef/daily-sync-YYYY-MM-DD.log` | Output completo del run |
 
