@@ -269,7 +269,7 @@ class MonthlyEeffImporter:
         orden = 0
 
         for r in range(layout.data_start_row, sheet.n_rows):
-            nombre_raw = _cell_str(sheet, r, 0)
+            nombre_raw = _cell_str(sheet, r, layout.nombre_col)
             if not nombre_raw:
                 continue
             nombre_norm = _normalize(nombre_raw)
@@ -483,7 +483,7 @@ class _EntidadInfo:
 
 
 class _Layout:
-    __slots__ = ("data_start_row", "entidades", "fecha_cierre", "periodo_yyyymm")
+    __slots__ = ("data_start_row", "entidades", "fecha_cierre", "nombre_col", "periodo_yyyymm")
 
     def __init__(
         self,
@@ -491,11 +491,15 @@ class _Layout:
         periodo_yyyymm: int,
         entidades: list[_EntidadInfo],
         data_start_row: int,
+        nombre_col: int = 0,
     ) -> None:
         self.fecha_cierre = fecha_cierre
         self.periodo_yyyymm = periodo_yyyymm
         self.entidades = entidades
         self.data_start_row = data_start_row
+        # 0 = layout moderno (cuentas en col 0). 1 = layout BANCOS/FINANCIERAS
+        # 2010-2012 (col 0 vacia, cuentas en col 1).
+        self.nombre_col = nombre_col
 
 
 def _detect_layout(sheet: XlsSheet) -> _Layout:
@@ -541,8 +545,25 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
     entidades_row = monedas_row - 1
     data_start_row = monedas_row + 1
 
-    # Saltar filas vacias entre monedas y primera cuenta
-    while data_start_row < sheet.n_rows and not _cell_str(sheet, data_start_row, 0):
+    # Detectar la columna donde estan los NOMBRES de cuenta. Layout moderno
+    # tiene cuentas en col 0; layout BANCOS/FINANCIERAS 2010-2012 tiene col 0
+    # vacia y cuentas en col 1. Probamos col 0 primero, sino col 1.
+    nombre_col = 0
+    test_rows_with_content_col_0 = sum(
+        1
+        for r in range(data_start_row, min(data_start_row + 20, sheet.n_rows))
+        if _cell_str(sheet, r, 0)
+    )
+    test_rows_with_content_col_1 = sum(
+        1
+        for r in range(data_start_row, min(data_start_row + 20, sheet.n_rows))
+        if _cell_str(sheet, r, 1)
+    )
+    if test_rows_with_content_col_0 == 0 and test_rows_with_content_col_1 > 0:
+        nombre_col = 1
+
+    # Saltar filas vacias entre monedas y primera cuenta (chequea col elegida)
+    while data_start_row < sheet.n_rows and not _cell_str(sheet, data_start_row, nombre_col):
         data_start_row += 1
 
     # Detectar entidades. Cada entidad ocupa N columnas consecutivas con monedas
@@ -585,6 +606,7 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
         periodo_yyyymm=periodo_yyyymm,
         entidades=entidades,
         data_start_row=data_start_row,
+        nombre_col=nombre_col,
     )
 
 
