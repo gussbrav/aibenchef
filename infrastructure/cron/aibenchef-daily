@@ -1,0 +1,7 @@
+# aibenchef daily sync — 11:00 UTC = 06:00 Lima
+# Runs scraper + import + quality-check for previous 2 months
+# Refs #42 (operational automation)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 11 * * * root /usr/local/bin/aibenchef-daily-sync.sh
