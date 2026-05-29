@@ -913,18 +913,29 @@ class _CuentaLookup:
         return instance
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
-        # 0) Alias manual (dw.cuenta_alias) — para nombres renombrados en SBS
+        # BUG issue #65: V108 generó aliases automaticos desde "file variants"
+        # que apuntan a codigos NO-header (ej "disponible" -> A6.1 sub-cuenta
+        # de Activos Fijos). Cuando el parser ve "DISPONIBLE" (header L2 en
+        # mayusculas), normaliza a "disponible" y si el alias gana primero,
+        # asigna A6.1 en vez del header correcto A1.
+        #
+        # Fix: match exacto PRIMERO (que apunta a codigo header legitimo segun
+        # dim_cuenta + cabecera_maestra), alias como FALLBACK cuando no hay
+        # match exacto. Asi aliases solo aplican para nombres renombrados que
+        # SBS realmente publica con variantes raras.
+
+        # 1) Match exacto (codigo header legitimo)
+        exact = self._header.get((section, nombre_norm))
+        if exact:
+            return exact
+        # 2) Alias manual (dw.cuenta_alias) — fallback para nombres renombrados
         alias_codigo = self._aliases.get((section, nombre_norm)) or self._aliases.get(
             ("", nombre_norm)
         )
         if alias_codigo:
             nombre = self._codigo_to_nombre.get(alias_codigo, "")
             return (alias_codigo, nombre)
-        # 1) Match exacto
-        exact = self._header.get((section, nombre_norm))
-        if exact:
-            return exact
-        # 2) Match fuzzy por prefix: SBS a veces trunca nombres largos.
+        # 3) Match fuzzy por prefix: SBS a veces trunca nombres largos.
         #    Solo se devuelve si hay UN UNICO candidato (sino, ambiguo).
         nombre_palabras = nombre_norm.split()
         if len(nombre_palabras) < 2:
