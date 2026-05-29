@@ -108,13 +108,22 @@ class MonthlyEeffImporter:
         # Cache para cabecera_maestra: key = (tipo_estado, tipo_entidad)
         self._position_cache: dict[tuple[str, str], _PositionLookup] = {}
 
-    async def import_file(self, path: Path, *, tipo_entidad: str | None = None) -> ImportResult:
+    async def import_file(
+        self,
+        path: Path,
+        *,
+        tipo_entidad: str | None = None,
+        archivo_id: str | None = None,
+    ) -> ImportResult:
         """Importa un archivo SBS mensual.
 
         Args:
             path: Ruta al .xls SBS.
             tipo_entidad: BANCOS / FINANCIERAS / CMAC / CRAC / EDPYMES. Si None,
                 se intenta inferir del path (.../banca_multiple/... -> BANCOS).
+            archivo_id: UUID de raw.archivos_descargados — se propaga a
+                raw.eeff_celda_cruda para trazabilidad. None si el import es
+                puntual y el archivo no esta registrado.
         """
         start = time.perf_counter()
         if tipo_entidad is None:
@@ -155,6 +164,7 @@ class MonthlyEeffImporter:
                     source_file=path.name,
                     tipo_entidad=tipo_entidad,
                     lookup=lookup,
+                    archivo_id=archivo_id,
                 )
                 inserted += n
                 log.info("monthly_eeff.sheet_ok", sheet=sheet.name, rows=n)
@@ -173,6 +183,7 @@ class MonthlyEeffImporter:
                     source_file=path.name,
                     tipo_entidad=tipo_entidad,
                     lookup=lookup,
+                    archivo_id=archivo_id,
                 )
                 inserted += n
                 log.info("monthly_eeff.sheet_ok", sheet=sheet.name, rows=n)
@@ -222,6 +233,7 @@ class MonthlyEeffImporter:
         source_file: str,
         tipo_entidad: str,
         lookup: _CuentaLookup,
+        archivo_id: str | None = None,
     ) -> int:
         layout = _detect_layout(sheet)
         if not layout.entidades:
@@ -242,6 +254,9 @@ class MonthlyEeffImporter:
         )
 
         observations: list[tuple] = []
+        # Celdas crudas — una por (entidad, orden). Se llenan ANTES del resolver
+        # de codigos para capturar tambien filas que el parser descarta (issue #65).
+        cells_raw: list[tuple] = []
         # Section tracker: en balance "Activo" -> A, "Pasivo" -> B, "Patrimonio" -> C.
         # En resultados no hay secciones canonicas (todo bajo prefix "").
         current_section: str = "A" if tipo_estado == "balance" else ""
@@ -255,13 +270,21 @@ class MonthlyEeffImporter:
             "patrimonio": "C",
             "patrimonio neto": "C",
         }
+        # Headers que CAMBIAN seccion al verlos (no son section markers SBS
+        # pero indican que las siguientes filas son de un sector distinto):
+        # CONTINGENTES y TOTAL PASIVO Y PATRIMONIO disparan sec=D para que
+        # las cuentas D1-D4 se busquen bajo parent='D'.
+        _section_trigger_headers = {
+            "contingentes": "D",
+            "total pasivo y patrimonio": "T",
+        }
 
         # Counter posicional — debe espejar EXACTAMENTE init-maestra: cada fila
         # no-vacia que no sea section marker (Activo/Pasivo/Patrimonio).
         orden = 0
 
         for r in range(layout.data_start_row, sheet.n_rows):
-            nombre_raw = _cell_str(sheet, r, 0)
+            nombre_raw = _cell_str(sheet, r, layout.nombre_col)
             if not nombre_raw:
                 continue
             nombre_norm = _normalize(nombre_raw)
@@ -293,28 +316,87 @@ class MonthlyEeffImporter:
                 orden -= 1
                 continue
 
-            # 1) Maestra posicional: si existe entrada para este orden, es
-            #    autoritativa. NULL codigo => fila conocida no-cuenta (skip).
-            if position_lookup.has(orden):
-                codigo = position_lookup.get_codigo(orden)
-                if codigo is None:
-                    continue  # footnote/total/contingente conocido
-                cuenta_nombre_canonico = position_lookup.get_nombre(orden)
-                # Mantener current_parent_codigo coherente para fallbacks posteriores
+            # ESTRATEGIA (refactor issue #42 - cuentas faltantes por entidad):
+            # 1) NAME-BASED PRIMARIO: la cabecera_maestra positional es fragil
+            #    cuando un archivo SBS varia su estructura entre entidades del
+            #    mismo grupo (ej. CMAC Arequipa abril 2020 no tiene la fila
+            #    "Tarjetas de Crédito" que sí esta en cabecera CMAC, causando
+            #    drift +1 en todos los codigos a partir de ese orden).
+            #
+            #    Resolver por NOMBRE (con parent tracking) es robusto ante
+            #    estos huecos porque cada cuenta se identifica por su nombre
+            #    canonico, no por la posicion relativa.
+            #
+            # 2) POSITION como FALLBACK: si name-based falla (cuenta SBS con
+            #    typo no contemplado en aliases, o nombre nuevo), confiamos
+            #    en cabecera. Codigo NULL en cabecera = fila conocida no-
+            #    cuenta -> skip.
+            # Pre-check: trigger headers cambian la seccion ANTES de hacer
+            # name lookup (CONTINGENTES dispara seccion D; TOTAL PASIVO Y
+            # PATRIMONIO dispara T). Sin esto, find_header("C","contingentes")
+            # falla porque cabecera tiene CONTINGENTES bajo section D.
+            trigger_section = _section_trigger_headers.get(nombre_norm)
+            if trigger_section and es_header:
+                current_section = trigger_section
+                current_parent_codigo = trigger_section
+
+            name_codigo: str | None = None
+            name_nombre: str | None = None
+            if es_header:
+                resolved = lookup.find_header(current_section, nombre_norm)
+                if resolved:
+                    name_codigo, name_nombre = resolved
+            elif current_parent_codigo:
+                resolved = lookup.find_child(current_parent_codigo, nombre_norm)
+                if resolved:
+                    name_codigo, name_nombre = resolved
+
+            if name_codigo:
+                codigo = name_codigo
+                cuenta_nombre_canonico = name_nombre
                 if es_header:
                     current_parent_codigo = codigo
-            else:
-                # 2) Fallback nombre-based (mantiene compatibilidad si maestra
-                #    no esta inicializada o tiene gaps).
+            elif position_lookup.has(orden):
+                # Fallback a position. NULL => skip conocido.
+                pos_codigo = position_lookup.get_codigo(orden)
+                if pos_codigo is None:
+                    continue
+                codigo = pos_codigo
+                cuenta_nombre_canonico = position_lookup.get_nombre(orden)
                 if es_header:
-                    resolved = lookup.find_header(current_section, nombre_norm)
-                    if resolved:
-                        codigo, cuenta_nombre_canonico = resolved
-                        current_parent_codigo = codigo
-                elif current_parent_codigo:
-                    resolved = lookup.find_child(current_parent_codigo, nombre_norm)
-                    if resolved:
-                        codigo, cuenta_nombre_canonico = resolved
+                    current_parent_codigo = codigo
+
+            # Captura de celdas crudas — corre para TODAS las entidades del layout,
+            # incluso si codigo no resolvio. Es justamente la senal que el inspector
+            # usa para mostrar "fila en archivo sin codigo en cabecera".
+            for entidad_info in layout.entidades:
+                vals_raw: dict[str, float] = {}
+                for moneda, col_idx in entidad_info.monedas.items():
+                    raw_val = sheet.cell(r, col_idx)
+                    v = _coerce_number(raw_val)
+                    if v is not None:
+                        vals_raw[moneda] = v
+
+                # Solo guardar la fila si tiene al menos UN valor — filas
+                # totalmente vacias (todas las celdas blancas) no aportan
+                # informacion al inspector y solo inflan la tabla.
+                if vals_raw:
+                    cells_raw.append(
+                        (
+                            layout.periodo_yyyymm,
+                            entidad_info.nombre,
+                            tipo_entidad,
+                            tipo_estado,
+                            orden,
+                            es_header,
+                            nombre_raw.strip(),
+                            vals_raw.get("MN"),
+                            vals_raw.get("ME"),
+                            vals_raw.get("TOTAL"),  # NULL si SBS no lo publica
+                            archivo_id,
+                            source_file,
+                        )
+                    )
 
             if not codigo:
                 continue
@@ -369,11 +451,30 @@ class MonthlyEeffImporter:
             seen.add(key)
             deduped.append(obs)
 
+        # Dedup celdas crudas por (entidad, orden) — orden es unico por fila SBS
+        # y el unique constraint de la tabla lo refuerza. Conservamos la primera.
+        seen_raw: set[tuple] = set()
+        deduped_raw: list[tuple] = []
+        for cell in cells_raw:
+            # cell = (periodo, nomb_correg=1, tipo_entidad, tipo_estado=3, orden=4, ...)
+            key_raw = (cell[1], cell[3], cell[4])
+            if key_raw in seen_raw:
+                continue
+            seen_raw.add(key_raw)
+            deduped_raw.append(cell)
+
         # Volcar en batches
         inserted = 0
         for i in range(0, len(deduped), self._batch_size):
             batch = deduped[i : i + self._batch_size]
             inserted += await self._copy_batch(batch)
+
+        # Volcar celdas crudas (issue #65). No suma al rows_inserted del
+        # importer porque es metadata para el inspector, no data del cubo.
+        for i in range(0, len(deduped_raw), self._batch_size):
+            batch_raw = deduped_raw[i : i + self._batch_size]
+            await self._copy_batch_celdas(batch_raw)
+
         return inserted
 
     async def _copy_batch(self, batch: list[tuple]) -> int:
@@ -433,6 +534,75 @@ class MonthlyEeffImporter:
         await self._conn.commit()
         return n
 
+    async def _copy_batch_celdas(self, batch: list[tuple]) -> int:
+        """Volcado de celdas crudas a raw.eeff_celda_cruda (issue #65).
+
+        UPSERT por (periodo, nomb_correg, tipo_estado, orden). El nomb_correg se
+        normaliza con dw.normalizar_entidad para mantener consistencia con
+        raw.eeff_observacion (sino el LEFT JOIN del inspector no matchea
+        cuando el entidad tiene footnote marker).
+        """
+        if not batch:
+            return 0
+        with contextlib.suppress(Exception):
+            await self._conn.rollback()
+
+        async with self._conn.cursor() as cur:
+            await cur.execute("DROP TABLE IF EXISTS _eeff_celda_stage")
+            await cur.execute(
+                """
+                CREATE TEMPORARY TABLE _eeff_celda_stage (
+                    periodo INT, nomb_correg TEXT, tipo_entidad TEXT,
+                    tipo_estado TEXT, orden INT, es_header BOOLEAN,
+                    nombre_archivo TEXT,
+                    valor_mn NUMERIC(20, 4), valor_me NUMERIC(20, 4),
+                    valor_total NUMERIC(20, 4),
+                    archivo_id UUID, source_file TEXT
+                )
+                """
+            )
+
+            async with cur.copy(
+                "COPY _eeff_celda_stage "
+                "(periodo, nomb_correg, tipo_entidad, tipo_estado, orden, "
+                "es_header, nombre_archivo, valor_mn, valor_me, valor_total, "
+                "archivo_id, source_file) "
+                "FROM STDIN"
+            ) as copy:
+                for row in batch:
+                    await copy.write_row(row)
+
+            await cur.execute(
+                """
+                INSERT INTO raw.eeff_celda_cruda (
+                    periodo, nomb_correg, tipo_entidad, tipo_estado, orden,
+                    es_header, nombre_archivo, valor_mn, valor_me, valor_total,
+                    archivo_id, source_file
+                )
+                SELECT periodo,
+                       dw.normalizar_entidad(nomb_correg),
+                       tipo_entidad, tipo_estado, orden,
+                       es_header, nombre_archivo, valor_mn, valor_me, valor_total,
+                       archivo_id, source_file
+                FROM _eeff_celda_stage
+                ON CONFLICT (periodo, nomb_correg, tipo_estado, orden)
+                DO UPDATE SET
+                    nombre_archivo = EXCLUDED.nombre_archivo,
+                    valor_mn       = EXCLUDED.valor_mn,
+                    valor_me       = EXCLUDED.valor_me,
+                    valor_total    = EXCLUDED.valor_total,
+                    es_header      = EXCLUDED.es_header,
+                    archivo_id     = EXCLUDED.archivo_id,
+                    source_file    = EXCLUDED.source_file,
+                    imported_at    = now()
+                """
+            )
+            n = cur.rowcount
+            await cur.execute("DROP TABLE IF EXISTS _eeff_celda_stage")
+
+        await self._conn.commit()
+        return n
+
 
 # ============================================================================
 # Layout detection
@@ -448,7 +618,7 @@ class _EntidadInfo:
 
 
 class _Layout:
-    __slots__ = ("data_start_row", "entidades", "fecha_cierre", "periodo_yyyymm")
+    __slots__ = ("data_start_row", "entidades", "fecha_cierre", "nombre_col", "periodo_yyyymm")
 
     def __init__(
         self,
@@ -456,11 +626,15 @@ class _Layout:
         periodo_yyyymm: int,
         entidades: list[_EntidadInfo],
         data_start_row: int,
+        nombre_col: int = 0,
     ) -> None:
         self.fecha_cierre = fecha_cierre
         self.periodo_yyyymm = periodo_yyyymm
         self.entidades = entidades
         self.data_start_row = data_start_row
+        # 0 = layout moderno (cuentas en col 0). 1 = layout BANCOS/FINANCIERAS
+        # 2010-2012 (col 0 vacia, cuentas en col 1).
+        self.nombre_col = nombre_col
 
 
 def _detect_layout(sheet: XlsSheet) -> _Layout:
@@ -506,8 +680,25 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
     entidades_row = monedas_row - 1
     data_start_row = monedas_row + 1
 
-    # Saltar filas vacias entre monedas y primera cuenta
-    while data_start_row < sheet.n_rows and not _cell_str(sheet, data_start_row, 0):
+    # Detectar la columna donde estan los NOMBRES de cuenta. Layout moderno
+    # tiene cuentas en col 0; layout BANCOS/FINANCIERAS 2010-2012 tiene col 0
+    # vacia y cuentas en col 1. Probamos col 0 primero, sino col 1.
+    nombre_col = 0
+    test_rows_with_content_col_0 = sum(
+        1
+        for r in range(data_start_row, min(data_start_row + 20, sheet.n_rows))
+        if _cell_str(sheet, r, 0)
+    )
+    test_rows_with_content_col_1 = sum(
+        1
+        for r in range(data_start_row, min(data_start_row + 20, sheet.n_rows))
+        if _cell_str(sheet, r, 1)
+    )
+    if test_rows_with_content_col_0 == 0 and test_rows_with_content_col_1 > 0:
+        nombre_col = 1
+
+    # Saltar filas vacias entre monedas y primera cuenta (chequea col elegida)
+    while data_start_row < sheet.n_rows and not _cell_str(sheet, data_start_row, nombre_col):
         data_start_row += 1
 
     # Detectar entidades. Cada entidad ocupa N columnas consecutivas con monedas
@@ -535,7 +726,11 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
             else:
                 break
         if len(monedas) >= 2 and nombre not in vistos:
-            entidades.append(_EntidadInfo(nombre=nombre, monedas=monedas))
+            # Normalizar footnote markers SBS (ej. "CMAC Arequipa (*)" -> "CMAC Arequipa")
+            # para que el Inspector encuentre las mismas entidades entre periodos.
+            nombre_norm_entity = re.sub(r"\s*\(\*+\)\s*$", "", nombre).strip()
+            nombre_norm_entity = re.sub(r"\s*\*+\s+.*$", "", nombre_norm_entity).strip()
+            entidades.append(_EntidadInfo(nombre=nombre_norm_entity, monedas=monedas))
             vistos.add(nombre)
             col = scan + 1
         else:
@@ -546,6 +741,7 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
         periodo_yyyymm=periodo_yyyymm,
         entidades=entidades,
         data_start_row=data_start_row,
+        nombre_col=nombre_col,
     )
 
 
@@ -635,6 +831,82 @@ class _CuentaLookup:
                 instance._child_by_parent_name.setdefault(
                     (grand_parent, nombre_norm), (codigo, nombre)
                 )
+
+        # ENRIQUECER lookup con cabecera_maestra (issue #42 - parser refactor).
+        #
+        # dim_cuenta NO tiene los codigos agregados (B=TOTAL PASIVO, T=TOTAL
+        # PASIVO Y PATRIMONIO, D=CONTINGENTES, D1-D4 contingentes específicos).
+        # Esos viven en cabecera_maestra. Sin esto, find_header/find_child
+        # devuelven None para TOTAL PASIVO, CONTINGENTES, etc., y el parser
+        # cae a position_lookup que es fragil cuando el archivo SBS tiene
+        # estructura distinta de la cabecera (caso CMAC sin "Tarjetas de
+        # Crédito" → offset acumulado +1 en todos los codigos).
+        #
+        # Cabecera_maestra esta tipificada por (tipo_estado, tipo_entidad);
+        # acumulamos todas las entidades porque los codigos agregados son
+        # consistentes entre grupos. Si hay duplicado, setdefault preserva
+        # la primera entrada.
+        async with conn.cursor() as cur2:
+            # Leemos tanto cabecera VIGENTE (valido_hasta IS NULL) como
+            # LEGACY (valido_hasta != NULL, ej. pre-2013). ORDER BY
+            # valido_hasta IS NULL DESC garantiza que vigente entra
+            # primero; el `setdefault` mas abajo preserva la vigente
+            # cuando el nombre normalizado colisiona.
+            # Subquery con DISTINCT ON para tomar la vigente cuando hay
+            # multiples versiones del mismo codigo. ORDER BY garantiza
+            # que valido_hasta IS NULL (vigente) gana sobre las legacy.
+            await cur2.execute(
+                """
+                SELECT codigo, nombre, es_h, es_tot
+                  FROM (
+                       SELECT DISTINCT ON (codigo, nombre)
+                              codigo,
+                              nombre,
+                              COALESCE(es_header, false) AS es_h,
+                              COALESCE(es_total, false) AS es_tot,
+                              (CASE WHEN valido_hasta IS NULL THEN 0 ELSE 1 END) AS prio
+                         FROM dw.cabecera_maestra
+                        WHERE tipo_estado = %s
+                          AND codigo IS NOT NULL
+                        ORDER BY codigo, nombre, prio
+                  ) t
+                """,
+                (tipo_estado,),
+            )
+            cabecera_rows = await cur2.fetchall()
+        await conn.commit()
+
+        for codigo, nombre, _es_h, _es_tot in cabecera_rows:
+            if not nombre:
+                continue
+            nombre_norm = _normalize(nombre)
+            section = _section_prefix(codigo)
+            instance._codigo_to_nombre.setdefault(codigo, nombre)
+
+            # Top-level header: codigo de un solo char (A, B, C, D, T).
+            # Sub-cuentas (A1, B1.1, D1, etc.) son children de su seccion/parent.
+            if len(codigo) == 1:
+                instance._header.setdefault((section, nombre_norm), (codigo, nombre))
+                continue
+
+            # Sub-cuentas. Inferir parent:
+            #   - "B1.1" -> parent "B1"
+            #   - "A4.1.3" -> parent "A4.1"
+            #   - "D1" -> parent "D" (sin punto, el primer char es la seccion)
+            #   - "B10" -> parent "B" (digit sin punto -> seccion como parent)
+            if "." in codigo:
+                parent = codigo.rsplit(".", 1)[0]
+            else:
+                # Codigo tipo "B10" o "D1" — el parent es la seccion (primer char)
+                parent = section if section else codigo[0]
+
+            # Tambien registrar como header secundario en la seccion si es es_header
+            # (ej. A1, B1, C1 son headers pero tambien sub-cuentas de su seccion).
+            if _es_h:
+                instance._header.setdefault((section, nombre_norm), (codigo, nombre))
+
+            instance._child_by_parent_name.setdefault((parent, nombre_norm), (codigo, nombre))
+
         return instance
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
@@ -764,11 +1036,15 @@ class _PositionLookup:
 
 
 def _section_prefix(codigo: str) -> str:
-    """Para balance: A/B/C. Para resultados: ''."""
+    """Para balance: A/B/C/D/T. Para resultados: ''.
+
+    D = CONTINGENTES (seccion adicional al balance contable).
+    T = TOTAL PASIVO Y PATRIMONIO (gran total).
+    """
     if not codigo:
         return ""
     first = codigo[0]
-    if first in ("A", "B", "C"):
+    if first in ("A", "B", "C", "D", "T"):
         return first
     return ""
 
@@ -801,31 +1077,76 @@ def _infer_tipo_entidad_from_path(path: Path) -> str | None:
 
 def _is_annotation_or_footnote_extra(nombre_raw: str) -> bool:
     """Detecta filas EXTRA que no están en cabecera_maestra y deben skipearse
-    sin contar como orden — son anotaciones/footnotes que SBS publicó
+    sin contar como orden — son anotaciones/footnotes/metadata que SBS publica
     inconsistentemente entre periodos.
 
-    Las filas ya listadas en cabecera_maestra (orden con codigo=NULL) se
-    manejan por la ruta normal. Esta funcion solo aplica cuando
-    position_lookup.has(orden) es False.
+    Esta funcion debe llamarse ANTES de consultar position_lookup, porque
+    cabecera_maestra puede tener un NULL entry en el orden actual con OTRO
+    nombre (causando misalignment silencioso si confiamos solo en posicional).
 
-    Patrones detectados (issue #15):
-    - "* Mediante Resolución SBS N° ...": notas al pie de SBS con texto
-      variable por año. Algunos archivos las tienen (ej. B-2201-jn2019.xls
-      tiene Resolucion 1286-2019 entre TOTAL ACTIVO y Balance General header).
-    - "** Mediante Resolución..." (variant)
+    Patrones detectados:
+
+    Issue #15 (original):
+    - "* Mediante Resolución SBS N° ...": notas al pie con texto variable por año.
+    - "** Mediante Resolución..." (variant).
     - Numerated footnotes "1/", "2/" cuando NO están en cabecera para ese orden.
 
-    NO incluye patterns ya cubiertos por cabecera_maestra (Tipo de Cambio,
-    Balance General por..., etc) porque esas SÍ están listadas con NULL.
+    Issue #42 (auditor F1 v2, 2009-2026):
+    - Excel serial date como header: "40543.0", "42400.0" (cell type "date"
+      reportada como número crudo).
+    - ISO datetime: "2018-01-31 00:00:00" — fecha del periodo como header.
+    - "Tipo de Cambio Contable: S/ X,XXX" — cabecera de TC variable por mes.
+    - "Balance General por ..." — title de la hoja que SBS a veces incluye
+      en la primera fila de data.
+    - "Estado de Ganancias y Pérdidas por ..." — idem para GyP.
+    - "(En miles de soles)" / "(En miles de nuevos soles)" — unit note.
+    - "Actualizado al/el DD-MM-YYYY" — fecha de publicacion.
+    - "(*) Con relacion a ..." / "(*) Con relación a ..." — footnotes
+      parentizadas con texto variable (caso CMAC Arequipa / CRAC Luren).
     """
     n = nombre_raw.strip()
     if not n:
         return False
-    # Notas SBS de resoluciones — texto variable por periodo
+
+    # Notas SBS de resoluciones (cabecera del documento publicado)
     if n.startswith(("*", "**")):
         return True
-    # Footnote numerada (1/ Incluye..., 2/ Las cifras..., etc)
-    return bool(re.match(r"^\d+/\s", n))
+
+    # Footnote numerada "N/ ..." (ej. "1/ Incluye...", "2/ Las cifras...")
+    if re.match(r"^\d+/\s", n):
+        return True
+
+    # Footnote parentizada "(*) Con relacion a ..." — texto variable de SBS
+    # describiendo casos especiales (CRAC Luren -> CMAC Arequipa, etc).
+    # Usamos la version normalizada (sin tildes/case) para tolerar variantes.
+    if re.match(r"^\(\*+\)\s+", n):
+        return True
+
+    # Excel serial date como header crudo (cell type DATE serializada a numero).
+    # Ej: "40543.0" = 2010-12-31, "42400.0" = 2016-02-29, etc.
+    # Rango: 36526.0 (2000-01-01) a 73050.0 (2100-01-01), con o sin decimales.
+    if re.match(r"^\d{4,6}(\.0+)?$", n):
+        return True
+
+    # Fecha en formato ISO (con o sin hora). Ej: "2018-01-31 00:00:00"
+    if re.match(r"^\d{4}-\d{2}-\d{2}(\s+\d{2}:\d{2}(:\d{2})?)?$", n):
+        return True
+
+    # Metadata textual: Tipo de Cambio, Balance General, Estado de GyP, etc.
+    # Usamos lower() + sin tildes para tolerar variantes ("Pérdidas" vs "Perdidas").
+    nlower = unicodedata.normalize("NFD", n).encode("ascii", "ignore").decode("ascii").lower()
+    return nlower.startswith(
+        (
+            "tipo de cambio contable",
+            "balance general por",
+            "estado de ganancias y perdidas por",
+            "estado de ganancias y perdidas y otro resultado integral",  # variante 2020+
+            "(en miles de soles)",
+            "(en miles de nuevos soles)",
+            "actualizado al ",
+            "actualizado el ",
+        )
+    )
 
 
 def _normalize(s: str) -> str:
@@ -834,9 +1155,12 @@ def _normalize(s: str) -> str:
     Aplica:
     - strip de espacios (BANCOS indenta con '   Caja', CMAC sin indentar)
     - quita asterisco final ('Vigentes*' -> 'Vigentes')
-    - colapsa espacios multiples internos
     - quita acentos
     - lowercase
+    - reemplaza puntuacion / paren / brackets / asteriscos por espacio
+    - colapsa espacios multiples internos
+    - DEBE COINCIDIR con la normalizacion del SQL en V108:
+      LOWER(REGEXP_REPLACE(unaccent(s), '[^a-z0-9]+', ' ', 'g'))
     """
     s = s.strip()
     if s.endswith("*"):
@@ -844,7 +1168,9 @@ def _normalize(s: str) -> str:
     s = unicodedata.normalize("NFD", s)
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
     s = s.lower()
-    s = re.sub(r"\s+", " ", s)
+    # Reemplazar punctuation/paren/bracket/etc por espacio (matches SQL regex)
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
     return s
 
 

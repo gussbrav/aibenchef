@@ -1,0 +1,5 @@
+
+# Audit output artifacts (regenerable via scripts/audit_sbs_headers_history.py)
+out/
+out_v2/
+out_v2_from_server/

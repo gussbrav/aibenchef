@@ -85,13 +85,7 @@ export async function getEeffInspectorData(
   const periodoPrev = meta[0].periodo_prev;
 
   // Iterar cabecera_maestra para balance y resultados con 3 monedas.
-  const balance = await fetchByTipoEstado(
-    entidad,
-    periodo,
-    periodoPrev,
-    "balance",
-    tipoEntidad,
-  );
+  const balance = await fetchByTipoEstado(entidad, periodo, periodoPrev, "balance", tipoEntidad);
   const resultados = await fetchByTipoEstado(
     entidad,
     periodo,
@@ -175,6 +169,11 @@ async function fetchByTipoEstado(
   // Driver: cabecera_maestra. Por cada orden hacemos pivote de las 3 monedas
   // (MN, ME, TOTAL) en una sola pasada via FILTER WHERE. Mas eficiente que
   // 3 LEFT JOIN separados, y devuelve las 3 columnas listas para la UI.
+  //
+  // raw.eeff_celda_cruda (issue #65) hace JOIN por (periodo, nomb_correg,
+  // tipo_estado, orden) — orden posicional del archivo que matchea con
+  // cabecera_maestra.orden. Esto detecta cuando el parser dropea una fila
+  // (eo.* NULL pero cc.* tiene valor).
   const rows = await db.execute<Record<string, unknown>>(sql`
     SELECT
       cm.orden,
@@ -188,13 +187,19 @@ async function fetchByTipoEstado(
       eo.valor_mn,
       eo.valor_me,
       eo.valor_total,
+      cc.valor_mn                                 AS xls_valor_mn,
+      cc.valor_me                                 AS xls_valor_me,
+      cc.valor_total                              AS xls_valor_total,
       prev.valor_total                            AS valor_prev,
       (eo.valor_total - prev.valor_total)         AS delta_abs,
       CASE
         WHEN prev.valor_total IS NULL OR prev.valor_total = 0 THEN NULL
         ELSE (eo.valor_total - prev.valor_total) / ABS(prev.valor_total)
       END                                         AS delta_pct,
-      COALESCE(q.qstatus, 'ok')                   AS quality_status
+      COALESCE(q.qstatus, 'ok')                   AS quality_status,
+      -- Aliases registrados para este codigo: si el file_name normalizado matchea
+      -- algun alias, NO consideramos mismatch (V108).
+      COALESCE(al.alias_norms, ARRAY[]::text[])   AS alias_norms
     FROM dw.cabecera_maestra cm
     LEFT JOIN LATERAL (
       SELECT
@@ -209,6 +214,11 @@ async function fetchByTipoEstado(
         AND periodo       = ${periodo}
         AND tipo_estado   = cm.tipo_estado
     ) eo ON TRUE
+    LEFT JOIN raw.eeff_celda_cruda cc
+      ON cc.periodo     = ${periodo}
+     AND cc.nomb_correg = ${entidad}
+     AND cc.tipo_estado = cm.tipo_estado
+     AND cc.orden       = cm.orden
     LEFT JOIN LATERAL (
       SELECT MAX(valor) FILTER (WHERE moneda='TOTAL') AS valor_total
       FROM raw.eeff_observacion
@@ -232,9 +242,15 @@ async function fetchByTipoEstado(
         AND dqc.reviewed_at IS NULL
         AND (dqc.cuenta_codigo = cm.codigo OR dqc.cuenta_codigo IS NULL)
     ) q ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT array_agg(alias_norm) AS alias_norms
+      FROM dw.cuenta_alias
+      WHERE tipo_estado = cm.tipo_estado AND codigo = cm.codigo
+    ) al ON cm.codigo IS NOT NULL
     WHERE cm.tipo_estado = ${tipoEstado}
       AND cm.tipo_entidad = ${tipoEntidad}
-      AND cm.valido_hasta IS NULL
+      AND cm.valido_desde <= ${periodo}
+      AND (cm.valido_hasta IS NULL OR cm.valido_hasta >= ${periodo})
     ORDER BY cm.orden
   `);
 
@@ -247,17 +263,39 @@ async function fetchByTipoEstado(
     const esSeccion = Boolean(r.es_seccion);
     const esperaValor = codigo !== null && !esSeccion;
     const faltaEnRaw = esperaValor && nombreArchivo === null;
+    const valorTotal = r.valor_total != null ? Number(r.valor_total) : null;
+    const xlsValorTotal = r.xls_valor_total != null ? Number(r.xls_valor_total) : null;
+    // diffTotal: solo significativa cuando AMBOS estan presentes. Si xls es NULL
+    // (caso BANCOS: SBS no publica TOTAL crudo) no podemos comparar honestamente.
+    // Si diff es 0 dejamos NULL para que la UI no pinte nada — solo destacamos
+    // diferencias reales. Tolerancia de redondeo a 0.01 (NUMERIC(20,4) en DB).
+    const diffTotal = (() => {
+      if (valorTotal == null || xlsValorTotal == null) return null;
+      const d = valorTotal - xlsValorTotal;
+      return Math.abs(d) < 0.01 ? null : d;
+    })();
     return {
       orden: Number(r.orden),
       cuentaCodigo: codigo,
       cuentaNombreCanonica: nombreCanonica,
       cuentaNombreArchivo: nombreArchivo,
-      nombreMismatch:
-        nombreArchivo != null && normalize(nombreArchivo) !== normalize(nombreCanonica),
+      nombreMismatch: (() => {
+        if (nombreArchivo == null) return false;
+        const normFile = normalize(nombreArchivo);
+        if (normFile === normalize(nombreCanonica)) return false;
+        // Si el file_name matchea algun alias registrado para este codigo,
+        // NO es mismatch (V108).
+        const aliases = (r.alias_norms as string[] | null) ?? [];
+        return !aliases.includes(normFile);
+      })(),
       faltaEnRaw,
       valorMN: r.valor_mn != null ? Number(r.valor_mn) : null,
       valorME: r.valor_me != null ? Number(r.valor_me) : null,
-      valorTotal: r.valor_total != null ? Number(r.valor_total) : null,
+      valorTotal,
+      xlsValorMN: r.xls_valor_mn != null ? Number(r.xls_valor_mn) : null,
+      xlsValorME: r.xls_valor_me != null ? Number(r.xls_valor_me) : null,
+      xlsValorTotal,
+      diffTotal,
       valorPrev: r.valor_prev != null ? Number(r.valor_prev) : null,
       deltaPct: r.delta_pct != null ? Number(r.delta_pct) : null,
       deltaAbs: r.delta_abs != null ? Number(r.delta_abs) : null,
@@ -302,7 +340,8 @@ async function fetchExtras(
         WHERE cm.tipo_estado = ${tipoEstado}
           AND cm.tipo_entidad = ${tipoEntidad}
           AND cm.codigo = eo.cuenta_codigo
-          AND cm.valido_hasta IS NULL
+          AND cm.valido_desde <= ${periodo}
+          AND (cm.valido_hasta IS NULL OR cm.valido_hasta >= ${periodo})
       )
     GROUP BY eo.cuenta_codigo
     ORDER BY eo.cuenta_codigo
