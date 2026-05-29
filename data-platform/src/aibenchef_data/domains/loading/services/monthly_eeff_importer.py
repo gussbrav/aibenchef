@@ -108,13 +108,22 @@ class MonthlyEeffImporter:
         # Cache para cabecera_maestra: key = (tipo_estado, tipo_entidad)
         self._position_cache: dict[tuple[str, str], _PositionLookup] = {}
 
-    async def import_file(self, path: Path, *, tipo_entidad: str | None = None) -> ImportResult:
+    async def import_file(
+        self,
+        path: Path,
+        *,
+        tipo_entidad: str | None = None,
+        archivo_id: str | None = None,
+    ) -> ImportResult:
         """Importa un archivo SBS mensual.
 
         Args:
             path: Ruta al .xls SBS.
             tipo_entidad: BANCOS / FINANCIERAS / CMAC / CRAC / EDPYMES. Si None,
                 se intenta inferir del path (.../banca_multiple/... -> BANCOS).
+            archivo_id: UUID de raw.archivos_descargados — se propaga a
+                raw.eeff_celda_cruda para trazabilidad. None si el import es
+                puntual y el archivo no esta registrado.
         """
         start = time.perf_counter()
         if tipo_entidad is None:
@@ -155,6 +164,7 @@ class MonthlyEeffImporter:
                     source_file=path.name,
                     tipo_entidad=tipo_entidad,
                     lookup=lookup,
+                    archivo_id=archivo_id,
                 )
                 inserted += n
                 log.info("monthly_eeff.sheet_ok", sheet=sheet.name, rows=n)
@@ -173,6 +183,7 @@ class MonthlyEeffImporter:
                     source_file=path.name,
                     tipo_entidad=tipo_entidad,
                     lookup=lookup,
+                    archivo_id=archivo_id,
                 )
                 inserted += n
                 log.info("monthly_eeff.sheet_ok", sheet=sheet.name, rows=n)
@@ -222,6 +233,7 @@ class MonthlyEeffImporter:
         source_file: str,
         tipo_entidad: str,
         lookup: _CuentaLookup,
+        archivo_id: str | None = None,
     ) -> int:
         layout = _detect_layout(sheet)
         if not layout.entidades:
@@ -242,6 +254,9 @@ class MonthlyEeffImporter:
         )
 
         observations: list[tuple] = []
+        # Celdas crudas — una por (entidad, orden). Se llenan ANTES del resolver
+        # de codigos para capturar tambien filas que el parser descarta (issue #65).
+        cells_raw: list[tuple] = []
         # Section tracker: en balance "Activo" -> A, "Pasivo" -> B, "Patrimonio" -> C.
         # En resultados no hay secciones canonicas (todo bajo prefix "").
         current_section: str = "A" if tipo_estado == "balance" else ""
@@ -351,6 +366,38 @@ class MonthlyEeffImporter:
                 if es_header:
                     current_parent_codigo = codigo
 
+            # Captura de celdas crudas — corre para TODAS las entidades del layout,
+            # incluso si codigo no resolvio. Es justamente la senal que el inspector
+            # usa para mostrar "fila en archivo sin codigo en cabecera".
+            for entidad_info in layout.entidades:
+                vals_raw: dict[str, float] = {}
+                for moneda, col_idx in entidad_info.monedas.items():
+                    raw_val = sheet.cell(r, col_idx)
+                    v = _coerce_number(raw_val)
+                    if v is not None:
+                        vals_raw[moneda] = v
+
+                # Solo guardar la fila si tiene al menos UN valor — filas
+                # totalmente vacias (todas las celdas blancas) no aportan
+                # informacion al inspector y solo inflan la tabla.
+                if vals_raw:
+                    cells_raw.append(
+                        (
+                            layout.periodo_yyyymm,
+                            entidad_info.nombre,
+                            tipo_entidad,
+                            tipo_estado,
+                            orden,
+                            es_header,
+                            nombre_raw.strip(),
+                            vals_raw.get("MN"),
+                            vals_raw.get("ME"),
+                            vals_raw.get("TOTAL"),  # NULL si SBS no lo publica
+                            archivo_id,
+                            source_file,
+                        )
+                    )
+
             if not codigo:
                 continue
 
@@ -404,11 +451,30 @@ class MonthlyEeffImporter:
             seen.add(key)
             deduped.append(obs)
 
+        # Dedup celdas crudas por (entidad, orden) — orden es unico por fila SBS
+        # y el unique constraint de la tabla lo refuerza. Conservamos la primera.
+        seen_raw: set[tuple] = set()
+        deduped_raw: list[tuple] = []
+        for cell in cells_raw:
+            # cell = (periodo, nomb_correg=1, tipo_entidad, tipo_estado=3, orden=4, ...)
+            key_raw = (cell[1], cell[3], cell[4])
+            if key_raw in seen_raw:
+                continue
+            seen_raw.add(key_raw)
+            deduped_raw.append(cell)
+
         # Volcar en batches
         inserted = 0
         for i in range(0, len(deduped), self._batch_size):
             batch = deduped[i : i + self._batch_size]
             inserted += await self._copy_batch(batch)
+
+        # Volcar celdas crudas (issue #65). No suma al rows_inserted del
+        # importer porque es metadata para el inspector, no data del cubo.
+        for i in range(0, len(deduped_raw), self._batch_size):
+            batch_raw = deduped_raw[i : i + self._batch_size]
+            await self._copy_batch_celdas(batch_raw)
+
         return inserted
 
     async def _copy_batch(self, batch: list[tuple]) -> int:
@@ -464,6 +530,75 @@ class MonthlyEeffImporter:
             )
             n = cur.rowcount
             await cur.execute("DROP TABLE IF EXISTS _eeff_stage")
+
+        await self._conn.commit()
+        return n
+
+    async def _copy_batch_celdas(self, batch: list[tuple]) -> int:
+        """Volcado de celdas crudas a raw.eeff_celda_cruda (issue #65).
+
+        UPSERT por (periodo, nomb_correg, tipo_estado, orden). El nomb_correg se
+        normaliza con dw.normalizar_entidad para mantener consistencia con
+        raw.eeff_observacion (sino el LEFT JOIN del inspector no matchea
+        cuando el entidad tiene footnote marker).
+        """
+        if not batch:
+            return 0
+        with contextlib.suppress(Exception):
+            await self._conn.rollback()
+
+        async with self._conn.cursor() as cur:
+            await cur.execute("DROP TABLE IF EXISTS _eeff_celda_stage")
+            await cur.execute(
+                """
+                CREATE TEMPORARY TABLE _eeff_celda_stage (
+                    periodo INT, nomb_correg TEXT, tipo_entidad TEXT,
+                    tipo_estado TEXT, orden INT, es_header BOOLEAN,
+                    nombre_archivo TEXT,
+                    valor_mn NUMERIC(20, 4), valor_me NUMERIC(20, 4),
+                    valor_total NUMERIC(20, 4),
+                    archivo_id UUID, source_file TEXT
+                )
+                """
+            )
+
+            async with cur.copy(
+                "COPY _eeff_celda_stage "
+                "(periodo, nomb_correg, tipo_entidad, tipo_estado, orden, "
+                "es_header, nombre_archivo, valor_mn, valor_me, valor_total, "
+                "archivo_id, source_file) "
+                "FROM STDIN"
+            ) as copy:
+                for row in batch:
+                    await copy.write_row(row)
+
+            await cur.execute(
+                """
+                INSERT INTO raw.eeff_celda_cruda (
+                    periodo, nomb_correg, tipo_entidad, tipo_estado, orden,
+                    es_header, nombre_archivo, valor_mn, valor_me, valor_total,
+                    archivo_id, source_file
+                )
+                SELECT periodo,
+                       dw.normalizar_entidad(nomb_correg),
+                       tipo_entidad, tipo_estado, orden,
+                       es_header, nombre_archivo, valor_mn, valor_me, valor_total,
+                       archivo_id, source_file
+                FROM _eeff_celda_stage
+                ON CONFLICT (periodo, nomb_correg, tipo_estado, orden)
+                DO UPDATE SET
+                    nombre_archivo = EXCLUDED.nombre_archivo,
+                    valor_mn       = EXCLUDED.valor_mn,
+                    valor_me       = EXCLUDED.valor_me,
+                    valor_total    = EXCLUDED.valor_total,
+                    es_header      = EXCLUDED.es_header,
+                    archivo_id     = EXCLUDED.archivo_id,
+                    source_file    = EXCLUDED.source_file,
+                    imported_at    = now()
+                """
+            )
+            n = cur.rowcount
+            await cur.execute("DROP TABLE IF EXISTS _eeff_celda_stage")
 
         await self._conn.commit()
         return n

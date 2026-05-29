@@ -175,6 +175,21 @@ export type EeffRow = {
   /** Valor consolidado (MN + ME convertido a soles). */
   valorTotal: number | null;
 
+  /**
+   * Valores leidos directamente del .xls SBS (raw.eeff_celda_cruda) — issue #65.
+   * Permiten verificar que la extraccion no perdio data. Si el parser SKIPea
+   * una fila, valorMN/ME/Total seran NULL pero xlsValor* tendran el valor real.
+   *
+   * xlsValorTotal puede ser NULL legitimamente cuando SBS no publica el TOTAL
+   * (caso BANCOS) — el parser lo calcula como MN+ME y lo guarda en valorTotal.
+   */
+  xlsValorMN: number | null;
+  xlsValorME: number | null;
+  xlsValorTotal: number | null;
+  /** Diferencia absoluta entre lo extraido y lo crudo (sobre TOTAL).
+   *  NULL si no hay match en celda_cruda o si los valores son iguales. */
+  diffTotal: number | null;
+
   /** Valor TOTAL del periodo anterior — para delta. */
   valorPrev: number | null;
   /** Δ% sobre TOTAL vs periodo anterior. NULL si no hay valor previo o = 0. */

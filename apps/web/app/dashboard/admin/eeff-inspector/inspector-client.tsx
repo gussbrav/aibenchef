@@ -5,15 +5,11 @@
  * 3 columnas monedas (MN/ME/TOTAL) + export CSV + extras + quality summary.
  */
 
+import { AlertTriangle, Download, ExternalLink, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { AlertTriangle, Download, ExternalLink, FileText } from "lucide-react";
 
-import type {
-  EeffInspectorData,
-  EeffRow,
-  EntidadOption,
-} from "@/lib/domains/pipeline";
+import type { EeffInspectorData, EeffRow, EntidadOption } from "@/lib/domains/pipeline";
 
 export function EeffInspectorClient({
   periodos,
@@ -105,8 +101,7 @@ export function EeffInspectorClient({
               <ul className="space-y-1 text-xs">
                 {data.archivos.map((a, i) => (
                   <li key={i} className="font-mono text-slate-600">
-                    <span className="font-semibold text-slate-800">{a.topico}</span>:{" "}
-                    {a.pathLocal}{" "}
+                    <span className="font-semibold text-slate-800">{a.topico}</span>: {a.pathLocal}{" "}
                     <a
                       href={a.sourceUrl}
                       target="_blank"
@@ -135,11 +130,12 @@ function QualitySummaryRow({ data }: { data: EeffInspectorData }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
       {items.map((it) => {
-        const bg = it.critical > 0
-          ? "bg-red-50 border-red-300 text-red-900"
-          : it.warning > 0
-            ? "bg-amber-50 border-amber-300 text-amber-900"
-            : "bg-emerald-50 border-emerald-300 text-emerald-900";
+        const bg =
+          it.critical > 0
+            ? "bg-red-50 border-red-300 text-red-900"
+            : it.warning > 0
+              ? "bg-amber-50 border-amber-300 text-amber-900"
+              : "bg-emerald-50 border-emerald-300 text-emerald-900";
         const icon = it.critical > 0 ? "🚨" : it.warning > 0 ? "⚠️" : "✅";
         return (
           <div key={it.label} className={`rounded-lg border p-3 ${bg}`}>
@@ -190,24 +186,59 @@ function EeffTable({
         <table className="text-xs border-collapse w-full">
           <thead>
             <tr className="bg-slate-100 border-b">
-              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-12 border-r">#</th>
-              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 w-20 border-r">Código</th>
+              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-12 border-r">
+                #
+              </th>
+              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 w-20 border-r">
+                Código
+              </th>
               <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 border-r">
                 Cuenta (cabecera-base)
               </th>
-              <th colSpan={3} className="text-center p-1 font-semibold text-slate-700 border-r bg-slate-200 text-[11px]">
-                {periodoActual}
+              <th
+                colSpan={3}
+                className="text-center p-1 font-semibold text-slate-700 border-r bg-slate-200 text-[11px]"
+              >
+                Extraído ({periodoActual})
+              </th>
+              <th
+                colSpan={4}
+                className="text-center p-1 font-semibold text-slate-600 border-r bg-amber-50 text-[11px]"
+                title="Valores leídos directamente del .xls SBS para verificar que la extracción no perdió data"
+              >
+                Excel SBS (crudo)
               </th>
               <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-24 border-r">
                 Total {periodoPrevio ?? "Previo"}
               </th>
-              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-16 border-r">Δ%</th>
-              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 w-24">Diag.</th>
+              <th rowSpan={2} className="text-right p-2 font-semibold text-slate-700 w-16 border-r">
+                Δ%
+              </th>
+              <th rowSpan={2} className="text-left p-2 font-semibold text-slate-700 w-24">
+                Diag.
+              </th>
             </tr>
             <tr className="bg-slate-100 border-b">
               <th className="text-right p-1 font-semibold text-slate-600 w-20 text-[10px]">MN</th>
               <th className="text-right p-1 font-semibold text-slate-600 w-20 text-[10px]">ME</th>
-              <th className="text-right p-1 font-semibold text-slate-700 w-24 text-[11px] bg-slate-50 border-r">TOTAL</th>
+              <th className="text-right p-1 font-semibold text-slate-700 w-24 text-[11px] bg-slate-50 border-r">
+                TOTAL
+              </th>
+              <th className="text-right p-1 font-semibold text-amber-800 w-20 text-[10px] bg-amber-50">
+                MN
+              </th>
+              <th className="text-right p-1 font-semibold text-amber-800 w-20 text-[10px] bg-amber-50">
+                ME
+              </th>
+              <th className="text-right p-1 font-semibold text-amber-900 w-24 text-[11px] bg-amber-50">
+                TOTAL
+              </th>
+              <th
+                className="text-right p-1 font-semibold text-amber-900 w-16 text-[10px] bg-amber-50 border-r"
+                title="Diferencia entre TOTAL extraído y TOTAL del archivo. Si != 0, el parser perdió o agregó data."
+              >
+                Δ
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -225,8 +256,8 @@ function EeffTable({
             {extras.length} cuentas extra en archivo que NO están en cabecera-base
           </h3>
           <p className="text-[11px] text-amber-800 mt-1">
-            El parser persistió estas filas en raw.eeff_observacion pero la cabecera-base
-            no las define. Posible drift de SBS — revisar si hay que actualizar la cabecera.
+            El parser persistió estas filas en raw.eeff_observacion pero la cabecera-base no las
+            define. Posible drift de SBS — revisar si hay que actualizar la cabecera.
           </p>
           <table className="text-xs mt-2 w-full">
             <thead>
@@ -263,7 +294,7 @@ function EeffRowComponent({ row }: { row: EeffRow }) {
   const indent = row.nivel * 12;
 
   let rowClass = "border-b border-slate-100 hover:bg-slate-50";
-  let codigoClass = "font-mono text-slate-600";
+  const codigoClass = "font-mono text-slate-600";
   let nombreClass = "text-slate-800";
 
   if (isSection) {
@@ -280,6 +311,7 @@ function EeffRowComponent({ row }: { row: EeffRow }) {
   const diag: string[] = [];
   if (row.faltaEnRaw) diag.push("❌ falta");
   if (row.nombreMismatch) diag.push("⚠️ nombre");
+  if (row.diffTotal != null) diag.push("🔴 diff");
   if (row.qualityStatus === "critical") diag.push("🚨");
   else if (row.qualityStatus === "warning") diag.push("⚠️");
 
@@ -304,14 +336,31 @@ function EeffRowComponent({ row }: { row: EeffRow }) {
       <td className="p-2 text-right font-mono font-semibold bg-slate-50 border-r">
         {fmt(row.valorTotal)}
       </td>
+      <td className="p-2 text-right font-mono text-amber-700 bg-amber-50/50">
+        {fmt(row.xlsValorMN)}
+      </td>
+      <td className="p-2 text-right font-mono text-amber-700 bg-amber-50/50">
+        {fmt(row.xlsValorME)}
+      </td>
+      <td className="p-2 text-right font-mono font-semibold text-amber-900 bg-amber-50">
+        {fmt(row.xlsValorTotal)}
+      </td>
+      <td
+        className={`p-2 text-right font-mono text-[11px] border-r ${
+          row.diffTotal == null
+            ? "bg-amber-50 text-amber-400"
+            : "bg-red-100 text-red-800 font-semibold"
+        }`}
+        title={
+          row.diffTotal == null ? "Coincide" : `Extraído - Crudo = ${row.diffTotal.toFixed(4)}`
+        }
+      >
+        {row.diffTotal == null ? "—" : fmt(row.diffTotal)}
+      </td>
       <td className="p-2 text-right font-mono text-slate-500 border-r">{fmt(row.valorPrev)}</td>
       <td
         className={`p-2 text-right font-mono border-r ${
-          row.deltaPct == null
-            ? ""
-            : row.deltaPct > 0
-              ? "text-emerald-700"
-              : "text-red-700"
+          row.deltaPct == null ? "" : row.deltaPct > 0 ? "text-emerald-700" : "text-red-700"
         }`}
       >
         {fmtPct(row.deltaPct)}
@@ -393,6 +442,10 @@ function downloadCsv(data: EeffInspectorData): void {
       "Valor MN",
       "Valor ME",
       `Valor TOTAL ${data.periodo}`,
+      "Excel SBS MN",
+      "Excel SBS ME",
+      "Excel SBS TOTAL",
+      "Diff TOTAL (extraido - crudo)",
       `Valor TOTAL ${data.periodoPrevio ?? "Previo"}`,
       "Delta abs",
       "Delta pct",
@@ -420,6 +473,10 @@ function downloadCsv(data: EeffInspectorData): void {
           r.valorMN != null ? String(r.valorMN) : "",
           r.valorME != null ? String(r.valorME) : "",
           r.valorTotal != null ? String(r.valorTotal) : "",
+          r.xlsValorMN != null ? String(r.xlsValorMN) : "",
+          r.xlsValorME != null ? String(r.xlsValorME) : "",
+          r.xlsValorTotal != null ? String(r.xlsValorTotal) : "",
+          r.diffTotal != null ? String(r.diffTotal) : "",
           r.valorPrev != null ? String(r.valorPrev) : "",
           r.deltaAbs != null ? String(r.deltaAbs) : "",
           r.deltaPct != null ? String(r.deltaPct) : "",
@@ -441,9 +498,7 @@ function downloadCsv(data: EeffInspectorData): void {
     lines.push("");
     lines.push("# EXTRAS (filas en raw fuera de cabecera-base)");
     lines.push(
-      ["Seccion", "Codigo", "Nombre archivo", "MN", "ME", "TOTAL"]
-        .map(csvEscape)
-        .join(","),
+      ["Seccion", "Codigo", "Nombre archivo", "MN", "ME", "TOTAL"].map(csvEscape).join(","),
     );
     for (const e of data.extrasBalance) {
       lines.push(

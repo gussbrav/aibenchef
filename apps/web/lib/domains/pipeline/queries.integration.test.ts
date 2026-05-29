@@ -198,6 +198,27 @@ async function setupSchema(url: string): Promise<void> {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
         PRIMARY KEY (tipo_estado, alias_norm)
       );
+
+      -- V113: eeff_celda_cruda — cells del .xls SBS para validar extraccion (issue #65)
+      CREATE TABLE IF NOT EXISTS raw.eeff_celda_cruda (
+        id BIGSERIAL PRIMARY KEY,
+        periodo INTEGER NOT NULL,
+        nomb_correg TEXT NOT NULL,
+        tipo_entidad TEXT NOT NULL,
+        tipo_estado TEXT NOT NULL
+          CHECK (tipo_estado IN ('balance', 'resultados')),
+        orden INTEGER NOT NULL,
+        es_header BOOLEAN NOT NULL DEFAULT FALSE,
+        nombre_archivo TEXT NOT NULL,
+        valor_mn NUMERIC(20, 4),
+        valor_me NUMERIC(20, 4),
+        valor_total NUMERIC(20, 4),
+        archivo_id UUID REFERENCES raw.archivos_descargados(id) ON DELETE SET NULL,
+        source_file TEXT,
+        imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT eeff_celda_cruda_uniq
+          UNIQUE (periodo, nomb_correg, tipo_estado, orden)
+      );
     `);
 
     await sql.unsafe(`
@@ -243,6 +264,7 @@ async function seedFixtures(url: string): Promise<void> {
   try {
     // Limpiar tablas (orden por FKs)
     await sql.unsafe(`
+      TRUNCATE raw.eeff_celda_cruda RESTART IDENTITY CASCADE;
       TRUNCATE raw.eeff_observacion CASCADE;
       TRUNCATE admin.estructura_diffs CASCADE;
       TRUNCATE admin.data_quality_checks RESTART IDENTITY CASCADE;
@@ -743,6 +765,77 @@ describe.skipIf(SKIP_INTEGRATION)("EEFF Inspector — 3 monedas MN/ME/TOTAL", ()
     // Verifica que la signature acepta (entidad, periodo) sin tercer arg
     const data = await getEeffInspectorData("Banco Existente", 202603);
     expect(data).not.toBeNull();
+  });
+});
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* V113: Excel SBS crudo + diff (issue #65)                                  */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+describe.skipIf(SKIP_INTEGRATION)("V113 Excel SBS crudo + diff", () => {
+  beforeEach(async () => {
+    if (SKIP_INTEGRATION) return;
+    await seedFixtures(testDbUrl);
+    const { default: postgres } = await import("postgres");
+    const sql = postgres(testDbUrl, { max: 1 });
+    try {
+      // Caso 1 — match exacto (extraido = crudo). diffTotal debe ser NULL.
+      // Caso 2 — diff real: parser persistio TOTAL=110, archivo tenia 115.
+      //          La UI debe pintar la fila en rojo.
+      // Caso 3 — sin row crudo (orden=3 A3 INVERSIONES NETAS): xlsValor* = NULL,
+      //          diff = NULL (no se puede comparar sin fuente cruda).
+      await sql.unsafe(`
+        INSERT INTO raw.eeff_celda_cruda
+          (periodo, nomb_correg, tipo_entidad, tipo_estado, orden, es_header,
+           nombre_archivo, valor_mn, valor_me, valor_total, source_file)
+        VALUES
+          -- orden=1 A1: match exacto vs eeff_observacion (TOTAL=110)
+          (202603, 'Banco Existente', 'BANCOS', 'balance', 1, true,
+           'DISPONIBLE', 60, 50, NULL, 'B-test.xls'),
+          -- orden=2 A2: diff de 5 — parser tiene 200, archivo dice 205
+          (202603, 'Banco Existente', 'BANCOS', 'balance', 2, true,
+           'FONDOS INTERBANCARIOS', 150, 55, 205, 'B-test.xls');
+        -- orden=3 NO insertado: simula gap parser-vs-archivo (raw esta vacio)
+      `);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("Inspector trae xlsValorMN/ME y diffTotal = NULL cuando hay match exacto", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
+    const a1 = data!.balance.find((r) => r.cuentaCodigo === "A1");
+    expect(a1).toBeDefined();
+    expect(a1?.xlsValorMN).toBe(60);
+    expect(a1?.xlsValorME).toBe(50);
+    // BANCOS no publica TOTAL crudo — xlsValorTotal = NULL
+    expect(a1?.xlsValorTotal).toBeNull();
+    // Cuando xlsValorTotal es NULL no podemos comparar -> diffTotal = NULL
+    expect(a1?.diffTotal).toBeNull();
+  });
+
+  it("Inspector retorna diffTotal != NULL cuando hay diferencia real", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
+    const a2 = data!.balance.find((r) => r.cuentaCodigo === "A2");
+    expect(a2).toBeDefined();
+    expect(a2?.xlsValorTotal).toBe(205);
+    expect(a2?.valorTotal).toBe(200); // del seed eeff_observacion
+    // diff = extraido - crudo = 200 - 205 = -5
+    expect(a2?.diffTotal).toBe(-5);
+  });
+
+  it("Inspector retorna xls* todos NULL cuando no hay row en celda_cruda", async () => {
+    const { getEeffInspectorData } = await import("./eeff-inspector");
+    const data = await getEeffInspectorData("Banco Existente", 202603);
+    // A3 NO tiene row en celda_cruda (orden=3 sin INSERT en el beforeEach)
+    const a3 = data!.balance.find((r) => r.cuentaCodigo === "A3");
+    expect(a3).toBeDefined();
+    expect(a3?.xlsValorMN).toBeNull();
+    expect(a3?.xlsValorME).toBeNull();
+    expect(a3?.xlsValorTotal).toBeNull();
+    expect(a3?.diffTotal).toBeNull();
   });
 });
 

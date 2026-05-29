@@ -2273,7 +2273,13 @@ async def _import_file_with_audit(
     ) as log:
         try:
             t0 = time.monotonic()
-            result = await importer.import_file(file)
+            # Solo monthly_eeff hoy consume archivo_id (issue #65). Probar
+            # con kwarg y caer al call original si el importer no lo acepta —
+            # asi no rompemos los otros importers (oficinas, depositos, etc).
+            try:
+                result = await importer.import_file(file, archivo_id=archivo_id)
+            except TypeError:
+                result = await importer.import_file(file)
             duration = time.monotonic() - t0
         except Exception as exc:
             # Marca archivo como error antes de re-raise (carga_log_context
