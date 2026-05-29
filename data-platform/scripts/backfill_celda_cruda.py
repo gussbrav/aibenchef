@@ -27,7 +27,7 @@ import psycopg
 
 from aibenchef_data.domains.loading.services.monthly_eeff_importer import MonthlyEeffImporter
 from aibenchef_data.env import settings
-from aibenchef_data.infrastructure.db import connection
+from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
 
 GRUPO_TO_TIPO_ENTIDAD = {
     "banca_multiple": "BANCOS",
@@ -116,24 +116,41 @@ async def main_async(periodos: list[int], grupo: str | None, dry_run: bool) -> i
             print(f"  [DRY] {periodo} {g:<14} {Path(path).name}  (archivo_id={aid[:8]}...)")
         return 0
 
-    total_obs = 0
-    failed = 0
-    for i, (aid, periodo, g, path) in enumerate(archivos, 1):
-        tipo_entidad = GRUPO_TO_TIPO_ENTIDAD.get(g)
-        if not tipo_entidad:
-            print(f"  [{i}/{len(archivos)}] [SKIP] grupo desconocido: {g}")
-            continue
-        print(f"  [{i}/{len(archivos)}] {periodo} {g:<14} {Path(path).name}", flush=True)
-        try:
-            n = await reimport_one(aid, path, tipo_entidad)
-            total_obs += n
-            print(f"      OK rows_obs={n}")
-        except Exception as exc:
-            failed += 1
-            print(f"      ERROR {type(exc).__name__}: {exc}")
+    # Open pool ANTES de iterar — connection() del pool requiere pool.open()
+    await open_pool()
+    try:
+        total_obs = 0
+        failed = 0
+        skipped = 0
+        for i, (aid, periodo, g, path) in enumerate(archivos, 1):
+            tipo_entidad = GRUPO_TO_TIPO_ENTIDAD.get(g)
+            if not tipo_entidad:
+                print(f"  [{i}/{len(archivos)}] [SKIP] grupo desconocido: {g}")
+                skipped += 1
+                continue
+            if not Path(path).exists():
+                # Path apunta a /app/local-data/raw/... que solo existe en el container
+                print(
+                    f"  [{i}/{len(archivos)}] [SKIP] archivo no existe: {path}",
+                    file=sys.stderr,
+                )
+                skipped += 1
+                continue
+            print(f"  [{i}/{len(archivos)}] {periodo} {g:<14} {Path(path).name}", flush=True)
+            try:
+                n = await reimport_one(aid, path, tipo_entidad)
+                total_obs += n
+                print(f"      OK rows_obs={n}")
+            except Exception as exc:
+                failed += 1
+                print(f"      ERROR {type(exc).__name__}: {exc}")
+    finally:
+        await close_pool()
 
+    ok = len(archivos) - failed - skipped
     print(
-        f"\n# Re-import finalizado: {len(archivos) - failed} ok, {failed} fallidos, {total_obs} obs upserted"
+        f"\n# Re-import finalizado: {ok} ok, {failed} fallidos, {skipped} skipped, "
+        f"{total_obs} obs upserted"
     )
     return 0 if failed == 0 else 1
 
