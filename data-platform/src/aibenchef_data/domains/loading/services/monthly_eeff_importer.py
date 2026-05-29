@@ -958,9 +958,42 @@ class _CuentaLookup:
         return None
 
     def find_child(self, parent_codigo: str, nombre_norm: str) -> tuple[str, str] | None:
-        # 0) Alias manual: derivar seccion del parent_codigo y consultar.
-        #    Las aliases capturan renombres intencionales (ej "Resultado Neto del
-        #    Ejercicio" -> C8) y aplican aunque la fila no sea uppercase.
+        # BUG issue #65: alias gana sobre exact match → nombres ambiguos
+        # ("Depósitos de Ahorros" existe bajo B1 = B1.2 y bajo B2 = B2.2) se
+        # asignan SIEMPRE al codigo del alias (B1.2) ignorando el parent
+        # tracker actual. Resultado: parser bajo B2 retorna B1.2 (mal) y B2.2
+        # queda sin asignar.
+        #
+        # Orden de prioridad para preservar jerarquia parent-aware:
+        #   1. Exact match scoped a parent (mismo nombre bajo parent actual)
+        #   2. Fuzzy match scoped a parent (tolera typos SBS, ej "Ahorro" vs "Ahorros")
+        #   3. Alias manual (ultimo recurso, ignora parent — para renombres SBS reales)
+
+        # 1) Match exacto bajo el parent actual (respeta jerarquia SBS)
+        exact = self._child_by_parent_name.get((parent_codigo, nombre_norm))
+        if exact:
+            return exact
+
+        # 2) Fuzzy match dentro del mismo parent (typos SBS).
+        # Comparar primeras 2 palabras (o todas si nombre mas corto).
+        nombre_palabras = nombre_norm.split()
+        if nombre_palabras:
+            candidatos = []
+            for (parent, cand_norm), value in self._child_by_parent_name.items():
+                if parent != parent_codigo:
+                    continue
+                cand_palabras = cand_norm.split()
+                n_check = min(2, len(nombre_palabras), len(cand_palabras))
+                if n_check < 1:
+                    continue
+                if nombre_palabras[:n_check] == cand_palabras[:n_check]:
+                    candidatos.append(value)
+            if len(candidatos) == 1:
+                return candidatos[0]
+
+        # 3) Alias manual (dw.cuenta_alias) — fallback global SOLO si exact + fuzzy
+        # bajo parent no resolvieron. Util para nombres que SBS renombra a algo
+        # que no aparece en cabecera_maestra del parent actual.
         seccion = _section_prefix(parent_codigo)
         alias_codigo = self._aliases.get((seccion, nombre_norm)) or self._aliases.get(
             ("", nombre_norm)
@@ -968,26 +1001,6 @@ class _CuentaLookup:
         if alias_codigo:
             nombre = self._codigo_to_nombre.get(alias_codigo, "")
             return (alias_codigo, nombre)
-        # 1) Exacto
-        exact = self._child_by_parent_name.get((parent_codigo, nombre_norm))
-        if exact:
-            return exact
-        # 2) Fuzzy single-match dentro del mismo parent
-        nombre_palabras = nombre_norm.split()
-        if not nombre_palabras:
-            return None
-        candidatos = []
-        for (parent, cand_norm), value in self._child_by_parent_name.items():
-            if parent != parent_codigo:
-                continue
-            cand_palabras = cand_norm.split()
-            n_check = min(2, len(nombre_palabras), len(cand_palabras))
-            if n_check < 1:
-                continue
-            if nombre_palabras[:n_check] == cand_palabras[:n_check]:
-                candidatos.append(value)
-        if len(candidatos) == 1:
-            return candidatos[0]
         return None
 
 
