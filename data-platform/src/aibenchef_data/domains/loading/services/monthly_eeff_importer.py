@@ -801,31 +801,76 @@ def _infer_tipo_entidad_from_path(path: Path) -> str | None:
 
 def _is_annotation_or_footnote_extra(nombre_raw: str) -> bool:
     """Detecta filas EXTRA que no están en cabecera_maestra y deben skipearse
-    sin contar como orden — son anotaciones/footnotes que SBS publicó
+    sin contar como orden — son anotaciones/footnotes/metadata que SBS publica
     inconsistentemente entre periodos.
 
-    Las filas ya listadas en cabecera_maestra (orden con codigo=NULL) se
-    manejan por la ruta normal. Esta funcion solo aplica cuando
-    position_lookup.has(orden) es False.
+    Esta funcion debe llamarse ANTES de consultar position_lookup, porque
+    cabecera_maestra puede tener un NULL entry en el orden actual con OTRO
+    nombre (causando misalignment silencioso si confiamos solo en posicional).
 
-    Patrones detectados (issue #15):
-    - "* Mediante Resolución SBS N° ...": notas al pie de SBS con texto
-      variable por año. Algunos archivos las tienen (ej. B-2201-jn2019.xls
-      tiene Resolucion 1286-2019 entre TOTAL ACTIVO y Balance General header).
-    - "** Mediante Resolución..." (variant)
+    Patrones detectados:
+
+    Issue #15 (original):
+    - "* Mediante Resolución SBS N° ...": notas al pie con texto variable por año.
+    - "** Mediante Resolución..." (variant).
     - Numerated footnotes "1/", "2/" cuando NO están en cabecera para ese orden.
 
-    NO incluye patterns ya cubiertos por cabecera_maestra (Tipo de Cambio,
-    Balance General por..., etc) porque esas SÍ están listadas con NULL.
+    Issue #42 (auditor F1 v2, 2009-2026):
+    - Excel serial date como header: "40543.0", "42400.0" (cell type "date"
+      reportada como número crudo).
+    - ISO datetime: "2018-01-31 00:00:00" — fecha del periodo como header.
+    - "Tipo de Cambio Contable: S/ X,XXX" — cabecera de TC variable por mes.
+    - "Balance General por ..." — title de la hoja que SBS a veces incluye
+      en la primera fila de data.
+    - "Estado de Ganancias y Pérdidas por ..." — idem para GyP.
+    - "(En miles de soles)" / "(En miles de nuevos soles)" — unit note.
+    - "Actualizado al/el DD-MM-YYYY" — fecha de publicacion.
+    - "(*) Con relacion a ..." / "(*) Con relación a ..." — footnotes
+      parentizadas con texto variable (caso CMAC Arequipa / CRAC Luren).
     """
     n = nombre_raw.strip()
     if not n:
         return False
-    # Notas SBS de resoluciones — texto variable por periodo
+
+    # Notas SBS de resoluciones (cabecera del documento publicado)
     if n.startswith(("*", "**")):
         return True
-    # Footnote numerada (1/ Incluye..., 2/ Las cifras..., etc)
-    return bool(re.match(r"^\d+/\s", n))
+
+    # Footnote numerada "N/ ..." (ej. "1/ Incluye...", "2/ Las cifras...")
+    if re.match(r"^\d+/\s", n):
+        return True
+
+    # Footnote parentizada "(*) Con relacion a ..." — texto variable de SBS
+    # describiendo casos especiales (CRAC Luren -> CMAC Arequipa, etc).
+    # Usamos la version normalizada (sin tildes/case) para tolerar variantes.
+    if re.match(r"^\(\*+\)\s+", n):
+        return True
+
+    # Excel serial date como header crudo (cell type DATE serializada a numero).
+    # Ej: "40543.0" = 2010-12-31, "42400.0" = 2016-02-29, etc.
+    # Rango: 36526.0 (2000-01-01) a 73050.0 (2100-01-01), con o sin decimales.
+    if re.match(r"^\d{4,6}(\.0+)?$", n):
+        return True
+
+    # Fecha en formato ISO (con o sin hora). Ej: "2018-01-31 00:00:00"
+    if re.match(r"^\d{4}-\d{2}-\d{2}(\s+\d{2}:\d{2}(:\d{2})?)?$", n):
+        return True
+
+    # Metadata textual: Tipo de Cambio, Balance General, Estado de GyP, etc.
+    # Usamos lower() + sin tildes para tolerar variantes ("Pérdidas" vs "Perdidas").
+    nlower = unicodedata.normalize("NFD", n).encode("ascii", "ignore").decode("ascii").lower()
+    return nlower.startswith(
+        (
+            "tipo de cambio contable",
+            "balance general por",
+            "estado de ganancias y perdidas por",
+            "estado de ganancias y perdidas y otro resultado integral",  # variante 2020+
+            "(en miles de soles)",
+            "(en miles de nuevos soles)",
+            "actualizado al ",
+            "actualizado el ",
+        )
+    )
 
 
 def _normalize(s: str) -> str:
