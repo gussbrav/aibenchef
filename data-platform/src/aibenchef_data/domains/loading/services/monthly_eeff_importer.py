@@ -395,6 +395,7 @@ class MonthlyEeffImporter:
                             vals_raw.get("TOTAL"),  # NULL si SBS no lo publica
                             archivo_id,
                             source_file,
+                            codigo,  # V114: NULL si parser no resolvio — JOIN por codigo en inspector
                         )
                     )
 
@@ -557,7 +558,8 @@ class MonthlyEeffImporter:
                     nombre_archivo TEXT,
                     valor_mn NUMERIC(20, 4), valor_me NUMERIC(20, 4),
                     valor_total NUMERIC(20, 4),
-                    archivo_id UUID, source_file TEXT
+                    archivo_id UUID, source_file TEXT,
+                    cuenta_codigo TEXT
                 )
                 """
             )
@@ -566,7 +568,7 @@ class MonthlyEeffImporter:
                 "COPY _eeff_celda_stage "
                 "(periodo, nomb_correg, tipo_entidad, tipo_estado, orden, "
                 "es_header, nombre_archivo, valor_mn, valor_me, valor_total, "
-                "archivo_id, source_file) "
+                "archivo_id, source_file, cuenta_codigo) "
                 "FROM STDIN"
             ) as copy:
                 for row in batch:
@@ -577,13 +579,13 @@ class MonthlyEeffImporter:
                 INSERT INTO raw.eeff_celda_cruda (
                     periodo, nomb_correg, tipo_entidad, tipo_estado, orden,
                     es_header, nombre_archivo, valor_mn, valor_me, valor_total,
-                    archivo_id, source_file
+                    archivo_id, source_file, cuenta_codigo
                 )
                 SELECT periodo,
                        dw.normalizar_entidad(nomb_correg),
                        tipo_entidad, tipo_estado, orden,
                        es_header, nombre_archivo, valor_mn, valor_me, valor_total,
-                       archivo_id, source_file
+                       archivo_id, source_file, cuenta_codigo
                 FROM _eeff_celda_stage
                 ON CONFLICT (periodo, nomb_correg, tipo_estado, orden)
                 DO UPDATE SET
@@ -594,6 +596,7 @@ class MonthlyEeffImporter:
                     es_header      = EXCLUDED.es_header,
                     archivo_id     = EXCLUDED.archivo_id,
                     source_file    = EXCLUDED.source_file,
+                    cuenta_codigo  = EXCLUDED.cuenta_codigo,
                     imported_at    = now()
                 """
             )
