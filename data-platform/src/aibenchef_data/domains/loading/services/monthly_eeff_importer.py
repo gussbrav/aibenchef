@@ -255,6 +255,14 @@ class MonthlyEeffImporter:
             "patrimonio": "C",
             "patrimonio neto": "C",
         }
+        # Headers que CAMBIAN seccion al verlos (no son section markers SBS
+        # pero indican que las siguientes filas son de un sector distinto):
+        # CONTINGENTES y TOTAL PASIVO Y PATRIMONIO disparan sec=D para que
+        # las cuentas D1-D4 se busquen bajo parent='D'.
+        _section_trigger_headers = {
+            "contingentes": "D",
+            "total pasivo y patrimonio": "T",
+        }
 
         # Counter posicional — debe espejar EXACTAMENTE init-maestra: cada fila
         # no-vacia que no sea section marker (Activo/Pasivo/Patrimonio).
@@ -293,28 +301,55 @@ class MonthlyEeffImporter:
                 orden -= 1
                 continue
 
-            # 1) Maestra posicional: si existe entrada para este orden, es
-            #    autoritativa. NULL codigo => fila conocida no-cuenta (skip).
-            if position_lookup.has(orden):
-                codigo = position_lookup.get_codigo(orden)
-                if codigo is None:
-                    continue  # footnote/total/contingente conocido
-                cuenta_nombre_canonico = position_lookup.get_nombre(orden)
-                # Mantener current_parent_codigo coherente para fallbacks posteriores
+            # ESTRATEGIA (refactor issue #42 - cuentas faltantes por entidad):
+            # 1) NAME-BASED PRIMARIO: la cabecera_maestra positional es fragil
+            #    cuando un archivo SBS varia su estructura entre entidades del
+            #    mismo grupo (ej. CMAC Arequipa abril 2020 no tiene la fila
+            #    "Tarjetas de Crédito" que sí esta en cabecera CMAC, causando
+            #    drift +1 en todos los codigos a partir de ese orden).
+            #
+            #    Resolver por NOMBRE (con parent tracking) es robusto ante
+            #    estos huecos porque cada cuenta se identifica por su nombre
+            #    canonico, no por la posicion relativa.
+            #
+            # 2) POSITION como FALLBACK: si name-based falla (cuenta SBS con
+            #    typo no contemplado en aliases, o nombre nuevo), confiamos
+            #    en cabecera. Codigo NULL en cabecera = fila conocida no-
+            #    cuenta -> skip.
+            # Pre-check: trigger headers cambian la seccion ANTES de hacer
+            # name lookup (CONTINGENTES dispara seccion D; TOTAL PASIVO Y
+            # PATRIMONIO dispara T). Sin esto, find_header("C","contingentes")
+            # falla porque cabecera tiene CONTINGENTES bajo section D.
+            trigger_section = _section_trigger_headers.get(nombre_norm)
+            if trigger_section and es_header:
+                current_section = trigger_section
+                current_parent_codigo = trigger_section
+
+            name_codigo: str | None = None
+            name_nombre: str | None = None
+            if es_header:
+                resolved = lookup.find_header(current_section, nombre_norm)
+                if resolved:
+                    name_codigo, name_nombre = resolved
+            elif current_parent_codigo:
+                resolved = lookup.find_child(current_parent_codigo, nombre_norm)
+                if resolved:
+                    name_codigo, name_nombre = resolved
+
+            if name_codigo:
+                codigo = name_codigo
+                cuenta_nombre_canonico = name_nombre
                 if es_header:
                     current_parent_codigo = codigo
-            else:
-                # 2) Fallback nombre-based (mantiene compatibilidad si maestra
-                #    no esta inicializada o tiene gaps).
+            elif position_lookup.has(orden):
+                # Fallback a position. NULL => skip conocido.
+                pos_codigo = position_lookup.get_codigo(orden)
+                if pos_codigo is None:
+                    continue
+                codigo = pos_codigo
+                cuenta_nombre_canonico = position_lookup.get_nombre(orden)
                 if es_header:
-                    resolved = lookup.find_header(current_section, nombre_norm)
-                    if resolved:
-                        codigo, cuenta_nombre_canonico = resolved
-                        current_parent_codigo = codigo
-                elif current_parent_codigo:
-                    resolved = lookup.find_child(current_parent_codigo, nombre_norm)
-                    if resolved:
-                        codigo, cuenta_nombre_canonico = resolved
+                    current_parent_codigo = codigo
 
             if not codigo:
                 continue
@@ -635,6 +670,66 @@ class _CuentaLookup:
                 instance._child_by_parent_name.setdefault(
                     (grand_parent, nombre_norm), (codigo, nombre)
                 )
+
+        # ENRIQUECER lookup con cabecera_maestra (issue #42 - parser refactor).
+        #
+        # dim_cuenta NO tiene los codigos agregados (B=TOTAL PASIVO, T=TOTAL
+        # PASIVO Y PATRIMONIO, D=CONTINGENTES, D1-D4 contingentes específicos).
+        # Esos viven en cabecera_maestra. Sin esto, find_header/find_child
+        # devuelven None para TOTAL PASIVO, CONTINGENTES, etc., y el parser
+        # cae a position_lookup que es fragil cuando el archivo SBS tiene
+        # estructura distinta de la cabecera (caso CMAC sin "Tarjetas de
+        # Crédito" → offset acumulado +1 en todos los codigos).
+        #
+        # Cabecera_maestra esta tipificada por (tipo_estado, tipo_entidad);
+        # acumulamos todas las entidades porque los codigos agregados son
+        # consistentes entre grupos. Si hay duplicado, setdefault preserva
+        # la primera entrada.
+        async with conn.cursor() as cur2:
+            await cur2.execute(
+                """
+                SELECT DISTINCT codigo, nombre, COALESCE(es_header, false), COALESCE(es_total, false)
+                  FROM dw.cabecera_maestra
+                 WHERE tipo_estado = %s
+                   AND valido_hasta IS NULL
+                   AND codigo IS NOT NULL
+                """,
+                (tipo_estado,),
+            )
+            cabecera_rows = await cur2.fetchall()
+        await conn.commit()
+
+        for codigo, nombre, _es_h, _es_tot in cabecera_rows:
+            if not nombre:
+                continue
+            nombre_norm = _normalize(nombre)
+            section = _section_prefix(codigo)
+            instance._codigo_to_nombre.setdefault(codigo, nombre)
+
+            # Top-level header: codigo de un solo char (A, B, C, D, T).
+            # Sub-cuentas (A1, B1.1, D1, etc.) son children de su seccion/parent.
+            if len(codigo) == 1:
+                instance._header.setdefault((section, nombre_norm), (codigo, nombre))
+                continue
+
+            # Sub-cuentas. Inferir parent:
+            #   - "B1.1" -> parent "B1"
+            #   - "A4.1.3" -> parent "A4.1"
+            #   - "D1" -> parent "D" (sin punto, el primer char es la seccion)
+            #   - "B10" -> parent "B" (digit sin punto -> seccion como parent)
+            if "." in codigo:
+                parent = codigo.rsplit(".", 1)[0]
+            else:
+                # Codigo tipo "B10" o "D1" — el parent es la seccion (primer char)
+                parent = section if section else codigo[0]
+
+            # Tambien registrar como header secundario en la seccion si es es_header
+            # (ej. A1, B1, C1 son headers pero tambien sub-cuentas de su seccion).
+            if _es_h:
+                instance._header.setdefault((section, nombre_norm), (codigo, nombre))
+
+            instance._child_by_parent_name.setdefault((parent, nombre_norm), (codigo, nombre))
+
         return instance
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
@@ -764,11 +859,15 @@ class _PositionLookup:
 
 
 def _section_prefix(codigo: str) -> str:
-    """Para balance: A/B/C. Para resultados: ''."""
+    """Para balance: A/B/C/D/T. Para resultados: ''.
+
+    D = CONTINGENTES (seccion adicional al balance contable).
+    T = TOTAL PASIVO Y PATRIMONIO (gran total).
+    """
     if not codigo:
         return ""
     first = codigo[0]
-    if first in ("A", "B", "C"):
+    if first in ("A", "B", "C", "D", "T"):
         return first
     return ""
 
