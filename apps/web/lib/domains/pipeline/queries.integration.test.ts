@@ -187,6 +187,17 @@ async function setupSchema(url: string): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS uq_cabecera_codigo_vigente
         ON dw.cabecera_maestra (tipo_estado, tipo_entidad, codigo)
         WHERE valido_hasta IS NULL AND codigo IS NOT NULL;
+
+      -- V102/V108: cuenta_alias para mapeo nombre normalizado -> codigo
+      CREATE TABLE IF NOT EXISTS dw.cuenta_alias (
+        tipo_estado TEXT NOT NULL,
+        alias_norm  TEXT NOT NULL,
+        codigo      TEXT NOT NULL,
+        seccion     TEXT,
+        fuente      TEXT,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (tipo_estado, alias_norm)
+      );
     `);
 
     await sql.unsafe(`
