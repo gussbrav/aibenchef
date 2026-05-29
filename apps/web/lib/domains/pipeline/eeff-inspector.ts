@@ -194,7 +194,10 @@ async function fetchByTipoEstado(
         WHEN prev.valor_total IS NULL OR prev.valor_total = 0 THEN NULL
         ELSE (eo.valor_total - prev.valor_total) / ABS(prev.valor_total)
       END                                         AS delta_pct,
-      COALESCE(q.qstatus, 'ok')                   AS quality_status
+      COALESCE(q.qstatus, 'ok')                   AS quality_status,
+      -- Aliases registrados para este codigo: si el file_name normalizado matchea
+      -- algun alias, NO consideramos mismatch (V108).
+      COALESCE(al.alias_norms, ARRAY[]::text[])   AS alias_norms
     FROM dw.cabecera_maestra cm
     LEFT JOIN LATERAL (
       SELECT
@@ -232,9 +235,15 @@ async function fetchByTipoEstado(
         AND dqc.reviewed_at IS NULL
         AND (dqc.cuenta_codigo = cm.codigo OR dqc.cuenta_codigo IS NULL)
     ) q ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT array_agg(alias_norm) AS alias_norms
+      FROM dw.cuenta_alias
+      WHERE tipo_estado = cm.tipo_estado AND codigo = cm.codigo
+    ) al ON cm.codigo IS NOT NULL
     WHERE cm.tipo_estado = ${tipoEstado}
       AND cm.tipo_entidad = ${tipoEntidad}
-      AND cm.valido_hasta IS NULL
+      AND cm.valido_desde <= ${periodo}
+      AND (cm.valido_hasta IS NULL OR cm.valido_hasta >= ${periodo})
     ORDER BY cm.orden
   `);
 
@@ -252,8 +261,15 @@ async function fetchByTipoEstado(
       cuentaCodigo: codigo,
       cuentaNombreCanonica: nombreCanonica,
       cuentaNombreArchivo: nombreArchivo,
-      nombreMismatch:
-        nombreArchivo != null && normalize(nombreArchivo) !== normalize(nombreCanonica),
+      nombreMismatch: (() => {
+        if (nombreArchivo == null) return false;
+        const normFile = normalize(nombreArchivo);
+        if (normFile === normalize(nombreCanonica)) return false;
+        // Si el file_name matchea algun alias registrado para este codigo,
+        // NO es mismatch (V108).
+        const aliases = (r.alias_norms as string[] | null) ?? [];
+        return !aliases.includes(normFile);
+      })(),
       faltaEnRaw,
       valorMN: r.valor_mn != null ? Number(r.valor_mn) : null,
       valorME: r.valor_me != null ? Number(r.valor_me) : null,
@@ -302,7 +318,8 @@ async function fetchExtras(
         WHERE cm.tipo_estado = ${tipoEstado}
           AND cm.tipo_entidad = ${tipoEntidad}
           AND cm.codigo = eo.cuenta_codigo
-          AND cm.valido_hasta IS NULL
+          AND cm.valido_desde <= ${periodo}
+          AND (cm.valido_hasta IS NULL OR cm.valido_hasta >= ${periodo})
       )
     GROUP BY eo.cuenta_codigo
     ORDER BY eo.cuenta_codigo

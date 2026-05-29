@@ -570,7 +570,11 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
             else:
                 break
         if len(monedas) >= 2 and nombre not in vistos:
-            entidades.append(_EntidadInfo(nombre=nombre, monedas=monedas))
+            # Normalizar footnote markers SBS (ej. "CMAC Arequipa (*)" -> "CMAC Arequipa")
+            # para que el Inspector encuentre las mismas entidades entre periodos.
+            nombre_norm_entity = re.sub(r"\s*\(\*+\)\s*$", "", nombre).strip()
+            nombre_norm_entity = re.sub(r"\s*\*+\s+.*$", "", nombre_norm_entity).strip()
+            entidades.append(_EntidadInfo(nombre=nombre_norm_entity, monedas=monedas))
             vistos.add(nombre)
             col = scan + 1
         else:
