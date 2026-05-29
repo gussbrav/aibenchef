@@ -686,13 +686,29 @@ class _CuentaLookup:
         # consistentes entre grupos. Si hay duplicado, setdefault preserva
         # la primera entrada.
         async with conn.cursor() as cur2:
+            # Leemos tanto cabecera VIGENTE (valido_hasta IS NULL) como
+            # LEGACY (valido_hasta != NULL, ej. pre-2013). ORDER BY
+            # valido_hasta IS NULL DESC garantiza que vigente entra
+            # primero; el `setdefault` mas abajo preserva la vigente
+            # cuando el nombre normalizado colisiona.
+            # Subquery con DISTINCT ON para tomar la vigente cuando hay
+            # multiples versiones del mismo codigo. ORDER BY garantiza
+            # que valido_hasta IS NULL (vigente) gana sobre las legacy.
             await cur2.execute(
                 """
-                SELECT DISTINCT codigo, nombre, COALESCE(es_header, false), COALESCE(es_total, false)
-                  FROM dw.cabecera_maestra
-                 WHERE tipo_estado = %s
-                   AND valido_hasta IS NULL
-                   AND codigo IS NOT NULL
+                SELECT codigo, nombre, es_h, es_tot
+                  FROM (
+                       SELECT DISTINCT ON (codigo, nombre)
+                              codigo,
+                              nombre,
+                              COALESCE(es_header, false) AS es_h,
+                              COALESCE(es_total, false) AS es_tot,
+                              (CASE WHEN valido_hasta IS NULL THEN 0 ELSE 1 END) AS prio
+                         FROM dw.cabecera_maestra
+                        WHERE tipo_estado = %s
+                          AND codigo IS NOT NULL
+                        ORDER BY codigo, nombre, prio
+                  ) t
                 """,
                 (tipo_estado,),
             )
