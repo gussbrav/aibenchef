@@ -1,15 +1,21 @@
 """F1 (issue #42): auditor de cabeceras SBS por año.
 
-Recorre los archivos historicos de SBS guardados en disco
-(`d:\\PROYECTO\\SBS\\Extraer data de pagina SBS\\`), extrae para cada
-archivo la secuencia de filas (orden, nombre, es_header, tipo_estado),
-y produce:
+Recorre los archivos historicos de SBS y, para cada uno, extrae la
+secuencia de filas (orden, nombre, es_header, tipo_estado).
 
-  1) `out/sbs_headers_per_file.jsonl` — una linea JSON por archivo con
-     su secuencia de cuentas tal cual aparece en SBS.
-  2) `out/sbs_drift_matrix_<grupo>.csv` — matriz nombre_normalizado x año
+Soporta dos layouts:
+  - **scraper** (canonico): `<root>/<grupo>/eeff/<year>/<month>/<file>.xls`
+    Es el que produce `aibenchef sbs work-jobs`. En el container EasyPanel
+    el root es `/app/local-data/raw`.
+  - **legacy**: `<root>/<grupo_dir>/01_EEFF_SBS/<year>/<file>.xls`
+    Es el directorio manual heredado del proyecto Pentaho.
+
+Outputs (en `--out-dir`):
+  1) `sbs_headers_per_file.jsonl` — una linea JSON por archivo con la
+     secuencia de cuentas tal cual aparece en SBS.
+  2) `sbs_drift_matrix_<grupo>_<tipo>.csv` — matriz nombre_normalizado x año
      marcando en qué años aparece cada cuenta para ese grupo.
-  3) `out/sbs_drift_summary.md` — reporte ejecutivo: cuentas nuevas /
+  3) `sbs_drift_summary.md` — reporte ejecutivo: cuentas nuevas /
      eliminadas / renombradas por (grupo, año).
 
 Modo solo-lectura: NO toca DB, NO modifica archivos SBS. Reusa el parser
@@ -19,7 +25,15 @@ para que el output sea consistente con como el importer "ve" cada archivo.
 Issue #42.
 
 Uso:
-    uv run python scripts/audit_sbs_headers_history.py [--samples-per-year 1]
+    # Local (legacy):
+    uv run python scripts/audit_sbs_headers_history.py
+
+    # Desde container EasyPanel (scraper) con cobertura 2009-2026:
+    docker exec aibenchef-data python /app/scripts/audit_sbs_headers_history.py \\
+        --root /app/local-data/raw --samples-per-year 1 --out-dir /tmp/audit
+
+    # Explicito:
+    --root /path --layout scraper --samples-per-year 2 --out-dir /tmp/out
 """
 
 from __future__ import annotations
@@ -42,14 +56,27 @@ from aibenchef_data.domains.loading.services.monthly_eeff_importer import (
 )
 from aibenchef_data.domains.parsing import XlsSheet, read_xls
 
-ROOT = Path(r"D:\PROYECTO\SBS\Extraer data de pagina SBS")
+DEFAULT_ROOT_LEGACY = Path(r"D:\PROYECTO\SBS\Extraer data de pagina SBS")
+DEFAULT_ROOT_SCRAPER = Path("/app/local-data/raw")
 
-GRUPO_DIRS: dict[str, str] = {
+# Layout legacy: archivos manuales del proyecto Pentaho viejo
+#   <ROOT>/<grupo_dir>/01_EEFF_SBS/<year>/<file>.xls
+GRUPO_DIRS_LEGACY: dict[str, str] = {
     "BANCOS": "01_Entidad_Banca_Multiple",
     "FINANCIERAS": "02_Entidad_Empresas_Financiera",
     "CMAC": "03_Entidad_CajaMunicipales",
     "CRAC": "04_Entidad_CajaRurales",
     "EDPYMES": "05_Entidad_Edpymes",
+}
+
+# Layout scraper (canonico): el download dir del SBS scraper
+#   <ROOT>/<grupo_dir>/eeff/<year>/<month>/<file>.xls
+GRUPO_DIRS_SCRAPER: dict[str, str] = {
+    "BANCOS": "banca_multiple",
+    "FINANCIERAS": "financiera",
+    "CMAC": "cmac",
+    "CRAC": "crac",
+    "EDPYMES": "edpyme",
 }
 
 # SBS usa abreviaturas de mes en castellano: en, fe, ma, ab, my, jn, jl, ag, se, oc, no, di.
@@ -108,10 +135,35 @@ class RowExtracted:
     section: str  # 'A' | 'B' | 'C' | '' (resultados)
 
 
-def discover_files() -> Iterator[tuple[FileMeta, Path]]:
-    """Camina los 5 grupos buscando archivos EEFF .xls y emite metadata."""
-    for grupo, sub in GRUPO_DIRS.items():
-        eeff_root = ROOT / sub / "01_EEFF_SBS"
+def _detect_root_layout(root: Path) -> str:
+    """Auto-detecta si root es layout 'legacy' o 'scraper'."""
+    if (root / "01_Entidad_Banca_Multiple").is_dir():
+        return "legacy"
+    if (root / "banca_multiple").is_dir():
+        return "scraper"
+    raise ValueError(
+        f"No se pudo detectar layout en {root}. Esperaba 01_Entidad_Banca_Multiple/ "
+        "(legacy) o banca_multiple/ (scraper) como subdirectorio."
+    )
+
+
+def _eeff_subdir(layout: str, grupo_dir: str) -> Path:
+    """Devuelve el sub-path donde estan los archivos EEFF para cada layout."""
+    if layout == "legacy":
+        return Path(grupo_dir) / "01_EEFF_SBS"
+    return Path(grupo_dir) / "eeff"
+
+
+def discover_files(root: Path, layout: str) -> Iterator[tuple[FileMeta, Path]]:
+    """Camina los 5 grupos buscando archivos EEFF .xls y emite metadata.
+
+    Soporta:
+      - legacy:  <root>/<grupo_dir>/01_EEFF_SBS/<year>/<file>.xls
+      - scraper: <root>/<grupo_dir>/eeff/<year>/<month>/<file>.xls
+    """
+    grupo_dirs = GRUPO_DIRS_LEGACY if layout == "legacy" else GRUPO_DIRS_SCRAPER
+    for grupo, sub in grupo_dirs.items():
+        eeff_root = root / _eeff_subdir(layout, sub)
         if not eeff_root.is_dir():
             print(f"  [skip] {grupo}: no existe {eeff_root}", file=sys.stderr)
             continue
@@ -446,14 +498,44 @@ def main() -> int:
         default=OUT_DIR,
         help=f"Directorio de output (default: {OUT_DIR}).",
     )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help=(
+            "Directorio raiz de archivos SBS. Auto-detecta layout legacy o scraper. "
+            "Default: $SBS_RAW_ROOT, sino /app/local-data/raw si existe, sino el legacy local."
+        ),
+    )
+    parser.add_argument(
+        "--layout",
+        choices=["auto", "legacy", "scraper"],
+        default="auto",
+        help="Layout del directorio raiz (default: auto-detect).",
+    )
     args = parser.parse_args()
 
-    if not ROOT.exists():
-        print(f"ERROR: directorio raiz no existe: {ROOT}", file=sys.stderr)
+    import os
+
+    if args.root is None:
+        env_root = os.environ.get("SBS_RAW_ROOT")
+        if env_root:
+            root = Path(env_root)
+        elif DEFAULT_ROOT_SCRAPER.is_dir():
+            root = DEFAULT_ROOT_SCRAPER
+        else:
+            root = DEFAULT_ROOT_LEGACY
+    else:
+        root = args.root
+
+    if not root.exists():
+        print(f"ERROR: directorio raiz no existe: {root}", file=sys.stderr)
         return 2
 
-    print(f"# Discover en {ROOT}")
-    files = list(discover_files())
+    layout = args.layout if args.layout != "auto" else _detect_root_layout(root)
+
+    print(f"# Discover en {root} (layout={layout})")
+    files = list(discover_files(root, layout))
     print(f"# {len(files)} archivos detectados")
 
     samples = pick_samples(files, samples_per_year=args.samples_per_year)
