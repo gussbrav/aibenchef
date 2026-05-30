@@ -6,17 +6,30 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { listTopicos, getTopicoResumen } from "@/lib/domains/pipeline/inspector-topicos";
+import {
+  getTopicoResumen,
+  getUltimoPeriodoConData,
+  listTopicos,
+} from "@/lib/domains/pipeline/inspector-topicos";
 
 export const dynamic = "force-dynamic";
 
 export default async function InspectorTopicosPage() {
   const topicos = listTopicos();
+  // Para cada topico mostramos UNA card con el "ultimo periodo CON data real"
+  // (no necesariamente el ultimo descargado, que puede tener 0 filas porque
+  // todavia no se proceso). Asi el card muestra info util en vez de ceros.
   const resumenes = await Promise.all(
-    topicos.map(async (t) => ({
-      info: t,
-      resumen: await getTopicoResumen(t.topico, 1),
-    })),
+    topicos.map(async (t) => {
+      const ultimoConData = await getUltimoPeriodoConData(t.topico);
+      const resumen = await getTopicoResumen(t.topico, 24);
+      const rowConData = ultimoConData
+        ? resumen.find((r) => r.periodo === ultimoConData)
+        : undefined;
+      // Fallback: si nunca tuvo data raw, usar el ultimo descargado (rowConData será undefined)
+      const display = rowConData ?? resumen[0];
+      return { info: t, display, ultimoConData };
+    }),
   );
 
   return (
@@ -28,13 +41,12 @@ export default async function InspectorTopicosPage() {
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {resumenes.map(({ info, resumen }) => {
-          const ultimo = resumen[0];
-          const cobertura = ultimo
-            ? Math.round((ultimo.procesados / Math.max(ultimo.archivos, 1)) * 100)
+        {resumenes.map(({ info, display, ultimoConData }) => {
+          const cobertura = display
+            ? Math.round((display.procesados / Math.max(display.archivos, 1)) * 100)
             : 0;
           const semaforo =
-            !ultimo || ultimo.errores > 0
+            !display || display.errores > 0
               ? "bg-red-50 border-red-200 text-red-900"
               : cobertura === 100
                 ? "bg-emerald-50 border-emerald-200 text-emerald-900"
@@ -51,34 +63,37 @@ export default async function InspectorTopicosPage() {
                   <h2 className="font-semibold text-base capitalize">
                     {info.topico.replace(/_/g, " ")}
                   </h2>
-                  {ultimo && (
+                  {display && (
                     <span className="text-xs font-mono opacity-75">
-                      {ultimo.periodo}
+                      {display.periodo}
+                      {ultimoConData && display.periodo !== ultimoConData ? (
+                        <span className="text-amber-700"> (sin proc.)</span>
+                      ) : null}
                     </span>
                   )}
                 </div>
               </div>
               <div className="p-4 text-xs space-y-1.5 text-slate-700">
-                {ultimo ? (
+                {display ? (
                   <>
                     <div className="flex justify-between">
                       <span>Archivos</span>
-                      <span className="font-mono">{ultimo.archivos}</span>
+                      <span className="font-mono">{display.archivos}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Procesados</span>
-                      <span className="font-mono">{ultimo.procesados}</span>
+                      <span className="font-mono">{display.procesados}</span>
                     </div>
-                    {ultimo.errores > 0 && (
+                    {display.errores > 0 && (
                       <div className="flex justify-between text-red-700 font-semibold">
                         <span>Errores</span>
-                        <span className="font-mono">{ultimo.errores}</span>
+                        <span className="font-mono">{display.errores}</span>
                       </div>
                     )}
                     <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-2">
                       <span className="text-slate-500">Filas raw</span>
                       <span className="font-mono font-semibold">
-                        {ultimo.filasRaw.toLocaleString()}
+                        {display.filasRaw.toLocaleString()}
                       </span>
                     </div>
                   </>
@@ -93,6 +108,13 @@ export default async function InspectorTopicosPage() {
           );
         })}
       </div>
+
+      <p className="text-[11px] text-slate-500 mt-6">
+        Las cards muestran el último periodo con data raw real. Si el último
+        archivo descargado todavía no fue procesado, aparece la nota{" "}
+        <span className="text-amber-700">(sin proc.)</span>. Click para drill-down
+        por entidad / periodo / archivo SBS.
+      </p>
     </div>
   );
 }
