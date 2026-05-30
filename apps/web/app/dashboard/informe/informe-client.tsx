@@ -31,6 +31,7 @@ import type {
   InformeData,
   Kpi,
   KpiValor,
+  MargenNetoHistoricoRow,
   PuntoEquilibrioRow,
   EntidadDisponible,
   BubblePoint,
@@ -118,7 +119,7 @@ export function InformeClient({
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
 }) {
-  const { cliente, periodo, periodoComparativo, competidores, cuadroResumen, puntoEquilibrio, margenNetoBubble, margenNetoWaterfall, comentarios } = data;
+  const { cliente, periodo, periodoComparativo, competidores, cuadroResumen, puntoEquilibrio, margenNetoHistorico, margenNetoBubble, margenNetoWaterfall, comentarios } = data;
   const [exportando, setExportando] = useState(false);
 
   const onExport = (formato: "pptx" | "pdf") => {
@@ -207,7 +208,12 @@ export function InformeClient({
       <SeccionCuadroResumen data={cuadroResumen} competidores={labelsCompetidores} clientePropio={labelCortoPropio} />
 
       {/* ============ PUNTO DE EQUILIBRIO ============ */}
-      <SeccionPuntoEquilibrio data={puntoEquilibrio} competidores={labelsCompetidores} clientePropio={labelCortoPropio} />
+      <SeccionPuntoEquilibrio
+        data={puntoEquilibrio}
+        margenNetoHistorico={margenNetoHistorico}
+        competidores={labelsCompetidores}
+        clientePropio={labelCortoPropio}
+      />
 
       {/* ============ ANALISIS MARGEN NETO — BUBBLE ============ */}
       <SeccionMargenNetoBubble
@@ -332,6 +338,15 @@ function FragmentGrupo({
             <td className="px-4 py-2 text-slate-700 text-[13px]">
               <span className="inline-block w-2 h-2 rounded-full bg-slate-300 mr-2 align-middle" />
               {k.nombre}
+              {k.tooltip && (
+                <span
+                  className="ml-1.5 inline-flex items-center cursor-help"
+                  title={k.tooltip}
+                  aria-label={k.tooltip}
+                >
+                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 inline align-middle" />
+                </span>
+              )}
             </td>
             {competidores.map((c) => {
               const v = k.valores.find((x) => x.competidor === c);
@@ -362,14 +377,19 @@ function FragmentGrupo({
 
 function SeccionPuntoEquilibrio({
   data,
+  margenNetoHistorico,
   competidores,
   clientePropio,
 }: {
   data: PuntoEquilibrioRow[];
+  margenNetoHistorico: MargenNetoHistoricoRow[];
   competidores: string[];
   clientePropio: string;
 }) {
-  const hayDatos = data.some((r) => Object.values(r.valores).some((v) => v !== null));
+  // Sacamos %Margen Neto del array principal — lo renderizamos en la seccion
+  // historica comparativa con 3 cortes (actual / Dic año previo / mismo mes año previo).
+  const dataPrincipal = data.filter((r) => r.label !== "%Margen Neto");
+  const hayDatos = dataPrincipal.some((r) => Object.values(r.valores).some((v) => v !== null));
 
   return (
     <section>
@@ -407,7 +427,7 @@ function SeccionPuntoEquilibrio({
               </tr>
             </thead>
             <tbody>
-              {data.map((r, idx) => {
+              {dataPrincipal.map((r, idx) => {
                 const valoresNotNull = Object.values(r.valores).filter((v): v is number => v !== null);
                 const isNeg = valoresNotNull.length > 0 && valoresNotNull.every((v) => v < 0);
                 const valueClass = isNeg ? "text-rose-700" : "text-emerald-700";
@@ -430,6 +450,38 @@ function SeccionPuntoEquilibrio({
                           className={`px-4 py-2 text-right tabular-nums text-[13px] ${valueClass} ${
                             esPropio ? "bg-blue-50" : ""
                           } ${r.indentado ? "italic" : ""}`}
+                        >
+                          {formatValor(v, "pct")}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              {/* %Margen Neto comparativo: actual + Dic año previo + mismo mes año previo */}
+              {margenNetoHistorico.map((row, idx) => {
+                const valoresNotNull = Object.values(row.valores).filter((v): v is number => v !== null);
+                const todosPositivos = valoresNotNull.length > 0 && valoresNotNull.every((v) => v >= 0);
+                const valueClass = todosPositivos ? "text-emerald-700" : "text-rose-700";
+                const esActual = idx === 0;
+                return (
+                  <tr
+                    key={`mn-${row.periodo}`}
+                    className={`border-t ${esActual ? "border-t-2 border-amber-300 bg-amber-50 font-bold" : "border-slate-100 bg-amber-50/40 font-semibold"}`}
+                  >
+                    <td className="px-4 py-2 text-[13px] text-slate-800">
+                      <span className="inline-block w-14 text-[11px] text-slate-500 uppercase tracking-wider mr-2">
+                        {row.periodoLabel}
+                      </span>
+                      %Margen Neto
+                    </td>
+                    {competidores.map((c) => {
+                      const v = row.valores[c];
+                      const esPropio = c === clientePropio;
+                      return (
+                        <td
+                          key={c}
+                          className={`px-4 py-2 text-right tabular-nums text-[13px] ${valueClass} ${esPropio ? "bg-blue-50" : ""}`}
                         >
                           {formatValor(v, "pct")}
                         </td>
