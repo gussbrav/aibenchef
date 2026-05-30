@@ -38,8 +38,20 @@ export default async function InspectorTopicoDetallePage({
   const info = TOPICO_REGISTRY[topico];
   if (!info) notFound();
 
-  const resumen = await getTopicoResumen(topico, 24);
+  // Todos los periodos disponibles (sin limit). Lista larga pero util para
+  // navegar histórico SBS completo (2009 → presente, ~220 periodos).
+  const resumen = await getTopicoResumen(topico);
   const periodoActual = sp.periodo ? Number(sp.periodo) : resumen[0]?.periodo ?? 0;
+
+  // Agrupar resumen por año para mostrar tabla colapsable por decada.
+  const resumenPorAnio = new Map<number, typeof resumen>();
+  for (const r of resumen) {
+    const anio = Math.floor(r.periodo / 100);
+    if (!resumenPorAnio.has(anio)) resumenPorAnio.set(anio, []);
+    resumenPorAnio.get(anio)!.push(r);
+  }
+  const aniosOrdenados = Array.from(resumenPorAnio.keys()).sort((a, b) => b - a);
+  const anioActual = Math.floor(periodoActual / 100);
 
   const [archivos, resumenEntidades] = await Promise.all([
     getArchivosTopico(topico, periodoActual),
@@ -72,49 +84,76 @@ export default async function InspectorTopicoDetallePage({
         <p className="text-xs text-slate-500 font-mono">{info.tablaRaw}</p>
       </div>
 
-      {/* 1. Resumen periodos */}
+      {/* 1. Resumen periodos — agrupados por año, colapsables (año seleccionado abierto) */}
       <section>
         <h2 className="text-sm font-semibold text-slate-700 mb-2">
-          Últimos {resumen.length} periodos · cobertura del tópico
+          Cobertura por periodo · {resumen.length} periodos en total ({aniosOrdenados.at(-1)}–{aniosOrdenados[0]})
         </h2>
-        <div className="overflow-x-auto rounded border border-slate-200">
-          <table className="text-xs w-full">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="text-left p-2">Periodo</th>
-                <th className="text-right p-2">Archivos</th>
-                <th className="text-right p-2">Procesados</th>
-                <th className="text-right p-2">Errores</th>
-                <th className="text-right p-2">Filas raw</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumen.map((r) => {
-                const esActual = r.periodo === periodoActual;
-                return (
-                  <tr
-                    key={r.periodo}
-                    className={`border-t ${esActual ? "bg-amber-50 font-semibold" : "hover:bg-slate-50"}`}
-                  >
-                    <td className="p-2">
-                      <Link
-                        href={`/dashboard/admin/inspector-topicos/${topico}?periodo=${r.periodo}` as Route}
-                        className="text-sky-700 hover:underline font-mono"
-                      >
-                        {r.periodo}
-                      </Link>
-                    </td>
-                    <td className="p-2 text-right font-mono">{r.archivos}</td>
-                    <td className="p-2 text-right font-mono">{r.procesados}</td>
-                    <td className={`p-2 text-right font-mono ${r.errores > 0 ? "text-red-700" : ""}`}>
-                      {r.errores}
-                    </td>
-                    <td className="p-2 text-right font-mono">{r.filasRaw.toLocaleString()}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {aniosOrdenados.map((anio) => {
+            const periodosDelAnio = resumenPorAnio.get(anio)!;
+            const isOpen = anio === anioActual;
+            const totalArchivos = periodosDelAnio.reduce((s, r) => s + r.archivos, 0);
+            const totalProcesados = periodosDelAnio.reduce((s, r) => s + r.procesados, 0);
+            const totalErrores = periodosDelAnio.reduce((s, r) => s + r.errores, 0);
+            const totalFilasRaw = periodosDelAnio.reduce((s, r) => s + r.filasRaw, 0);
+            return (
+              <details key={anio} open={isOpen} className="rounded border border-slate-200 bg-white overflow-hidden">
+                <summary className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-slate-50 text-xs">
+                  <span className="font-semibold text-slate-900">
+                    {anio} · {periodosDelAnio.length} periodos
+                  </span>
+                  <span className="text-slate-500 flex gap-3 items-center">
+                    <span>Archivos: <span className="font-mono">{totalArchivos}</span></span>
+                    <span>Procesados: <span className="font-mono">{totalProcesados}</span></span>
+                    {totalErrores > 0 && (
+                      <span className="text-red-700 font-semibold">Errores: <span className="font-mono">{totalErrores}</span></span>
+                    )}
+                    <span>Filas: <span className="font-mono">{totalFilasRaw.toLocaleString()}</span></span>
+                  </span>
+                </summary>
+                <div className="overflow-x-auto border-t border-slate-200">
+                  <table className="text-xs w-full">
+                    <thead className="bg-slate-50 text-slate-700">
+                      <tr>
+                        <th className="text-left p-2">Periodo</th>
+                        <th className="text-right p-2">Archivos</th>
+                        <th className="text-right p-2">Procesados</th>
+                        <th className="text-right p-2">Errores</th>
+                        <th className="text-right p-2">Filas raw</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {periodosDelAnio.map((r) => {
+                        const esActual = r.periodo === periodoActual;
+                        return (
+                          <tr
+                            key={r.periodo}
+                            className={`border-t ${esActual ? "bg-amber-50 font-semibold" : "hover:bg-slate-50"}`}
+                          >
+                            <td className="p-2">
+                              <Link
+                                href={`/dashboard/admin/inspector-topicos/${topico}?periodo=${r.periodo}` as Route}
+                                className="text-sky-700 hover:underline font-mono"
+                              >
+                                {r.periodo}
+                              </Link>
+                            </td>
+                            <td className="p-2 text-right font-mono">{r.archivos}</td>
+                            <td className="p-2 text-right font-mono">{r.procesados}</td>
+                            <td className={`p-2 text-right font-mono ${r.errores > 0 ? "text-red-700" : ""}`}>
+                              {r.errores}
+                            </td>
+                            <td className="p-2 text-right font-mono">{r.filasRaw.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            );
+          })}
         </div>
       </section>
 

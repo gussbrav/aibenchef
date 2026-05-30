@@ -107,10 +107,12 @@ export type TopicoResumenRow = {
   filasRaw: number;
 };
 
-/** Lista los últimos N periodos del tópico con métricas agregadas. */
+/** Lista los últimos N periodos del tópico con métricas agregadas.
+ *  Default 1000 = efectivamente "todos los periodos disponibles" (SBS desde
+ *  2009 ≈ 220 periodos). Pasar limit=1 para landing card. */
 export async function getTopicoResumen(
   topico: string,
-  limit = 24,
+  limit = 1000,
 ): Promise<TopicoResumenRow[]> {
   const info = TOPICO_REGISTRY[topico];
   if (!info) return [];
