@@ -237,15 +237,28 @@ export default async function InspectorTopicoDetallePage({
         <section>
           <h2 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            Verificación archivo SBS vs procesado — periodo {periodoActual}
+            Auditoría: archivo SBS vs lo procesado — periodo {periodoActual}
           </h2>
           <p className="text-[11px] text-slate-500 mb-2">
-            Compara las filas que el importer reportó insertar (snapshot del
-            momento del import) vs las que actualmente están en{" "}
-            <code className="text-[10px]">{info.tablaRaw}</code>. Diff &gt; 0 = filas
-            perdidas post-import. Diff &lt; 0 = filas agregadas posteriormente
-            (re-import / backfill).
+            ¿La data que está hoy en la base coincide con lo que el importer
+            metió al momento de procesar cada archivo? Si hubo cambios después
+            (borrados, re-imports), aparece en la columna Diff.
           </p>
+          <details className="mb-2 text-[11px] text-slate-600">
+            <summary className="cursor-pointer text-slate-700 hover:text-slate-900">
+              ¿Qué significa cada columna y cada estado?
+            </summary>
+            <ul className="mt-2 pl-4 space-y-1">
+              <li><strong>Snapshot importer</strong>: filas que el importer dijo haber insertado cuando procesó el archivo.</li>
+              <li><strong>Filas actuales raw</strong>: filas que están AHORA en la tabla raw de este tópico.</li>
+              <li><strong>Diff = Snapshot − Actuales</strong>: si es positivo, se perdieron filas; si es negativo, alguien re-importó y agregó.</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">✓ ok</span> — todo consistente</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-semibold">⚠ filas perdidas</span> — el importer dijo X filas, hoy hay menos</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">⚠ filas agregadas</span> — hoy hay más filas que las que el importer reportó (re-import posterior)</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">sin data</span> — archivo procesado pero raw vacío</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold">no procesado</span> — archivo descargado pero el importer todavía no lo procesó</li>
+            </ul>
+          </details>
           <div className="overflow-x-auto rounded border border-slate-200">
             <table className="text-xs w-full">
               <thead className="bg-slate-100 text-slate-700">
@@ -296,13 +309,27 @@ export default async function InspectorTopicoDetallePage({
         <section>
           <h2 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
-            Entidades esperadas vs presentes — periodo {periodoActual}
+            ¿Qué entidades quedaron sin data este periodo?
           </h2>
           <p className="text-[11px] text-slate-500 mb-2">
-            Lista todas las entidades del peer-group oficial SBS. Si una está
-            declarada en <code>dw.entidad_maestra</code> pero NO tiene filas
-            en raw para el periodo, aparece marcada como faltante.
+            Lista las entidades del peer-group oficial SBS que han reportado
+            al tópico en los últimos 12 periodos. Si alguna NO tiene filas en
+            el periodo seleccionado, aparece <strong>faltante</strong>{" "}
+            (fila destacada en rojo) — puede ser drift del parser, archivo
+            tardío de SBS, o entidad que dejó de publicar.
           </p>
+          <div className="mb-2 text-[11px] text-slate-600 flex flex-wrap gap-3">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+              ✓ presente
+            </span>
+            <span className="text-slate-500">→ entidad con filas en raw</span>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-semibold">
+              ⚠ faltante
+            </span>
+            <span className="text-slate-500">
+              → reportó hace poco pero hoy no aparece — revisar archivo SBS
+            </span>
+          </div>
           <div className="overflow-x-auto rounded border border-slate-200">
             <table className="text-xs w-full">
               <thead className="bg-slate-100 text-slate-700">
