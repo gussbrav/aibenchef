@@ -11,14 +11,17 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
-import { ExternalLink, AlertCircle, CheckCircle2, Clock } from "lucide-react";
-import { labelGrupo } from "@/lib/domains/shared/grupos";
+import { ExternalLink, AlertCircle, CheckCircle2, Clock, AlertTriangle, ShieldCheck } from "lucide-react";
+import { labelGrupo, ordenGrupo } from "@/lib/domains/shared/grupos";
 import {
   TOPICO_REGISTRY,
   getArchivosTopico,
   getDetalleEntidad,
   getResumenPorEntidad,
   getTopicoResumen,
+  getVerificacionEntidades,
+  getVerificacionTopico,
+  type VerificacionArchivo,
 } from "@/lib/domains/pipeline/inspector-topicos";
 
 export const dynamic = "force-dynamic";
@@ -53,10 +56,20 @@ export default async function InspectorTopicoDetallePage({
   const aniosOrdenados = Array.from(resumenPorAnio.keys()).sort((a, b) => b - a);
   const anioActual = Math.floor(periodoActual / 100);
 
-  const [archivos, resumenEntidades] = await Promise.all([
+  const [archivos, resumenEntidades, verifArchivos, verifEntidades] = await Promise.all([
     getArchivosTopico(topico, periodoActual),
     getResumenPorEntidad(topico, periodoActual),
+    getVerificacionTopico(topico, periodoActual),
+    getVerificacionEntidades(topico, periodoActual),
   ]);
+  // Ordenar verifArchivos por grupo oficial (Bancos, Financieras, ...)
+  verifArchivos.sort((a, b) => ordenGrupo(a.grupo) - ordenGrupo(b.grupo));
+  // Solo entidades del peer-group oficial (5 grupos)
+  const verifEntidadesOrdenadas = [...verifEntidades].sort((a, b) => {
+    const og = ordenGrupo(a.tipoEntidad) - ordenGrupo(b.tipoEntidad);
+    if (og !== 0) return og;
+    return a.entidad.localeCompare(b.entidad);
+  });
 
   const entidadActual =
     sp.entidad ?? resumenEntidades[0]?.entidad ?? "";
@@ -210,7 +223,118 @@ export default async function InspectorTopicoDetallePage({
         </section>
       )}
 
-      {/* 3. Resumen por entidad */}
+      {/* 3. Verificacion archivo vs raw */}
+      {verifArchivos.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            Verificación archivo SBS vs procesado — periodo {periodoActual}
+          </h2>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Compara las filas que el importer reportó insertar (snapshot del
+            momento del import) vs las que actualmente están en{" "}
+            <code className="text-[10px]">{info.tablaRaw}</code>. Diff &gt; 0 = filas
+            perdidas post-import. Diff &lt; 0 = filas agregadas posteriormente
+            (re-import / backfill).
+          </p>
+          <div className="overflow-x-auto rounded border border-slate-200">
+            <table className="text-xs w-full">
+              <thead className="bg-slate-100 text-slate-700">
+                <tr>
+                  <th className="text-left p-2">Grupo</th>
+                  <th className="text-left p-2">Archivo</th>
+                  <th className="text-right p-2">Snapshot importer</th>
+                  <th className="text-right p-2">Filas actuales raw</th>
+                  <th className="text-right p-2">Diff</th>
+                  <th className="text-left p-2">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {verifArchivos.map((v) => (
+                  <tr key={v.archivoId} className="border-t hover:bg-slate-50">
+                    <td className="p-2">{labelGrupo(v.grupo)}</td>
+                    <td className="p-2 font-mono text-[11px]">{v.nombreArchivo}</td>
+                    <td className="p-2 text-right font-mono">
+                      {v.filasInsertadasSnapshot?.toLocaleString() ?? "—"}
+                    </td>
+                    <td className="p-2 text-right font-mono">
+                      {v.filasActualesRaw.toLocaleString()}
+                    </td>
+                    <td
+                      className={`p-2 text-right font-mono ${
+                        v.diff === 0
+                          ? "text-slate-400"
+                          : v.diff > 0
+                            ? "text-red-700 font-semibold"
+                            : "text-amber-700 font-semibold"
+                      }`}
+                    >
+                      {v.diff === 0 ? "—" : v.diff > 0 ? `+${v.diff}` : v.diff}
+                    </td>
+                    <td className="p-2">
+                      <VerifBadge estado={v.estado} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* 4. Verificacion entidades esperadas vs presentes */}
+      {verifEntidadesOrdenadas.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            Entidades esperadas vs presentes — periodo {periodoActual}
+          </h2>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Lista todas las entidades del peer-group oficial SBS. Si una está
+            declarada en <code>dw.entidad_maestra</code> pero NO tiene filas
+            en raw para el periodo, aparece marcada como faltante.
+          </p>
+          <div className="overflow-x-auto rounded border border-slate-200">
+            <table className="text-xs w-full">
+              <thead className="bg-slate-100 text-slate-700">
+                <tr>
+                  <th className="text-left p-2">Entidad</th>
+                  <th className="text-left p-2">Grupo</th>
+                  <th className="text-right p-2">Filas raw</th>
+                  <th className="text-left p-2">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {verifEntidadesOrdenadas.map((e) => (
+                  <tr
+                    key={`${e.tipoEntidad}-${e.entidad}`}
+                    className={`border-t ${e.presente ? "hover:bg-slate-50" : "bg-red-50/40 hover:bg-red-50"}`}
+                  >
+                    <td className="p-2">{e.entidad}</td>
+                    <td className="p-2 text-slate-500 text-[11px]">{labelGrupo(e.tipoEntidad)}</td>
+                    <td className="p-2 text-right font-mono">
+                      {e.presente ? e.filasRaw.toLocaleString() : "—"}
+                    </td>
+                    <td className="p-2">
+                      {e.presente ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 text-[11px]">
+                          <CheckCircle2 className="w-3 h-3" /> presente
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-700 text-[11px] font-semibold">
+                          <AlertCircle className="w-3 h-3" /> faltante
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* 5. Resumen por entidad */}
       {resumenEntidades.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-slate-700 mb-2">
@@ -313,6 +437,48 @@ export default async function InspectorTopicoDetallePage({
         </section>
       )}
     </div>
+  );
+}
+
+function VerifBadge({ estado }: { estado: VerificacionArchivo["estado"] }) {
+  const map: Record<
+    VerificacionArchivo["estado"],
+    { label: string; cls: string; icon: React.ReactNode }
+  > = {
+    ok: {
+      label: "ok",
+      cls: "bg-emerald-100 text-emerald-800",
+      icon: <CheckCircle2 className="w-3 h-3" />,
+    },
+    diff_perdidas: {
+      label: "filas perdidas",
+      cls: "bg-red-100 text-red-800",
+      icon: <AlertCircle className="w-3 h-3" />,
+    },
+    diff_agregadas: {
+      label: "filas agregadas",
+      cls: "bg-amber-100 text-amber-800",
+      icon: <AlertTriangle className="w-3 h-3" />,
+    },
+    sin_data: {
+      label: "sin data",
+      cls: "bg-slate-100 text-slate-600",
+      icon: <Clock className="w-3 h-3" />,
+    },
+    no_procesado: {
+      label: "no procesado",
+      cls: "bg-slate-100 text-slate-500",
+      icon: <Clock className="w-3 h-3" />,
+    },
+  };
+  const v = map[estado];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${v.cls}`}
+    >
+      {v.icon}
+      {v.label}
+    </span>
   );
 }
 

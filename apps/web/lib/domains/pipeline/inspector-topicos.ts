@@ -646,6 +646,165 @@ export async function getDetalleEntidad(
   }
 }
 
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Verificacion archivo vs procesado                                         */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+/** Cada archivo descargado con: filas que el importer DIJO insertar (snapshot)
+ *  vs filas que ACTUALMENTE estan en raw.<topico>_observacion. Diff indica
+ *  perdida o re-import incompleto. */
+export type VerificacionArchivo = {
+  archivoId: string;
+  grupo: string;
+  nombreArchivo: string;
+  status: string;
+  /** Filas que el importer reporto al insertar (snapshot momento del import). */
+  filasInsertadasSnapshot: number | null;
+  /** Filas que ACTUALMENTE estan en raw.<topico>_observacion para
+   *  (periodo, tipo_entidad) inferido del grupo. */
+  filasActualesRaw: number;
+  /** Diff: snapshot - actuales. >0 = se perdieron filas, <0 = se agregaron
+   *  filas post-import (raro), 0 = todo OK. */
+  diff: number;
+  estado: "ok" | "diff_perdidas" | "diff_agregadas" | "sin_data" | "no_procesado";
+};
+
+/** Mapping grupo (path raw) → tipo_entidad (columna en raw.*). */
+const GRUPO_TO_TIPO_ENTIDAD: Record<string, string> = {
+  banca_multiple: "BANCOS",
+  financiera: "FINANCIERAS",
+  cmac: "CMAC",
+  crac: "CRAC",
+  edpyme: "EDPYMES",
+};
+
+export async function getVerificacionTopico(
+  topico: string,
+  periodo: number,
+): Promise<VerificacionArchivo[]> {
+  const info = TOPICO_REGISTRY[topico];
+  if (!info) return [];
+
+  // 1. Archivos descargados del periodo
+  const archivos = await db.execute<Record<string, unknown>>(sql`
+    SELECT id::text, grupo, nombre_archivo, status, filas_insertadas
+    FROM raw.archivos_descargados
+    WHERE topico = ${topico} AND periodo = ${periodo}
+    ORDER BY grupo
+  `);
+
+  // 2. Conteo actual en raw por tipo_entidad
+  const colGrupo = info.columnaGrupo;
+  let conteosRaw = new Map<string, number>();
+  if (colGrupo) {
+    const conteos = await db.execute<{ tipo: string; n: number }>(sql`
+      SELECT ${sql.raw(colGrupo)} AS tipo, COUNT(*)::int AS n
+      FROM ${sql.raw(info.tablaRaw)}
+      WHERE ${sql.raw(info.columnaPeriodo)} = ${periodo}
+      GROUP BY ${sql.raw(colGrupo)}
+    `);
+    conteosRaw = new Map(conteos.map((c) => [c.tipo, Number(c.n)]));
+  } else {
+    // Topicos sin columna de grupo (creditos_depositos_geo, indicadores):
+    // contar todo y asignar el total al primer (y unico) archivo.
+    const total = await db.execute<{ n: number }>(sql`
+      SELECT COUNT(*)::int AS n FROM ${sql.raw(info.tablaRaw)}
+      WHERE ${sql.raw(info.columnaPeriodo)} = ${periodo}
+    `);
+    conteosRaw.set("__all__", Number(total[0]?.n ?? 0));
+  }
+
+  return archivos.map((a) => {
+    const grupo = a.grupo as string;
+    const tipo = colGrupo ? GRUPO_TO_TIPO_ENTIDAD[grupo] ?? grupo.toUpperCase() : "__all__";
+    const snapshot = a.filas_insertadas != null ? Number(a.filas_insertadas) : null;
+    const actuales = conteosRaw.get(tipo) ?? 0;
+    const diff = snapshot != null ? snapshot - actuales : 0;
+
+    let estado: VerificacionArchivo["estado"];
+    if (snapshot == null) {
+      estado = "no_procesado";
+    } else if (snapshot === 0 && actuales === 0) {
+      estado = "sin_data";
+    } else if (diff === 0) {
+      estado = "ok";
+    } else if (diff > 0) {
+      estado = "diff_perdidas";
+    } else {
+      estado = "diff_agregadas";
+    }
+
+    return {
+      archivoId: a.id as string,
+      grupo,
+      nombreArchivo: a.nombre_archivo as string,
+      status: a.status as string,
+      filasInsertadasSnapshot: snapshot,
+      filasActualesRaw: actuales,
+      diff,
+      estado,
+    };
+  });
+}
+
+/** Lista entidades esperadas (de dim_entidad) vs presentes en raw para el
+ *  periodo + topico. Util para detectar "entidades fantasma" — declaradas en
+ *  la maestra pero sin filas en raw para ese periodo. */
+export type VerificacionEntidad = {
+  entidad: string;
+  tipoEntidad: string;
+  presente: boolean;
+  filasRaw: number;
+};
+
+export async function getVerificacionEntidades(
+  topico: string,
+  periodo: number,
+): Promise<VerificacionEntidad[]> {
+  const info = TOPICO_REGISTRY[topico];
+  if (!info || !info.columnaEntidad || !info.columnaGrupo) return [];
+
+  // "esperadas" = entidades que reportaron al topico en los ULTIMOS 12 periodos
+  // (no toda la maestra historica). Asi evitamos falsos faltantes por entidades
+  // fusionadas/cerradas hace anios. Si la entidad reporto recientemente y no
+  // este periodo, es genuinamente "faltante" o "no publico aun".
+  const rows = await db.execute<Record<string, unknown>>(sql`
+    WITH esperadas AS (
+      SELECT
+        dw.resolver_nomb_correg_canonico(${sql.raw(info.columnaEntidad)}) AS entidad,
+        ${sql.raw(info.columnaGrupo)} AS tipo_entidad,
+        COUNT(DISTINCT ${sql.raw(info.columnaPeriodo)}) AS n_periodos_reporto
+      FROM ${sql.raw(info.tablaRaw)}
+      WHERE ${sql.raw(info.columnaPeriodo)} BETWEEN ${periodo - 100} AND ${periodo}
+        AND ${sql.raw(info.columnaGrupo)} IN ('BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES')
+      GROUP BY 1, 2
+      HAVING COUNT(DISTINCT ${sql.raw(info.columnaPeriodo)}) >= 1
+    ),
+    presentes AS (
+      SELECT
+        dw.resolver_nomb_correg_canonico(${sql.raw(info.columnaEntidad)}) AS entidad,
+        ${sql.raw(info.columnaGrupo)} AS tipo,
+        COUNT(*)::int AS n
+      FROM ${sql.raw(info.tablaRaw)}
+      WHERE ${sql.raw(info.columnaPeriodo)} = ${periodo}
+      GROUP BY 1, 2
+    )
+    SELECT e.entidad, e.tipo_entidad,
+           COALESCE(p.n, 0) AS filas_raw,
+           (p.n IS NOT NULL) AS presente
+    FROM esperadas e
+    LEFT JOIN presentes p ON p.entidad = e.entidad AND p.tipo = e.tipo_entidad
+    ORDER BY e.tipo_entidad, e.entidad
+  `);
+
+  return rows.map((r) => ({
+    entidad: r.entidad as string,
+    tipoEntidad: r.tipo_entidad as string,
+    presente: Boolean(r.presente),
+    filasRaw: Number(r.filas_raw),
+  }));
+}
+
 /** Lista de archivos descargados para periodo+topico con su status + URL. */
 export type ArchivoTopicoRow = {
   id: string;
