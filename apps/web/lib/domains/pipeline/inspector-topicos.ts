@@ -658,15 +658,22 @@ export type VerificacionArchivo = {
   grupo: string;
   nombreArchivo: string;
   status: string;
-  /** Filas que el importer reporto al insertar (snapshot momento del import). */
+  /** Filas que el importer reporto al insertar (snapshot momento del import).
+   *  NULL = importer viejo no lo guardo (no significa que no se proceso). */
   filasInsertadasSnapshot: number | null;
   /** Filas que ACTUALMENTE estan en raw.<topico>_observacion para
    *  (periodo, tipo_entidad) inferido del grupo. */
   filasActualesRaw: number;
   /** Diff: snapshot - actuales. >0 = se perdieron filas, <0 = se agregaron
-   *  filas post-import (raro), 0 = todo OK. */
-  diff: number;
-  estado: "ok" | "diff_perdidas" | "diff_agregadas" | "sin_data" | "no_procesado";
+   *  filas post-import (raro), 0 = todo OK. NULL si no hay snapshot para comparar. */
+  diff: number | null;
+  estado:
+    | "ok"
+    | "ok_sin_snapshot"
+    | "diff_perdidas"
+    | "diff_agregadas"
+    | "sin_data"
+    | "no_procesado";
 };
 
 /** Mapping grupo (path raw) → tipo_entidad (columna en raw.*). */
@@ -719,16 +726,27 @@ export async function getVerificacionTopico(
     const tipo = colGrupo ? GRUPO_TO_TIPO_ENTIDAD[grupo] ?? grupo.toUpperCase() : "__all__";
     const snapshot = a.filas_insertadas != null ? Number(a.filas_insertadas) : null;
     const actuales = conteosRaw.get(tipo) ?? 0;
-    const diff = snapshot != null ? snapshot - actuales : 0;
+    const status = a.status as string;
+    const diff = snapshot != null ? snapshot - actuales : null;
 
     let estado: VerificacionArchivo["estado"];
-    if (snapshot == null) {
-      estado = "no_procesado";
+    if (status === "no_publicado_sbs") {
+      estado = "sin_data";
+    } else if (snapshot == null) {
+      // El importer viejo no guardo el contador. Si hay filas en raw =>
+      // sí se procesó, solo no tenemos snapshot para comparar.
+      if (actuales > 0) {
+        estado = "ok_sin_snapshot";
+      } else if (status === "procesado") {
+        estado = "sin_data"; // procesado pero raw vacío (raro)
+      } else {
+        estado = "no_procesado";
+      }
     } else if (snapshot === 0 && actuales === 0) {
       estado = "sin_data";
     } else if (diff === 0) {
       estado = "ok";
-    } else if (diff > 0) {
+    } else if (diff !== null && diff > 0) {
       estado = "diff_perdidas";
     } else {
       estado = "diff_agregadas";
@@ -915,9 +933,8 @@ export async function getArchivosTopico(
            descargado_en::text, procesado_en::text
     FROM raw.archivos_descargados
     WHERE topico = ${topico} AND periodo = ${periodo}
-    ORDER BY grupo
   `);
-  return rows.map((r) => ({
+  const out = rows.map((r) => ({
     id: r.id as string,
     grupo: r.grupo as string,
     nombreArchivo: r.nombre_archivo as string,
@@ -929,4 +946,7 @@ export async function getArchivosTopico(
     descargadoEn: r.descargado_en as string,
     procesadoEn: (r.procesado_en as string) ?? null,
   }));
+  // Orden oficial SBS: Bancos -> Financieras -> Cajas Municipales -> Cajas Rurales -> Empresas de Créditos
+  out.sort((a, b) => ordenGrupo(a.grupo) - ordenGrupo(b.grupo));
+  return out;
 }
