@@ -805,6 +805,92 @@ export async function getVerificacionEntidades(
   }));
 }
 
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Contenido crudo del archivo SBS (grid universal — V119)                  */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+/** Una celda del grid del .xls SBS. */
+export type ArchivoCeldaRow = {
+  sheetIdx: number;
+  sheetName: string;
+  fila: number;
+  columna: number;
+  valorText: string;
+  valorNumero: number | null;
+};
+
+/** Devuelve el grid completo del archivo agrupado por hoja. */
+export type ArchivoContenido = {
+  archivoId: string;
+  sheets: Array<{
+    idx: number;
+    name: string;
+    nRows: number;
+    nCols: number;
+    /** Matriz cells[fila][columna] = valor_text (null si celda vacia). */
+    cells: (string | null)[][];
+  }>;
+};
+
+export async function getArchivoContenido(
+  archivoId: string,
+): Promise<ArchivoContenido | null> {
+  const rows = await db.execute<{
+    sheet_idx: number;
+    sheet_name: string;
+    fila: number;
+    columna: number;
+    valor_text: string;
+  }>(sql`
+    SELECT sheet_idx, sheet_name, fila, columna, valor_text
+    FROM raw.archivo_contenido
+    WHERE archivo_id = ${archivoId}
+    ORDER BY sheet_idx, fila, columna
+  `);
+  if (rows.length === 0) return null;
+
+  // Agrupar por sheet y construir matriz dense
+  const sheetsMap = new Map<number, { name: string; cells: Map<string, string> }>();
+  let maxRow = 0;
+  let maxCol = 0;
+  for (const r of rows) {
+    const idx = Number(r.sheet_idx);
+    if (!sheetsMap.has(idx)) {
+      sheetsMap.set(idx, { name: r.sheet_name, cells: new Map() });
+    }
+    sheetsMap.get(idx)!.cells.set(`${r.fila}|${r.columna}`, r.valor_text);
+    if (r.fila > maxRow) maxRow = r.fila;
+    if (r.columna > maxCol) maxCol = r.columna;
+  }
+
+  const sheets = Array.from(sheetsMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([idx, sh]) => {
+      // Calcular dimensions reales por sheet
+      let mr = 0;
+      let mc = 0;
+      for (const key of sh.cells.keys()) {
+        const [r, c] = key.split("|").map(Number);
+        if ((r ?? 0) > mr) mr = r ?? 0;
+        if ((c ?? 0) > mc) mc = c ?? 0;
+      }
+      const nRows = mr + 1;
+      const nCols = mc + 1;
+      // Construir matriz dense
+      const cells: (string | null)[][] = [];
+      for (let r = 0; r < nRows; r++) {
+        const row: (string | null)[] = [];
+        for (let c = 0; c < nCols; c++) {
+          row.push(sh.cells.get(`${r}|${c}`) ?? null);
+        }
+        cells.push(row);
+      }
+      return { idx, name: sh.name, nRows, nCols, cells };
+    });
+
+  return { archivoId, sheets };
+}
+
 /** Lista de archivos descargados para periodo+topico con su status + URL. */
 export type ArchivoTopicoRow = {
   id: string;

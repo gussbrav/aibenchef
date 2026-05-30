@@ -184,6 +184,7 @@ export default async function InspectorTopicoDetallePage({
                   <th className="text-left p-2">Archivo</th>
                   <th className="text-left p-2">Status</th>
                   <th className="text-right p-2">Filas insertadas</th>
+                  <th className="text-left p-2">Ver crudo</th>
                   <th className="text-left p-2">SBS</th>
                 </tr>
               </thead>
@@ -202,6 +203,14 @@ export default async function InspectorTopicoDetallePage({
                     </td>
                     <td className="p-2 text-right font-mono">
                       {a.filasInsertadas?.toLocaleString() ?? "—"}
+                    </td>
+                    <td className="p-2">
+                      <Link
+                        href={`/dashboard/admin/inspector-topicos/${topico}/archivo/${a.id}` as Route}
+                        className="text-sky-700 hover:underline text-[11px]"
+                      >
+                        Grid →
+                      </Link>
                     </td>
                     <td className="p-2">
                       {a.sourceUrl && (
