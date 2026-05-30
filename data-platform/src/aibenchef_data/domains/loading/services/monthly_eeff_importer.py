@@ -354,7 +354,13 @@ class MonthlyEeffImporter:
             if name_codigo:
                 codigo = name_codigo
                 cuenta_nombre_canonico = name_nombre
-                if es_header:
+                # Solo actualizar parent si el codigo es un verdadero header con
+                # sub-cuentas (issue #65): "C.T.S." (B1.3.3) o "OTROS" en hoja
+                # de banca a veces aparecen mayusculas pero NO son parents
+                # validos. Si los aceptamos, el find_child siguiente busca
+                # bajo el parent equivocado y falla → fall a position_lookup
+                # que asigna mal.
+                if es_header and lookup.has_children(codigo):
                     current_parent_codigo = codigo
             elif position_lookup.has(orden):
                 # Fallback a position. NULL => skip conocido.
@@ -363,12 +369,18 @@ class MonthlyEeffImporter:
                     continue
                 codigo = pos_codigo
                 cuenta_nombre_canonico = position_lookup.get_nombre(orden)
-                if es_header:
+                if es_header and lookup.has_children(codigo):
                     current_parent_codigo = codigo
 
             # Captura de celdas crudas — corre para TODAS las entidades del layout,
             # incluso si codigo no resolvio. Es justamente la senal que el inspector
             # usa para mostrar "fila en archivo sin codigo en cabecera".
+            #
+            # SBS convention: celda vacia o "-" en MN/ME/TOTAL = 0 (sin movimiento).
+            # Si la fila tiene codigo resuelto, guardar SIEMPRE con 0 explicito
+            # para celdas vacias — asi el inspector muestra "0.00" en vez de "—"
+            # (que se confunde con "data no llego al parser"). Si codigo es NULL,
+            # solo guardar cuando hay al menos un valor numerico real.
             for entidad_info in layout.entidades:
                 vals_raw: dict[str, float] = {}
                 for moneda, col_idx in entidad_info.monedas.items():
@@ -377,10 +389,17 @@ class MonthlyEeffImporter:
                     if v is not None:
                         vals_raw[moneda] = v
 
-                # Solo guardar la fila si tiene al menos UN valor — filas
-                # totalmente vacias (todas las celdas blancas) no aportan
-                # informacion al inspector y solo inflan la tabla.
-                if vals_raw:
+                # Si codigo se resolvio: completar monedas presentes en el layout
+                # con 0 (celda vacia = SBS dice "sin movimiento"). Monedas que NO
+                # estan en el layout (ej. TOTAL para BANCOS) quedan NULL — eso
+                # significa "SBS no publica esta columna para esta entidad".
+                if codigo:
+                    for moneda in entidad_info.monedas:
+                        vals_raw.setdefault(moneda, 0.0)
+
+                # Filtro: guardar si codigo resuelto, o si hay al menos UN valor
+                # numerico real (este ultimo para detectar drops del parser).
+                if codigo or vals_raw:
                     cells_raw.append(
                         (
                             layout.periodo_yyyymm,
@@ -392,7 +411,7 @@ class MonthlyEeffImporter:
                             nombre_raw.strip(),
                             vals_raw.get("MN"),
                             vals_raw.get("ME"),
-                            vals_raw.get("TOTAL"),  # NULL si SBS no lo publica
+                            vals_raw.get("TOTAL"),  # NULL si SBS no publica la columna
                             archivo_id,
                             source_file,
                             codigo,  # V114: NULL si parser no resolvio — JOIN por codigo en inspector
@@ -911,6 +930,22 @@ class _CuentaLookup:
             instance._child_by_parent_name.setdefault((parent, nombre_norm), (codigo, nombre))
 
         return instance
+
+    def has_children(self, codigo: str) -> bool:
+        """True si el codigo tiene sub-cuentas registradas en cabecera_maestra.
+
+        Usado por el parser para validar que un codigo es un verdadero header
+        (parent valido) antes de actualizar current_parent_codigo. Evita que
+        codigos mayusculas pero leaf (ej "C.T.S." = B1.3.3) corrompan el
+        parent tracker (issue #65).
+
+        Tambien siempre True para top-level sections (A, B, C, D, T) — son
+        headers conceptualmente aunque no tengan entries directas en
+        _child_by_parent_name (sus children estan registrados bajo grand_parent).
+        """
+        if len(codigo) == 1:
+            return True
+        return any(p == codigo for (p, _) in self._child_by_parent_name)
 
     def find_header(self, section: str, nombre_norm: str) -> tuple[str, str] | None:
         # BUG issue #65: V108 generó aliases automaticos desde "file variants"
