@@ -252,10 +252,11 @@ export default async function InspectorTopicoDetallePage({
               <li><strong>Snapshot importer</strong>: filas que el importer dijo haber insertado cuando procesó el archivo.</li>
               <li><strong>Filas actuales raw</strong>: filas que están AHORA en la tabla raw de este tópico.</li>
               <li><strong>Diff = Snapshot − Actuales</strong>: si es positivo, se perdieron filas; si es negativo, alguien re-importó y agregó.</li>
-              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">✓ ok</span> — todo consistente</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">✓ ok</span> — snapshot == filas actuales, todo consistente</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">✓ ok (sin snapshot)</span> — archivo procesado correctamente (hay filas en raw) pero el importer antiguo no guardó el contador, no podemos comparar diff</li>
               <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-semibold">⚠ filas perdidas</span> — el importer dijo X filas, hoy hay menos</li>
               <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">⚠ filas agregadas</span> — hoy hay más filas que las que el importer reportó (re-import posterior)</li>
-              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">sin data</span> — archivo procesado pero raw vacío</li>
+              <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">sin data</span> — archivo procesado pero raw vacío (caso "no publicado SBS")</li>
               <li><span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold">no procesado</span> — archivo descargado pero el importer todavía no lo procesó</li>
             </ul>
           </details>
@@ -284,14 +285,19 @@ export default async function InspectorTopicoDetallePage({
                     </td>
                     <td
                       className={`p-2 text-right font-mono ${
-                        v.diff === 0
+                        v.diff == null || v.diff === 0
                           ? "text-slate-400"
                           : v.diff > 0
                             ? "text-red-700 font-semibold"
                             : "text-amber-700 font-semibold"
                       }`}
+                      title={v.diff == null ? "Sin snapshot del importer para comparar" : undefined}
                     >
-                      {v.diff === 0 ? "—" : v.diff > 0 ? `+${v.diff}` : v.diff}
+                      {v.diff == null || v.diff === 0
+                        ? "—"
+                        : v.diff > 0
+                          ? `+${v.diff}`
+                          : v.diff}
                     </td>
                     <td className="p-2">
                       <VerifBadge estado={v.estado} />
@@ -479,38 +485,52 @@ export default async function InspectorTopicoDetallePage({
 function VerifBadge({ estado }: { estado: VerificacionArchivo["estado"] }) {
   const map: Record<
     VerificacionArchivo["estado"],
-    { label: string; cls: string; icon: React.ReactNode }
+    { label: string; cls: string; icon: React.ReactNode; title?: string }
   > = {
     ok: {
       label: "ok",
       cls: "bg-emerald-100 text-emerald-800",
       icon: <CheckCircle2 className="w-3 h-3" />,
+      title: "Snapshot == filas actuales: todo consistente",
+    },
+    ok_sin_snapshot: {
+      label: "ok (sin snapshot)",
+      cls: "bg-emerald-100 text-emerald-800",
+      icon: <CheckCircle2 className="w-3 h-3" />,
+      title:
+        "Archivo procesado correctamente (hay filas en raw) pero el importer antiguo no guardo contador de filas insertadas, asi que no podemos comparar diff.",
     },
     diff_perdidas: {
       label: "filas perdidas",
       cls: "bg-red-100 text-red-800",
       icon: <AlertCircle className="w-3 h-3" />,
+      title: "Hoy hay menos filas en raw que las que el importer reporto insertar",
     },
     diff_agregadas: {
       label: "filas agregadas",
       cls: "bg-amber-100 text-amber-800",
       icon: <AlertTriangle className="w-3 h-3" />,
+      title:
+        "Hoy hay mas filas en raw que las que el importer reporto (re-import o backfill posterior)",
     },
     sin_data: {
       label: "sin data",
       cls: "bg-slate-100 text-slate-600",
       icon: <Clock className="w-3 h-3" />,
+      title: "Archivo procesado pero sin filas en raw (caso 'no publicado SBS' o data vacia)",
     },
     no_procesado: {
       label: "no procesado",
       cls: "bg-slate-100 text-slate-500",
       icon: <Clock className="w-3 h-3" />,
+      title: "Archivo descargado pero el importer todavia no lo proceso",
     },
   };
   const v = map[estado];
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${v.cls}`}
+      title={v.title}
     >
       {v.icon}
       {v.label}
