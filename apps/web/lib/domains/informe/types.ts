@@ -34,6 +34,9 @@ export type Kpi = {
   signo: 1 | -1;
   seccion: KpiSeccion;
   valores: KpiValor[];
+  /** Tooltip opcional explicando la metodologia del KPI
+   *  (ej. "Utilidad anualizada trailing 12 meses (TTM)"). */
+  tooltip?: string;
 };
 
 export type PuntoEquilibrioRow = {
@@ -42,6 +45,18 @@ export type PuntoEquilibrioRow = {
   esTotal?: boolean;
   esSubtotal?: boolean;
   indentado?: boolean;
+  /** Tooltip opcional explicando el indicador (ej. "anualizada trailing 12 meses"). */
+  tooltip?: string;
+};
+
+/** Comparativa historica de %Margen Neto (Punto Equilibrio Anualizado).
+ *  Replica el formato Excel: 3 filas con el mismo indicador en 3 cortes. */
+export type MargenNetoHistoricoRow = {
+  /** Label corto del periodo (ej. "Abr-20", "Dic-19", "Abr-19"). */
+  periodoLabel: string;
+  /** Codigo YYYYMM. */
+  periodo: number;
+  valores: Record<string, number | null>;
 };
 
 export type BubblePoint = {
@@ -91,6 +106,8 @@ export type InformeData = {
   competidores: Competidor[];
   cuadroResumen: Kpi[];
   puntoEquilibrio: PuntoEquilibrioRow[];
+  /** Comparativa anualizada %Margen Neto en 3 cortes (actual / Dic año previo / mismo mes año previo). */
+  margenNetoHistorico: MargenNetoHistoricoRow[];
   margenNetoBubble: BubblePoint[];
   margenNetoWaterfall: WaterfallData[];
   comentarios: Record<string, string>;

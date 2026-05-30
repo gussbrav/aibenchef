@@ -22,6 +22,7 @@ import type {
   InformeData,
   Kpi,
   KpiValor,
+  MargenNetoHistoricoRow,
   PuntoEquilibrioRow,
   BubblePoint,
   WaterfallData,
@@ -64,6 +65,12 @@ function periodoMismoMesAnioPrev(periodo: number): number {
   const anio = Math.floor(periodo / 100);
   const mes = periodo % 100;
   return (anio - 1) * 100 + mes;
+}
+
+/** Diciembre del año anterior al periodo. Para Abr 2020 → Dic 2019. */
+function periodoDicAnioPrev(periodo: number): number {
+  const anio = Math.floor(periodo / 100);
+  return (anio - 1) * 100 + 12;
 }
 
 // ============================================================================
@@ -243,7 +250,7 @@ async function getPuntoEquilibrioForPeriodo(periodo: number, entidades: string[]
       WITH input AS (
         SELECT label,
                ${consolidar
-                 ? sql.raw("dw.resolver_nomb_correg_canonico(label)")
+                 ? sql.raw(`dw.resolver_nomb_correg_para_periodo(label, ${periodo})`)
                  : sql.raw(`dw.nombre_vigente_en_periodo(label, ${periodo})`)} AS canon
         FROM unnest(${entidadesArr}) AS t(label)
       ),
@@ -618,6 +625,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "cartera",
+      tooltip:
+        "Variación de la Cartera Bruta vs el mismo mes del año anterior (year-over-year).",
       valores: mk((r) => {
         if (r.cartera_bruta == null || r.cartera_bruta_prev_anual == null || r.cartera_bruta_prev_anual === 0) return null;
         return Number(r.cartera_bruta) / Number(r.cartera_bruta_prev_anual) - 1;
@@ -676,6 +685,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: -1,
       seccion: "eficiencia",
+      tooltip:
+        "Anualizado trailing 12 meses. Numerador: gastos operacionales TTM. Denominador: Margen Bruto + INOF neto TTM.",
       // Excel r115: (cta_10_1 + cta_10_2 + cta_10_3 + cta_10_4 + cta_12_7 + cta_12_8)_TTM
       //          / ((cta_1 - cta_2) + (cta_6 - cta_7))_TTM
       valores: mk((r) => {
@@ -694,6 +705,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "eficiencia",
+      tooltip:
+        "Anualizado trailing 12 meses. INOF neto (ingresos por servicios financieros netos) / (Ingresos Financieros + INOF) TTM.",
       // Excel r685: (cta_6 - cta_7)_TTM / Ingresos_Totales_TTM
       // Ingresos Totales ≈ cta_1_TTM + cta_6_TTM (simplificacion sin "dif positiva" otros)
       valores: mk((r) => {
@@ -748,6 +761,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "moneda_mm",
       signo: 1,
       seccion: "rentabilidad",
+      tooltip:
+        "Utilidad neta ANUALIZADA — suma de los últimos 12 meses (trailing twelve months, TTM) terminados en el periodo seleccionado. En millones de soles.",
       // utilidad_ttm en miles_S/, mm() divide por 1000 -> MM_S/
       valores: mk((r) => mm(r.utilidad_ttm)),
     },
@@ -757,6 +772,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "rentabilidad",
+      tooltip:
+        "Return on Equity anualizado. Utilidad TTM / Patrimonio promedio 12 meses.",
       // Excel r552: Utilidad_TTM / Patrimonio_prom_12m
       valores: mk((r) => {
         if (r.utilidad_ttm == null || r.patrimonio_prom_12m == null || r.patrimonio_prom_12m === 0) return null;
@@ -769,6 +786,8 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "rentabilidad",
+      tooltip:
+        "Return on Assets anualizado. Utilidad TTM / Activos promedio 12 meses.",
       // Excel r558: Utilidad_TTM / Activos_prom_12m
       valores: mk((r) => {
         if (r.utilidad_ttm == null || r.activos_prom_12m == null || r.activos_prom_12m === 0) return null;
@@ -959,11 +978,13 @@ export async function getInformeData(opts: {
 
   const entidadesNombs = competidores.map((c) => c.nombCorreg);
   const periodoPrev = periodoMismoMesAnioPrev(opts.periodo);
+  const periodoDicPrev = periodoDicAnioPrev(opts.periodo);
 
   const consolidar = opts.consolidar !== false; // default true
-  const [peActual, pePrev, cuadroRaw] = await Promise.all([
+  const [peActual, pePrev, peDicPrev, cuadroRaw] = await Promise.all([
     getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs, consolidar),
     getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs, consolidar),
+    getPuntoEquilibrioForPeriodo(periodoDicPrev, entidadesNombs, consolidar),
     getCuadroResumenRaw(opts.periodo, entidadesNombs, consolidar),
   ]);
 
@@ -981,6 +1002,14 @@ export async function getInformeData(opts: {
 
   const cuadroResumen = buildCuadroResumen(cuadroRaw, competidores);
   const puntoEquilibrio = buildPuntoEquilibrioRows(peActual, competidores);
+  const margenNetoHistorico = buildMargenNetoHistorico(
+    [
+      { periodo: opts.periodo, map: peActual },
+      { periodo: periodoDicPrev, map: peDicPrev },
+      { periodo: periodoPrev, map: pePrev },
+    ],
+    competidores,
+  );
   const { bubble, waterfall } = buildBubbleAndWaterfall(peActual, pePrev, competidores);
 
   return {
@@ -990,6 +1019,7 @@ export async function getInformeData(opts: {
     competidores,
     cuadroResumen,
     puntoEquilibrio,
+    margenNetoHistorico,
     margenNetoBubble: bubble,
     margenNetoWaterfall: waterfall,
     comentarios: {
@@ -998,6 +1028,29 @@ export async function getInformeData(opts: {
     },
     cobertura,
   };
+}
+
+/** Construye 3 filas de %Margen Neto comparativo (actual + 2 historicos). */
+function buildMargenNetoHistorico(
+  cortes: { periodo: number; map: Map<string, PuntoEqRow> }[],
+  competidores: Competidor[],
+): MargenNetoHistoricoRow[] {
+  return cortes.map(({ periodo, map }) => {
+    const valores: Record<string, number | null> = {};
+    for (const c of competidores) {
+      const r = map.get(c.nombCorreg);
+      valores[c.labelCorto] = r ? (r.pct_margen_neto ?? null) : null;
+    }
+    return { periodo, periodoLabel: periodoLabelCorto(periodo), valores };
+  });
+}
+
+/** Label compacto tipo "Abr-20" para encabezados. */
+function periodoLabelCorto(periodo: number): string {
+  const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const anio = Math.floor(periodo / 100);
+  const mes = periodo % 100;
+  return `${meses[mes - 1] ?? "?"}-${String(anio).slice(2)}`;
 }
 
 // ============================================================================
