@@ -6,18 +6,11 @@
  */
 
 import type { CoberturaRow } from "@/lib/domains/pipeline";
+import { labelGrupo, ORDEN_GRUPOS_DB } from "@/lib/domains/shared/grupos";
 
-// La DB guarda grupos en lowercase singular (consistente con paths
-// /local-data/raw/<grupo>/). Mapeamos a nombres "comerciales" para mostrar
-// en la tabla.
-const GRUPO_LABEL: Record<string, string> = {
-  banca_multiple: "BANCOS",
-  financiera: "FINANCIERAS",
-  cmac: "CMAC",
-  crac: "CRAC",
-  edpyme: "EDPYMES",
-};
-const GRUPOS_ORDEN = ["banca_multiple", "financiera", "cmac", "crac", "edpyme"];
+// Orden uniforme en toda la UI: Bancos → Financieras → Cajas Municipales →
+// Cajas Rurales → Empresas de Créditos.
+const GRUPOS_ORDEN = [...ORDEN_GRUPOS_DB];
 
 export function CoberturaSection({ rows }: { rows: CoberturaRow[] }) {
   if (rows.length === 0) {
@@ -31,7 +24,7 @@ export function CoberturaSection({ rows }: { rows: CoberturaRow[] }) {
   // Pivot: { topico → { grupo → CoberturaRow } }
   const topicos = Array.from(new Set(rows.map((r) => r.topico))).sort();
   const gruposPresentes = new Set(rows.map((r) => r.grupo));
-  const gruposEff = GRUPOS_ORDEN.filter((g) => gruposPresentes.has(g));
+  const gruposEff: string[] = GRUPOS_ORDEN.filter((g) => gruposPresentes.has(g));
   // Fallback: grupos no listados en GRUPOS_ORDEN aparecen al final.
   for (const g of gruposPresentes) {
     if (!gruposEff.includes(g)) gruposEff.push(g);
@@ -55,7 +48,7 @@ export function CoberturaSection({ rows }: { rows: CoberturaRow[] }) {
                 key={g}
                 className="text-center p-2 border-b font-semibold text-slate-700 min-w-[80px]"
               >
-                {GRUPO_LABEL[g] ?? g.toUpperCase()}
+                {labelGrupo(g)}
               </th>
             ))}
             <th className="text-center p-2 border-b font-semibold text-slate-700">

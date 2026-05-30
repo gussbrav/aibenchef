@@ -12,6 +12,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { ExternalLink, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { labelGrupo } from "@/lib/domains/shared/grupos";
 import {
   TOPICO_REGISTRY,
   getArchivosTopico,
@@ -137,7 +138,7 @@ export default async function InspectorTopicoDetallePage({
               <tbody>
                 {archivos.map((a) => (
                   <tr key={a.id} className="border-t hover:bg-slate-50">
-                    <td className="p-2 font-mono uppercase">{a.grupo}</td>
+                    <td className="p-2">{labelGrupo(a.grupo)}</td>
                     <td className="p-2 font-mono">{a.nombreArchivo}</td>
                     <td className="p-2">
                       <StatusBadge status={a.status} />
@@ -195,7 +196,7 @@ export default async function InspectorTopicoDetallePage({
                       className={`border-t ${esActual ? "bg-blue-50 font-semibold" : "hover:bg-slate-50"}`}
                     >
                       <td className="p-2">{e.entidad}</td>
-                      <td className="p-2 text-slate-500 text-[11px]">{e.tipoEntidad}</td>
+                      <td className="p-2 text-slate-500 text-[11px]">{labelGrupo(e.tipoEntidad)}</td>
                       <td className="p-2 text-right font-mono">
                         {e.total != null ? e.total.toLocaleString() : "—"}
                       </td>

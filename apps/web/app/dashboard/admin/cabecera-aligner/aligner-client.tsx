@@ -9,6 +9,7 @@ import { useState, useTransition } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 
 import type { CabeceraDiffRow, TipoEstado } from "@/lib/domains/pipeline";
+import { labelGrupo } from "@/lib/domains/shared/grupos";
 
 export function CabeceraAlignerClient({
   tiposEstado,
@@ -126,7 +127,7 @@ export function CabeceraAlignerClient({
           label="Tipo entidad"
           value={currentTipoEntidad}
           onChange={(v) => navigate({ tipoEntidad: v })}
-          options={tiposEntidad.map((t) => ({ value: t, label: t }))}
+          options={tiposEntidad.map((t) => ({ value: t, label: labelGrupo(t) }))}
         />
         <SelectField
           label="Periodo (fuente de nombres)"

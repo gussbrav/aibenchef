@@ -11,6 +11,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
+import { ordenGrupo } from "@/lib/domains/shared/grupos";
 
 export type TopicoInfo = {
   topico: string;
@@ -148,6 +149,19 @@ export async function getTopicoResumen(
   }));
 }
 
+/** Último periodo del tópico CON data real en la tabla raw (no solo descargado).
+ *  Usado por el landing para mostrar stats útiles en vez del último descargado
+ *  que puede tener 0 filas porque aún no se ha procesado. */
+export async function getUltimoPeriodoConData(topico: string): Promise<number | null> {
+  const info = TOPICO_REGISTRY[topico];
+  if (!info) return null;
+  const rows = await db.execute<{ p: number | null }>(sql`
+    SELECT MAX(${sql.raw(info.columnaPeriodo)})::int AS p
+    FROM ${sql.raw(info.tablaRaw)}
+  `);
+  return rows[0]?.p ?? null;
+}
+
 /** Devuelve N filas raw de un tópico filtradas por periodo + entidad opcional.
  *  Para inspección visual estilo "adminer mini".  */
 export async function getTopicoRawSample(
@@ -206,6 +220,23 @@ export type ResumenEntidadRow = {
 };
 
 export async function getResumenPorEntidad(
+  topico: string,
+  periodo: number,
+): Promise<ResumenEntidadRow[]> {
+  const out = await _getResumenPorEntidadRaw(topico, periodo);
+  // Orden uniforme en TODA la UI: Bancos → Financieras → Cajas Municipales →
+  // Cajas Rurales → Empresas de Créditos. Dentro de cada grupo, por total DESC.
+  return out.sort((a, b) => {
+    const og = ordenGrupo(a.tipoEntidad) - ordenGrupo(b.tipoEntidad);
+    if (og !== 0) return og;
+    const ta = a.total ?? Number.NEGATIVE_INFINITY;
+    const tb = b.total ?? Number.NEGATIVE_INFINITY;
+    if (tb !== ta) return tb - ta;
+    return a.entidad.localeCompare(b.entidad);
+  });
+}
+
+async function _getResumenPorEntidadRaw(
   topico: string,
   periodo: number,
 ): Promise<ResumenEntidadRow[]> {

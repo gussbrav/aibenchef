@@ -18,13 +18,8 @@ const TOPICO_LABEL: Record<string, string> = {
   indicadores: "Indicadores Prudenciales",
 };
 
-const GRUPO_LABEL: Record<string, string> = {
-  banca_multiple: "Banca Múltiple",
-  financiera: "Empresas Financieras",
-  cmac: "Cajas Municipales (CMAC)",
-  crac: "Cajas Rurales (CRAC)",
-  edpyme: "Edpymes",
-};
+// Orden y labels oficiales SBS — sincronizado con shared/grupos.ts
+import { labelGrupo, ORDEN_GRUPOS_DB } from "@/lib/domains/shared/grupos";
 
 export function MatrizArchivos({ celdas }: { celdas: MatrizCelda[] }) {
   const [grupoExpand, setGrupoExpand] = useState<string | null>(null);
@@ -43,8 +38,7 @@ export function MatrizArchivos({ celdas }: { celdas: MatrizCelda[] }) {
     return t;
   }, [celdas]);
 
-  const gruposOrdenados = ["banca_multiple", "financiera", "cmac", "crac", "edpyme"]
-    .filter((g) => tree.has(g));
+  const gruposOrdenados = ORDEN_GRUPOS_DB.filter((g) => tree.has(g));
 
   return (
     <div className="space-y-6">
@@ -63,7 +57,7 @@ export function MatrizArchivos({ celdas }: { celdas: MatrizCelda[] }) {
             >
               <div className="flex items-center gap-3">
                 <span className="text-base font-semibold text-slate-900">
-                  {GRUPO_LABEL[grupo] ?? grupo}
+                  {labelGrupo(grupo)}
                 </span>
                 <span className="text-xs text-slate-500">
                   {topicos.size} tópicos · {totalArchivos.toLocaleString()} archivos
