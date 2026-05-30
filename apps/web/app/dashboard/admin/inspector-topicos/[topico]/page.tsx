@@ -1,18 +1,22 @@
 /**
- * Detalle por tópico — vista de un tópico SBS con:
- *  - Resumen de últimos 24 periodos (archivos, procesados, errores, filas raw)
- *  - Sample lineal de las filas raw filtradas por periodo + entidad
+ * Detalle por tópico — inspector funcional con pivots específicos.
  *
- * Aplica a todos los tópicos del registry (oficinas, personal, clientes, etc.).
+ * Estructura:
+ *  1. Resumen últimos 24 periodos (cobertura por periodo)
+ *  2. Archivos descargados del periodo seleccionado (con links + status)
+ *  3. Resumen por entidad (total agregado de la métrica principal)
+ *  4. Detalle de UNA entidad (pivot dim × metricas específico del tópico)
  */
 
 import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
+import { ExternalLink, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import {
   TOPICO_REGISTRY,
-  getTopicoEntidades,
-  getTopicoRawSample,
+  getArchivosTopico,
+  getDetalleEntidad,
+  getResumenPorEntidad,
   getTopicoResumen,
 } from "@/lib/domains/pipeline/inspector-topicos";
 
@@ -35,13 +39,25 @@ export default async function InspectorTopicoDetallePage({
 
   const resumen = await getTopicoResumen(topico, 24);
   const periodoActual = sp.periodo ? Number(sp.periodo) : resumen[0]?.periodo ?? 0;
-  const entidades = await getTopicoEntidades(topico, periodoActual);
-  const entidadActual = sp.entidad ?? entidades[0] ?? "";
-  const sample = await getTopicoRawSample(topico, {
-    periodo: periodoActual,
-    entidad: entidadActual || undefined,
-    limit: 200,
-  });
+
+  const [archivos, resumenEntidades] = await Promise.all([
+    getArchivosTopico(topico, periodoActual),
+    getResumenPorEntidad(topico, periodoActual),
+  ]);
+
+  const entidadActual =
+    sp.entidad ?? resumenEntidades[0]?.entidad ?? "";
+  const detalle = entidadActual
+    ? await getDetalleEntidad(topico, periodoActual, entidadActual)
+    : { dimColumns: [], metricColumns: [], rows: [] };
+
+  // Filtrar entidades por tipo (BANCOS, CMAC, etc) para selectores agrupados
+  const entidadesPorTipo = new Map<string, typeof resumenEntidades>();
+  for (const e of resumenEntidades) {
+    const k = e.tipoEntidad ?? "(sin tipo)";
+    if (!entidadesPorTipo.has(k)) entidadesPorTipo.set(k, []);
+    entidadesPorTipo.get(k)!.push(e);
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
@@ -55,9 +71,10 @@ export default async function InspectorTopicoDetallePage({
         <p className="text-xs text-slate-500 font-mono">{info.tablaRaw}</p>
       </div>
 
+      {/* 1. Resumen periodos */}
       <section>
         <h2 className="text-sm font-semibold text-slate-700 mb-2">
-          Últimos {resumen.length} periodos
+          Últimos {resumen.length} periodos · cobertura del tópico
         </h2>
         <div className="overflow-x-auto rounded border border-slate-200">
           <table className="text-xs w-full">
@@ -100,63 +117,143 @@ export default async function InspectorTopicoDetallePage({
         </div>
       </section>
 
-      {entidades.length > 0 && (
+      {/* 2. Archivos del periodo */}
+      {archivos.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-slate-700 mb-2">
-            Sample raw — periodo {periodoActual}
+            Archivos SBS — periodo {periodoActual}
           </h2>
-          <div className="flex items-center gap-3 mb-3">
-            <label className="text-xs text-slate-600">Entidad:</label>
-            <form className="flex gap-2 flex-wrap">
-              <input type="hidden" name="periodo" value={periodoActual} />
-              <select
-                name="entidad"
-                defaultValue={entidadActual}
-                className="border border-slate-300 rounded px-2 py-1 text-xs bg-white min-w-[280px]"
-              >
-                {entidades.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                className="px-3 py-1 text-xs bg-slate-900 text-white rounded hover:bg-slate-700"
-              >
-                Filtrar
-              </button>
-            </form>
-            <span className="text-xs text-slate-500 ml-auto">
-              {sample.filas.length} filas (max 200)
-            </span>
-          </div>
-
           <div className="overflow-x-auto rounded border border-slate-200">
-            <table className="text-[11px] w-full">
-              <thead className="bg-slate-100 text-slate-700 sticky top-0">
+            <table className="text-xs w-full">
+              <thead className="bg-slate-100 text-slate-700">
                 <tr>
-                  {sample.columnas.map((c) => (
-                    <th key={c} className="text-left p-1.5 font-semibold whitespace-nowrap">
-                      {c}
+                  <th className="text-left p-2">Grupo</th>
+                  <th className="text-left p-2">Archivo</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-right p-2">Filas insertadas</th>
+                  <th className="text-left p-2">SBS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {archivos.map((a) => (
+                  <tr key={a.id} className="border-t hover:bg-slate-50">
+                    <td className="p-2 font-mono uppercase">{a.grupo}</td>
+                    <td className="p-2 font-mono">{a.nombreArchivo}</td>
+                    <td className="p-2">
+                      <StatusBadge status={a.status} />
+                      {a.errorMensaje && (
+                        <div className="text-[10px] text-red-700 mt-0.5">
+                          {a.errorMensaje.slice(0, 60)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-2 text-right font-mono">
+                      {a.filasInsertadas?.toLocaleString() ?? "—"}
+                    </td>
+                    <td className="p-2">
+                      {a.sourceUrl && (
+                        <a
+                          href={a.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sky-700 hover:underline inline-flex items-center gap-0.5"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Original
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* 3. Resumen por entidad */}
+      {resumenEntidades.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">
+            Resumen por entidad — periodo {periodoActual}
+          </h2>
+          <div className="overflow-x-auto rounded border border-slate-200">
+            <table className="text-xs w-full">
+              <thead className="bg-slate-100 text-slate-700">
+                <tr>
+                  <th className="text-left p-2">Entidad</th>
+                  <th className="text-left p-2">Grupo</th>
+                  <th className="text-right p-2">{resumenEntidades[0]?.totalLabel ?? "Total"}</th>
+                  <th className="text-left p-2 w-20" />
+                </tr>
+              </thead>
+              <tbody>
+                {resumenEntidades.map((e) => {
+                  const esActual = e.entidad === entidadActual;
+                  return (
+                    <tr
+                      key={e.entidad}
+                      className={`border-t ${esActual ? "bg-blue-50 font-semibold" : "hover:bg-slate-50"}`}
+                    >
+                      <td className="p-2">{e.entidad}</td>
+                      <td className="p-2 text-slate-500 text-[11px]">{e.tipoEntidad}</td>
+                      <td className="p-2 text-right font-mono">
+                        {e.total != null ? e.total.toLocaleString() : "—"}
+                      </td>
+                      <td className="p-2">
+                        <Link
+                          href={
+                            `/dashboard/admin/inspector-topicos/${topico}?periodo=${periodoActual}&entidad=${encodeURIComponent(e.entidad)}` as Route
+                          }
+                          className="text-sky-700 hover:underline text-[11px]"
+                        >
+                          ver →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* 4. Detalle entidad seleccionada */}
+      {entidadActual && detalle.rows.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-slate-700 mb-2">
+            Detalle — <span className="text-slate-900">{entidadActual}</span>{" "}
+            ({periodoActual})
+          </h2>
+          <div className="overflow-x-auto rounded border border-slate-200">
+            <table className="text-xs w-full">
+              <thead className="bg-slate-100 text-slate-700">
+                <tr>
+                  {detalle.dimColumns.map((d) => (
+                    <th key={d} className="text-left p-2 font-semibold">
+                      {d}
+                    </th>
+                  ))}
+                  {detalle.metricColumns.map((m) => (
+                    <th key={m} className="text-right p-2 font-semibold">
+                      {m}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {sample.filas.map((row, idx) => (
-                  <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50">
-                    {sample.columnas.map((c) => {
-                      const v = row[c];
-                      const display =
-                        v == null ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v);
-                      const isNum = typeof v === "number" || (typeof v === "string" && /^-?\d/.test(v));
+                {detalle.rows.map((r, idx) => (
+                  <tr key={idx} className="border-t hover:bg-slate-50">
+                    {detalle.dimColumns.map((d) => (
+                      <td key={d} className="p-2">
+                        {r.dims[d] ?? "—"}
+                      </td>
+                    ))}
+                    {detalle.metricColumns.map((m) => {
+                      const v = r.metricas[m];
                       return (
-                        <td
-                          key={c}
-                          className={`p-1.5 whitespace-nowrap ${isNum ? "text-right font-mono" : ""}`}
-                        >
-                          {display.length > 80 ? display.slice(0, 80) + "…" : display}
+                        <td key={m} className="p-2 text-right font-mono">
+                          {v == null ? "—" : v.toLocaleString()}
                         </td>
                       );
                     })}
@@ -167,6 +264,56 @@ export default async function InspectorTopicoDetallePage({
           </div>
         </section>
       )}
+
+      {entidadActual && detalle.rows.length === 0 && (
+        <section className="text-xs text-slate-500 italic">
+          {entidadesPorTipo.size === 0
+            ? `Sin filas raw para periodo ${periodoActual}.`
+            : `${entidadActual} no tiene detalle en este periodo. Probá otra entidad arriba.`}
+        </section>
+      )}
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+    procesado: {
+      label: "procesado",
+      cls: "bg-emerald-100 text-emerald-800",
+      icon: <CheckCircle2 className="w-3 h-3" />,
+    },
+    descargado: {
+      label: "pendiente",
+      cls: "bg-amber-100 text-amber-800",
+      icon: <Clock className="w-3 h-3" />,
+    },
+    procesando: {
+      label: "procesando",
+      cls: "bg-blue-100 text-blue-800",
+      icon: <Clock className="w-3 h-3" />,
+    },
+    error: {
+      label: "error",
+      cls: "bg-red-100 text-red-800",
+      icon: <AlertCircle className="w-3 h-3" />,
+    },
+    no_publicado_sbs: {
+      label: "no publicado",
+      cls: "bg-slate-100 text-slate-600",
+      icon: <Clock className="w-3 h-3" />,
+    },
+    omitido: {
+      label: "omitido",
+      cls: "bg-slate-100 text-slate-600",
+      icon: <Clock className="w-3 h-3" />,
+    },
+  };
+  const v = map[status] ?? { label: status, cls: "bg-slate-100 text-slate-700", icon: null };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${v.cls}`}>
+      {v.icon}
+      {v.label}
+    </span>
   );
 }
