@@ -200,19 +200,73 @@ async function buildCompetidores(
     ]),
   );
 
-  const fallbackPalette = ["#E91E63", "#4CAF50", "#0F2A5E", "#F44336", "#8D6E63", "#42A5F5", "#FF9800", "#9C27B0"];
-
   const peerList = peerGroupOverride ?? rowsToUse.map((r) => r.competidor_nomb_correg);
 
-  return peerList.map((nombCorreg, idx) => {
+  // Asignacion de colores robusta:
+  //  1. Si config.peer_group tiene color_hex configurado para la entidad → usarlo
+  //  2. Sino: pickColorEstable(nombCorreg, ya_usados) — paleta de 20 colores
+  //     contrastantes, mismo nombre siempre mismo color, sin duplicados dentro
+  //     del peer group actual.
+  const usados = new Set<string>();
+  return peerList.map((nombCorreg) => {
     const cfg = configByNomb.get(nombCorreg);
+    let color: string;
+    if (cfg?.color) {
+      color = cfg.color;
+    } else {
+      color = pickColorEstable(nombCorreg, usados);
+    }
+    usados.add(color);
     return {
       nombCorreg,
       labelCorto: cfg?.label ?? nombCorreg,
-      color: cfg?.color ?? fallbackPalette[idx % fallbackPalette.length],
+      color,
       esPropio: nombCorreg === entidadPropia,
     };
   });
+}
+
+// Paleta amplia (20 colores) elegida para contraste alto y diferenciacion
+// visual. Asignacion estable: el hash de `nomb_correg` siempre cae en el
+// mismo slot, salvo colision con otra entidad ya pickeada en el peer group
+// (en cuyo caso busca el siguiente slot libre).
+const PALETTE_ENTIDADES = [
+  "#0F2A5E", // azul Caja Arequipa
+  "#E91E63", // fucsia Compartamos
+  "#4CAF50", // verde Mibanco
+  "#C8102E", // rojo Caja Huancayo
+  "#722F37", // vino Caja Cusco
+  "#1E90FF", // celeste Caja Piura
+  "#FF9800", // naranja
+  "#9C27B0", // violeta
+  "#8D6E63", // marron
+  "#00BCD4", // cyan
+  "#FFEB3B", // amarillo (acentuar texto oscuro)
+  "#3F51B5", // indigo
+  "#795548", // marron oscuro
+  "#009688", // teal
+  "#FFC107", // ambar
+  "#673AB7", // violeta oscuro
+  "#F44336", // rojo
+  "#607D8B", // gris azul
+  "#7CB342", // verde claro
+  "#5D4037", // marron tierra
+];
+
+function pickColorEstable(nombCorreg: string, usados: Set<string>): string {
+  // Hash simple (sdbm) sobre el nomb_correg — estable y rapido.
+  let h = 0;
+  for (let i = 0; i < nombCorreg.length; i++) {
+    h = (nombCorreg.charCodeAt(i) + (h << 6) + (h << 16) - h) >>> 0;
+  }
+  const startIdx = h % PALETTE_ENTIDADES.length;
+  // Buscar primer slot libre desde startIdx (evita colision con peer group)
+  for (let i = 0; i < PALETTE_ENTIDADES.length; i++) {
+    const candidate = PALETTE_ENTIDADES[(startIdx + i) % PALETTE_ENTIDADES.length];
+    if (candidate !== undefined && !usados.has(candidate)) return candidate;
+  }
+  // Fallback (peer group > 20 entidades): wrap del hash original
+  return PALETTE_ENTIDADES[startIdx] ?? "#0F2A5E";
 }
 
 // ============================================================================

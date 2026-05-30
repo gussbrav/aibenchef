@@ -592,16 +592,37 @@ function SeccionMargenNetoBubble({
                     const d = payload[0].payload as BubbleChartPayload | undefined;
                     if (!d) return null;
                     return (
-                      <div className="bg-white border border-slate-200 rounded shadow-lg p-3 text-xs">
-                        <p className="font-semibold text-slate-900 mb-1">{d.label}</p>
-                        <p className="text-slate-600">Margen neto: <span className="font-mono">{(d.margenNeto * 100).toFixed(2)}%</span></p>
-                        <p className="text-slate-600">Delta interanual: <span className={`font-mono ${d.deltaPp >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{d.deltaPp.toFixed(2)} pp</span></p>
+                      <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[200px]">
+                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
+                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                          <p className="font-semibold text-slate-900">{d.label}</p>
+                        </div>
+                        <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-slate-600">
+                          <span>Margen neto actual</span>
+                          <span className="font-mono font-semibold text-slate-900">
+                            {(d.margenNeto * 100).toFixed(2)}%
+                          </span>
+                          <span>Δ Punto Equilibrio</span>
+                          <span className={`font-mono ${d.x >= 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                            {d.x >= 0 ? "+" : ""}{d.x.toFixed(2)} pp
+                          </span>
+                          <span>Δ Rendimiento</span>
+                          <span className={`font-mono ${d.y >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                            {d.y >= 0 ? "+" : ""}{d.y.toFixed(2)} pp
+                          </span>
+                          <span className="border-t border-slate-100 pt-1 mt-1">Δ Margen Neto</span>
+                          <span className={`font-mono font-semibold border-t border-slate-100 pt-1 mt-1 ${d.deltaPp >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                            {d.deltaPp >= 0 ? "+" : ""}{d.deltaPp.toFixed(2)} pp
+                          </span>
+                        </div>
                       </div>
                     );
                   }}
                 />
                 <Scatter
                   data={scatterData}
+                  isAnimationActive={true}
+                  animationDuration={600}
                   shape={(props: { cx?: number; cy?: number; size?: number; payload?: BubbleChartPayload }) => {
                     const { cx, cy, size, payload } = props;
                     if (cx == null || cy == null || !payload) return <g />;
@@ -610,15 +631,42 @@ function SeccionMargenNetoBubble({
                     const area = typeof size === "number" && size > 0 ? size : 600;
                     const r = Math.sqrt(area / Math.PI);
                     return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={r}
-                        fill={payload.color}
-                        fillOpacity={0.75}
-                        stroke="#fff"
-                        strokeWidth={2}
-                      />
+                      <g>
+                        {/* halo sutil */}
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={r + 3}
+                          fill={payload.color}
+                          fillOpacity={0.18}
+                        />
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={r}
+                          fill={payload.color}
+                          fillOpacity={0.85}
+                          stroke="#fff"
+                          strokeWidth={2}
+                          style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.18))" }}
+                        />
+                        {/* label dentro/encima de la burbuja */}
+                        <text
+                          x={cx}
+                          y={cy - r - 6}
+                          textAnchor="middle"
+                          className="text-[10px] font-semibold"
+                          fill="#0f172a"
+                          style={{
+                            paintOrder: "stroke",
+                            stroke: "#ffffff",
+                            strokeWidth: 3,
+                            strokeLinejoin: "round",
+                          }}
+                        >
+                          {payload.label}
+                        </text>
+                      </g>
                     );
                   }}
                 />
