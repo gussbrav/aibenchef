@@ -69,12 +69,16 @@ export function parseManifest(manifest: DbtManifest): ParsedManifest {
       if (node.resource_type === "test" || node.resource_type === "exposure") continue;
       const ourId = `${node.schema}.${node.name}`;
       idMap.set(dbtId, ourId);
+      const materialization =
+        "config" in node && node.config && typeof node.config === "object"
+          ? (node.config as { materialized?: string }).materialized
+          : undefined;
       nodes.push({
         id: ourId,
         schema: node.schema,
         name: node.name,
         resourceType: node.resource_type,
-        materialization: ("config" in node ? node.config?.materialized : undefined) ?? undefined,
+        materialization,
       });
     }
   };
