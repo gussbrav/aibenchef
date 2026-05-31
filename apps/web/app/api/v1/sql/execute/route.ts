@@ -3,6 +3,10 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { executeQuerySandbox } from "@/lib/domains/sql-workbench";
 import { handleRoute, UnauthorizedError, ValidationError } from "@/lib/domains/shared";
 
@@ -31,10 +35,30 @@ export async function POST(req: NextRequest) {
       hdrs.get("x-real-ip") ??
       null;
     const userAgent = hdrs.get("user-agent");
-    return executeQuerySandbox(parsed.data.sqlText, {
+
+    const result = await executeQuerySandbox(parsed.data.sqlText, {
       userId: session.user.id,
       ip,
       userAgent,
     });
+
+    // Audit event en gov.audit_log (dual-write con app.sql_audit_log).
+    // Fire-and-forget — no propaga errores, la query ya se ejecuto.
+    const ctx = extractAuditContext(hdrs, session.user.id, session.user.email);
+    await recordAuditEvent({
+      ...ctx,
+      category: "data_access",
+      action: "sql_execute",
+      severity: "info",
+      resource: "sql:workbench",
+      metadata: {
+        sqlLength: parsed.data.sqlText.length,
+        rowsReturned: result.totalFilas,
+        durationMs: result.duracionMs,
+        truncado: result.truncado,
+      },
+    });
+
+    return result;
   });
 }

@@ -12,9 +12,14 @@
  */
 
 import { sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/infrastructure/db";
 import { requireSession } from "@/lib/auth-helpers";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { handleRoute, ValidationError } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
@@ -51,9 +56,26 @@ export async function POST(req: NextRequest) {
       RETURNING id
     `);
 
+    const jobId = rows[0]?.id ?? null;
+    const hdrs = await headers();
+    const ctxAudit = extractAuditContext(hdrs, session.id, session.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "schema",
+      action: "sync_sbs_enqueued",
+      severity: "info",
+      resource: `sync_job:${jobId}`,
+      metadata: {
+        periodoDesde: desde,
+        periodoHasta: hasta,
+        topicos,
+        grupos,
+      },
+    });
+
     return {
       ok: true,
-      jobId: rows[0]?.id ?? null,
+      jobId,
       mensaje: "Job encolado. El worker lo tomara en los proximos minutos.",
     };
   });
