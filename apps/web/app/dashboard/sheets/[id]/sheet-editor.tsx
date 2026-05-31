@@ -686,7 +686,8 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
             {focusedCell.value !== null && focusedCell.value !== undefined && focusedCell.value !== "" && (
               <>
                 {typeof focusedCell.value === "string" && focusedCell.value.trimStart().startsWith("=") ? (
-                  // Formula: mostrar formula + resultado evaluado
+                  // Formula: mostrar formula + resultado evaluado + refs resueltas
+                  // (asi el usuario ve si referencio celdas vacias por error)
                   <>
                     <span className="truncate max-w-xs">
                       <span className="font-mono text-slate-500 mr-1">Formula:</span>
@@ -701,6 +702,31 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
                           : <span className="text-rose-600">{String(r)}</span>;
                       })()}
                     </span>
+                    {(() => {
+                      // Extrae refs como A1, B2 (case-insensitive — el motor las upper-casea)
+                      const raw = String(focusedCell.value).slice(1);
+                      const refs = Array.from(new Set(raw.toUpperCase().match(/[A-Z]+\d+/g) ?? []));
+                      if (refs.length === 0) return null;
+                      const empties = refs.filter((ref) => {
+                        const v = getCellRaw(ref);
+                        return v === null || v === undefined || v === "";
+                      });
+                      if (empties.length === 0) {
+                        return (
+                          <span className="text-[10px] text-slate-400" title={refs.map((r) => `${r}=${String(getCellRaw(r))}`).join(", ")}>
+                            ({refs.length} ref{refs.length === 1 ? "" : "s"} OK)
+                          </span>
+                        );
+                      }
+                      return (
+                        <span
+                          className="text-[10px] text-amber-700 font-semibold"
+                          title={`Estas celdas estan vacias: ${empties.join(", ")} — se tratan como 0. Si esperabas un valor, revisa que la fila/columna sea la correcta.`}
+                        >
+                          ⚠ {empties.join(",")} vacia{empties.length === 1 ? "" : "s"} (=0)
+                        </span>
+                      );
+                    })()}
                   </>
                 ) : (
                   <span className="truncate max-w-md">
