@@ -15,16 +15,20 @@ Sincronización automática diaria de archivos SBS — scrape + import + quality
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  [1/3] queue-monthly                                     │
+│  [1/4] queue-monthly                                     │
 │  → admin.sync_jobs INSERT job (mes anterior, idempotente)│
 ├──────────────────────────────────────────────────────────┤
-│  [2/3] work-jobs --max-jobs 10                           │
+│  [2/4] work-jobs --max-jobs 10                           │
 │  → playwright scrape SBS                                 │
 │  → escribe a /app/local-data/raw/<grupo>/<topico>/...    │
 │  → status archivo: descargado | no_publicado_sbs | error │
-│  → import monthly-eeff de archivos con status descargado │
+│  → import monthly-* de archivos con status descargado    │
 ├──────────────────────────────────────────────────────────┤
-│  [3/3] quality-check (últimos 2 meses)                   │
+│  [3/4] dump_archivo_contenido --skip-existing            │
+│  → parsea .xls nuevos y vuelca grid a raw.archivo_contenido│
+│  → alimenta el visor Grid del Inspector de Tópicos (#65) │
+├──────────────────────────────────────────────────────────┤
+│  [4/4] quality-check (últimos 2 meses)                   │
 │  → balance_contable + outlier_zscore + suma_subcuentas   │
 │  → auto-resolve (PR #44) limpia stale anomalies          │
 └──────────────────────────────────────────────────────────┘
