@@ -1,13 +1,26 @@
 /**
- * Email infra mínima.
+ * Email infra: dos proveedores soportados, prioridad SMTP > Resend > fallback.
  *
- * Si esta seteado RESEND_API_KEY -> envia via Resend.
- * Si no -> devuelve { sent: false } y el caller debe mostrar el link manual.
+ *   1. SMTP (nodemailer): si smtp_enabled = true en system_settings.
+ *      Usable con Gmail (smtp.gmail.com:587 + app password), Zoho
+ *      (smtppro.zoho.com:587), Outlook (smtp.office365.com:587), o cualquier
+ *      relay corporativo. Es la opcion preferida cuando el operador ya tiene
+ *      una casilla funcional y no quiere depender de un proveedor extra.
  *
- * Estrategia de fallback: en lugar de fallar si no hay email configurado,
- * permitimos al admin copiar el link de invitacion y compartirlo manualmente
- * (WhatsApp, Slack, etc). Asi el sistema funciona desde dia 1 sin Resend.
+ *   2. Resend (HTTP API): si email_resend_enabled = true. Requiere dominio
+ *      verificado en https://resend.com pero no exige mantener un servidor
+ *      SMTP propio. Mantenemos compatibilidad porque ya hay deployments que
+ *      lo configuraron.
+ *
+ *   3. Fallback: si ningun proveedor esta configurado retorna { sent: false,
+ *      reason: 'no_email_provider' } y el caller muestra un link copiable
+ *      manual al admin (UX de invitaciones funciona sin email desde dia 1).
+ *
+ * Las contraseñas / api keys se guardan encriptadas en app.system_settings
+ * (AES-256-GCM, ver V121). NUNCA exponer al frontend.
  */
+
+import nodemailer, { type Transporter } from "nodemailer";
 
 const RESEND_BASE = "https://api.resend.com";
 
@@ -21,42 +34,134 @@ export type SendEmailInput = {
 
 export type SendEmailResult = {
   sent: boolean;
-  reason?: string; // ej 'no_resend_key', 'rate_limited', etc
+  reason?: string;
   messageId?: string;
+  provider?: "smtp" | "resend";
 };
 
-export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  // Prioridad de configuracion:
-  //   1. app.system_settings (UI, sin redeploy) — si email_resend_enabled=true
-  //   2. process.env.RESEND_API_KEY (fallback legacy)
-  let apiKey: string | null = null;
-  let fromConfig: string | null = null;
+type SmtpConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  from: string;
+};
+
+type ResendConfig = {
+  apiKey: string;
+  from: string | null;
+};
+
+/**
+ * Cache de transporter SMTP — crear un transporter por cada email es lento
+ * (handshake TLS por mensaje). Re-creamos solo cuando cambian las settings.
+ */
+let cachedTransporter: { config: SmtpConfig; transport: Transporter } | null = null;
+
+function smtpConfigEqual(a: SmtpConfig, b: SmtpConfig): boolean {
+  return (
+    a.host === b.host &&
+    a.port === b.port &&
+    a.secure === b.secure &&
+    a.user === b.user &&
+    a.password === b.password
+  );
+}
+
+function getTransporter(cfg: SmtpConfig): Transporter {
+  if (cachedTransporter && smtpConfigEqual(cachedTransporter.config, cfg)) {
+    return cachedTransporter.transport;
+  }
+  const transport = nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure, // true=465 SSL, false=STARTTLS (puerto 587)
+    auth: { user: cfg.user, pass: cfg.password },
+  });
+  cachedTransporter = { config: cfg, transport };
+  return transport;
+}
+
+async function loadSmtpConfig(): Promise<SmtpConfig | null> {
   try {
-    // Import dinamico para evitar ciclo de dependencias y permitir que esta
-    // funcion funcione tambien en contextos donde no hay DB (tests, etc).
+    const { getSystemSettingValue } = await import("@/lib/domains/system-settings");
+    const enabled = await getSystemSettingValue("smtp_enabled");
+    if (enabled !== "true") return null;
+    const host = (await getSystemSettingValue("smtp_host"))?.trim();
+    const portStr = (await getSystemSettingValue("smtp_port"))?.trim();
+    const secureStr = (await getSystemSettingValue("smtp_secure"))?.trim();
+    const user = (await getSystemSettingValue("smtp_user"))?.trim();
+    const password = (await getSystemSettingValue("smtp_password"))?.trim();
+    const from = (await getSystemSettingValue("smtp_from"))?.trim();
+    if (!host || !user || !password) return null;
+    const port = Number(portStr || "587");
+    return {
+      host,
+      port: Number.isFinite(port) ? port : 587,
+      secure: secureStr === "true" || port === 465,
+      user,
+      password,
+      from: from || user,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadResendConfig(): Promise<ResendConfig | null> {
+  let apiKey: string | null = null;
+  let from: string | null = null;
+  try {
     const { getSystemSettingValue } = await import("@/lib/domains/system-settings");
     const enabled = await getSystemSettingValue("email_resend_enabled");
     if (enabled === "true") {
       apiKey = await getSystemSettingValue("email_resend_api_key");
-      fromConfig = await getSystemSettingValue("email_resend_from");
+      from = await getSystemSettingValue("email_resend_from");
     }
   } catch {
-    // Si la tabla no existe aun (migracion pendiente) o falla la DB,
-    // caemos al fallback de env vars.
+    // Tabla no creada (migracion pendiente) — fallback a env
   }
-  if (!apiKey) {
-    apiKey = process.env.RESEND_API_KEY ?? null;
-  }
-  if (!apiKey || !apiKey.trim()) {
-    return { sent: false, reason: "no_resend_key" };
-  }
-  const from = input.from || fromConfig || process.env.RESEND_FROM_EMAIL || "Aibenchef <no-reply@aibenchef.dev>";
+  if (!apiKey) apiKey = process.env.RESEND_API_KEY ?? null;
+  if (!from) from = process.env.RESEND_FROM_EMAIL ?? null;
+  if (!apiKey || !apiKey.trim()) return null;
+  return { apiKey: apiKey.trim(), from: from?.trim() || null };
+}
 
+async function sendViaSmtp(
+  input: SendEmailInput,
+  cfg: SmtpConfig,
+): Promise<SendEmailResult> {
+  try {
+    const transport = getTransporter(cfg);
+    const info = await transport.sendMail({
+      from: input.from || cfg.from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+    });
+    return { sent: true, provider: "smtp", messageId: info.messageId };
+  } catch (e) {
+    // Si el handshake fallo invalidamos el cache — credenciales pudieron
+    // haber cambiado entre intentos.
+    cachedTransporter = null;
+    const msg = e instanceof Error ? e.message : String(e);
+    return { sent: false, provider: "smtp", reason: `smtp: ${msg}` };
+  }
+}
+
+async function sendViaResend(
+  input: SendEmailInput,
+  cfg: ResendConfig,
+): Promise<SendEmailResult> {
+  const from =
+    input.from || cfg.from || "Aibenchef <no-reply@aibenchef.dev>";
   try {
     const resp = await fetch(`${RESEND_BASE}/emails`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${cfg.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -69,13 +174,50 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      return { sent: false, reason: `resend_${resp.status}: ${errText.slice(0, 200)}` };
+      return {
+        sent: false,
+        provider: "resend",
+        reason: `resend_${resp.status}: ${errText.slice(0, 200)}`,
+      };
     }
     const json = (await resp.json()) as { id?: string };
-    return { sent: true, messageId: json.id };
+    return { sent: true, provider: "resend", messageId: json.id };
   } catch (e) {
-    return { sent: false, reason: e instanceof Error ? e.message : String(e) };
+    return {
+      sent: false,
+      provider: "resend",
+      reason: e instanceof Error ? e.message : String(e),
+    };
   }
+}
+
+export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  // SMTP tiene prioridad — es el path mas comun para self-hosted (Gmail/Zoho).
+  const smtp = await loadSmtpConfig();
+  if (smtp) {
+    return sendViaSmtp(input, smtp);
+  }
+  const resend = await loadResendConfig();
+  if (resend) {
+    return sendViaResend(input, resend);
+  }
+  return { sent: false, reason: "no_email_provider" };
+}
+
+/**
+ * Para que el boton "Probar" desde Settings pueda ejercitar la config actual
+ * sin enviar a un usuario real. Devuelve diagnostico utilizable.
+ */
+export async function testEmailConfig(toAddress: string): Promise<SendEmailResult> {
+  return sendEmail({
+    to: toAddress,
+    subject: "Aibenchef — prueba de configuracion de email",
+    text:
+      "Este es un email de prueba enviado desde Aibenchef.\n\nSi llego es porque la configuracion SMTP / Resend esta funcionando.",
+    html:
+      "<p>Este es un email de <strong>prueba</strong> enviado desde Aibenchef.</p>" +
+      "<p>Si llego es porque la configuracion SMTP / Resend esta funcionando.</p>",
+  });
 }
 
 /**
