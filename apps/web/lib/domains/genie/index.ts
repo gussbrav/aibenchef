@@ -1,2 +1,2 @@
 export type { GenieRequest, GenieResponse, GenieHistory } from "./types";
-export { generarSqlDesdeNl, marcarFeedback } from "./service";
+export { diagnoseProvider, generarSqlDesdeNl, marcarFeedback } from "./service";

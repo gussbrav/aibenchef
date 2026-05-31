@@ -118,6 +118,23 @@ async function resolveProvider(): Promise<{
   throw new GenieNotConfiguredError(estados.join("; "));
 }
 
+/**
+ * Diagnostico: dice si Genie esta configurado y que proveedor usaria, sin
+ * ejecutar el LLM ni consumir tokens. Para que el frontend muestre banner
+ * antes de que el usuario tipee.
+ */
+export async function diagnoseProvider(): Promise<
+  | { ok: true; provider: AiProviderId; modelo: string }
+  | { ok: false; motivo: string }
+> {
+  try {
+    const r = await resolveProvider();
+    return { ok: true, provider: r.provider, modelo: r.modelo };
+  } catch (e) {
+    return { ok: false, motivo: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function generarSqlDesdeNl(
   userId: string,
   req: GenieRequest,
@@ -131,7 +148,20 @@ export async function generarSqlDesdeNl(
 
   const start = Date.now();
   const { provider, llm, modelo } = await resolveProvider();
-  const systemPrompt = await buildSystemPrompt();
+
+  // buildSystemPrompt hace queries pg_class/dim_cuenta — si la DB esta
+  // momentaneamente sin acceso, no queremos que el usuario vea
+  // "Error interno del servidor" sin pistas.
+  let systemPrompt: string;
+  try {
+    systemPrompt = await buildSystemPrompt();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new ValidationError(
+      `No se pudo armar el contexto de Aiben (problema al leer el catalog de la DB): ${msg}`,
+      { paso: "build_system_prompt" },
+    );
+  }
   const userPrompt = buildUserPrompt(req);
 
   let generationResult;

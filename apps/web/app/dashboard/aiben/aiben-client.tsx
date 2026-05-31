@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowRight,
   Loader2,
   Play,
+  Settings as SettingsIcon,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -53,6 +56,47 @@ export function AibenClient() {
   const [resultadoIdx, setResultadoIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Timeout duro del lado del cliente: si el server queda colgado (Ollama
+  // detras de un hostname inalcanzable, modelo enorme en CPU, etc) abortamos
+  // a los 35s asi el usuario no se queda mirando "pensando..." indefinido.
+  // 35s = 25s timeout del provider + holgura para handshake + DB write.
+  const CLIENT_TIMEOUT_MS = 35_000;
+  const abortRef = useRef<AbortController | null>(null);
+  const [tiempoTranscurrido, setTiempoTranscurrido] = useState(0);
+  const [diagnostico, setDiagnostico] = useState<
+    | { ok: true; provider: string; modelo: string }
+    | { ok: false; motivo: string }
+    | null
+  >(null);
+
+  // Diagnostico ligero al cargar: detecta proactivamente si Genie no tiene
+  // proveedor configurado y muestra el banner antes de que el usuario tipee.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/v1/genie/diagnose")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j.data) setDiagnostico(j.data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!generando) {
+      setTiempoTranscurrido(0);
+      return;
+    }
+    const t0 = Date.now();
+    const id = window.setInterval(() => {
+      setTiempoTranscurrido(Math.floor((Date.now() - t0) / 1000));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [generando]);
+
   const generar = async (texto?: string) => {
     const promptUsar = texto ?? prompt;
     if (!promptUsar.trim()) return;
@@ -60,11 +104,16 @@ export function AibenClient() {
     setGenerando(true);
     setConversacion((c) => [...c, { rol: "user", texto: promptUsar }]);
     setPrompt("");
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
     try {
       const r = await fetch("/api/v1/genie/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptUsar }),
+        signal: controller.signal,
       });
       const json = await r.json();
       if (json.error) {
@@ -87,10 +136,28 @@ export function AibenClient() {
         },
       ]);
     } catch (e) {
-      setError(String(e));
+      // Si el AbortController disparo, mostramos un error explicito + accion.
+      const isAbort = (e as { name?: string })?.name === "AbortError";
+      if (isAbort) {
+        setError(
+          `Aiben no respondio en ${CLIENT_TIMEOUT_MS / 1000}s. Probable causa: ` +
+            "el proveedor LLM esta caido o inalcanzable. Si configuraste Ollama " +
+            "en un servidor remoto verifica que el host sea alcanzable desde el " +
+            "contenedor web (los nombres tipo 'azoramind_ollama' solo resuelven " +
+            "dentro de la misma red Docker).",
+        );
+        setConversacion((c) => c.slice(0, -1));
+      } else {
+        setError(String(e));
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setGenerando(false);
     }
+  };
+
+  const cancelar = () => {
+    abortRef.current?.abort();
   };
 
   const ejecutar = async (idx: number, sql: string) => {
@@ -249,14 +316,38 @@ export function AibenClient() {
             })
           )}
           {generando && (
-            <div className="flex items-center gap-2 text-xs text-violet-700 p-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Aiben esta pensando...
+            <div className="flex items-center justify-between gap-2 text-xs text-violet-700 p-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Aiben esta pensando... ({tiempoTranscurrido}s)
+                {tiempoTranscurrido > 15 && (
+                  <span className="text-slate-500">
+                    — si tarda mas de {CLIENT_TIMEOUT_MS / 1000}s, abortamos.
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={cancelar}
+                className="text-[10px] uppercase tracking-wider text-slate-500 hover:text-rose-600 font-semibold"
+              >
+                Cancelar
+              </button>
             </div>
           )}
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700">
-              {error}
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700 space-y-2">
+              <div className="flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span className="break-words">{error}</span>
+              </div>
+              <Link
+                href={"/dashboard/settings?tab=ai" as never}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-800 hover:text-rose-900 underline"
+              >
+                <SettingsIcon className="w-3 h-3" />
+                Revisar proveedores AI en Settings
+              </Link>
             </div>
           )}
         </div>
