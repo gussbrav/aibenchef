@@ -1,3 +1,5 @@
+import { describeConnectionFailure } from "@/lib/domains/ai-providers/url-validation";
+
 import type { LLMGenerationResult, LLMProvider } from "./types";
 
 /**
@@ -73,14 +75,11 @@ export class OllamaProvider implements LLMProvider {
         : e instanceof Error
           ? e.message
           : String(e);
-      // Hint cuando el host parece Docker-internal (no resuelve desde otra red)
-      const looksDocker = /^[a-z0-9][a-z0-9_-]*$/i.test(
-        new URL(this.baseUrl).hostname,
+      const detailed = describeConnectionFailure(
+        this.baseUrl,
+        `Ollama conexion fallida (${this.baseUrl}): ${msg}`,
       );
-      const hint = looksDocker
-        ? " (el hostname parece nombre de servicio Docker — verifica que el contenedor web este en la misma red, o setea OLLAMA_BASE_URL con una IP/dominio publico)"
-        : "";
-      throw new Error(`Ollama conexion fallida (${this.baseUrl}): ${msg}${hint}`);
+      throw new Error(detailed);
     } finally {
       clearTimeout(timeout);
     }
