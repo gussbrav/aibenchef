@@ -348,28 +348,33 @@ export function WidgetCard({
         <h3 className="text-xs font-semibold text-slate-800 truncate">
           {widget.titulo ?? widget.tipo}
         </h3>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 widget-no-drag">
+          {/* widget-no-drag: react-grid-layout draggableCancel selector — sin
+              esto el handler de drag swallow los clicks y los botones no
+              responden. */}
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onEdit(widget);
             }}
-            className="text-slate-400 hover:text-slate-700 p-1"
+            className="text-slate-400 hover:text-slate-700 p-1 widget-no-drag"
             aria-label="Editar"
           >
-            <Settings2 className="w-3.5 h-3.5" />
+            <Settings2 className="w-3.5 h-3.5 pointer-events-none" />
           </button>
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onDelete(widget.id);
             }}
-            className="text-slate-400 hover:text-rose-600 p-1"
+            className="text-slate-400 hover:text-rose-600 p-1 widget-no-drag"
             aria-label="Eliminar"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
           </button>
         </div>
       </header>

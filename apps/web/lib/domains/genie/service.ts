@@ -48,53 +48,74 @@ class GenieNotConfiguredError extends ValidationError {
 }
 
 // Resuelve el primer provider habilitado con config valida.
+//
+// Reglas:
+//  * Un provider DESHABILITADO en DB pero con ENV var seteada SIGUE siendo
+//    valido — el env es el override de operador/deploy (util cuando ni se
+//    quiere persistir la key en DB). Reportamos como "envOverride".
+//  * Ollama acepta ENV OLLAMA_BASE_URL como fallback a la config DB.
+//  * El diagnostico se acumula en `estados` para que el mensaje al usuario
+//    explique exactamente porque ningun provider sirvio.
 async function resolveProvider(): Promise<{
   provider: AiProviderId;
   llm: LLMProvider;
   modelo: string;
 }> {
-  const errores: string[] = [];
+  const estados: string[] = [];
 
   for (const id of PROVIDER_PRIORITY) {
     try {
-      const cfg = await getProvider(id);
-      if (!cfg.enabled) continue;
+      const cfg = await getProvider(id).catch(() => null);
+      const envOnly = !cfg || !cfg.enabled;
 
       if (id === "claude") {
         const apiKey =
-          (await getProviderApiKey("claude").catch(() => null)) ||
+          (cfg?.enabled
+            ? await getProviderApiKey("claude").catch(() => null)
+            : null) ||
           process.env.ANTHROPIC_API_KEY ||
           null;
         if (!apiKey) {
-          errores.push("claude (sin api key)");
+          estados.push(envOnly ? "claude (deshabilitado y sin env)" : "claude (sin api key)");
           continue;
         }
-        const modelo = cfg.modelDefault || "claude-opus-4-7";
+        const modelo = cfg?.modelDefault || "claude-opus-4-7";
         return { provider: "claude", llm: new ClaudeProvider(apiKey, modelo), modelo };
       }
 
       if (id === "ollama") {
-        if (!cfg.baseUrl) {
-          errores.push("ollama (sin baseUrl)");
+        const baseUrl =
+          (cfg?.enabled ? cfg.baseUrl : null) ||
+          process.env.OLLAMA_BASE_URL ||
+          null;
+        if (!baseUrl) {
+          estados.push(envOnly ? "ollama (deshabilitado y sin OLLAMA_BASE_URL env)" : "ollama (sin baseUrl)");
           continue;
         }
-        const apiKey = (await getProviderApiKey("ollama").catch(() => null)) ?? undefined;
-        const modelo = cfg.modelDefault || "llama3.1:8b";
+        if (envOnly && !process.env.OLLAMA_BASE_URL) {
+          estados.push("ollama (deshabilitado)");
+          continue;
+        }
+        const apiKey =
+          (cfg?.enabled
+            ? await getProviderApiKey("ollama").catch(() => null)
+            : null) ?? undefined;
+        const modelo = cfg?.modelDefault || process.env.OLLAMA_MODEL || "llama3.1:8b";
         return {
           provider: "ollama",
-          llm: new OllamaProvider(cfg.baseUrl, modelo, apiKey ?? undefined),
+          llm: new OllamaProvider(baseUrl, modelo, apiKey ?? undefined),
           modelo,
         };
       }
 
       // openai / gemini: stub — agregar adapter cuando se necesite
-      errores.push(`${id} (adapter pendiente)`);
+      estados.push(`${id} (adapter pendiente)`);
     } catch (e) {
-      errores.push(`${id} (${e instanceof Error ? e.message : String(e)})`);
+      estados.push(`${id} (${e instanceof Error ? e.message : String(e)})`);
     }
   }
 
-  throw new GenieNotConfiguredError(errores.join("; "));
+  throw new GenieNotConfiguredError(estados.join("; "));
 }
 
 export async function generarSqlDesdeNl(
@@ -122,7 +143,18 @@ export async function generarSqlDesdeNl(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Provider ${provider} fallo: ${msg}`);
+    // ValidationError -> response HTTP 400 con mensaje friendly visible.
+    // Antes lanzabamos new Error() y handleRoute lo capturaba como
+    // "Error interno del servidor" en prod sin pistas — el usuario veia el
+    // 500 generico sin saber que era un problema de red al provider.
+    throw new ValidationError(
+      `El proveedor LLM "${provider}" no respondio: ${msg}`,
+      { provider, hint:
+        provider === "ollama"
+          ? "Verifica que la baseUrl de Ollama sea alcanzable desde el contenedor web (los nombres tipo 'azoramind_ollama' solo resuelven dentro de la misma red Docker)."
+          : "Revisa la api key y la conectividad al proveedor.",
+      },
+    );
   }
 
   const duracionMs = Date.now() - start;
@@ -139,11 +171,17 @@ export async function generarSqlDesdeNl(
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
-    throw new Error(`Claude no devolvio JSON valido. Respuesta: ${raw.slice(0, 200)}`);
+    throw new ValidationError(
+      `El proveedor LLM (${provider}) no devolvio JSON valido. Inicio respuesta: ${raw.slice(0, 200)}`,
+      { provider, modelo },
+    );
   }
 
   if (!parsed.sql || typeof parsed.sql !== "string") {
-    throw new Error("Respuesta sin campo 'sql'");
+    throw new ValidationError(
+      `El proveedor LLM (${provider}) respondio sin campo "sql"`,
+      { provider, modelo },
+    );
   }
 
   const sqlGenerado = parsed.sql.trim();

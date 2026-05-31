@@ -35,6 +35,7 @@ export function DragDropGrid({
         onLayoutChange(all.lg ?? []);
       }}
       draggableHandle=".widget-drag-handle"
+      draggableCancel=".widget-no-drag"
       compactType="vertical"
       preventCollision={false}
     >

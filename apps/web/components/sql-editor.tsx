@@ -36,6 +36,12 @@ export type SqlEditorProps = {
   readOnly?: boolean;
 };
 
+// Singleton-level guards: Monaco languages es global, queremos registrar el
+// provider de autocomplete UNA SOLA VEZ y compartir el cache entre editores.
+let autocompleteProviderRegistered = false;
+let catalogCache: Array<{ schema: string; tabla: string }> | null = null;
+const columnasCache: Map<string, Array<{ nombre: string; tipo: string }>> = new Map();
+
 export function SqlEditor({
   value,
   onChange,
@@ -62,9 +68,13 @@ export function SqlEditor({
       onSaveRef.current?.();
     });
 
-    // Configurar provider de autocomplete (lazy: pide al endpoint al primer trigger)
-    let catalogCache: Array<{ schema: string; tabla: string }> | null = null;
-    let columnasCache: Map<string, Array<{ nombre: string; tipo: string }>> = new Map();
+    // El provider de autocomplete se registra UNA SOLA VEZ por ciclo de vida
+    // de Monaco (singleton). Sin este guard, cada vez que SqlEditor se monta
+    // (ej. abrir y cerrar el widget editor modal varias veces) se registra un
+    // provider nuevo y todas las sugerencias salen duplicadas N veces.
+    // El cache vive a nivel modulo para que sea compartido entre editores.
+    if (autocompleteProviderRegistered) return;
+    autocompleteProviderRegistered = true;
 
     // Tipos de monaco no estan en @types — usamos any acotado donde haga falta.
     // Cualquier referencia a model/position viene tipada por el callback de monaco.
