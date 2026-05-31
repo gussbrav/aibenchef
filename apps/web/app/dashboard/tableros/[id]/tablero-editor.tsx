@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+import { useConfirm } from "@/components/ui";
 
 import type { Tablero, TableroWidget, WidgetTipo } from "@/lib/domains/tableros";
 import { WidgetRenderer } from "./widget-renderer";
@@ -53,6 +54,7 @@ const TIPOS_DISPONIBLES: Array<{ tipo: WidgetTipo; label: string; icon: typeof H
 
 export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [tablero, setTablero] = useState<Tablero>(initial);
   const [editandoWidget, setEditandoWidget] = useState<TableroWidget | null>(null);
   const [agregando, setAgregando] = useState(false);
@@ -171,7 +173,13 @@ export function TableroEditor({ tablero: initial }: { tablero: Tablero }) {
   };
 
   const eliminarWidget = async (widgetId: string) => {
-    if (!confirm("Eliminar este widget?")) return;
+    const ok = await confirm({
+      title: "Eliminar widget",
+      message: "Esta accion no se puede deshacer.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       const r = await fetch(`/api/v1/tableros/${tablero.id}/widgets/${widgetId}`, {

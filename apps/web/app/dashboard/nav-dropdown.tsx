@@ -75,7 +75,10 @@ export function NavDropdown({ label, items }: { label: string; items: NavDropdow
       {open && (
         <div
           role="menu"
-          className="absolute top-full right-0 mt-1 w-64 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-black/5 z-50 overflow-hidden"
+          // w-80 = 320px. Descripciones cortas caben en 1-2 lineas y largas
+          // hacen wrap natural (sin truncate) — antes con w-64 se cortaba la
+          // mitad de cada subtitulo.
+          className="absolute top-full right-0 mt-1 w-80 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-black/5 z-50 overflow-hidden"
         >
           {items.map((it) => {
             const itemActive =
@@ -92,9 +95,11 @@ export function NavDropdown({ label, items }: { label: string; items: NavDropdow
                     : "text-slate-700 hover:bg-slate-50",
                 )}
               >
-                <div>{it.label}</div>
+                <div className="font-medium">{it.label}</div>
                 {it.description && (
-                  <div className="text-[11px] text-slate-500 mt-0.5">{it.description}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-snug whitespace-normal break-words">
+                    {it.description}
+                  </div>
                 )}
               </Link>
             );

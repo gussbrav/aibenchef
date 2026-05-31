@@ -128,7 +128,7 @@ async function getSchema(fuente: FuentePivot): Promise<MvSchema> {
     todas.add(c);
     if (DIMENSIONES_COMUNES.has(c)) {
       dimensiones.add(c);
-    } else {
+    } else if (!COLUMNAS_BLACKLIST.has(c)) {
       medidas.add(c);
     }
   }
@@ -154,9 +154,25 @@ async function getCuentaLabels(): Promise<Map<string, string>> {
     const key = `cta_${String(r.codigo).toLowerCase().replace(/\./g, "_")}`;
     map.set(key, `(${r.codigo}) ${r.nombre}`);
   }
+  // Totales L1 sinteticos (V120 los agrega a v_eeff_balance_ancho como
+  // SUMA de hijos L2). Los codigos 'A', 'B', 'C' NO existen en raw ni en
+  // dim_cuenta — los etiquetamos a mano para que en Analisis Dinamico no
+  // aparezcan como "cta_a" sin nombre.
+  if (!map.has("cta_a")) map.set("cta_a", "(A) TOTAL ACTIVO");
+  if (!map.has("cta_b")) map.set("cta_b", "(B) TOTAL PASIVO");
+  if (!map.has("cta_c")) map.set("cta_c", "(C) TOTAL PATRIMONIO");
   CUENTAS_LABEL_CACHE = map;
   return map;
 }
+
+// Columnas cta_* que existen en la MV pero NO tienen valor publicado por
+// SBS (siempre NULL). Las ocultamos del selector de medidas para no
+// confundir al usuario con cuentas vacias.
+//
+// cta_a10: la MV V085 incluye cuenta_codigo='A10' pero SBS no publica un
+//   A10 directo (los activos llegan hasta A9). Comprobado: SELECT COUNT(*)
+//   FROM raw.eeff_observacion WHERE cuenta_codigo='A10' devuelve 0.
+const COLUMNAS_BLACKLIST = new Set<string>(["cta_a10"]);
 
 function labelDimension(col: string): string {
   switch (col) {

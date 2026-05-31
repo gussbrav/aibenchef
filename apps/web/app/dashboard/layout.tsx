@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { Container } from "@/components/ui";
+import { Container, ConfirmModalProvider } from "@/components/ui";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { DashboardUserMenu } from "./user-menu";
 import { NavLink } from "./nav-link";
@@ -26,6 +26,7 @@ export default async function DashboardLayout({
   // porque cualquier excepcion no-redirect rompe TODAS las rutas del dashboard.
 
   return (
+    <ConfirmModalProvider>
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 border-b border-slate-200">
         <Container size="full">
@@ -135,5 +136,6 @@ export default async function DashboardLayout({
       {/* Command Palette global — atajo Cmd+K / Ctrl+K */}
       <CommandPalette />
     </div>
+    </ConfirmModalProvider>
   );
 }
