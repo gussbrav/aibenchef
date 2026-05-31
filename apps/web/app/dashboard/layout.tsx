@@ -40,7 +40,7 @@ export default async function DashboardLayout({
 
             <nav className="hidden md:flex items-center gap-5 lg:gap-6 text-[13px] flex-1 justify-center min-w-0 whitespace-nowrap">
               <NavLink href="/dashboard" label="Resumen" exact />
-              <NavLink href="/dashboard/informe" label="Informe ✨" />
+              <NavLink href="/dashboard/informe" label="Benchmark" />
 
               <NavDropdown
                 label="Estados Financieros"
@@ -90,7 +90,7 @@ export default async function DashboardLayout({
                   {
                     href: "/dashboard/sheets",
                     label: "Sheets",
-                    description: "Hojas de cálculo editables tipo Excel/Google Sheets. Datos ad-hoc + export XLSX",
+                    description: "Hojas de cálculo editables con fórmulas, gráficos y datos ad-hoc. Export al formato XLSX.",
                   },
                   {
                     href: "/dashboard/sql",

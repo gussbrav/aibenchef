@@ -71,7 +71,10 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   const gridApiRef = useRef<GridApi | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Construir rowData desde el JSONB sparse
+  // Construir rowData desde el JSONB sparse. Importante: dependencias EXACTAS
+  // (cells, nRows, nCols) — NO el objeto sheet completo, asi cambios en
+  // sheet.charts no invalidan rowData y AG Grid no resetea el foco mientras
+  // estas editando una celda.
   const rowData = useMemo<GridRow[]>(() => {
     const rows: GridRow[] = [];
     for (let r = 1; r <= sheet.nRows; r++) {
@@ -84,7 +87,7 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
       rows.push(row);
     }
     return rows;
-  }, [sheet]);
+  }, [sheet.cells, sheet.nRows, sheet.nCols]);
 
   // Lookup function para el evaluador de formulas — busca por celda key (ej "A1")
   // en el cells JSONB sparse.
@@ -335,13 +338,34 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     const wb = new ExcelJS.Workbook();
     wb.creator = "Aibenchef";
     const ws = wb.addWorksheet(sheet.nombre);
-    const headers = Array.from({ length: sheet.nCols }, (_, c) => colKey(c));
-    ws.addRow(headers);
-    ws.getRow(1).font = { bold: true };
-    for (let r = 1; r <= sheet.nRows; r++) {
-      const row = Array.from({ length: sheet.nCols }, (_, c) => {
+    // NO prepender una fila literal con "A B C D..." — el formato XLSX ya
+    // numera las columnas en el header gris del cliente. Antes lo hacia y
+    // empujaba toda la data una fila abajo (A1 caia en row 2, A2 en row 3).
+    // Para no exportar filas vacias al final, encontramos la ultima fila
+    // con datos y solo escribimos hasta ahi.
+    let lastRow = 0;
+    let lastCol = 0;
+    for (const k of Object.keys(sheet.cells)) {
+      const m = k.match(/^([A-Z]+)(\d+)$/);
+      if (!m) continue;
+      const colIdx = m[1]!
+        .split("")
+        .reduce((acc, ch) => acc * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+      const rowIdx = Number(m[2]);
+      if (rowIdx > lastRow) lastRow = rowIdx;
+      if (colIdx > lastCol) lastCol = colIdx;
+    }
+    // Si la sheet esta totalmente vacia exportamos al menos 1 fila vacia.
+    const nRowsOut = Math.max(lastRow, 1);
+    const nColsOut = Math.max(lastCol + 1, 1);
+    for (let r = 1; r <= nRowsOut; r++) {
+      const row = Array.from({ length: nColsOut }, (_, c) => {
         const k = `${colKey(c)}${r}`;
-        return sheet.cells[k] ?? null;
+        const v = sheet.cells[k];
+        // Si la celda tiene formula =..., el motor del cliente no se llama
+        // en export — la dejamos como texto. Para producir formulas Excel
+        // reales habria que mapear nuestra sintaxis al estilo OOXML.
+        return v ?? null;
       });
       ws.addRow(row);
     }
@@ -686,7 +710,8 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
             {focusedCell.value !== null && focusedCell.value !== undefined && focusedCell.value !== "" && (
               <>
                 {typeof focusedCell.value === "string" && focusedCell.value.trimStart().startsWith("=") ? (
-                  // Formula: mostrar formula + resultado evaluado
+                  // Formula: mostrar formula + resultado evaluado + refs resueltas
+                  // (asi el usuario ve si referencio celdas vacias por error)
                   <>
                     <span className="truncate max-w-xs">
                       <span className="font-mono text-slate-500 mr-1">Formula:</span>
@@ -701,6 +726,31 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
                           : <span className="text-rose-600">{String(r)}</span>;
                       })()}
                     </span>
+                    {(() => {
+                      // Extrae refs como A1, B2 (case-insensitive — el motor las upper-casea)
+                      const raw = String(focusedCell.value).slice(1);
+                      const refs = Array.from(new Set(raw.toUpperCase().match(/[A-Z]+\d+/g) ?? []));
+                      if (refs.length === 0) return null;
+                      const empties = refs.filter((ref) => {
+                        const v = getCellRaw(ref);
+                        return v === null || v === undefined || v === "";
+                      });
+                      if (empties.length === 0) {
+                        return (
+                          <span className="text-[10px] text-slate-400" title={refs.map((r) => `${r}=${String(getCellRaw(r))}`).join(", ")}>
+                            ({refs.length} ref{refs.length === 1 ? "" : "s"} OK)
+                          </span>
+                        );
+                      }
+                      return (
+                        <span
+                          className="text-[10px] text-amber-700 font-semibold"
+                          title={`Estas celdas estan vacias: ${empties.join(", ")} — se tratan como 0. Si esperabas un valor, revisa que la fila/columna sea la correcta.`}
+                        >
+                          ⚠ {empties.join(",")} vacia{empties.length === 1 ? "" : "s"} (=0)
+                        </span>
+                      );
+                    })()}
                   </>
                 ) : (
                   <span className="truncate max-w-md">

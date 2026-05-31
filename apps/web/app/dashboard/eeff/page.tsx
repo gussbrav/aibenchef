@@ -57,7 +57,7 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
         iconBg="from-sky-500 to-indigo-600"
         title="Estados Financieros mensuales"
         tagline="Balance General + Estado de Resultados de cualquier entidad SBS, con histórico completo desde 2009 y ratios calculados al instante"
-        description="Cambiá de entidad o moneda y ves todo recalculado — ROA, ROE, mora, eficiencia, evolución mensual y anual. Lo que antes tardaba días bajando Excel y haciendo cálculos manuales."
+        description="Cambiá de entidad o moneda y ves todo recalculado — ROA, ROE, mora, eficiencia, evolución mensual y anual. Lo que antes tardaba días bajando archivos sueltos y haciendo cálculos manuales."
         stats={
           actual
             ? [

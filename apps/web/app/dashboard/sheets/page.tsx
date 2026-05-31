@@ -25,8 +25,8 @@ export default async function SheetsPage() {
         icon={TableProperties}
         iconBg="from-emerald-500 to-teal-600"
         title="Sheets"
-        tagline="Hojas de cálculo editables — la familiaridad de Excel adentro de Aibenchef, sin saltar a otra app"
-        description="Para cuando necesitás meter datos a mano, hacer cálculos rápidos, o armar un export ad-hoc para mandar por mail. Edición tipo Google Sheets, persistido en la nube."
+        tagline="Hojas de cálculo editables adentro de Aibenchef, sin saltar a otra app"
+        description="Para cuando necesitás meter datos a mano, hacer cálculos rápidos, o armar un export ad-hoc para mandar por mail. Edición en vivo, persistido en la nube, export al formato estándar XLSX."
         stats={
           sheets.length > 0
             ? [
@@ -48,7 +48,7 @@ export default async function SheetsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
             <FeatureTile
               icon={FileSpreadsheet}
-              title="Como un Excel online"
+              title="Hoja de cálculo online"
               description="Editás celdas, agregás filas, formato básico. Sin instalar nada, accesible desde cualquier dispositivo."
               color="text-emerald-600"
             />
@@ -61,7 +61,7 @@ export default async function SheetsPage() {
             <FeatureTile
               icon={Download}
               title="Export XLSX"
-              description="Bajás como Excel real para compartir fuera del sistema o entregar a clientes."
+              description="Bajás como XLSX para abrir en cualquier hoja de cálculo y compartir fuera del sistema o entregar a clientes."
               color="text-violet-600"
             />
           </div>
