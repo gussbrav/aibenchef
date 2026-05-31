@@ -150,6 +150,10 @@ function ProviderCard({
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [warningMsg, setWarningMsg] = useState<{
+    message: string;
+    suggestion?: string;
+  } | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     ok: boolean;
@@ -205,10 +209,18 @@ function ProviderCard({
         setErrorMsg(json.error.message ?? "Error guardando");
       } else {
         setOkMsg("Guardado correctamente");
+        // El backend puede emitir un warning si la baseUrl es Docker-internal
+        // (no resuelve cross-project). No bloquea — solo avisa.
+        const w = json.data?._warning as { message?: string; suggestion?: string } | undefined;
+        if (w && w.message) {
+          setWarningMsg({ message: w.message, suggestion: w.suggestion });
+        } else {
+          setWarningMsg(null);
+        }
         setApiKey("");
         setEditando(false);
         onSaved();
-        setTimeout(() => setOkMsg(null), 3000);
+        setTimeout(() => setOkMsg(null), 5000);
       }
     } catch (e) {
       setErrorMsg(String(e));
@@ -389,6 +401,25 @@ function ProviderCard({
             <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700 flex items-center gap-1">
               <Check className="w-3 h-3" />
               {okMsg}
+            </div>
+          )}
+          {warningMsg && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 space-y-1.5">
+              <div className="flex items-start gap-1.5 font-semibold">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                Atencion: hostname Docker-internal
+              </div>
+              <p className="leading-relaxed">{warningMsg.message}</p>
+              {warningMsg.suggestion && (
+                <p className="leading-relaxed text-amber-800">{warningMsg.suggestion}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => setWarningMsg(null)}
+                className="text-[10px] uppercase tracking-wider text-amber-700 hover:text-amber-900 font-semibold"
+              >
+                Entendido, no mostrar mas
+              </button>
             </div>
           )}
 

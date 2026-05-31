@@ -22,6 +22,7 @@ import {
   getProviderApiKey,
   getProviderBaseUrl,
 } from "@/lib/domains/ai-providers";
+import { validateProviderBaseUrl } from "@/lib/domains/ai-providers/url-validation";
 import { handleRoute, UnauthorizedError, ValidationError } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
@@ -59,12 +60,13 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
       return { ...result, elapsedMs: Date.now() - start };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      const baseUrl = await getProviderBaseUrl(id).catch(() => null);
       return {
         ok: false,
         provider: id,
         message: msg,
         elapsedMs: Date.now() - start,
-        hint: pickHint(id, msg),
+        hint: pickHint(id, msg, baseUrl),
       };
     }
   });
@@ -212,8 +214,19 @@ async function fetchWithTimeout(
   }
 }
 
-function pickHint(id: AiProviderId, msg: string): string | undefined {
+function pickHint(id: AiProviderId, msg: string, baseUrl: string | null): string | undefined {
   const m = msg.toLowerCase();
+  // Pre-emptivo: si la baseUrl es Docker-internal y el sintoma es
+  // timeout/DNS, el hint estructural manda — explica la raiz, no el sintoma.
+  if (baseUrl) {
+    const v = validateProviderBaseUrl(baseUrl);
+    if (
+      v.isDockerInternal &&
+      (m.includes("timeout") || m.includes("abort") || m.includes("getaddrinfo") || m.includes("enotfound"))
+    ) {
+      return ((v.warning ?? "") + (v.suggestion ? " " + v.suggestion : "")).trim();
+    }
+  }
   if (id === "ollama") {
     if (m.includes("getaddrinfo") || m.includes("enotfound") || m.includes("resolve")) {
       return "El hostname no resuelve desde el servidor de Aibenchef. Si Ollama esta en otro EasyPanel project, usa la IP publica del Hetzner en vez del nombre interno.";
