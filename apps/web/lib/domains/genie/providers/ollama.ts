@@ -50,8 +50,13 @@ export class OllamaProvider implements LLMProvider {
       },
     };
 
+    // Timeout corto a proposito: si Ollama no responde en 25s probablemente
+    // el modelo es demasiado grande para el CPU del server o el hostname no
+    // resuelve (Docker internal name). Mejor fallar rapido para que el
+    // usuario vea el error y reaccione, que hacerle esperar 60s.
+    const TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 25_000);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60_000); // 60s timeout
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     let resp: Response;
     try {
@@ -62,8 +67,20 @@ export class OllamaProvider implements LLMProvider {
         signal: controller.signal,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(`Ollama conexion fallida (${this.baseUrl}): ${msg}`);
+      const aborted = (e as { name?: string })?.name === "AbortError";
+      const msg = aborted
+        ? `timeout despues de ${TIMEOUT_MS / 1000}s`
+        : e instanceof Error
+          ? e.message
+          : String(e);
+      // Hint cuando el host parece Docker-internal (no resuelve desde otra red)
+      const looksDocker = /^[a-z0-9][a-z0-9_-]*$/i.test(
+        new URL(this.baseUrl).hostname,
+      );
+      const hint = looksDocker
+        ? " (el hostname parece nombre de servicio Docker — verifica que el contenedor web este en la misma red, o setea OLLAMA_BASE_URL con una IP/dominio publico)"
+        : "";
+      throw new Error(`Ollama conexion fallida (${this.baseUrl}): ${msg}${hint}`);
     } finally {
       clearTimeout(timeout);
     }

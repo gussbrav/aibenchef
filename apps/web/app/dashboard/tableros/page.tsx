@@ -9,6 +9,7 @@ import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listTableros } from "@/lib/domains/tableros";
 
 import { NewTableroButton } from "./new-tablero-button";
+import { DeleteTableroButton } from "./delete-tablero-button";
 
 export const metadata: Metadata = { title: "Tableros" };
 export const dynamic = "force-dynamic";
@@ -79,8 +80,9 @@ export default async function TablerosPage() {
             <Link
               key={t.id}
               href={`/dashboard/tableros/${t.id}` as never}
-              className="block"
+              className="block group relative"
             >
+              <DeleteTableroButton id={t.id} nombre={t.nombre} />
               <Card
                 variant="elevated"
                 className="p-5 hover:shadow-md hover:border-brand-300 transition cursor-pointer h-full"

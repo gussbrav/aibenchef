@@ -189,6 +189,34 @@ export async function updateUserStatus(
   return getUser(targetId);
 }
 
+/**
+ * Admin renombra a otro usuario. Email NO se cambia desde aca (cambiar email
+ * dispara re-verificacion y puede deslogear todas las sesiones — se hace por
+ * flujo aparte si se necesita).
+ */
+export async function adminUpdateUserName(
+  actorId: string,
+  targetId: string,
+  name: string,
+): Promise<User> {
+  await requireAdmin(actorId);
+  const trimmed = name.trim();
+  if (!trimmed) throw new ValidationError("Nombre vacio", {});
+  if (trimmed.length > 120) throw new ValidationError("Nombre muy largo", {});
+  await db.execute(
+    sql`UPDATE auth.users SET name = ${trimmed}, updated_at = now() WHERE id = ${targetId}`,
+  );
+  try {
+    await db.execute(
+      sql`INSERT INTO auth.users_audit (user_id, accion, detalle, actor_id)
+          VALUES (${targetId}, 'admin_rename', ${`name=${trimmed}`}, ${actorId})`,
+    );
+  } catch {
+    /* swallow */
+  }
+  return getUser(targetId);
+}
+
 export async function deleteUser(actorId: string, targetId: string): Promise<void> {
   await requireAdmin(actorId);
   if (actorId === targetId) {

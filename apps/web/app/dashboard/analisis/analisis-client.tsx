@@ -47,14 +47,19 @@ export function AnalisisClient() {
   // Al cambiar de fuente:
   //   1) limpiamos el resultado anterior para no mostrar datos viejos del Balance
   //      mientras esperamos los nuevos de Resultados/Ratios.
-  //   2) podamos medidas/dimensiones que no existan en el nuevo schema (ej. cta_a
-  //      es valido en balance pero no en resultados). Sin esto, el auto-ejecutor
-  //      dispara el pivot con columnas invalidas y aparece "Columna no permitida".
+  //   2) limpiamos `columnas` para bloquear el auto-ejecutor (guard
+  //      `if (!columnas) return` en el effect siguiente) hasta que tengamos
+  //      el schema de la nueva fuente.
+  //   3) podamos medidas/dimensiones que no existan en el nuevo schema (ej.
+  //      cta_a es valido en balance pero no en resultados). Sin esta combinacion
+  //      el auto-ejecutor dispara el pivot con columnas invalidas y aparece
+  //      "Columna no permitida".
   useEffect(() => {
     let alive = true;
     setCargandoCols(true);
     setError(null);
     setResultado(null);
+    setColumnas(null);
     fetch(`/api/v1/pivot/columnas?fuente=${config.fuente}`)
       .then((r) => r.json())
       .then((json) => {
@@ -68,11 +73,25 @@ export function AnalisisClient() {
         const dimsValidas = new Set(cols.dimensiones.map((c) => c.key));
         const medsValidas = new Set(cols.medidas.map((c) => c.key));
         setConfig((cfg) => {
-          const dimsNew = cfg.dimensiones.filter((k) => dimsValidas.has(k));
-          const medsNew = cfg.medidas.filter((k) => medsValidas.has(k));
+          let dimsNew = cfg.dimensiones.filter((k) => dimsValidas.has(k));
+          let medsNew = cfg.medidas.filter((k) => medsValidas.has(k));
+          // Fallback: si todas las dims o medidas se podaron, sembrar defaults
+          // sensatos para el nuevo schema. Sin esto el usuario ve la grilla
+          // vacia y debe elegir todo desde cero al cambiar de fuente.
+          if (dimsNew.length === 0 && cols.dimensiones.length > 0) {
+            const periodo = cols.dimensiones.find((d) => d.key === "periodo");
+            const entidad = cols.dimensiones.find((d) => d.key === "nomb_correg");
+            dimsNew = [periodo?.key, entidad?.key].filter(Boolean) as string[];
+            if (dimsNew.length === 0) dimsNew = [cols.dimensiones[0]!.key];
+          }
+          if (medsNew.length === 0 && cols.medidas.length > 0) {
+            medsNew = cols.medidas.slice(0, 3).map((m) => m.key);
+          }
           if (
             dimsNew.length === cfg.dimensiones.length &&
-            medsNew.length === cfg.medidas.length
+            medsNew.length === cfg.medidas.length &&
+            dimsNew.every((k, i) => cfg.dimensiones[i] === k) &&
+            medsNew.every((k, i) => cfg.medidas[i] === k)
           ) {
             return cfg;
           }
