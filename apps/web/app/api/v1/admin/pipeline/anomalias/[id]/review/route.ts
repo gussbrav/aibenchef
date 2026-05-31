@@ -8,9 +8,14 @@
  * registrado para audit (reviewed_by = email del usuario en sesion).
  */
 
+import { headers } from "next/headers";
 import { NextRequest } from "next/server";
 
 import { requireAdminSession } from "@/lib/auth-helpers";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { reviewAnomalia } from "@/lib/domains/pipeline";
 import type { AnomaliaReviewInput } from "@/lib/domains/pipeline";
 import { handleRoute, NotFoundError, ValidationError } from "@/lib/domains/shared";
@@ -57,6 +62,18 @@ export async function POST(
         {},
       );
     }
+
+    const hdrs = await headers();
+    const ctxAudit = extractAuditContext(hdrs, session.id, session.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "schema",
+      action: "pipeline_anomalia_reviewed",
+      severity: "info",
+      resource: `estructura_diff:${id}`,
+      metadata: { action: body.action, hasNotes: Boolean(body.notes) },
+    });
+
     return { id, reviewedBy: session.email, action: body.action };
   });
 }

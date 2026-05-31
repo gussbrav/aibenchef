@@ -6,9 +6,14 @@
  * en dw.cabecera_maestra. Audit en admin.cabecera_audit_log.
  */
 
+import { headers } from "next/headers";
 import { NextRequest } from "next/server";
 
 import { requireAdminSession } from "@/lib/auth-helpers";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { alignCabecera } from "@/lib/domains/pipeline";
 import type { CabeceraAlignInput, TipoEstado } from "@/lib/domains/pipeline";
 import { handleRoute, ValidationError } from "@/lib/domains/shared";
@@ -49,6 +54,23 @@ export async function POST(req: NextRequest) {
       session.email,
       body.motivo,
     );
+
+    const hdrs = await headers();
+    const ctxAudit = extractAuditContext(hdrs, session.id, session.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "schema",
+      action: "cabecera_align",
+      severity: "warn", // alinear cabecera afecta el parser y los marts
+      resource: `dw.cabecera_maestra:${body.tipoEstado}:${body.tipoEntidad}`,
+      metadata: {
+        codigosCount: body.codigos.length,
+        periodoSrc: body.periodoSrc,
+        changes,
+        hasMotivo: Boolean(body.motivo),
+      },
+    });
+
     return { changes };
   });
 }

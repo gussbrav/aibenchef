@@ -9,6 +9,10 @@ import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
+import {
   findPendingInvitationByEmail,
   resendInvitationEmail,
 } from "@/lib/domains/invitations";
@@ -25,7 +29,8 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_req: NextRequest, ctx: Ctx) {
   return handleRoute(async () => {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const hdrs = await headers();
+    const session = await auth.api.getSession({ headers: hdrs });
     if (!session) throw new UnauthorizedError("Sesion requerida", {});
     const { id } = await ctx.params;
     const user = await getUser(id);
@@ -36,6 +41,18 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
         {},
       );
     }
-    return resendInvitationEmail(session.user.id, invitation.id);
+    const result = await resendInvitationEmail(session.user.id, invitation.id);
+
+    const ctxAudit = extractAuditContext(hdrs, session.user.id, session.user.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "admin",
+      action: "invitation_resent",
+      severity: "info",
+      resource: `invitation:${invitation.id}`,
+      metadata: { targetEmail: user.email },
+    });
+
+    return result;
   });
 }
