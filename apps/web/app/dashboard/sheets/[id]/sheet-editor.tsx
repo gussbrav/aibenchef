@@ -71,7 +71,10 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   const gridApiRef = useRef<GridApi | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Construir rowData desde el JSONB sparse
+  // Construir rowData desde el JSONB sparse. Importante: dependencias EXACTAS
+  // (cells, nRows, nCols) — NO el objeto sheet completo, asi cambios en
+  // sheet.charts no invalidan rowData y AG Grid no resetea el foco mientras
+  // estas editando una celda.
   const rowData = useMemo<GridRow[]>(() => {
     const rows: GridRow[] = [];
     for (let r = 1; r <= sheet.nRows; r++) {
@@ -84,7 +87,7 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
       rows.push(row);
     }
     return rows;
-  }, [sheet]);
+  }, [sheet.cells, sheet.nRows, sheet.nCols]);
 
   // Lookup function para el evaluador de formulas — busca por celda key (ej "A1")
   // en el cells JSONB sparse.
@@ -335,13 +338,34 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     const wb = new ExcelJS.Workbook();
     wb.creator = "Aibenchef";
     const ws = wb.addWorksheet(sheet.nombre);
-    const headers = Array.from({ length: sheet.nCols }, (_, c) => colKey(c));
-    ws.addRow(headers);
-    ws.getRow(1).font = { bold: true };
-    for (let r = 1; r <= sheet.nRows; r++) {
-      const row = Array.from({ length: sheet.nCols }, (_, c) => {
+    // NO prepender una fila literal con "A B C D..." — el formato XLSX ya
+    // numera las columnas en el header gris del cliente. Antes lo hacia y
+    // empujaba toda la data una fila abajo (A1 caia en row 2, A2 en row 3).
+    // Para no exportar filas vacias al final, encontramos la ultima fila
+    // con datos y solo escribimos hasta ahi.
+    let lastRow = 0;
+    let lastCol = 0;
+    for (const k of Object.keys(sheet.cells)) {
+      const m = k.match(/^([A-Z]+)(\d+)$/);
+      if (!m) continue;
+      const colIdx = m[1]!
+        .split("")
+        .reduce((acc, ch) => acc * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+      const rowIdx = Number(m[2]);
+      if (rowIdx > lastRow) lastRow = rowIdx;
+      if (colIdx > lastCol) lastCol = colIdx;
+    }
+    // Si la sheet esta totalmente vacia exportamos al menos 1 fila vacia.
+    const nRowsOut = Math.max(lastRow, 1);
+    const nColsOut = Math.max(lastCol + 1, 1);
+    for (let r = 1; r <= nRowsOut; r++) {
+      const row = Array.from({ length: nColsOut }, (_, c) => {
         const k = `${colKey(c)}${r}`;
-        return sheet.cells[k] ?? null;
+        const v = sheet.cells[k];
+        // Si la celda tiene formula =..., el motor del cliente no se llama
+        // en export — la dejamos como texto. Para producir formulas Excel
+        // reales habria que mapear nuestra sintaxis al estilo OOXML.
+        return v ?? null;
       });
       ws.addRow(row);
     }

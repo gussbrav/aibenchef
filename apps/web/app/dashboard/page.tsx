@@ -53,7 +53,7 @@ export default async function DashboardHome() {
         iconBg="from-indigo-500 to-violet-600"
         title="Pulso del Sistema Financiero Peruano"
         tagline="Inteligencia competitiva instantánea sobre los 5 grupos SBS (Bancos · Financieras · Cajas Municipales · Cajas Rurales · Empresas de Créditos)"
-        description="Última publicación oficial SBS lista para analizar. Comparate con tus pares en segundos, sin descargar Excel ni hacer cálculos manuales."
+        description="Última publicación oficial SBS lista para analizar. Comparate con tus pares en segundos, sin descargar archivos sueltos ni hacer cálculos manuales."
         stats={[
           { label: "Último cierre", value: lastFecha ? formatPeriod(lastPeriod) : "—", hint: lastFecha ?? undefined },
           { label: "Entidades reportadas", value: totalEntidades },

@@ -118,10 +118,21 @@ export function rangoToDataset(
   for (let c = r.startColIdx; c <= r.endColIdx; c++) {
     cols.push({ idx: c, letter: idxToColLetter(c) });
   }
+  // Caso especial: rango de UNA SOLA columna. No tiene sentido usar la misma
+  // columna como X y serie a la vez — usamos el indice de fila (1, 2, 3, ...)
+  // como eje X y los valores de esa columna como serie unica. Asi
+  // =SheetChart(A1:A4) funciona out-of-the-box.
+  const singleCol = cols.length === 1;
   const xIdx = colLetterToIdx(xColumn);
   // Si la xColumn no esta dentro del rango, usar la primera columna del rango.
-  const effectiveXIdx = cols.find((c) => c.idx === xIdx) ? xIdx : r.startColIdx;
-  const xLetter = idxToColLetter(effectiveXIdx);
+  // En modo singleCol forzamos un effectiveXIdx fuera del rango para que la
+  // columna unica caiga en "series".
+  const effectiveXIdx = singleCol
+    ? -1
+    : cols.find((c) => c.idx === xIdx)
+      ? xIdx
+      : r.startColIdx;
+  const xLetter = effectiveXIdx >= 0 ? idxToColLetter(effectiveXIdx) : "_idx";
 
   // Resolver nombres de columna (header) — caen al letter por default.
   const colNames: Record<string, string> = {};
@@ -141,6 +152,10 @@ export function rangoToDataset(
   const data: Array<Record<string, string | number>> = [];
   for (let row = firstDataRow; row <= r.endRow; row++) {
     const point: Record<string, string | number> = {};
+    // En singleCol el eje X es el numero de fila del rango (1..N).
+    if (singleCol) {
+      point._x = row - firstDataRow + 1;
+    }
     for (const c of cols) {
       const raw = getRaw(`${c.letter}${row}`);
       const evaluated = evaluateFormula(raw, getRaw);
@@ -155,9 +170,9 @@ export function rangoToDataset(
       const key = c.idx === effectiveXIdx ? "_x" : colNames[c.letter]!;
       point[key] = value;
     }
-    // Saltar filas completamente vacias
-    const hasAnyValue = Object.values(point).some(
-      (v) => v !== "" && v !== null && v !== undefined,
+    // Saltar filas completamente vacias (no contar _x para esa decision)
+    const hasAnyValue = Object.entries(point).some(
+      ([k, v]) => k !== "_x" && v !== "" && v !== null && v !== undefined,
     );
     if (hasAnyValue) data.push(point);
   }

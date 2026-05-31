@@ -63,7 +63,7 @@ const NAV_BASE: NavItem[] = [
 const ACTIONS_BASE: NavItem[] = [
   { label: "Nuevo tablero", description: "Crear dashboard multi-widget", group: "Acciones rapidas", icon: LayoutDashboard, href: "/dashboard/tableros" },
   { label: "Nuevo notebook", description: "Reporte con SQL + markdown + charts", group: "Acciones rapidas", icon: NotebookText, href: "/dashboard/notebooks" },
-  { label: "Nueva sheet", description: "Hoja de calculo editable tipo Excel/Zoho", group: "Acciones rapidas", icon: TableProperties, href: "/dashboard/sheets" },
+  { label: "Nueva sheet", description: "Hoja de calculo editable con formulas + graficos", group: "Acciones rapidas", icon: TableProperties, href: "/dashboard/sheets" },
   { label: "Preguntar a Aiben", description: "NL2SQL via Claude/Ollama", group: "Acciones rapidas", icon: Sparkles, href: "/dashboard/aiben" },
   { label: "Ejecutar SQL ad-hoc", description: "Workbench con Monaco", group: "Acciones rapidas", icon: Code, href: "/dashboard/sql" },
   { label: "Invitar usuario", description: "Generar token de invitacion", group: "Acciones rapidas", icon: MailPlus, href: "/dashboard/settings?tab=invitaciones" },
