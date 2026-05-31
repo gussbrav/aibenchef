@@ -45,6 +45,8 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.14.0",
     "ipython>=8.30.0",
+    "hypothesis>=6.122.0",
+    "pyarrow>=18.1.0",
 ]
 
 [tool.ruff]
@@ -93,6 +95,9 @@ testpaths = ["tests"]
 markers = [
     "integration: tests que requieren Docker (testcontainers Postgres)",
     "slow: tests lentos que se omiten en pre-push hook",
+    "golden: tests que iteran sobre el golden dataset (BASE EE.FF.. canon de Gus)",
+    "property: property-based tests con Hypothesis",
+    "regression: tests que cubren bugs historicos — docstring debe llevar bug ID",
 ]
 
 [tool.coverage.run]
