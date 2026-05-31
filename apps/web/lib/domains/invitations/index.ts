@@ -157,6 +157,79 @@ export async function createInvitation(
   return { invitation, emailSent, emailReason };
 }
 
+/**
+ * Re-enviar el email de una invitacion pendiente. NO regenera el token
+ * (asi el link que se envio antes sigue siendo valido). Solo dispara
+ * sendEmail otra vez con la misma plantilla.
+ */
+export async function resendInvitationEmail(
+  actorId: string,
+  id: string,
+): Promise<{ emailSent: boolean; emailReason?: string }> {
+  await requireAdmin(actorId);
+  const rows = await db.execute<Record<string, unknown>>(
+    sql`
+      SELECT id, token, email, role, invited_by, expires_at, accepted_at,
+             accepted_by, revoked_at, notas, created_at
+      FROM app.invitations
+      WHERE id = ${id}
+        AND accepted_at IS NULL
+        AND revoked_at IS NULL
+        AND expires_at > now()
+      LIMIT 1
+    `,
+  );
+  if (rows.length === 0) {
+    throw new NotFoundError(
+      "Invitacion no encontrada, ya aceptada, revocada o expirada",
+      {},
+    );
+  }
+  const invitation = mapRow(rows[0]!);
+  const inviterRows = await db.execute<{ name: string }>(
+    sql`SELECT name FROM auth.users WHERE id = ${actorId}`,
+  );
+  const inviterName = inviterRows[0]?.name || "Un administrador";
+  const tpl = renderInvitationEmail({
+    appName: "Aibenchef",
+    inviterName,
+    inviteUrl: invitation.url,
+    role: invitation.role,
+    expiresAt: new Date(invitation.expiresAt),
+  });
+  const result = await sendEmail({
+    to: invitation.email,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
+  return { emailSent: result.sent, emailReason: result.reason };
+}
+
+/**
+ * Devuelve la invitacion pendiente para el email del usuario, o null si
+ * nunca se invito o ya se acepto. Util para el menu admin: si existe,
+ * mostramos "Reenviar invitacion"; sino, ocultamos la accion.
+ */
+export async function findPendingInvitationByEmail(
+  email: string,
+): Promise<Invitation | null> {
+  const rows = await db.execute<Record<string, unknown>>(
+    sql`
+      SELECT id, token, email, role, invited_by, expires_at, accepted_at,
+             accepted_by, revoked_at, notas, created_at
+      FROM app.invitations
+      WHERE lower(email) = ${email.toLowerCase()}
+        AND accepted_at IS NULL
+        AND revoked_at IS NULL
+        AND expires_at > now()
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+  );
+  return rows.length > 0 ? mapRow(rows[0]!) : null;
+}
+
 export async function revokeInvitation(actorId: string, id: string): Promise<void> {
   await requireAdmin(actorId);
   const rows = await db.execute<Record<string, unknown>>(
