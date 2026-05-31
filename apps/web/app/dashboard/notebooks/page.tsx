@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { NotebookText, Plus } from "lucide-react";
+import { NotebookText, FileText, Database, Share2 } from "lucide-react";
 
 import { auth } from "@/lib/auth";
-import { Card } from "@/components/ui";
+import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listNotebooks } from "@/lib/domains/notebooks";
 
 import { NewNotebookButton } from "./new-notebook-button";
@@ -20,22 +20,58 @@ export default async function NotebooksPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Notebooks</h1>
-          <p className="text-sm text-slate-600">
-            Reportes interactivos: combina markdown, SQL y charts en una sola hoja.
-          </p>
-        </div>
-        <NewNotebookButton />
-      </header>
+      <PageHero
+        icon={NotebookText}
+        iconBg="from-amber-500 to-orange-600"
+        title="Notebooks"
+        tagline="Construí reportes vivos que se ven como un documento pero funcionan como una herramienta — texto explicativo, consultas y visualizaciones en una sola hoja compartible"
+        description="Ideal para análisis recurrentes (informes mensuales, presentaciones a clientes, deep-dives) que querés re-correr con un solo click cuando entran datos nuevos."
+        stats={
+          notebooks.length > 0
+            ? [
+                { label: "Notebooks creados", value: notebooks.length },
+                {
+                  label: "Última edición",
+                  value: new Date(
+                    Math.max(...notebooks.map((n) => new Date(n.updatedAt).getTime())),
+                  ).toLocaleDateString("es-PE"),
+                },
+              ]
+            : undefined
+        }
+        action={<NewNotebookButton />}
+      />
 
       {notebooks.length === 0 ? (
-        <Card variant="elevated" className="p-12 text-center">
-          <NotebookText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-600 mb-4">Crea tu primer notebook.</p>
-          <NewNotebookButton variant="cta" />
-        </Card>
+        <div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+            <FeatureTile
+              icon={FileText}
+              title="Texto + datos juntos"
+              description="Markdown para explicar contexto + celdas SQL para traer datos + charts automáticos. Como un Jupyter o Notion DB."
+              color="text-amber-600"
+            />
+            <FeatureTile
+              icon={Database}
+              title="Conectado a SBS real"
+              description="Cada celda SQL apunta al data warehouse. Cuando entra el cierre mensual, refresh y todo se actualiza."
+              color="text-blue-600"
+            />
+            <FeatureTile
+              icon={Share2}
+              title="Compartible y reproducible"
+              description="Compartí el link interno con tu equipo. Mismo notebook, misma data, mismas conclusiones."
+              color="text-emerald-600"
+            />
+          </div>
+          <Card variant="elevated" className="p-12 text-center">
+            <NotebookText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-600 mb-4">
+              Creá tu primer notebook — partís de un template o empezás en blanco.
+            </p>
+            <NewNotebookButton variant="cta" />
+          </Card>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {notebooks.map((n) => (

@@ -136,11 +136,11 @@ export function AcumuladoClient() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <FileBarChart2 className="w-6 h-6 text-brand-600" />
-              Estado de Resultados Acumulado
+              Estado de Resultados Anualizado (TTM)
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Cifras acumuladas YTD vs mismo periodo del año anterior. Fuente: SBS (en
-              miles de soles).
+              Tendencia year-to-date comparada con el mismo periodo del año anterior — entiendé en
+              segundos cómo cierra el año cualquier entidad SBS. Cifras en miles de soles.
             </p>
           </div>
         </div>
