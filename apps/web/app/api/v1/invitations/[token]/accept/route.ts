@@ -2,6 +2,10 @@ import type { NextRequest } from "next/server";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { acceptInvitation } from "@/lib/domains/invitations";
 import { handleRoute, UnauthorizedError } from "@/lib/domains/shared";
 
@@ -14,9 +18,22 @@ type Ctx = { params: Promise<{ token: string }> };
 // la invitacion, asigna el rol invitado, y consume el token.
 export async function POST(_req: NextRequest, ctx: Ctx) {
   return handleRoute(async () => {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const hdrs = await headers();
+    const session = await auth.api.getSession({ headers: hdrs });
     if (!session) throw new UnauthorizedError("Tenes que estar autenticado", {});
     const { token } = await ctx.params;
-    return acceptInvitation(token, session.user.id);
+    const result = await acceptInvitation(token, session.user.id);
+
+    const ctxAudit = extractAuditContext(hdrs, session.user.id, session.user.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "auth",
+      action: "invitation_accepted",
+      severity: "info",
+      resource: `invitation:${token.slice(0, 8)}...`,
+      metadata: {},
+    });
+
+    return result;
   });
 }

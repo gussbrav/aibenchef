@@ -108,6 +108,7 @@ export default async function DashboardLayout({
               <NavDropdown
                 label="Admin"
                 items={[
+                  { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
                   { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad ingesta SBS" },
                   { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados SBS" },
                   { href: "/dashboard/admin/renombres", label: "Maestra", description: "Renombres y entidades" },

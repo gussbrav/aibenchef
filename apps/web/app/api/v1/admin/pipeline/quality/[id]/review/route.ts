@@ -6,9 +6,14 @@
  * Marca un quality check (admin.data_quality_checks) como revisado.
  */
 
+import { headers } from "next/headers";
 import { NextRequest } from "next/server";
 
 import { requireAdminSession } from "@/lib/auth-helpers";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { reviewQualityCheck } from "@/lib/domains/pipeline";
 import { handleRoute, NotFoundError, ValidationError } from "@/lib/domains/shared";
 
@@ -54,6 +59,18 @@ export async function POST(
         {},
       );
     }
+
+    const hdrs = await headers();
+    const ctxAudit = extractAuditContext(hdrs, session.id, session.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "schema",
+      action: "pipeline_quality_reviewed",
+      severity: "info",
+      resource: `quality_check:${id}`,
+      metadata: { action: body.action, hasNotes: Boolean(body.notes) },
+    });
+
     return { id, reviewedBy: session.email, action: body.action };
   });
 }

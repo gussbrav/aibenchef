@@ -81,6 +81,8 @@ export {
   setAuditLogger,
   PostgresAuditLogger,
   InMemoryAuditLogger,
+  extractAuditContext,
+  type AuditRequestContext,
 } from "./audit";
 
 export {

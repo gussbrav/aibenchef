@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, Lock, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowRight, Lock, Loader2, Sparkles } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 
@@ -46,20 +46,27 @@ export function SignupForm() {
       .finally(() => setPreviewLoading(false));
   }, [token]);
 
-  // Estado: sin token -> mensaje "solo por invitacion"
+  // Estado: sin token -> mensaje "solo por invitacion" + CTA a solicitar-acceso
   if (!token) {
     return (
-      <div className="space-y-4 text-center">
+      <div className="space-y-5 text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
           <Lock className="w-6 h-6 text-amber-700" />
         </div>
         <h2 className="text-lg font-semibold text-slate-900">Registro por invitacion</h2>
-        <p className="text-sm text-slate-600">
-          El acceso a Aibenchef es <strong>cerrado</strong>. Solicita una invitacion al
-          administrador de tu organizacion. Cuando la recibas por email, vas a tener un
-          link unico que te permite crear tu cuenta.
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Aibenchef es <strong>beta privado</strong>. Si ya tenes un link de invitacion,
+          abrilo desde tu correo. Si todavia no, podes solicitar acceso y te respondemos
+          en 24–48h.
         </p>
-        <div className="pt-2">
+        <Link
+          href={"/solicitar-acceso" as never}
+          className="inline-flex items-center justify-center gap-2 h-11 px-5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition w-full"
+        >
+          Solicitar acceso
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+        <div className="pt-1">
           <Link href="/login" className="text-brand-600 hover:underline font-medium text-sm">
             ¿Ya tenes cuenta? Entra
           </Link>

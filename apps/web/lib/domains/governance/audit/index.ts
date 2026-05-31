@@ -23,6 +23,7 @@ import type { AuditLogger } from "./types";
 
 export { PostgresAuditLogger } from "./postgres-audit-logger";
 export { InMemoryAuditLogger } from "./in-memory-audit-logger";
+export { extractAuditContext, type AuditRequestContext } from "./request-helpers";
 
 let _instance: AuditLogger | null = null;
 

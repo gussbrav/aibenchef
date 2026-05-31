@@ -5,8 +5,13 @@
  */
 
 import type { NextRequest } from "next/server";
+import { headers } from "next/headers";
 import { z } from "zod";
 
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import {
   consumeResetToken,
   previewResetToken,
@@ -37,6 +42,21 @@ export async function POST(req: NextRequest) {
         issues: parsed.error.flatten().fieldErrors,
       });
     }
-    return consumeResetToken(parsed.data.token, parsed.data.newPassword);
+    const result = await consumeResetToken(parsed.data.token, parsed.data.newPassword);
+
+    // Audit sin actor (endpoint publico — el token identifica al user).
+    // Resource es el hash truncado del token para no leakear.
+    const hdrs = await headers();
+    const ctxAudit = extractAuditContext(hdrs);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "auth",
+      action: "password_reset_consumed",
+      severity: "warn",
+      resource: `reset_token:${parsed.data.token.slice(0, 8)}...`,
+      metadata: {},
+    });
+
+    return result;
   });
 }

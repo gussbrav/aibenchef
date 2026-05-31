@@ -3,6 +3,10 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import {
+  extractAuditContext,
+  recordAuditEvent,
+} from "@/lib/domains/governance";
 import { createInvitation, listInvitations } from "@/lib/domains/invitations";
 import { requireAdmin } from "@/lib/domains/users";
 import { handleRoute, UnauthorizedError, ValidationError } from "@/lib/domains/shared";
@@ -15,16 +19,16 @@ const createBody = z.object({
   notas: z.string().max(500).nullable().optional(),
 });
 
-async function requireUserId(): Promise<string> {
+async function requireSession() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new UnauthorizedError("Sesion requerida", {});
-  return session.user.id;
+  return session;
 }
 
 export async function GET() {
   return handleRoute(async () => {
-    const userId = await requireUserId();
-    await requireAdmin(userId);
+    const session = await requireSession();
+    await requireAdmin(session.user.id);
     const rows = await listInvitations();
     return { rows, count: rows.length };
   });
@@ -32,7 +36,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
-    const userId = await requireUserId();
+    const hdrs = await headers();
+    const session = await requireSession();
+    const userId = session.user.id;
     const json = await req.json();
     const parsed = createBody.safeParse(json);
     if (!parsed.success) {
@@ -40,6 +46,18 @@ export async function POST(req: NextRequest) {
         issues: parsed.error.flatten().fieldErrors,
       });
     }
-    return createInvitation(userId, parsed.data);
+    const invitation = await createInvitation(userId, parsed.data);
+
+    const ctxAudit = extractAuditContext(hdrs, userId, session.user.email);
+    await recordAuditEvent({
+      ...ctxAudit,
+      category: "admin",
+      action: "invitation_created",
+      severity: "info",
+      resource: `invitation:${parsed.data.email}`,
+      metadata: { role: parsed.data.role },
+    });
+
+    return invitation;
   });
 }
