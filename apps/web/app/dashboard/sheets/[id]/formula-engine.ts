@@ -92,7 +92,11 @@ export function evaluateFormula(
     return raw;
   }
 
-  let expr = trimmed.slice(1).trim();
+  // Normalizamos a mayusculas para aceptar refs en cualquier caso
+  // (=c2+d2 == =C2+D2). Sin esto, el regex de Paso 2 no matcheaba las
+  // refs lowercase y caian al whitelist como letras sueltas -> #ERROR.
+  // Como la sintaxis no admite strings literales, el upcase es safe.
+  let expr = trimmed.slice(1).trim().toUpperCase();
 
   // Paso 1: funciones agregadas con rango. SUM(A1:A5), AVG(A1:B10), etc.
   expr = expr.replace(
