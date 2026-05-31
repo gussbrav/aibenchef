@@ -12,12 +12,31 @@ import { NotFoundError, ValidationError, toIso } from "@/lib/domains/shared";
 
 export type SheetCells = Record<string, string | number | boolean | null>;
 
+export type SheetChartTipo = "line" | "bar" | "pie" | "area";
+
+export type SheetChartConfig = {
+  ejeY?: { titulo?: string; formato?: "number" | "percent" | "thousands" };
+  ejeX?: { titulo?: string };
+  colores?: string[];
+};
+
+export type SheetChart = {
+  id: string;
+  tipo: SheetChartTipo;
+  titulo: string;
+  rango: string;
+  headerRow: boolean;
+  xColumn: string;
+  config: SheetChartConfig;
+};
+
 export type Sheet = {
   id: string;
   userId: string;
   nombre: string;
   descripcion: string | null;
   cells: SheetCells;
+  charts: SheetChart[];
   nRows: number;
   nCols: number;
   esPublico: boolean;
@@ -25,7 +44,7 @@ export type Sheet = {
   updatedAt: string;
 };
 
-export type SheetResumen = Omit<Sheet, "cells"> & { nCells: number };
+export type SheetResumen = Omit<Sheet, "cells" | "charts"> & { nCells: number };
 
 function mapRow(r: Record<string, unknown>): Sheet {
   return {
@@ -34,6 +53,7 @@ function mapRow(r: Record<string, unknown>): Sheet {
     nombre: String(r.nombre),
     descripcion: (r.descripcion as string | null) ?? null,
     cells: (r.cells as SheetCells) ?? {},
+    charts: Array.isArray(r.charts) ? (r.charts as SheetChart[]) : [],
     nRows: Number(r.n_rows),
     nCols: Number(r.n_cols),
     esPublico: Boolean(r.es_publico),
@@ -72,8 +92,8 @@ export async function listSheets(userId: string): Promise<SheetResumen[]> {
 export async function getSheet(userId: string, id: string): Promise<Sheet> {
   const rows = await db.execute<Record<string, unknown>>(
     sql`
-      SELECT id, user_id, nombre, descripcion, cells, n_rows, n_cols, es_publico,
-             created_at, updated_at
+      SELECT id, user_id, nombre, descripcion, cells, charts, n_rows, n_cols,
+             es_publico, created_at, updated_at
       FROM app.sheets
       WHERE id = ${id} AND (user_id = ${userId} OR es_publico = TRUE)
       LIMIT 1
@@ -94,8 +114,8 @@ export async function createSheet(
     sql`
       INSERT INTO app.sheets (user_id, nombre, descripcion, n_rows, n_cols)
       VALUES (${userId}, ${data.nombre.trim()}, ${data.descripcion ?? null}, ${nRows}, ${nCols})
-      RETURNING id, user_id, nombre, descripcion, cells, n_rows, n_cols, es_publico,
-                created_at, updated_at
+      RETURNING id, user_id, nombre, descripcion, cells, charts, n_rows, n_cols,
+                es_publico, created_at, updated_at
     `,
   );
   return mapRow(rows[0]!);
@@ -106,6 +126,7 @@ export async function updateSheetCells(
   id: string,
   data: {
     cells?: SheetCells;
+    charts?: SheetChart[];
     nombre?: string;
     descripcion?: string | null;
     nRows?: number;
@@ -117,6 +138,9 @@ export async function updateSheetCells(
   const sets: ReturnType<typeof sql>[] = [];
   if (data.cells !== undefined) {
     sets.push(sql`cells = ${JSON.stringify(data.cells)}::jsonb`);
+  }
+  if (data.charts !== undefined) {
+    sets.push(sql`charts = ${JSON.stringify(data.charts)}::jsonb`);
   }
   if (data.nombre !== undefined) {
     if (!data.nombre.trim()) throw new ValidationError("Nombre vacio", {});
@@ -139,8 +163,8 @@ export async function updateSheetCells(
     sql`
       UPDATE app.sheets SET ${sql.join(sets, sql`, `)}
       WHERE id = ${id} AND user_id = ${userId}
-      RETURNING id, user_id, nombre, descripcion, cells, n_rows, n_cols, es_publico,
-                created_at, updated_at
+      RETURNING id, user_id, nombre, descripcion, cells, charts, n_rows, n_cols,
+                es_publico, created_at, updated_at
     `,
   );
   if (rows.length === 0) throw new NotFoundError("Sheet no encontrada", {});

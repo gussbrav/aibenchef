@@ -15,8 +15,10 @@ import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import {
   ArrowLeft,
+  BarChart3,
   Check,
   Download,
+  Edit3,
   Loader2,
   Save,
   Trash2,
@@ -25,10 +27,13 @@ import {
 
 import { cn } from "@/lib/utils/cn";
 import { formatNumber } from "@/app/dashboard/_lib/format";
+import { useConfirm } from "@/components/ui";
 
-import type { Sheet, SheetCells } from "@/lib/domains/sheets";
+import type { Sheet, SheetCells, SheetChart as ChartDef } from "@/lib/domains/sheets";
 
 import { evaluateFormula, type CellRawValue } from "./formula-engine";
+import { SheetChart } from "./sheet-chart";
+import { SheetChartEditor } from "./sheet-chart-editor";
 
 ModuleRegistry.registerModules([ClientSideRowModelModule]);
 
@@ -45,6 +50,7 @@ type GridRow = { _row: number; [col: string]: string | number | boolean | null |
 
 export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [sheet, setSheet] = useState<Sheet>(initial);
   const [nombre, setNombre] = useState(initial.nombre);
   const [editandoNombre, setEditandoNombre] = useState(false);
@@ -55,6 +61,11 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     cellRef: string;
     value: string | number | boolean | null | undefined;
   } | null>(null);
+  const [chartEditor, setChartEditor] = useState<
+    | { mode: "new" }
+    | { mode: "edit"; chart: ChartDef }
+    | null
+  >(null);
   const pendingCellsRef = useRef<SheetCells>({});
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gridApiRef = useRef<GridApi | null>(null);
@@ -304,7 +315,13 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
   };
 
   const eliminar = async () => {
-    if (!confirm(`Eliminar la sheet "${sheet.nombre}"?`)) return;
+    const ok = await confirm({
+      title: `Eliminar la sheet "${sheet.nombre}"`,
+      message: "Se borra la hoja con todas sus celdas y graficos.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await fetch(`/api/v1/sheets/${sheet.id}`, { method: "DELETE" });
       router.push("/dashboard/sheets" as never);
@@ -338,6 +355,59 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
     a.download = `${sheet.nombre}_${Date.now()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // ============================================================
+  // Charts (V123) — persistencia + handlers
+  // ============================================================
+  const persistCharts = useCallback(
+    async (nuevos: ChartDef[]) => {
+      setSaving(true);
+      setError(null);
+      try {
+        const r = await fetch(`/api/v1/sheets/${sheet.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ charts: nuevos }),
+        });
+        const json = await r.json();
+        if (json.error) {
+          setError(json.error.message ?? "Error guardando charts");
+        } else {
+          setSheet(json.data as Sheet);
+          setSavedAt(new Date());
+        }
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [sheet.id],
+  );
+
+  const guardarChart = (chart: ChartDef) => {
+    const isNew = !sheet.charts.some((c) => c.id === chart.id);
+    const proximo = isNew
+      ? [...sheet.charts, chart]
+      : sheet.charts.map((c) => (c.id === chart.id ? chart : c));
+    setSheet((s) => ({ ...s, charts: proximo }));
+    setChartEditor(null);
+    void persistCharts(proximo);
+  };
+
+  const eliminarChart = async (chartId: string) => {
+    const c = sheet.charts.find((c) => c.id === chartId);
+    const ok = await confirm({
+      title: `Eliminar grafico${c ? ` "${c.titulo}"` : ""}`,
+      message: "El grafico desaparece de esta hoja. Las celdas no se tocan.",
+      confirmLabel: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    const proximo = sheet.charts.filter((c) => c.id !== chartId);
+    setSheet((s) => ({ ...s, charts: proximo }));
+    void persistCharts(proximo);
   };
 
   // Import XLSX desde archivo del usuario
@@ -475,6 +545,15 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
           </button>
           <button
             type="button"
+            onClick={() => setChartEditor({ mode: "new" })}
+            className="h-8 px-3 text-xs bg-white border border-slate-300 hover:bg-violet-50 hover:border-violet-300 rounded inline-flex items-center gap-1"
+            title="Insertar grafico desde un rango"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-violet-600" />
+            Grafico
+          </button>
+          <button
+            type="button"
             onClick={exportXlsx}
             className="h-8 px-3 text-xs bg-white border border-slate-300 hover:bg-slate-50 rounded inline-flex items-center gap-1"
           >
@@ -497,7 +576,12 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
         </div>
       )}
 
-      <div className={cn("flex-1 ag-theme-quartz mx-2 border border-slate-200 rounded")}>
+      <div
+        className={cn(
+          "ag-theme-quartz mx-2 border border-slate-200 rounded",
+          sheet.charts.length > 0 ? "h-[55%]" : "flex-1",
+        )}
+      >
         <AgGridReact
           rowData={rowData}
           columnDefs={colDefs}
@@ -518,6 +602,68 @@ export function SheetEditor({ sheet: initial }: { sheet: Sheet }) {
           enterNavigatesVerticallyAfterEdit
         />
       </div>
+
+      {sheet.charts.length > 0 && (
+        <div className="flex-1 mx-2 mt-2 overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {sheet.charts.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col h-[280px]"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-900 truncate">
+                      {c.titulo || "Sin titulo"}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      {c.tipo} · {c.rango}
+                      {c.headerRow ? " · con header" : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setChartEditor({ mode: "edit", chart: c })}
+                      className="p-1 text-slate-400 hover:text-slate-700 rounded"
+                      aria-label="Editar grafico"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => eliminarChart(c.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                      aria-label="Eliminar grafico"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <SheetChart chart={c} cells={sheet.cells} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {chartEditor && (
+        <SheetChartEditor
+          cells={sheet.cells}
+          initial={chartEditor.mode === "edit" ? chartEditor.chart : null}
+          onCancel={() => setChartEditor(null)}
+          onSave={(chart) => {
+            // Asegurar id (los nuevos vienen con id="preview" del editor)
+            const final =
+              chartEditor.mode === "new" || chart.id === "preview"
+                ? { ...chart, id: `chart_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}` }
+                : chart;
+            guardarChart(final);
+          }}
+        />
+      )}
 
       {/* Status bar tipo Excel (single-cell focus en Community) */}
       <footer className="mx-2 mt-1 px-3 h-7 bg-slate-50 border border-slate-200 rounded flex items-center gap-4 text-[11px] text-slate-600">
