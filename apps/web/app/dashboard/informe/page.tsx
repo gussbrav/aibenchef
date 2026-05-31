@@ -3,7 +3,7 @@ import { getInformeData, listPeriodosDisponibles, listEntidadesDisponibles } fro
 import { InformeClient } from "./informe-client";
 
 export const metadata: Metadata = {
-  title: "Informe Ejecutivo",
+  title: "Benchmark",
 };
 
 export const dynamic = "force-dynamic";
