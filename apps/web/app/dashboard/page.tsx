@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowRight, BarChart3, Building2, Calendar } from "lucide-react";
+import { ArrowRight, BarChart3, Building2, Activity } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { Card, Container } from "@/components/ui";
+import { Card, Container, PageHero } from "@/components/ui";
 import { getRatiosLatest } from "@/lib/domains/analytics";
 import { WelcomeBanner } from "./welcome-banner";
 import {
@@ -48,13 +48,19 @@ export default async function DashboardHome() {
     <Container size="xl" className="space-y-8 px-0">
       <WelcomeBanner userName={userName} />
 
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Resumen del sistema</h1>
-        <p className="text-slate-600 flex items-center gap-2">
-          <Calendar className="w-4 h-4" />
-          {lastFecha ? `Última publicación SBS: ${formatPeriod(lastPeriod)} (cierre ${lastFecha})` : "Sin datos aún"}
-        </p>
-      </div>
+      <PageHero
+        icon={Activity}
+        iconBg="from-indigo-500 to-violet-600"
+        title="Pulso del Sistema Financiero Peruano"
+        tagline="Inteligencia competitiva instantánea sobre los 5 grupos SBS (Bancos · Financieras · Cajas Municipales · Cajas Rurales · Empresas de Créditos)"
+        description="Última publicación oficial SBS lista para analizar. Comparate con tus pares en segundos, sin descargar Excel ni hacer cálculos manuales."
+        stats={[
+          { label: "Último cierre", value: lastFecha ? formatPeriod(lastPeriod) : "—", hint: lastFecha ?? undefined },
+          { label: "Entidades reportadas", value: totalEntidades },
+          { label: "ROA promedio sistema", value: formatPct(avgRoa) },
+          { label: "Mora promedio", value: formatPct(avgMora) },
+        ]}
+      />
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard

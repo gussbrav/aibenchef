@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Calendar } from "lucide-react";
-import { Card, Container } from "@/components/ui";
+import { Calendar, FileText } from "lucide-react";
+import { Card, Container, PageHero } from "@/components/ui";
 import { getRatios, getRatiosLatest, listEntidades } from "@/lib/domains/analytics";
 import type { Moneda, RatioEeff } from "@/lib/domains/analytics";
 import { EntidadSelector } from "./entidad-selector";
@@ -52,25 +52,24 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
 
   return (
     <Container size="xl" className="space-y-8 px-0">
-      <header className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Estados Financieros</h1>
-            <p className="text-slate-600 text-sm flex items-center gap-2 mt-1">
-              <Calendar className="w-4 h-4" />
-              {actual ? (
-                <>
-                  Último cierre: <strong>{formatPeriod(actual.periodo)}</strong> ({actual.fechaCierre})
-                  <span className="text-slate-400">·</span>
-                  Histórico desde {formatPeriod(historia[0]?.periodo)}
-                </>
-              ) : (
-                <>Sin datos para esta combinación.</>
-              )}
-            </p>
-          </div>
-        </div>
+      <PageHero
+        icon={FileText}
+        iconBg="from-sky-500 to-indigo-600"
+        title="Estados Financieros mensuales"
+        tagline="Balance General + Estado de Resultados de cualquier entidad SBS, con histórico completo desde 2009 y ratios calculados al instante"
+        description="Cambiá de entidad o moneda y ves todo recalculado — ROA, ROE, mora, eficiencia, evolución mensual y anual. Lo que antes tardaba días bajando Excel y haciendo cálculos manuales."
+        stats={
+          actual
+            ? [
+                { label: "Entidad", value: entidadSeleccionada },
+                { label: "Último cierre", value: formatPeriod(actual.periodo), hint: actual.fechaCierre ?? undefined },
+                { label: "Histórico desde", value: formatPeriod(historia[0]?.periodo) },
+              ]
+            : undefined
+        }
+      />
 
+      <header className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-center">
           <EntidadSelector
             entidades={entidades}

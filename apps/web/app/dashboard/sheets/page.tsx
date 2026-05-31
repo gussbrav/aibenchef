@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { TableProperties } from "lucide-react";
+import { TableProperties, FileSpreadsheet, Calculator, Download } from "lucide-react";
 
 import { auth } from "@/lib/auth";
-import { Card } from "@/components/ui";
+import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listSheets } from "@/lib/domains/sheets";
 
 import { NewSheetButton } from "./new-sheet-button";
@@ -20,25 +20,58 @@ export default async function SheetsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Sheets</h1>
-          <p className="text-sm text-slate-600">
-            Hojas de calculo editables tipo Excel/Zoho Sheet. Datos sueltos, calculos
-            ad-hoc, export XLSX.
-          </p>
-        </div>
-        <NewSheetButton />
-      </header>
+      <PageHero
+        icon={TableProperties}
+        iconBg="from-emerald-500 to-teal-600"
+        title="Sheets"
+        tagline="Hojas de cálculo editables — la familiaridad de Excel adentro de Aibenchef, sin saltar a otra app"
+        description="Para cuando necesitás meter datos a mano, hacer cálculos rápidos, o armar un export ad-hoc para mandar por mail. Edición tipo Google Sheets, persistido en la nube."
+        stats={
+          sheets.length > 0
+            ? [
+                { label: "Sheets creados", value: sheets.length },
+                {
+                  label: "Última edición",
+                  value: new Date(
+                    Math.max(...sheets.map((s) => new Date(s.updatedAt).getTime())),
+                  ).toLocaleDateString("es-PE"),
+                },
+              ]
+            : undefined
+        }
+        action={<NewSheetButton />}
+      />
 
       {sheets.length === 0 ? (
-        <Card variant="elevated" className="p-12 text-center">
-          <TableProperties className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-600 mb-4">
-            Aun no tenes sheets. Crea una nueva para empezar a editar celdas.
-          </p>
-          <NewSheetButton variant="cta" />
-        </Card>
+        <div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+            <FeatureTile
+              icon={FileSpreadsheet}
+              title="Como un Excel online"
+              description="Editás celdas, agregás filas, formato básico. Sin instalar nada, accesible desde cualquier dispositivo."
+              color="text-emerald-600"
+            />
+            <FeatureTile
+              icon={Calculator}
+              title="Cálculos rápidos"
+              description="Pegás datos del informe, hacés operaciones manuales, mezclás con texto. Ideal para casos donde SQL es overkill."
+              color="text-blue-600"
+            />
+            <FeatureTile
+              icon={Download}
+              title="Export XLSX"
+              description="Bajás como Excel real para compartir fuera del sistema o entregar a clientes."
+              color="text-violet-600"
+            />
+          </div>
+          <Card variant="elevated" className="p-12 text-center">
+            <TableProperties className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-600 mb-4">
+              Aún no tenés sheets. Creá una nueva para empezar a editar celdas.
+            </p>
+            <NewSheetButton variant="cta" />
+          </Card>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {sheets.map((s) => (

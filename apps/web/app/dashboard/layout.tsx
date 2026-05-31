@@ -44,27 +44,63 @@ export default async function DashboardLayout({
               <NavDropdown
                 label="Estados Financieros"
                 items={[
-                  { href: "/dashboard/eeff", label: "EEFF", description: "Balance + Resultados por entidad" },
-                  { href: "/dashboard/eeff/acumulado", label: "ER Acumulado", description: "Estado de Resultados anualizado" },
+                  {
+                    href: "/dashboard/eeff",
+                    label: "EEFF mensuales",
+                    description: "Balance General + Estado de Resultados de cualquier entidad y periodo",
+                  },
+                  {
+                    href: "/dashboard/eeff/acumulado",
+                    label: "ER Anualizado",
+                    description: "Tendencia del Estado de Resultados anualizado (TTM, trailing 12 meses)",
+                  },
                 ]}
               />
 
               <NavDropdown
                 label="Análisis"
                 items={[
-                  { href: "/dashboard/tableros", label: "Tableros", description: "Vistas operativas y KPI" },
-                  { href: "/dashboard/analisis", label: "Análisis", description: "Comparativos y tendencias" },
-                  { href: "/dashboard/aiben", label: "Aiben ✨", description: "Asistente IA" },
+                  {
+                    href: "/dashboard/tableros",
+                    label: "Tableros ejecutivos",
+                    description: "Dashboards personalizados con KPIs, gráficos y tablas para presentar a directorio",
+                  },
+                  {
+                    href: "/dashboard/analisis",
+                    label: "Análisis dinámico",
+                    description: "Compará entidades, períodos y métricas con tablas pivote sin escribir SQL",
+                  },
+                  {
+                    href: "/dashboard/aiben",
+                    label: "Aiben ✨ IA",
+                    description: "Asistente IA: preguntale en español y responde con datos reales y gráficos",
+                  },
                 ]}
               />
 
               <NavDropdown
                 label="Datos"
                 items={[
-                  { href: "/dashboard/notebooks", label: "Notebooks", description: "Notebooks SQL guardados" },
-                  { href: "/dashboard/sheets", label: "Sheets", description: "Hojas de cálculo" },
-                  { href: "/dashboard/sql", label: "SQL", description: "Consola SQL ad-hoc" },
-                  { href: "/dashboard/catalog", label: "Catalog", description: "Catálogo de tablas y vistas" },
+                  {
+                    href: "/dashboard/notebooks",
+                    label: "Notebooks",
+                    description: "Reportes interactivos: texto + consultas + visualizaciones en una hoja compartible",
+                  },
+                  {
+                    href: "/dashboard/sheets",
+                    label: "Sheets",
+                    description: "Hojas de cálculo editables tipo Excel/Google Sheets. Datos ad-hoc + export XLSX",
+                  },
+                  {
+                    href: "/dashboard/sql",
+                    label: "SQL Workbench",
+                    description: "Consulta directa a la base de datos SBS con SQL completo (avanzado)",
+                  },
+                  {
+                    href: "/dashboard/catalog",
+                    label: "Catálogo de datos",
+                    description: "Explorá todas las tablas, vistas y modelos disponibles del data warehouse",
+                  },
                 ]}
               />
 
