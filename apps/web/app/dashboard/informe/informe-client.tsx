@@ -145,7 +145,7 @@ export function InformeClient({
       >
         <div className="flex items-start justify-between gap-6 flex-wrap relative z-10">
           <div>
-            <p className="text-xs uppercase tracking-wider opacity-75 mb-2">Informe Ejecutivo de Benchmark</p>
+            <p className="text-xs uppercase tracking-wider opacity-75 mb-2">Benchmark Ejecutivo</p>
             <h1 className="text-3xl font-bold mb-1">{cliente.nombre}</h1>
             <p className="text-lg opacity-90">Cierre {periodo.label}</p>
             <div className="flex items-center gap-2 mt-4 flex-wrap">

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { type AiProviderId, getProvider, updateProvider } from "@/lib/domains/ai-providers";
+import { validateProviderBaseUrl } from "@/lib/domains/ai-providers/url-validation";
 import { handleRoute, UnauthorizedError, ValidationError } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,37 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         issues: parsed.error.flatten().fieldErrors,
       });
     }
-    return updateProvider(parsedProvider.data as AiProviderId, parsed.data, userId);
+
+    // Validar baseUrl si viene en el patch — bloquea URLs malformadas.
+    if (parsed.data.baseUrl !== undefined && parsed.data.baseUrl !== null) {
+      const v = validateProviderBaseUrl(parsed.data.baseUrl);
+      if (!v.valid) {
+        throw new ValidationError(v.warning ?? "baseUrl invalida", {
+          baseUrl: parsed.data.baseUrl,
+        });
+      }
+    }
+
+    const updated = await updateProvider(
+      parsedProvider.data as AiProviderId,
+      parsed.data,
+      userId,
+    );
+
+    // Si la baseUrl guardada es Docker-internal, agregamos un warning
+    // transient como campo `_warning`. Shape retro-compatible (AiProvider
+    // plano + campo opcional). No bloquea: el user puede tener el servicio
+    // en la misma red Docker, donde el internal hostname si funciona.
+    const v =
+      parsed.data.baseUrl !== undefined && parsed.data.baseUrl !== null
+        ? validateProviderBaseUrl(parsed.data.baseUrl)
+        : null;
+    if (v && v.isDockerInternal) {
+      return {
+        ...updated,
+        _warning: { message: v.warning, suggestion: v.suggestion },
+      };
+    }
+    return updated;
   });
 }

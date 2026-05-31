@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 
 export const metadata: Metadata = {
-  title: "Diagnostico Informe",
+  title: "Diagnostico Benchmark",
 };
 
 export const dynamic = "force-dynamic";
@@ -93,7 +93,7 @@ export default async function DiagnosticoPage() {
   return (
     <div className="space-y-8 max-w-6xl mx-auto px-2">
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">Diagnóstico del Informe — Oficinas</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Diagnóstico del Benchmark — Oficinas</h1>
         <p className="text-sm text-slate-600 mt-1">
           Verifica si <code className="bg-slate-100 px-1 rounded">raw.creditos_depositos_oficina</code>{" "}
           tiene data y si <code className="bg-slate-100 px-1 rounded">marts.v_oficinas_por_entidad</code>{" "}
