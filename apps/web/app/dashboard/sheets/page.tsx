@@ -9,6 +9,7 @@ import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listSheets } from "@/lib/domains/sheets";
 
 import { NewSheetButton } from "./new-sheet-button";
+import { DeleteSheetButton } from "./delete-sheet-button";
 
 export const metadata: Metadata = { title: "Sheets" };
 export const dynamic = "force-dynamic";
@@ -75,7 +76,12 @@ export default async function SheetsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {sheets.map((s) => (
-            <Link key={s.id} href={`/dashboard/sheets/${s.id}` as never} className="block">
+            <Link
+              key={s.id}
+              href={`/dashboard/sheets/${s.id}` as never}
+              className="block group relative"
+            >
+              <DeleteSheetButton id={s.id} nombre={s.nombre} />
               <Card
                 variant="elevated"
                 className="p-5 hover:shadow-md hover:border-brand-300 transition cursor-pointer h-full"

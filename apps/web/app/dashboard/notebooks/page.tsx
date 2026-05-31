@@ -9,6 +9,7 @@ import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listNotebooks } from "@/lib/domains/notebooks";
 
 import { NewNotebookButton } from "./new-notebook-button";
+import { DeleteNotebookButton } from "./delete-notebook-button";
 
 export const metadata: Metadata = { title: "Notebooks" };
 export const dynamic = "force-dynamic";
@@ -75,7 +76,12 @@ export default async function NotebooksPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {notebooks.map((n) => (
-            <Link key={n.id} href={`/dashboard/notebooks/${n.id}` as never} className="block">
+            <Link
+              key={n.id}
+              href={`/dashboard/notebooks/${n.id}` as never}
+              className="block group relative"
+            >
+              <DeleteNotebookButton id={n.id} titulo={n.titulo} />
               <Card variant="elevated" className="p-5 hover:shadow-md hover:border-brand-300 transition cursor-pointer h-full">
                 <div className="flex items-start justify-between mb-3">
                   <NotebookText className="w-5 h-5 text-brand-600" />
