@@ -117,56 +117,57 @@ function computePerformance(
   return out;
 }
 
-const TIER_COLORS: Record<PerformanceTier, { dot: string; ring: string; label: string }> = {
-  top: { dot: "bg-emerald-500", ring: "ring-emerald-200", label: "Top 25%" },
-  high: { dot: "bg-emerald-300", ring: "ring-emerald-100", label: "Top 50%" },
-  mid: { dot: "bg-slate-300", ring: "ring-slate-100", label: "Medio" },
-  low: { dot: "bg-amber-400", ring: "ring-amber-100", label: "Bottom 50%" },
-  bottom: { dot: "bg-rose-500", ring: "ring-rose-200", label: "Bottom 25%" },
+/**
+ * Conditional formatting tipo Bloomberg/S&P: tinte de fondo sutil (bajo
+ * opacity) sobre la celda numerica. Sin dots ni badges — el numero queda
+ * como protagonista visual y el color es un encoding secundario.
+ *
+ * Solo 3 estados visibles (mejor / peor / neutro), no 5 — menos ruido
+ * visual. Las entidades intermedias quedan sin tinte (background blanco),
+ * privilegiando al ojo enfocarse en los extremos.
+ */
+const TIER_CELL_BG: Record<PerformanceTier, string> = {
+  top: "bg-emerald-50",       // mejor cuartil
+  high: "bg-emerald-50/40",   // tinte muy leve
+  mid: "",                    // sin tinte
+  low: "bg-amber-50/40",      // tinte muy leve
+  bottom: "bg-rose-50",       // peor cuartil
 };
 
-function PerfBadge({ info }: { info?: PerformanceInfo }) {
-  if (!info) return null;
-  const c = TIER_COLORS[info.tier];
-  return (
-    <span
-      className={`inline-flex items-center justify-center w-2.5 h-2.5 rounded-full ml-1.5 ring-2 ${c.dot} ${c.ring}`}
-      title={`${c.label} · #${info.rank} de ${info.total}`}
-      aria-label={`${c.label}, ranking ${info.rank} de ${info.total}`}
-    />
-  );
-}
+const TIER_LABELS: Record<PerformanceTier, string> = {
+  top: "Top 25%",
+  high: "Top 50%",
+  mid: "Medio",
+  low: "Bottom 50%",
+  bottom: "Bottom 25%",
+};
 
 /**
- * Leyenda del indicador de performance por KPI. Mostrada al lado del titulo
- * "Cuadro Resumen" para que el usuario entienda los puntos coloreados sin
- * tener que pasar el mouse uno por uno.
+ * Leyenda compacta del heatmap. Mostrada solo cuando hay heatmap activo
+ * (al menos un KPI rankeable). Tres swatches (mejor / medio / peor) en
+ * lugar de cinco — refleja lo que el usuario ve realmente en la grilla.
  */
 function PerfLegend() {
-  const items: Array<{ tier: PerformanceTier; label: string }> = [
-    { tier: "top", label: "Top 25%" },
-    { tier: "high", label: "Top 50%" },
-    { tier: "mid", label: "Medio" },
-    { tier: "low", label: "Bottom 50%" },
-    { tier: "bottom", label: "Bottom 25%" },
-  ];
   return (
     <div
-      className="inline-flex items-center gap-2 text-[10px] text-slate-500 px-3 py-1.5 rounded border border-slate-200 bg-white"
-      title="El indicador de cada celda muestra la posicion de esa entidad vs el resto del benchmark, segun la polaridad del KPI (mayor o menor es mejor segun el caso)."
+      className="inline-flex items-center gap-3 text-[10px] text-slate-500 px-3 py-1.5 rounded border border-slate-200 bg-white"
+      title="Solo aplica a metricas de calidad (mora, ROA, eficiencia, etc.). Las metricas de tamaño / market share / especializacion no se rankean."
     >
       <span className="font-semibold uppercase tracking-wider text-[9px] text-slate-600">
-        Performance vs pares
+        vs pares
       </span>
-      {items.map((it) => {
-        const c = TIER_COLORS[it.tier];
-        return (
-          <span key={it.tier} className="inline-flex items-center gap-1">
-            <span className={`w-2 h-2 rounded-full ${c.dot}`} />
-            <span>{it.label}</span>
-          </span>
-        );
-      })}
+      <span className="inline-flex items-center gap-1">
+        <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200" />
+        <span>Mejor</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="w-3 h-3 rounded bg-white border border-slate-200" />
+        <span>Medio</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="w-3 h-3 rounded bg-rose-100 border border-rose-200" />
+        <span>Peor</span>
+      </span>
     </div>
   );
 }
@@ -410,7 +411,10 @@ function FragmentGrupo({
         </td>
       </tr>
       {kpis.map((k) => {
-        const perf = computePerformance(k.valores, k.signo);
+        // Solo aplicar heatmap si la metrica representa calidad (no tamaño).
+        // rankeable !== false (default true) habilita el ranking visual.
+        const heatmapOn = k.rankeable !== false;
+        const perf = heatmapOn ? computePerformance(k.valores, k.signo) : new Map<string, PerformanceInfo>();
         return (
           <tr key={k.codigo} className="border-t border-slate-100 hover:bg-slate-50">
             <td className="px-4 py-2 text-slate-700 text-[13px]">
@@ -430,15 +434,21 @@ function FragmentGrupo({
               const v = k.valores.find((x) => x.competidor === c);
               const info = perf.get(c);
               const esPropio = c === clientePropio;
+              const bg = info ? TIER_CELL_BG[info.tier] : "";
+              const tooltip = info
+                ? `${TIER_LABELS[info.tier]} · #${info.rank} de ${info.total}`
+                : undefined;
               return (
                 <td
                   key={c}
+                  title={tooltip}
                   className={`px-4 py-2 text-right tabular-nums text-[13px] ${
-                    esPropio ? "bg-blue-50 font-semibold text-slate-900" : "text-slate-700"
+                    esPropio
+                      ? "bg-blue-50 font-semibold text-slate-900"
+                      : `${bg} text-slate-700`
                   }`}
                 >
                   {formatValor(v?.valor ?? null, k.unidad)}
-                  <PerfBadge info={info} />
                 </td>
               );
             })}
