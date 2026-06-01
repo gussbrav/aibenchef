@@ -1197,6 +1197,44 @@ export async function getInformeData(opts: {
   const gastosPersonalHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_personal");
   const gastosGeneralesHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_generales");
 
+  // Historicos de KPIs anuales TTM (Utilidad, ROE, ROA, Ingresos/Gastos
+  // Financieros, Margen Bruto/Neto). Cifras absolutas en miles -> dividimos
+  // por 1000 para mostrarlas en MM S/.
+  const kpisHistMap = await getHistoricoKpisAnuales({
+    entidades: entidadesNombs,
+    periodoActual: opts.periodo,
+    consolidar,
+  });
+  const utilidadNetaHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => (k.utilidad_ttm == null ? null : k.utilidad_ttm / 1000));
+  const roeHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => {
+      if (k.utilidad_ttm == null || !k.patrimonio_prom_12m || k.patrimonio_prom_12m === 0) return null;
+      return k.utilidad_ttm / k.patrimonio_prom_12m;
+    });
+  const roaHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => {
+      if (k.utilidad_ttm == null || !k.activos_prom_12m || k.activos_prom_12m === 0) return null;
+      return k.utilidad_ttm / k.activos_prom_12m;
+    });
+  const ingresosFinancierosHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => (k.cta_1_ttm == null ? null : k.cta_1_ttm / 1000));
+  const gastosFinancierosHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => (k.cta_2_ttm == null ? null : k.cta_2_ttm / 1000));
+  const margenFinancieroBrutoHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => {
+      if (k.cta_1_ttm == null || k.cta_2_ttm == null) return null;
+      return (k.cta_1_ttm - k.cta_2_ttm) / 1000;
+    });
+  const margenFinancieroNetoHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
+    (k) => {
+      // Margen Financiero Neto = Margen Bruto + INOF Neto = (cta_1 - cta_2) + (cta_6 - cta_7)
+      if (k.cta_1_ttm == null || k.cta_2_ttm == null) return null;
+      const bruto = k.cta_1_ttm - k.cta_2_ttm;
+      const inof = (k.cta_6_ttm ?? 0) - (k.cta_7_ttm ?? 0);
+      return (bruto + inof) / 1000;
+    });
+
   return {
     cliente,
     periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
@@ -1218,6 +1256,13 @@ export async function getInformeData(opts: {
     eficienciaHistorico,
     gastosPersonalHistorico,
     gastosGeneralesHistorico,
+    utilidadNetaHistorico,
+    roeHistorico,
+    roaHistorico,
+    ingresosFinancierosHistorico,
+    gastosFinancierosHistorico,
+    margenFinancieroBrutoHistorico,
+    margenFinancieroNetoHistorico,
     comentarios: {
       margen_neto_bubble: "",
       margen_neto_waterfall: "",
@@ -1385,6 +1430,122 @@ function buildHistoricoFromPE(
         periodo: p.periodo,
         periodoLabel: periodoLabel(p.periodo),
         valor,
+        crecimiento,
+      };
+    });
+    const valorActual = serie.length > 0 ? serie[serie.length - 1]!.valor : null;
+    const valorBase = serie.length > 0 ? serie[0]!.valor : null;
+    const variacionTotal =
+      valorActual != null && valorBase != null ? valorActual - valorBase : null;
+    return {
+      entidad: c.labelCorto,
+      color: c.color,
+      valorActual,
+      valorBase,
+      variacionTotal,
+      serie,
+    };
+  });
+}
+
+/**
+ * Trae KPIs anuales TTM (utilidad, patrimonio prom 12m, activos prom 12m,
+ * cuentas 1/2/6/7/10/12 TTM) para un set de entidades en los periodos de
+ * tendencia. Returns Map<entidad, array<{periodo, kpis}>>.
+ */
+type KpisAnualesRow = {
+  utilidad_ttm: number | null;
+  patrimonio_prom_12m: number | null;
+  activos_prom_12m: number | null;
+  cta_1_ttm: number | null;
+  cta_2_ttm: number | null;
+  cta_6_ttm: number | null;
+  cta_7_ttm: number | null;
+};
+
+async function getHistoricoKpisAnuales(opts: {
+  entidades: string[];
+  periodoActual: number;
+  consolidar?: boolean;
+}): Promise<Map<string, Array<{ periodo: number; k: KpisAnualesRow | null }>>> {
+  if (opts.entidades.length === 0) return new Map();
+  const periodos = await getPeriodosTendencia(opts.periodoActual);
+  if (periodos.length === 0) return new Map();
+  const consolidar = opts.consolidar !== false;
+  return safeQuery(
+    "getHistoricoKpisAnuales",
+    async () => {
+      const view = consolidar
+        ? sql.raw("marts.mv_kpis_anuales_entidad")
+        : sql.raw("marts.v_kpis_anuales_historica");
+      const rows = await db.execute<{
+        nomb_correg: string;
+        periodo: number;
+        utilidad_ttm: number | null;
+        patrimonio_prom_12m: number | null;
+        activos_prom_12m: number | null;
+        cta_1_ttm: number | null;
+        cta_2_ttm: number | null;
+        cta_6_ttm: number | null;
+        cta_7_ttm: number | null;
+      }>(sql`
+        SELECT nomb_correg, periodo,
+               utilidad_ttm, patrimonio_prom_12m, activos_prom_12m,
+               cta_1_ttm, cta_2_ttm, cta_6_ttm, cta_7_ttm
+        FROM ${view}
+        WHERE periodo = ANY(${periodos}::int[])
+          AND nomb_correg = ANY(${opts.entidades}::text[])
+      `);
+      const indexByEnt = new Map<string, Map<number, KpisAnualesRow>>();
+      for (const r of rows) {
+        const k = String(r.nomb_correg);
+        if (!indexByEnt.has(k)) indexByEnt.set(k, new Map());
+        indexByEnt.get(k)!.set(Number(r.periodo), {
+          utilidad_ttm: r.utilidad_ttm == null ? null : Number(r.utilidad_ttm),
+          patrimonio_prom_12m: r.patrimonio_prom_12m == null ? null : Number(r.patrimonio_prom_12m),
+          activos_prom_12m: r.activos_prom_12m == null ? null : Number(r.activos_prom_12m),
+          cta_1_ttm: r.cta_1_ttm == null ? null : Number(r.cta_1_ttm),
+          cta_2_ttm: r.cta_2_ttm == null ? null : Number(r.cta_2_ttm),
+          cta_6_ttm: r.cta_6_ttm == null ? null : Number(r.cta_6_ttm),
+          cta_7_ttm: r.cta_7_ttm == null ? null : Number(r.cta_7_ttm),
+        });
+      }
+      const out = new Map<string, Array<{ periodo: number; k: KpisAnualesRow | null }>>();
+      for (const ent of opts.entidades) {
+        const idx = indexByEnt.get(ent);
+        out.set(
+          ent,
+          periodos.map((p) => ({ periodo: p, k: idx?.get(p) ?? null })),
+        );
+      }
+      return out;
+    },
+    new Map(),
+  );
+}
+
+/**
+ * Convierte el Map<entidad, array<{periodo, kpis}>> a HistoricoEntidadSerie[]
+ * aplicando una funcion de calculo sobre KpisAnualesRow (ej. para ROA:
+ * k.utilidad_ttm / k.activos_prom_12m). Las cifras absolutas se pueden
+ * dividir por 1000 (KK) o 1_000_000 (MM) via el factor.
+ */
+function buildHistoricoFromKpis(
+  map: Map<string, Array<{ periodo: number; k: KpisAnualesRow | null }>>,
+  competidores: Competidor[],
+  compute: (k: KpisAnualesRow) => number | null,
+): import("./types").HistoricoEntidadSerie[] {
+  return competidores.map((c) => {
+    const puntos = map.get(c.nombCorreg) ?? [];
+    const serie = puntos.map((p, i, arr) => {
+      const valor = p.k ? compute(p.k) : null;
+      const prevK = i > 0 ? arr[i - 1]!.k : null;
+      const prevV = prevK ? compute(prevK) : null;
+      const crecimiento = valor != null && prevV != null ? valor - prevV : null;
+      return {
+        periodo: p.periodo,
+        periodoLabel: periodoLabel(p.periodo),
+        valor: valor != null && Number.isFinite(valor) ? valor : null,
         crecimiento,
       };
     });

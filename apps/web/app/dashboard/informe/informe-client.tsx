@@ -223,6 +223,13 @@ export function InformeClient({
     eficienciaHistorico,
     gastosPersonalHistorico,
     gastosGeneralesHistorico,
+    utilidadNetaHistorico,
+    roeHistorico,
+    roaHistorico,
+    ingresosFinancierosHistorico,
+    gastosFinancierosHistorico,
+    margenFinancieroBrutoHistorico,
+    margenFinancieroNetoHistorico,
     comentarios,
   } = data;
   const [exportando, setExportando] = useState(false);
@@ -434,6 +441,76 @@ export function InformeClient({
         subtitulo="Anualizado TTM — %"
         series={gastosGeneralesHistorico}
         periodoBaseLabel={gastosGeneralesHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ INGRESOS FINANCIEROS ============ */}
+      <SeccionHistoricoComparativo
+        titulo="INGRESOS FINANCIEROS"
+        subtitulo="Anualizado TTM — MM S/"
+        series={ingresosFinancierosHistorico}
+        periodoBaseLabel={ingresosFinancierosHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="moneda_mm"
+      />
+
+      {/* ============ GASTOS FINANCIEROS ============ */}
+      <SeccionHistoricoComparativo
+        titulo="GASTOS FINANCIEROS"
+        subtitulo="Anualizado TTM — MM S/"
+        series={gastosFinancierosHistorico}
+        periodoBaseLabel={gastosFinancierosHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="moneda_mm"
+      />
+
+      {/* ============ MARGEN FINANCIERO BRUTO ============ */}
+      <SeccionHistoricoComparativo
+        titulo="MARGEN FINANCIERO BRUTO"
+        subtitulo="(Ingresos − Gastos) Financieros, TTM — MM S/"
+        series={margenFinancieroBrutoHistorico}
+        periodoBaseLabel={margenFinancieroBrutoHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="moneda_mm"
+      />
+
+      {/* ============ MARGEN FINANCIERO NETO ============ */}
+      <SeccionHistoricoComparativo
+        titulo="MARGEN FINANCIERO NETO"
+        subtitulo="Margen Bruto + INOF Neto (TTM) — MM S/"
+        series={margenFinancieroNetoHistorico}
+        periodoBaseLabel={margenFinancieroNetoHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="moneda_mm"
+      />
+
+      {/* ============ RENTABILIDAD - UTILIDAD NETA ============ */}
+      <SeccionHistoricoComparativo
+        titulo="RENTABILIDAD — Utilidad Neta"
+        subtitulo="Anualizada TTM — MM S/"
+        series={utilidadNetaHistorico}
+        periodoBaseLabel={utilidadNetaHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="moneda_mm"
+      />
+
+      {/* ============ RENTABILIDAD - ROE ============ */}
+      <SeccionHistoricoComparativo
+        titulo="RENTABILIDAD — % ROE"
+        subtitulo="Utilidad TTM / Patrimonio promedio 12m"
+        series={roeHistorico}
+        periodoBaseLabel={roeHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ RENTABILIDAD - ROA ============ */}
+      <SeccionHistoricoComparativo
+        titulo="RENTABILIDAD — % ROA"
+        subtitulo="Utilidad TTM / Activos promedio 12m"
+        series={roaHistorico}
+        periodoBaseLabel={roaHistorico[0]?.serie[0]?.periodoLabel}
         periodoActualLabel={periodo.label}
         formatoValor="pct"
       />
