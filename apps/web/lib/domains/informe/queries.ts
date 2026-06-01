@@ -1083,10 +1083,22 @@ export async function getInformeData(opts: {
     }
   }
 
+  // Resolver peer group default:
+  //   1. Si el usuario paso ?peerGroup=... en la URL, respetamos esa lista.
+  //   2. Si no, computamos dinamicamente las top 2 entidades con mayor
+  //      cartera bruta del periodo, para cada uno de los 5 grupos SBS
+  //      (Bancos, Financieras, CMAC, CRAC, Empresas de Creditos).
+  //      Esto da 10 competidores representativos del sistema completo y
+  //      garantiza que el benchmark "out-of-the-box" sea comparable contra
+  //      el lider de cada grupo, no contra una lista estatica desactualizada.
+  let peerList = opts.peerGroupOverride;
+  if (!peerList || peerList.length === 0) {
+    peerList = await getTop2PorGrupoByCartera(opts.periodo);
+  }
+
   // Garantizar que la entidad propia esta siempre en el peer group.
   // Solo agregamos al final si NO esta ya en el array — si esta, respetamos
   // su posicion (el usuario puede ponerla primero, en medio o donde quiera).
-  let peerList = opts.peerGroupOverride;
   if (peerList && !peerList.includes(cliente.entidadPropia)) {
     peerList = [...peerList, cliente.entidadPropia];
   }
@@ -1197,6 +1209,73 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
         LIMIT ${limit}
       `);
       return rows.map((r) => Number(r.periodo));
+    },
+    [],
+  );
+}
+
+/**
+ * Default peer group: top 2 entidades por cartera bruta del periodo, para
+ * cada uno de los 5 grupos SBS (Bancos, Financieras, CMAC, CRAC, Empresas
+ * de Creditos). Total = 10 competidores, ordenados por grupo.
+ *
+ * Se usa cuando el usuario aterriza en /benchmark sin haber definido un
+ * peerGroup en la URL — asi siempre ve una comparativa representativa
+ * out-of-the-box contra los lideres de cada categoria.
+ *
+ * Fallback: si la query falla (ej. MV no refresheada), devuelve [] —
+ * buildCompetidores cae a su propio fallback estatico.
+ */
+export async function getTop2PorGrupoByCartera(periodo: number): Promise<string[]> {
+  return safeQuery(
+    "getTop2PorGrupoByCartera",
+    async () => {
+      const rows = await db.execute<{
+        nomb_correg: string;
+        tipo_entidad: string;
+        cartera_total: number;
+        rn: number;
+      }>(sql`
+        WITH cartera AS (
+          SELECT
+            v.nomb_correg,
+            UPPER(e.tipo_entidad) AS tipo_entidad,
+            v.cartera_total
+          FROM marts.v_colocaciones_total_por_entidad v
+          JOIN dw.dim_entidad e ON e.nomb_correg = v.nomb_correg
+          WHERE v.periodo = ${periodo}
+            AND NOT e.es_total
+            AND NOT e.es_sucursal
+            AND e.activa
+            AND e.tipo_entidad IS NOT NULL
+        ),
+        ranked AS (
+          SELECT
+            nomb_correg,
+            tipo_entidad,
+            cartera_total,
+            ROW_NUMBER() OVER (
+              PARTITION BY tipo_entidad
+              ORDER BY cartera_total DESC NULLS LAST
+            ) AS rn
+          FROM cartera
+        )
+        SELECT nomb_correg, tipo_entidad, cartera_total, rn
+        FROM ranked
+        WHERE rn <= 2
+          AND tipo_entidad IN ('BANCOS', 'FINANCIERAS', 'CMAC', 'CRAC', 'EDPYMES')
+        ORDER BY
+          CASE tipo_entidad
+            WHEN 'BANCOS'      THEN 0
+            WHEN 'FINANCIERAS' THEN 1
+            WHEN 'CMAC'        THEN 2
+            WHEN 'CRAC'        THEN 3
+            WHEN 'EDPYMES'     THEN 4
+            ELSE 99
+          END,
+          rn
+      `);
+      return rows.map((r) => String(r.nomb_correg));
     },
     [],
   );
