@@ -642,13 +642,16 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
   const mm = (v: number | null): number | null => (v == null ? null : v / 1_000);
 
   return [
-    // Datos generales
+    // Datos generales — TODOS estos son metricas de tamaño/contexto (mas
+    // agencias no es "mejor", solo mas grande). rankeable:false para que
+    // no se aplique heatmap visual.
     {
       codigo: "cr_n_oficinas",
       nombre: "N de agencias",
       unidad: "numero",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       valores: mk((r) => (r.n_oficinas == null ? null : Number(r.n_oficinas))),
     },
     {
@@ -657,6 +660,7 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "numero",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       valores: mk((r) => (r.n_clientes == null ? null : Number(r.n_clientes) / 1000)),
     },
     {
@@ -665,6 +669,7 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "numero",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       valores: mk((r) => (r.n_personal == null ? null : Number(r.n_personal))),
     },
     {
@@ -673,10 +678,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       tooltip:
         "Sistema Financiero (SF): denominador = total de cartera de TODAS las entidades reguladas " +
-        "(Bancos + Financieras + CMAC + CRAC + Empresas de Créditos). Útil para comparar tamaño " +
-        "de market share contra cualquier entidad del sistema, incluyendo bancos grandes.",
+        "(Bancos + Financieras + CMAC + CRAC + Empresas de Créditos). Mide tamaño relativo, no calidad.",
       valores: mk((r) => (r.pct_part_sf_coloc == null ? null : Number(r.pct_part_sf_coloc))),
     },
     {
@@ -685,10 +690,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       tooltip:
         "Sistema Microfinanciero (SMF): denominador = total de cartera SOLO de entidades " +
-        "microfinancieras (las que tienen >50% de su cartera en MES + PEQ, ej Cajas y Financieras " +
-        "especializadas). Los bancos universales aparecen en 0% porque no pertenecen al SMF.",
+        "microfinancieras (>50% de su cartera en MES + PEQ). Bancos universales aparecen 0%.",
       valores: mk((r) => (r.pct_part_smf_coloc == null ? null : Number(r.pct_part_smf_coloc))),
     },
     {
@@ -697,9 +702,9 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       tooltip:
-        "Sistema Financiero (SF): denominador = total de depósitos del público de TODAS las entidades " +
-        "reguladas. Mide market share de captación a escala completa.",
+        "Sistema Financiero (SF): denominador = total de depósitos de TODAS las entidades reguladas.",
       valores: mk((r) => (r.pct_part_sf_dep == null ? null : Number(r.pct_part_sf_dep))),
     },
     {
@@ -708,9 +713,9 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "datos_generales",
+      rankeable: false,
       tooltip:
-        "Sistema Microfinanciero (SMF): denominador = total de depósitos del público SOLO de entidades " +
-        "microfinancieras. Útil para benchmark dentro del nicho. Bancos aparecen 0%.",
+        "Sistema Microfinanciero (SMF): denominador = total de depósitos SOLO de entidades microfinancieras.",
       valores: mk((r) => (r.pct_part_smf_dep == null ? null : Number(r.pct_part_smf_dep))),
     },
 
@@ -721,6 +726,9 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "moneda_mm",
       signo: 1,
       seccion: "cartera",
+      // Tamaño absoluto, no calidad — un Banco siempre va a tener mas que una
+      // Caja. Sin heatmap; el crecimiento abajo si se ranking-ea.
+      rankeable: false,
       valores: mk((r) => mm(r.cartera_bruta)),
     },
     {
@@ -742,6 +750,9 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "cartera",
+      // Especializacion, no calidad — un Banco multipropósito tendra bajo
+      // % MYPE pero eso no lo hace "peor". Solo es indicativo de modelo.
+      rankeable: false,
       valores: mk((r) => (r.pct_cartera_mype == null ? null : Number(r.pct_cartera_mype))),
     },
     {
@@ -750,6 +761,9 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "moneda_miles",
       signo: 1,
       seccion: "cartera",
+      // Tamaño promedio del prestamo — Bancos prestan mas grande, Cajas mas
+      // chico. Contexto, no calidad.
+      rankeable: false,
       // cartera_bruta esta en miles de S/. n_clientes en personas.
       // -> credito_prom = miles_S/ por cliente.
       valores: mk((r) => {

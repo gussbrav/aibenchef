@@ -37,6 +37,13 @@ export type Kpi = {
   /** Tooltip opcional explicando la metodologia del KPI
    *  (ej. "Utilidad anualizada trailing 12 meses (TTM)"). */
   tooltip?: string;
+  /**
+   * Si false, el KPI NO se ranking-eea entre entidades (no aplica heatmap
+   * de cuartil). Para metricas de tamaño / market share donde mas alto no
+   * implica "mejor" (ej. # agencias, # personal, % Part. SF) — son contexto,
+   * no calidad. Default: true (metricas de calidad como ROA, mora, eficiencia).
+   */
+  rankeable?: boolean;
 };
 
 export type PuntoEquilibrioRow = {
