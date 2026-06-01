@@ -174,6 +174,16 @@ export type InformeData = {
   margenFinancieroBrutoHistorico: HistoricoEntidadSerie[];
   /** Serie historica Margen Financiero Neto = Margen Bruto + INOF Neto TTM en MM S/. */
   margenFinancieroNetoHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Mora Global (sin V/C). */
+  moraGlobalHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Mora Global con V/C (venta de cartera). */
+  moraGlobalVcHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Cobertura CAR (provisiones / cartera alto riesgo). */
+  coberturaCarHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Cartera Atrasada / cartera bruta. */
+  carteraAtrasadaHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Cartera de Alto Riesgo / cartera bruta. */
+  carHistorico: HistoricoEntidadSerie[];
   comentarios: Record<string, string>;
   cobertura: CoberturaDatos;
 };

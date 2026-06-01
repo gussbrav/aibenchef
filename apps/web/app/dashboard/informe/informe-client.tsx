@@ -230,6 +230,11 @@ export function InformeClient({
     gastosFinancierosHistorico,
     margenFinancieroBrutoHistorico,
     margenFinancieroNetoHistorico,
+    moraGlobalHistorico,
+    moraGlobalVcHistorico,
+    coberturaCarHistorico,
+    carteraAtrasadaHistorico,
+    carHistorico,
     comentarios,
   } = data;
   const [exportando, setExportando] = useState(false);
@@ -511,6 +516,56 @@ export function InformeClient({
         subtitulo="Utilidad TTM / Activos promedio 12m"
         series={roaHistorico}
         periodoBaseLabel={roaHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ CALIDAD - MORA GLOBAL ============ */}
+      <SeccionHistoricoComparativo
+        titulo="CALIDAD DE CARTERA — % Mora Global"
+        subtitulo="(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta"
+        series={moraGlobalHistorico}
+        periodoBaseLabel={moraGlobalHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ CALIDAD - MORA GLOBAL V/C ============ */}
+      <SeccionHistoricoComparativo
+        titulo="CALIDAD DE CARTERA — % Mora Global (con V/C)"
+        subtitulo="Incluye venta de cartera 12m en el numerador"
+        series={moraGlobalVcHistorico}
+        periodoBaseLabel={moraGlobalVcHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ CALIDAD - CARTERA ATRASADA ============ */}
+      <SeccionHistoricoComparativo
+        titulo="INDICADORES DE CALIDAD — % Cartera Atrasada"
+        subtitulo="Cartera Atrasada / Cartera Bruta"
+        series={carteraAtrasadaHistorico}
+        periodoBaseLabel={carteraAtrasadaHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ CALIDAD - CAR ============ */}
+      <SeccionHistoricoComparativo
+        titulo="INDICADORES DE CALIDAD — % Cartera de Alto Riesgo"
+        subtitulo="(Atrasada + Refinanciada) / Cartera Bruta"
+        series={carHistorico}
+        periodoBaseLabel={carHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ COBERTURA CAR ============ */}
+      <SeccionHistoricoComparativo
+        titulo="COBERTURA CARTERA ALTO RIESGO"
+        subtitulo="Provisiones / Cartera Alto Riesgo (%)"
+        series={coberturaCarHistorico}
+        periodoBaseLabel={coberturaCarHistorico[0]?.serie[0]?.periodoLabel}
         periodoActualLabel={periodo.label}
         formatoValor="pct"
       />

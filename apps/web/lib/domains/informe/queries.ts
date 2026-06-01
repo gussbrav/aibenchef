@@ -1235,6 +1235,48 @@ export async function getInformeData(opts: {
       return (bruto + inof) / 1000;
     });
 
+  // Historicos de calidad de cartera (mora, cobertura CAR, atrasada, CAR).
+  // Cada uno trae una columna pct_* desde su mart view.
+  const [moraMap, moraVcMap, cobCarMap, atrasadaMap, carMap] = await Promise.all([
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica",
+      field: "pct_mora_global",
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica",
+      field: "pct_mora_global_vc",
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_cobertura_car_historica",
+      field: "pct_cobertura_car",
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+    }),
+    // %Cartera Atrasada / Cartera Bruta — computado on-the-fly desde v_mora
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica",
+      field: "CASE WHEN cartera_bruta > 0 THEN cartera_atrasada / cartera_bruta ELSE NULL END",
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+    }),
+    // %CAR = (atrasada + refin) / bruta
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica",
+      field: "CASE WHEN cartera_bruta > 0 THEN (cartera_atrasada + cartera_refin) / cartera_bruta ELSE NULL END",
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+    }),
+  ]);
+  const moraGlobalHistorico = buildHistoricoFromValueMap(moraMap, competidores);
+  const moraGlobalVcHistorico = buildHistoricoFromValueMap(moraVcMap, competidores);
+  const coberturaCarHistorico = buildHistoricoFromValueMap(cobCarMap, competidores);
+  const carteraAtrasadaHistorico = buildHistoricoFromValueMap(atrasadaMap, competidores);
+  const carHistorico = buildHistoricoFromValueMap(carMap, competidores);
+
   return {
     cliente,
     periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
@@ -1263,6 +1305,11 @@ export async function getInformeData(opts: {
     gastosFinancierosHistorico,
     margenFinancieroBrutoHistorico,
     margenFinancieroNetoHistorico,
+    moraGlobalHistorico,
+    moraGlobalVcHistorico,
+    coberturaCarHistorico,
+    carteraAtrasadaHistorico,
+    carHistorico,
     comentarios: {
       margen_neto_bubble: "",
       margen_neto_waterfall: "",
@@ -1412,6 +1459,41 @@ async function getHistoricoPuntoEquilibrio(opts: {
  * Convierte el Map<entidad, array<{periodo, pe}>> a HistoricoEntidadSerie[]
  * extrayendo un campo especifico de PuntoEqRow (ej "pct_rendimiento").
  */
+/**
+ * Convierte un Map<entidad, array<{periodo, valor}>> a HistoricoEntidadSerie[]
+ * directamente (caso simple cuando el valor ya viene listo de la vista).
+ */
+function buildHistoricoFromValueMap(
+  map: Map<string, Array<{ periodo: number; valor: number | null }>>,
+  competidores: Competidor[],
+): import("./types").HistoricoEntidadSerie[] {
+  return competidores.map((c) => {
+    const puntos = map.get(c.nombCorreg) ?? [];
+    const serie = puntos.map((p, i, arr) => {
+      const prev = i > 0 ? arr[i - 1]!.valor : null;
+      const crecimiento = p.valor != null && prev != null ? p.valor - prev : null;
+      return {
+        periodo: p.periodo,
+        periodoLabel: periodoLabel(p.periodo),
+        valor: p.valor,
+        crecimiento,
+      };
+    });
+    const valorActual = serie.length > 0 ? serie[serie.length - 1]!.valor : null;
+    const valorBase = serie.length > 0 ? serie[0]!.valor : null;
+    const variacionTotal =
+      valorActual != null && valorBase != null ? valorActual - valorBase : null;
+    return {
+      entidad: c.labelCorto,
+      color: c.color,
+      valorActual,
+      valorBase,
+      variacionTotal,
+      serie,
+    };
+  });
+}
+
 function buildHistoricoFromPE(
   map: Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>,
   competidores: Competidor[],
@@ -1446,6 +1528,57 @@ function buildHistoricoFromPE(
       serie,
     };
   });
+}
+
+/**
+ * Trae una metrica historica desde una vista mart estandar (que tiene
+ * columnas `periodo`, `nomb_correg` y la columna que se especifique).
+ * Bulk query con WHERE periodo = ANY(...) y nomb_correg = ANY(...).
+ * Usado por las secciones de calidad cartera (Mora, Cobertura CAR,
+ * Cartera Atrasada, etc).
+ */
+async function getHistoricoFromMartView(opts: {
+  view: string;          // ej "marts.v_mora_global_historica"
+  field: string;         // ej "pct_mora_global"
+  entidades: string[];
+  periodoActual: number;
+}): Promise<Map<string, Array<{ periodo: number; valor: number | null }>>> {
+  if (opts.entidades.length === 0) return new Map();
+  const periodos = await getPeriodosTendencia(opts.periodoActual);
+  if (periodos.length === 0) return new Map();
+  return safeQuery(
+    `getHistoricoFromMartView[${opts.view}/${opts.field}]`,
+    async () => {
+      const view = sql.raw(opts.view);
+      const field = sql.raw(opts.field);
+      const rows = await db.execute<{
+        nomb_correg: string;
+        periodo: number;
+        valor: number | null;
+      }>(sql`
+        SELECT nomb_correg, periodo, ${field}::numeric AS valor
+        FROM ${view}
+        WHERE periodo = ANY(${periodos}::int[])
+          AND nomb_correg = ANY(${opts.entidades}::text[])
+      `);
+      const indexByEnt = new Map<string, Map<number, number | null>>();
+      for (const r of rows) {
+        const k = String(r.nomb_correg);
+        if (!indexByEnt.has(k)) indexByEnt.set(k, new Map());
+        indexByEnt.get(k)!.set(Number(r.periodo), r.valor == null ? null : Number(r.valor));
+      }
+      const out = new Map<string, Array<{ periodo: number; valor: number | null }>>();
+      for (const ent of opts.entidades) {
+        const idx = indexByEnt.get(ent);
+        out.set(
+          ent,
+          periodos.map((p) => ({ periodo: p, valor: idx?.get(p) ?? null })),
+        );
+      }
+      return out;
+    },
+    new Map(),
+  );
 }
 
 /**
