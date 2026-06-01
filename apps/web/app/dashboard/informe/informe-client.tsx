@@ -217,6 +217,12 @@ export function InformeClient({
     oficinasHistorico,
     personalHistorico,
     clientesHistorico,
+    rendimientoCarteraHistorico,
+    costoFondeoHistorico,
+    costoProvisionesHistorico,
+    eficienciaHistorico,
+    gastosPersonalHistorico,
+    gastosGeneralesHistorico,
     comentarios,
   } = data;
   const [exportando, setExportando] = useState(false);
@@ -370,6 +376,66 @@ export function InformeClient({
         periodoBaseLabel={clientesHistorico[0]?.serie[0]?.periodoLabel}
         periodoActualLabel={periodo.label}
         formatoValor="numero"
+      />
+
+      {/* ============ RENDIMIENTO DE CARTERA ============ */}
+      <SeccionHistoricoComparativo
+        titulo="RENDIMIENTO DE CARTERA"
+        subtitulo="Anualizado TTM — %"
+        series={rendimientoCarteraHistorico}
+        periodoBaseLabel={rendimientoCarteraHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ COSTO DE FONDEO ============ */}
+      <SeccionHistoricoComparativo
+        titulo="COSTO DE FONDEO"
+        subtitulo="Anualizado TTM — %"
+        series={costoFondeoHistorico}
+        periodoBaseLabel={costoFondeoHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ COSTO DE PROVISIONES ============ */}
+      <SeccionHistoricoComparativo
+        titulo="COSTO DE PROVISIONES"
+        subtitulo="Gasto Provisiones / Cartera Bruta Prom (%)"
+        series={costoProvisionesHistorico}
+        periodoBaseLabel={costoProvisionesHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ EFICIENCIA (Gastos Op / Mg Bruto) ============ */}
+      <SeccionHistoricoComparativo
+        titulo="EFICIENCIA — Gastos Operacionales / Margen Bruto"
+        subtitulo="Anualizado TTM — %"
+        series={eficienciaHistorico}
+        periodoBaseLabel={eficienciaHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ GASTOS PERSONAL / Mg Bruto ============ */}
+      <SeccionHistoricoComparativo
+        titulo="GASTOS DE PERSONAL / Margen Bruto"
+        subtitulo="Anualizado TTM — %"
+        series={gastosPersonalHistorico}
+        periodoBaseLabel={gastosPersonalHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
+      />
+
+      {/* ============ GASTOS GENERALES / Mg Bruto ============ */}
+      <SeccionHistoricoComparativo
+        titulo="GASTOS GENERALES / Margen Bruto"
+        subtitulo="Anualizado TTM — %"
+        series={gastosGeneralesHistorico}
+        periodoBaseLabel={gastosGeneralesHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="pct"
       />
 
       {/* ============ FOOTER ============ */}

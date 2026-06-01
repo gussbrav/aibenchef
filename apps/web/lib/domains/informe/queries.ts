@@ -1182,6 +1182,21 @@ export async function getInformeData(opts: {
   const personalHistorico = buildHistoricoSeries(personalHistMap, competidores);
   const clientesHistorico = buildHistoricoSeries(clientesHistMap, competidores);
 
+  // Historicos de KPIs derivados de Punto Equilibrio (anualizados TTM)
+  // para las secciones Costo Fondeo, Rendimiento, Provisiones, Eficiencia,
+  // Gastos Personal/Mg, Gastos Generales/Mg.
+  const peHistMap = await getHistoricoPuntoEquilibrio({
+    entidades: entidadesNombs,
+    periodoActual: opts.periodo,
+    consolidar,
+  });
+  const rendimientoCarteraHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_rendimiento");
+  const costoFondeoHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_costo_fondeo");
+  const costoProvisionesHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_provisiones");
+  const eficienciaHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_op");
+  const gastosPersonalHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_personal");
+  const gastosGeneralesHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_generales");
+
   return {
     cliente,
     periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
@@ -1197,6 +1212,12 @@ export async function getInformeData(opts: {
     oficinasHistorico,
     personalHistorico,
     clientesHistorico,
+    rendimientoCarteraHistorico,
+    costoFondeoHistorico,
+    costoProvisionesHistorico,
+    eficienciaHistorico,
+    gastosPersonalHistorico,
+    gastosGeneralesHistorico,
     comentarios: {
       margen_neto_bubble: "",
       margen_neto_waterfall: "",
@@ -1285,6 +1306,101 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
     },
     [],
   );
+}
+
+/**
+ * Devuelve la lista de periodos para mostrar tendencia historica: ultimos
+ * 4 cierres Diciembre + el periodo actual. Total 5 periodos espaciados
+ * que dan vista anual + ultimo punto, exactamente el patron del informe
+ * ejecutivo estilo Caja Arequipa.
+ */
+async function getPeriodosTendencia(periodoActual: number): Promise<number[]> {
+  return safeQuery(
+    "getPeriodosTendencia",
+    async () => {
+      const rows = await db.execute<{ periodo: number }>(sql`
+        WITH dec_periods AS (
+          SELECT DISTINCT periodo
+          FROM marts.mv_eeff_resultados_ancho
+          WHERE periodo % 100 = 12 AND periodo < ${periodoActual}
+          ORDER BY periodo DESC
+          LIMIT 4
+        ),
+        unified AS (
+          SELECT periodo FROM dec_periods
+          UNION SELECT ${periodoActual}
+        )
+        SELECT DISTINCT periodo FROM unified ORDER BY periodo ASC
+      `);
+      return rows.map((r) => Number(r.periodo));
+    },
+    [],
+  );
+}
+
+/**
+ * Para cada periodo de tendencia, computa PuntoEquilibrio de las entidades.
+ * Devuelve un Map<entidad, array<{ periodo, pe }>>.
+ * Las series ya quedan ordenadas por periodo ascendente.
+ */
+async function getHistoricoPuntoEquilibrio(opts: {
+  entidades: string[];
+  periodoActual: number;
+  consolidar?: boolean;
+}): Promise<Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>> {
+  if (opts.entidades.length === 0) return new Map();
+  const periodos = await getPeriodosTendencia(opts.periodoActual);
+  const maps = await Promise.all(
+    periodos.map((p) => getPuntoEquilibrioForPeriodo(p, opts.entidades, opts.consolidar)),
+  );
+  const out = new Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>();
+  for (const ent of opts.entidades) {
+    out.set(
+      ent,
+      periodos.map((p, i) => ({ periodo: p, pe: maps[i]?.get(ent) ?? null })),
+    );
+  }
+  return out;
+}
+
+/**
+ * Convierte el Map<entidad, array<{periodo, pe}>> a HistoricoEntidadSerie[]
+ * extrayendo un campo especifico de PuntoEqRow (ej "pct_rendimiento").
+ */
+function buildHistoricoFromPE(
+  map: Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>,
+  competidores: Competidor[],
+  field: keyof PuntoEqRow,
+): import("./types").HistoricoEntidadSerie[] {
+  return competidores.map((c) => {
+    const puntos = map.get(c.nombCorreg) ?? [];
+    const serie = puntos.map((p, i, arr) => {
+      const v = p.pe?.[field];
+      const valor = typeof v === "number" ? v : null;
+      const prevPe = i > 0 ? arr[i - 1]!.pe : null;
+      const prevV = prevPe ? prevPe[field] : null;
+      const prevNum = typeof prevV === "number" ? prevV : null;
+      const crecimiento = valor != null && prevNum != null ? valor - prevNum : null;
+      return {
+        periodo: p.periodo,
+        periodoLabel: periodoLabel(p.periodo),
+        valor,
+        crecimiento,
+      };
+    });
+    const valorActual = serie.length > 0 ? serie[serie.length - 1]!.valor : null;
+    const valorBase = serie.length > 0 ? serie[0]!.valor : null;
+    const variacionTotal =
+      valorActual != null && valorBase != null ? valorActual - valorBase : null;
+    return {
+      entidad: c.labelCorto,
+      color: c.color,
+      valorActual,
+      valorBase,
+      variacionTotal,
+      serie,
+    };
+  });
 }
 
 /**
