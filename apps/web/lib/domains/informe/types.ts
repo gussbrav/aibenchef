@@ -160,6 +160,20 @@ export type InformeData = {
   gastosPersonalHistorico: HistoricoEntidadSerie[];
   /** Serie historica Gastos Generales / Margen Bruto. */
   gastosGeneralesHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Utilidad Neta TTM (en MM S/). */
+  utilidadNetaHistorico: HistoricoEntidadSerie[];
+  /** Serie historica ROE = utilidad TTM / patrimonio prom 12m. */
+  roeHistorico: HistoricoEntidadSerie[];
+  /** Serie historica ROA = utilidad TTM / activos prom 12m. */
+  roaHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Ingresos Financieros TTM (cta_1) en MM S/. */
+  ingresosFinancierosHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Gastos Financieros TTM (cta_2) en MM S/. */
+  gastosFinancierosHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Margen Financiero Bruto = (cta_1 - cta_2) TTM en MM S/. */
+  margenFinancieroBrutoHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Margen Financiero Neto = Margen Bruto + INOF Neto TTM en MM S/. */
+  margenFinancieroNetoHistorico: HistoricoEntidadSerie[];
   comentarios: Record<string, string>;
   cobertura: CoberturaDatos;
 };

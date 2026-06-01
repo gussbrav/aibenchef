@@ -57,8 +57,12 @@ export function SeccionHistoricoComparativo({
   periodoActualLabel?: string;
   /** Texto opcional con insight al pie. */
   comentario?: string;
-  /** numero: formato entero. pct: formato % con 2 decimales. */
-  formatoValor?: "numero" | "pct";
+  /**
+   * numero  → formato entero locale-aware (1,234).
+   * pct     → formato % con 2 decimales (12.34%).
+   * moneda_mm → MM S/ con coma de miles (1,234 MM).
+   */
+  formatoValor?: "numero" | "pct" | "moneda_mm";
 }) {
   if (!series || series.length === 0) {
     return (
@@ -78,6 +82,9 @@ export function SeccionHistoricoComparativo({
     if (v == null || !Number.isFinite(v)) return "—";
     if (formatoValor === "pct") {
       return `${(v * 100).toFixed(2)}%`;
+    }
+    if (formatoValor === "moneda_mm") {
+      return fmtNum(v);
     }
     return fmtNum(v);
   };
@@ -179,7 +186,7 @@ function MiniBarChart({
   formatoValor,
 }: {
   serie: HistoricoEntidadSerie;
-  formatoValor: "numero" | "pct";
+  formatoValor: "numero" | "pct" | "moneda_mm";
 }) {
   const data = serie.serie.map((p) => ({
     name: p.periodoLabel,
