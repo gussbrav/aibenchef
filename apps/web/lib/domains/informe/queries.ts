@@ -680,8 +680,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       seccion: "datos_generales",
       rankeable: false,
       tooltip:
-        "Sistema Financiero (SF): denominador = total de cartera de TODAS las entidades reguladas " +
-        "(Bancos + Financieras + CMAC + CRAC + Empresas de Créditos). Mide tamaño relativo, no calidad.",
+        "Sistema Financiero (SF) = TODAS las entidades reguladas (Bancos + Financieras + CMAC + " +
+        "CRAC + Empresas de Créditos), incluyendo SMF. Para bancos con filiales en el exterior, " +
+        "usamos la cifra CONSOLIDADA (no la doméstica) — sin dedupe estaríamos contando ambas y " +
+        "el denominador inflaría 2x. Mide tamaño relativo, no calidad.",
       valores: mk((r) => (r.pct_part_sf_coloc == null ? null : Number(r.pct_part_sf_coloc))),
     },
     {
@@ -704,7 +706,9 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       seccion: "datos_generales",
       rankeable: false,
       tooltip:
-        "Sistema Financiero (SF): denominador = total de depósitos de TODAS las entidades reguladas.",
+        "Sistema Financiero (SF) = TODAS las entidades reguladas (incluye SMF). Para bancos con " +
+        "filiales en el exterior, usamos la cifra consolidada — sin dedupe el denominador estaría " +
+        "inflado por doble conteo.",
       valores: mk((r) => (r.pct_part_sf_dep == null ? null : Number(r.pct_part_sf_dep))),
     },
     {
