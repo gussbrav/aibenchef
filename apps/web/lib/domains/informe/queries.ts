@@ -1151,23 +1151,96 @@ export async function getInformeData(opts: {
     competidores,
   );
   const { bubble, waterfall } = buildBubbleAndWaterfall(peActual, pePrev, competidores);
+  const { waterfall: waterfallVsDic } = buildBubbleAndWaterfall(peActual, peDicPrev, competidores);
+
+  // Historicos para secciones N° Oficinas, N° Personal y N° Clientes
+  // (ultimos 5 periodos disponibles en cada vista).
+  const [oficinasHistMap, personalHistMap, clientesHistMap] = await Promise.all([
+    getHistoricoEntidad({
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+      metric: "oficinas",
+      consolidar,
+      ultimosN: 5,
+    }),
+    getHistoricoEntidad({
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+      metric: "personal",
+      consolidar,
+      ultimosN: 5,
+    }),
+    getHistoricoEntidad({
+      entidades: entidadesNombs,
+      periodoActual: opts.periodo,
+      metric: "clientes",
+      consolidar,
+      ultimosN: 5,
+    }),
+  ]);
+  const oficinasHistorico = buildHistoricoSeries(oficinasHistMap, competidores);
+  const personalHistorico = buildHistoricoSeries(personalHistMap, competidores);
+  const clientesHistorico = buildHistoricoSeries(clientesHistMap, competidores);
 
   return {
     cliente,
     periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
     periodoComparativo: { codigo: periodoPrev, label: periodoLabel(periodoPrev) },
+    periodoDicPrev: { codigo: periodoDicPrev, label: periodoLabel(periodoDicPrev) },
     competidores,
     cuadroResumen,
     puntoEquilibrio,
     margenNetoHistorico,
     margenNetoBubble: bubble,
     margenNetoWaterfall: waterfall,
+    margenNetoWaterfallVsDic: waterfallVsDic,
+    oficinasHistorico,
+    personalHistorico,
+    clientesHistorico,
     comentarios: {
       margen_neto_bubble: "",
       margen_neto_waterfall: "",
     },
     cobertura,
   };
+}
+
+/**
+ * Convierte el Map<entidad, array<{periodo,valor}>> al shape que consume
+ * el frontend: una entrada por competidor con su serie ordenada por periodo
+ * + crecimiento delta vs periodo previo + valorBase (primero) + valorActual (ultimo).
+ */
+function buildHistoricoSeries(
+  map: Map<string, Array<{ periodo: number; valor: number | null }>>,
+  competidores: Competidor[],
+): import("./types").HistoricoEntidadSerie[] {
+  return competidores.map((c) => {
+    const puntosRaw = map.get(c.nombCorreg) ?? [];
+    const serie = puntosRaw
+      .sort((a, b) => a.periodo - b.periodo)
+      .map((p, i, arr) => {
+        const prev = i > 0 ? arr[i - 1]!.valor : null;
+        const crecimiento = prev != null && p.valor != null ? p.valor - prev : null;
+        return {
+          periodo: p.periodo,
+          periodoLabel: periodoLabel(p.periodo),
+          valor: p.valor,
+          crecimiento,
+        };
+      });
+    const valorActual = serie.length > 0 ? serie[serie.length - 1]!.valor : null;
+    const valorBase = serie.length > 0 ? serie[0]!.valor : null;
+    const variacionTotal =
+      valorActual != null && valorBase != null ? valorActual - valorBase : null;
+    return {
+      entidad: c.labelCorto,
+      color: c.color,
+      valorActual,
+      valorBase,
+      variacionTotal,
+      serie,
+    };
+  });
 }
 
 /** Construye 3 filas de %Margen Neto comparativo (actual + 2 historicos). */
@@ -1226,6 +1299,75 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
  * Fallback: si la query falla (ej. MV no refresheada), devuelve [] —
  * buildCompetidores cae a su propio fallback estatico.
  */
+/**
+ * Serie historica de N de oficinas o personal para una lista de entidades,
+ * en los ultimos N periodos disponibles. Usado por el informe en las
+ * secciones "N° de Oficinas" y "N° de Personal" para mostrar tendencia.
+ *
+ * Devuelve por entidad: array de { periodo, valor, crecimiento_vs_prev }.
+ * El primer punto tiene crecimiento=null (sin referencia previa).
+ *
+ * `metric` = "oficinas" | "personal" elige la vista subyacente.
+ */
+export async function getHistoricoEntidad(opts: {
+  entidades: string[];
+  periodoActual: number;
+  metric: "oficinas" | "personal" | "clientes";
+  consolidar?: boolean;
+  ultimosN?: number;
+}): Promise<Map<string, Array<{ periodo: number; valor: number | null }>>> {
+  const ultimosN = opts.ultimosN ?? 5;
+  const consolidar = opts.consolidar !== false;
+  if (opts.entidades.length === 0) return new Map();
+  return safeQuery(
+    `getHistoricoEntidad[${opts.metric}]`,
+    async () => {
+      const view = opts.metric === "oficinas"
+        ? (consolidar
+            ? sql.raw("marts.v_oficinas_por_entidad_canonico")
+            : sql.raw("marts.v_oficinas_por_entidad_historica"))
+        : opts.metric === "personal"
+          ? (consolidar
+              ? sql.raw("marts.v_personal_por_entidad_canonico")
+              : sql.raw("marts.v_personal_por_entidad_historica"))
+          : (consolidar
+              ? sql.raw("marts.v_clientes_por_entidad_canonico")
+              : sql.raw("marts.v_clientes_por_entidad_historica"));
+      const valorCol = opts.metric === "oficinas"
+        ? sql.raw("n_oficinas")
+        : opts.metric === "personal"
+          ? sql.raw("n_personal")
+          : sql.raw("n_clientes");
+      const rows = await db.execute<{
+        nomb_correg: string;
+        periodo: number;
+        valor: number | null;
+      }>(sql`
+        WITH periodos_ult AS (
+          SELECT DISTINCT periodo
+          FROM ${view}
+          WHERE periodo <= ${opts.periodoActual}
+          ORDER BY periodo DESC
+          LIMIT ${ultimosN}
+        )
+        SELECT v.nomb_correg, v.periodo, v.${valorCol}::int AS valor
+        FROM ${view} v
+        JOIN periodos_ult pu ON pu.periodo = v.periodo
+        WHERE v.nomb_correg = ANY(${opts.entidades}::text[])
+        ORDER BY v.nomb_correg, v.periodo ASC
+      `);
+      const map = new Map<string, Array<{ periodo: number; valor: number | null }>>();
+      for (const r of rows) {
+        const k = String(r.nomb_correg);
+        if (!map.has(k)) map.set(k, []);
+        map.get(k)!.push({ periodo: Number(r.periodo), valor: r.valor == null ? null : Number(r.valor) });
+      }
+      return map;
+    },
+    new Map(),
+  );
+}
+
 export async function getTop2PorGrupoByCartera(periodo: number): Promise<string[]> {
   return safeQuery(
     "getTop2PorGrupoByCartera",

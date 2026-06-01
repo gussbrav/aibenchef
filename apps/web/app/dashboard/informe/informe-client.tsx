@@ -41,6 +41,7 @@ import type {
 } from "@/lib/domains/informe";
 
 import { SelectoresToolbar } from "./selectores-toolbar";
+import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
 
 // ============================================================================
 // Helpers de formato y ranking
@@ -201,7 +202,23 @@ export function InformeClient({
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
 }) {
-  const { cliente, periodo, periodoComparativo, competidores, cuadroResumen, puntoEquilibrio, margenNetoHistorico, margenNetoBubble, margenNetoWaterfall, comentarios } = data;
+  const {
+    cliente,
+    periodo,
+    periodoComparativo,
+    periodoDicPrev,
+    competidores,
+    cuadroResumen,
+    puntoEquilibrio,
+    margenNetoHistorico,
+    margenNetoBubble,
+    margenNetoWaterfall,
+    margenNetoWaterfallVsDic,
+    oficinasHistorico,
+    personalHistorico,
+    clientesHistorico,
+    comentarios,
+  } = data;
   const [exportando, setExportando] = useState(false);
 
   const onExport = (formato: "pptx" | "pdf") => {
@@ -305,7 +322,7 @@ export function InformeClient({
         comparativoLabel={periodoLabel}
       />
 
-      {/* ============ WATERFALL ============ */}
+      {/* ============ WATERFALL vs mismo mes año previo ============ */}
       <SeccionMargenNetoWaterfall
         data={margenNetoWaterfall}
         competidores={competidores}
@@ -313,6 +330,46 @@ export function InformeClient({
         comparativoLabel={periodoLabel}
         periodoBaseLabel={periodoComparativo.label}
         periodoFinalLabel={periodo.label}
+      />
+
+      {/* ============ WATERFALL vs Dic año previo ============ */}
+      <SeccionMargenNetoWaterfall
+        data={margenNetoWaterfallVsDic}
+        competidores={competidores}
+        comentario={""}
+        comparativoLabel={periodoLabel}
+        periodoBaseLabel={periodoDicPrev.label}
+        periodoFinalLabel={periodo.label}
+      />
+
+      {/* ============ N° DE OFICINAS ============ */}
+      <SeccionHistoricoComparativo
+        titulo="N° DE OFICINAS"
+        subtitulo="Principales competidores"
+        series={oficinasHistorico}
+        periodoBaseLabel={oficinasHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="numero"
+      />
+
+      {/* ============ N° DE PERSONAL ============ */}
+      <SeccionHistoricoComparativo
+        titulo="N° DE PERSONAL"
+        subtitulo="Principales competidores"
+        series={personalHistorico}
+        periodoBaseLabel={personalHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="numero"
+      />
+
+      {/* ============ N° DE CLIENTES DE CREDITO ============ */}
+      <SeccionHistoricoComparativo
+        titulo="N° DE CLIENTES DE CRÉDITO (Miles)"
+        subtitulo="Principales competidores"
+        series={clientesHistorico}
+        periodoBaseLabel={clientesHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="numero"
       />
 
       {/* ============ FOOTER ============ */}

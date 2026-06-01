@@ -106,17 +106,48 @@ export type CoberturaDatos = {
   sugerenciasMatch: Record<string, string[]>; // nomb_correg solicitado -> candidatos similares
 };
 
+export type HistoricoPuntoSerie = {
+  periodo: number;
+  periodoLabel: string;
+  valor: number | null;
+  /** Crecimiento absoluto vs periodo previo en la serie (null si no aplica). */
+  crecimiento: number | null;
+};
+
+export type HistoricoEntidadSerie = {
+  entidad: string;        // labelCorto
+  color: string;          // del competidor para tinte consistente
+  valorActual: number | null;
+  /** Valor en el primer periodo de la serie — para comparar "Dic.X vs hoy". */
+  valorBase: number | null;
+  /** Variacion absoluta entre primer y ultimo periodo de la serie. */
+  variacionTotal: number | null;
+  /** Serie temporal completa. */
+  serie: HistoricoPuntoSerie[];
+};
+
 export type InformeData = {
   cliente: Cliente;
   periodo: { codigo: number; label: string };
   periodoComparativo: { codigo: number; label: string };
+  /** Periodo de cierre del año previo (ej: Dic año anterior si actual = Mar 2026 -> Dic 2025). */
+  periodoDicPrev: { codigo: number; label: string };
   competidores: Competidor[];
   cuadroResumen: Kpi[];
   puntoEquilibrio: PuntoEquilibrioRow[];
   /** Comparativa anualizada %Margen Neto en 3 cortes (actual / Dic año previo / mismo mes año previo). */
   margenNetoHistorico: MargenNetoHistoricoRow[];
   margenNetoBubble: BubblePoint[];
+  /** Cascada %Margen Neto: actual vs mismo mes año previo. */
   margenNetoWaterfall: WaterfallData[];
+  /** Cascada %Margen Neto: actual vs cierre Dic año previo. */
+  margenNetoWaterfallVsDic: WaterfallData[];
+  /** Serie historica de # Oficinas por entidad (ultimos 5 periodos). */
+  oficinasHistorico: HistoricoEntidadSerie[];
+  /** Serie historica de # Personal por entidad (ultimos 5 periodos). */
+  personalHistorico: HistoricoEntidadSerie[];
+  /** Serie historica de # Clientes de Credito (en miles) por entidad. */
+  clientesHistorico: HistoricoEntidadSerie[];
   comentarios: Record<string, string>;
   cobertura: CoberturaDatos;
 };
