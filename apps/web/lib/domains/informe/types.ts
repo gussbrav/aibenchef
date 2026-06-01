@@ -184,6 +184,8 @@ export type InformeData = {
   carteraAtrasadaHistorico: HistoricoEntidadSerie[];
   /** Serie historica %Cartera de Alto Riesgo / cartera bruta. */
   carHistorico: HistoricoEntidadSerie[];
+  /** Serie historica de Cartera Bruta total (saldo en MM S/) por entidad. */
+  carteraBrutaHistorico: HistoricoEntidadSerie[];
   comentarios: Record<string, string>;
   cobertura: CoberturaDatos;
 };
