@@ -148,6 +148,18 @@ export type InformeData = {
   personalHistorico: HistoricoEntidadSerie[];
   /** Serie historica de # Clientes de Credito (en miles) por entidad. */
   clientesHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Rendimiento Cartera (anualizado TTM). */
+  rendimientoCarteraHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Costo Fondeo (anualizado TTM). */
+  costoFondeoHistorico: HistoricoEntidadSerie[];
+  /** Serie historica %Costo Provisiones / Cartera Prom (anualizado). */
+  costoProvisionesHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Eficiencia: %Gastos Op / Margen Bruto. */
+  eficienciaHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Gastos Personal / Margen Bruto. */
+  gastosPersonalHistorico: HistoricoEntidadSerie[];
+  /** Serie historica Gastos Generales / Margen Bruto. */
+  gastosGeneralesHistorico: HistoricoEntidadSerie[];
   comentarios: Record<string, string>;
   cobertura: CoberturaDatos;
 };
