@@ -746,13 +746,19 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
     },
     {
       codigo: "cr_cartera_mype",
-      nombre: "Cartera MYPE (%)",
+      nombre: "Cartera MYPE / Total (%)",
       unidad: "pct",
       signo: 1,
       seccion: "cartera",
       // Especializacion, no calidad — un Banco multipropósito tendra bajo
       // % MYPE pero eso no lo hace "peor". Solo es indicativo de modelo.
       rankeable: false,
+      tooltip:
+        "Porcentaje de la cartera total dedicada a MYPE (Microempresa + Pequeña Empresa). " +
+        "Aplica a TODAS las entidades del sistema: Bancos universales típicamente <20%, " +
+        "Cajas y Financieras especializadas en MYPE 70-95%. Una entidad se clasifica " +
+        "como SMF cuando este ratio supera el 50%. '—' significa que la entidad no reportó " +
+        "colocaciones MYPE en ese período.",
       valores: mk((r) => (r.pct_cartera_mype == null ? null : Number(r.pct_cartera_mype))),
     },
     {

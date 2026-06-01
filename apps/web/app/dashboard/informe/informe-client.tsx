@@ -118,20 +118,22 @@ function computePerformance(
 }
 
 /**
- * Conditional formatting tipo Bloomberg/S&P: tinte de fondo sutil (bajo
- * opacity) sobre la celda numerica. Sin dots ni badges — el numero queda
- * como protagonista visual y el color es un encoding secundario.
+ * Conditional formatting tipo Bloomberg/S&P: tinte de fondo sobre la celda
+ * numerica + texto en negrita y color en los extremos. Sin dots — el numero
+ * queda como protagonista pero el color guia el ojo a los outliers.
  *
- * Solo 3 estados visibles (mejor / peor / neutro), no 5 — menos ruido
- * visual. Las entidades intermedias quedan sin tinte (background blanco),
- * privilegiando al ojo enfocarse en los extremos.
+ * Top/Bottom destacan claramente; high/low tienen tinte sutil; mid sin
+ * tinte. Es el balance entre legibilidad y informacion: el usuario ve
+ * inmediatamente quien lidera y quien lleva la peor.
  */
-const TIER_CELL_BG: Record<PerformanceTier, string> = {
-  top: "bg-emerald-50",       // mejor cuartil
-  high: "bg-emerald-50/40",   // tinte muy leve
-  mid: "",                    // sin tinte
-  low: "bg-amber-50/40",      // tinte muy leve
-  bottom: "bg-rose-50",       // peor cuartil
+type TierStyle = { cell: string; text: string };
+
+const TIER_STYLE: Record<PerformanceTier, TierStyle> = {
+  top:    { cell: "bg-emerald-100", text: "text-emerald-800 font-semibold" },
+  high:   { cell: "bg-emerald-50",  text: "" },
+  mid:    { cell: "",               text: "" },
+  low:    { cell: "bg-amber-50",    text: "" },
+  bottom: { cell: "bg-rose-100",    text: "text-rose-800 font-semibold" },
 };
 
 const TIER_LABELS: Record<PerformanceTier, string> = {
@@ -143,30 +145,34 @@ const TIER_LABELS: Record<PerformanceTier, string> = {
 };
 
 /**
- * Leyenda compacta del heatmap. Mostrada solo cuando hay heatmap activo
- * (al menos un KPI rankeable). Tres swatches (mejor / medio / peor) en
- * lugar de cinco — refleja lo que el usuario ve realmente en la grilla.
+ * Leyenda compacta del heatmap. Mostrada al lado del titulo "Cuadro
+ * Resumen". Muestra los 4 tiers visibles (mejor / sobre la mediana / bajo
+ * la mediana / peor); el cuartil medio queda sin color.
  */
 function PerfLegend() {
   return (
     <div
       className="inline-flex items-center gap-3 text-[10px] text-slate-500 px-3 py-1.5 rounded border border-slate-200 bg-white"
-      title="Solo aplica a metricas de calidad (mora, ROA, eficiencia, etc.). Las metricas de tamaño / market share / especializacion no se rankean."
+      title="Solo aplica a metricas de calidad (mora, ROA, eficiencia, crecimiento). Las metricas de tamaño / market share / especializacion no se rankean — son contexto, no calidad."
     >
       <span className="font-semibold uppercase tracking-wider text-[9px] text-slate-600">
         vs pares
       </span>
       <span className="inline-flex items-center gap-1">
         <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200" />
-        <span>Mejor</span>
+        <span className="text-emerald-800 font-semibold">Mejor 25%</span>
       </span>
       <span className="inline-flex items-center gap-1">
-        <span className="w-3 h-3 rounded bg-white border border-slate-200" />
-        <span>Medio</span>
+        <span className="w-3 h-3 rounded bg-emerald-50 border border-emerald-100" />
+        <span>Sobre mediana</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="w-3 h-3 rounded bg-amber-50 border border-amber-100" />
+        <span>Bajo mediana</span>
       </span>
       <span className="inline-flex items-center gap-1">
         <span className="w-3 h-3 rounded bg-rose-100 border border-rose-200" />
-        <span>Peor</span>
+        <span className="text-rose-800 font-semibold">Peor 25%</span>
       </span>
     </div>
   );
@@ -434,10 +440,12 @@ function FragmentGrupo({
               const v = k.valores.find((x) => x.competidor === c);
               const info = perf.get(c);
               const esPropio = c === clientePropio;
-              const bg = info ? TIER_CELL_BG[info.tier] : "";
+              const style = info ? TIER_STYLE[info.tier] : { cell: "", text: "" };
               const tooltip = info
                 ? `${TIER_LABELS[info.tier]} · #${info.rank} de ${info.total}`
                 : undefined;
+              // El propio cliente mantiene su highlight azul (es su perspectiva).
+              // El heatmap se aplica solo a los competidores.
               return (
                 <td
                   key={c}
@@ -445,7 +453,7 @@ function FragmentGrupo({
                   className={`px-4 py-2 text-right tabular-nums text-[13px] ${
                     esPropio
                       ? "bg-blue-50 font-semibold text-slate-900"
-                      : `${bg} text-slate-700`
+                      : `${style.cell} ${style.text || "text-slate-700"}`
                   }`}
                 >
                   {formatValor(v?.valor ?? null, k.unidad)}
