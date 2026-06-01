@@ -401,6 +401,8 @@ type CuadroResumenRow = {
   n_empleados: number | null;
   pct_part_smf_coloc: number | null;
   pct_part_smf_dep: number | null;
+  pct_part_sf_coloc: number | null;
+  pct_part_sf_dep: number | null;
   pct_cartera_mype: number | null;
   pct_mora_global: number | null;
   pct_mora_global_vc: number | null;
@@ -522,6 +524,20 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         : sql.raw("marts.v_participacion_smf_dep_historica")}
       WHERE periodo = ${periodo}
     ),
+    sf_coloc AS (
+      SELECT nomb_correg, pct_participacion_sf
+      FROM ${consolidar
+        ? sql.raw("marts.v_participacion_sf_colocaciones")
+        : sql.raw("marts.v_participacion_sf_coloc_historica")}
+      WHERE periodo = ${periodo}
+    ),
+    sf_dep AS (
+      SELECT nomb_correg, pct_participacion_sf
+      FROM ${consolidar
+        ? sql.raw("marts.v_participacion_sf_depositos")
+        : sql.raw("marts.v_participacion_sf_dep_historica")}
+      WHERE periodo = ${periodo}
+    ),
     mype AS (
       SELECT nomb_correg, pct_cartera_mype
       FROM ${consolidar
@@ -570,6 +586,8 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       per.n_empleados,
       smc.pct_participacion_smf                        AS pct_part_smf_coloc,
       smd.pct_participacion_smf                        AS pct_part_smf_dep,
+      sfc.pct_participacion_sf                         AS pct_part_sf_coloc,
+      sfd.pct_participacion_sf                         AS pct_part_sf_dep,
       my.pct_cartera_mype                              AS pct_cartera_mype,
       mo.pct_mora_global                               AS pct_mora_global,
       mo.pct_mora_global_vc                            AS pct_mora_global_vc,
@@ -589,6 +607,8 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
     LEFT JOIN personal  per ON per.nomb_correg = input.canon
     LEFT JOIN smf_coloc smc ON smc.nomb_correg = input.canon
     LEFT JOIN smf_dep   smd ON smd.nomb_correg = input.canon
+    LEFT JOIN sf_coloc  sfc ON sfc.nomb_correg = input.canon
+    LEFT JOIN sf_dep    sfd ON sfd.nomb_correg = input.canon
     LEFT JOIN mype      my  ON my.nomb_correg  = input.canon
     LEFT JOIN mora      mo  ON mo.nomb_correg  = input.canon
     LEFT JOIN cob       cb  ON cb.nomb_correg  = input.canon
@@ -648,19 +668,49 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       valores: mk((r) => (r.n_personal == null ? null : Number(r.n_personal))),
     },
     {
-      codigo: "cr_part_colocaciones",
+      codigo: "cr_part_sf_coloc",
+      nombre: "% Part. Colocaciones en SF",
+      unidad: "pct",
+      signo: 1,
+      seccion: "datos_generales",
+      tooltip:
+        "Sistema Financiero (SF): denominador = total de cartera de TODAS las entidades reguladas " +
+        "(Bancos + Financieras + CMAC + CRAC + Empresas de Créditos). Útil para comparar tamaño " +
+        "de market share contra cualquier entidad del sistema, incluyendo bancos grandes.",
+      valores: mk((r) => (r.pct_part_sf_coloc == null ? null : Number(r.pct_part_sf_coloc))),
+    },
+    {
+      codigo: "cr_part_smf_coloc",
       nombre: "% Part. Colocaciones en SMF",
       unidad: "pct",
       signo: 1,
       seccion: "datos_generales",
+      tooltip:
+        "Sistema Microfinanciero (SMF): denominador = total de cartera SOLO de entidades " +
+        "microfinancieras (las que tienen >50% de su cartera en MES + PEQ, ej Cajas y Financieras " +
+        "especializadas). Los bancos universales aparecen en 0% porque no pertenecen al SMF.",
       valores: mk((r) => (r.pct_part_smf_coloc == null ? null : Number(r.pct_part_smf_coloc))),
     },
     {
-      codigo: "cr_part_depositos",
+      codigo: "cr_part_sf_dep",
+      nombre: "% Part. Depositos en SF",
+      unidad: "pct",
+      signo: 1,
+      seccion: "datos_generales",
+      tooltip:
+        "Sistema Financiero (SF): denominador = total de depósitos del público de TODAS las entidades " +
+        "reguladas. Mide market share de captación a escala completa.",
+      valores: mk((r) => (r.pct_part_sf_dep == null ? null : Number(r.pct_part_sf_dep))),
+    },
+    {
+      codigo: "cr_part_smf_dep",
       nombre: "% Part. Depositos en SMF",
       unidad: "pct",
       signo: 1,
       seccion: "datos_generales",
+      tooltip:
+        "Sistema Microfinanciero (SMF): denominador = total de depósitos del público SOLO de entidades " +
+        "microfinancieras. Útil para benchmark dentro del nicho. Bancos aparecen 0%.",
       valores: mk((r) => (r.pct_part_smf_dep == null ? null : Number(r.pct_part_smf_dep))),
     },
 

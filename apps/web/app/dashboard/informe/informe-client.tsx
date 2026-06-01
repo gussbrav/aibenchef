@@ -66,33 +66,108 @@ function formatValor(valor: number | null, unidad: KpiUnidad): string {
   }
 }
 
-function computeRanks(valores: KpiValor[], signo: 1 | -1): Map<string, number> {
-  const ranks = new Map<string, number>();
-  const sorted = valores
-    .filter((v) => v.valor !== null && v.valor !== undefined)
-    .sort((a, b) => {
-      const av = a.valor as number;
-      const bv = b.valor as number;
-      return signo === 1 ? bv - av : av - bv;
-    });
-  sorted.slice(0, 3).forEach((v, i) => ranks.set(v.competidor, i + 1));
-  return ranks;
+/**
+ * Indicador de rendimiento relativo por KPI: en lugar de medallas 1-2-3 fijas
+ * (que asumen siempre 3 ganadores), computamos un score normalizado por
+ * cuartil dentro del peer group activo. Cada entidad recibe uno de 5 tiers:
+ *   "top"     — top 25% (mejor performance segun signo)
+ *   "high"    — top 50%
+ *   "mid"     — mediana
+ *   "low"     — bottom 50%
+ *   "bottom"  — bottom 25% (peor performance)
+ *
+ * Asi se muestra TODA la grilla coloreada (no solo el podio), y el color
+ * respeta la polaridad del KPI (signo=1 alto es bueno; signo=-1 alto es malo).
+ * Si hay menos de 2 valores no-nulos, no se aplica indicador (sin sentido
+ * para una sola entidad).
+ */
+export type PerformanceTier = "top" | "high" | "mid" | "low" | "bottom";
+
+export type PerformanceInfo = {
+  tier: PerformanceTier;
+  rank: number; // posicion 1..N (1 = mejor)
+  total: number; // N de entidades con valor no-nulo
+};
+
+function computePerformance(
+  valores: KpiValor[],
+  signo: 1 | -1,
+): Map<string, PerformanceInfo> {
+  const out = new Map<string, PerformanceInfo>();
+  const withVal = valores.filter((v) => v.valor !== null && v.valor !== undefined);
+  if (withVal.length < 2) return out;
+  const sorted = [...withVal].sort((a, b) => {
+    const av = a.valor as number;
+    const bv = b.valor as number;
+    return signo === 1 ? bv - av : av - bv;
+  });
+  const n = sorted.length;
+  sorted.forEach((v, i) => {
+    const rank = i + 1;
+    // Quartil normalizado en [0,1] — 0 mejor, 1 peor.
+    const q = n === 1 ? 0 : i / (n - 1);
+    let tier: PerformanceTier;
+    if (q <= 0.25) tier = "top";
+    else if (q <= 0.5) tier = "high";
+    else if (q < 0.75) tier = "mid";
+    else if (q < 1) tier = "low";
+    else tier = "bottom";
+    out.set(v.competidor, { tier, rank, total: n });
+  });
+  return out;
 }
 
-function RankBadge({ rank }: { rank?: number }) {
-  if (!rank) return null;
-  const colors: Record<number, string> = {
-    1: "bg-blue-600 text-white",
-    2: "bg-blue-400 text-white",
-    3: "bg-blue-200 text-blue-900",
-  };
+const TIER_COLORS: Record<PerformanceTier, { dot: string; ring: string; label: string }> = {
+  top: { dot: "bg-emerald-500", ring: "ring-emerald-200", label: "Top 25%" },
+  high: { dot: "bg-emerald-300", ring: "ring-emerald-100", label: "Top 50%" },
+  mid: { dot: "bg-slate-300", ring: "ring-slate-100", label: "Medio" },
+  low: { dot: "bg-amber-400", ring: "ring-amber-100", label: "Bottom 50%" },
+  bottom: { dot: "bg-rose-500", ring: "ring-rose-200", label: "Bottom 25%" },
+};
+
+function PerfBadge({ info }: { info?: PerformanceInfo }) {
+  if (!info) return null;
+  const c = TIER_COLORS[info.tier];
   return (
     <span
-      className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ml-1 ${colors[rank]}`}
-      title={`Ranking ${rank} de 3`}
+      className={`inline-flex items-center justify-center w-2.5 h-2.5 rounded-full ml-1.5 ring-2 ${c.dot} ${c.ring}`}
+      title={`${c.label} · #${info.rank} de ${info.total}`}
+      aria-label={`${c.label}, ranking ${info.rank} de ${info.total}`}
+    />
+  );
+}
+
+/**
+ * Leyenda del indicador de performance por KPI. Mostrada al lado del titulo
+ * "Cuadro Resumen" para que el usuario entienda los puntos coloreados sin
+ * tener que pasar el mouse uno por uno.
+ */
+function PerfLegend() {
+  const items: Array<{ tier: PerformanceTier; label: string }> = [
+    { tier: "top", label: "Top 25%" },
+    { tier: "high", label: "Top 50%" },
+    { tier: "mid", label: "Medio" },
+    { tier: "low", label: "Bottom 50%" },
+    { tier: "bottom", label: "Bottom 25%" },
+  ];
+  return (
+    <div
+      className="inline-flex items-center gap-2 text-[10px] text-slate-500 px-3 py-1.5 rounded border border-slate-200 bg-white"
+      title="El indicador de cada celda muestra la posicion de esa entidad vs el resto del benchmark, segun la polaridad del KPI (mayor o menor es mejor segun el caso)."
     >
-      {rank}
-    </span>
+      <span className="font-semibold uppercase tracking-wider text-[9px] text-slate-600">
+        Performance vs pares
+      </span>
+      {items.map((it) => {
+        const c = TIER_COLORS[it.tier];
+        return (
+          <span key={it.tier} className="inline-flex items-center gap-1">
+            <span className={`w-2 h-2 rounded-full ${c.dot}`} />
+            <span>{it.label}</span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -280,9 +355,12 @@ function SeccionCuadroResumen({
 
   return (
     <section>
-      <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
-        Cuadro Resumen
-      </h2>
+      <div className="flex items-end justify-between gap-4 flex-wrap mb-1">
+        <h2 className="text-xl font-bold text-slate-900 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+          Cuadro Resumen
+        </h2>
+        <PerfLegend />
+      </div>
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -332,7 +410,7 @@ function FragmentGrupo({
         </td>
       </tr>
       {kpis.map((k) => {
-        const ranks = computeRanks(k.valores, k.signo);
+        const perf = computePerformance(k.valores, k.signo);
         return (
           <tr key={k.codigo} className="border-t border-slate-100 hover:bg-slate-50">
             <td className="px-4 py-2 text-slate-700 text-[13px]">
@@ -350,7 +428,7 @@ function FragmentGrupo({
             </td>
             {competidores.map((c) => {
               const v = k.valores.find((x) => x.competidor === c);
-              const rank = ranks.get(c);
+              const info = perf.get(c);
               const esPropio = c === clientePropio;
               return (
                 <td
@@ -360,7 +438,7 @@ function FragmentGrupo({
                   }`}
                 >
                   {formatValor(v?.valor ?? null, k.unidad)}
-                  <RankBadge rank={rank} />
+                  <PerfBadge info={info} />
                 </td>
               );
             })}
