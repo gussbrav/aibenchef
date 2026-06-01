@@ -235,6 +235,7 @@ export function InformeClient({
     coberturaCarHistorico,
     carteraAtrasadaHistorico,
     carHistorico,
+    carteraBrutaHistorico,
     comentarios,
   } = data;
   const [exportando, setExportando] = useState(false);
@@ -358,6 +359,16 @@ export function InformeClient({
         comparativoLabel={periodoLabel}
         periodoBaseLabel={periodoDicPrev.label}
         periodoFinalLabel={periodo.label}
+      />
+
+      {/* ============ CARTERA BRUTA HISTORICA (MM S/) ============ */}
+      <SeccionHistoricoComparativo
+        titulo="CARTERA BRUTA"
+        subtitulo="Saldo de Cartera por entidad (MM S/)"
+        series={carteraBrutaHistorico}
+        periodoBaseLabel={carteraBrutaHistorico[0]?.serie[0]?.periodoLabel}
+        periodoActualLabel={periodo.label}
+        formatoValor="moneda_mm"
       />
 
       {/* ============ N° DE OFICINAS ============ */}

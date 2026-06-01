@@ -1277,6 +1277,16 @@ export async function getInformeData(opts: {
   const carteraAtrasadaHistorico = buildHistoricoFromValueMap(atrasadaMap, competidores);
   const carHistorico = buildHistoricoFromValueMap(carMap, competidores);
 
+  // Cartera bruta total por entidad por periodo (MM S/). Dividimos por 1000
+  // en la vista (los saldos vienen en miles).
+  const carteraBrutaMap = await getHistoricoFromMartView({
+    view: "marts.v_colocaciones_total_por_entidad",
+    field: "cartera_total / 1000",  // -> MM S/
+    entidades: entidadesNombs,
+    periodoActual: opts.periodo,
+  });
+  const carteraBrutaHistorico = buildHistoricoFromValueMap(carteraBrutaMap, competidores);
+
   return {
     cliente,
     periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
@@ -1310,6 +1320,7 @@ export async function getInformeData(opts: {
     coberturaCarHistorico,
     carteraAtrasadaHistorico,
     carHistorico,
+    carteraBrutaHistorico,
     comentarios: {
       margen_neto_bubble: "",
       margen_neto_waterfall: "",
