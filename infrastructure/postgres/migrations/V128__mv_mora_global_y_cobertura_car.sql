@@ -18,7 +18,17 @@
 -- las queries existentes contra v_* siguen funcionando, pero el computo
 -- ocurre solo cuando se refresca la MV (post-ingest mensual).
 --
--- Indices CONCURRENTLY para que el REFRESH no bloquee lecturas.
+-- IMPORTANTE — WITH NO DATA:
+-- Las MVs se crean VACIAS para que la migracion sea instantanea. El
+-- primer refresh (que es la operacion pesada de 30-90s) hay que
+-- dispararlo MANUALMENTE despues del deploy via:
+--     POST /api/v1/admin/refresh-mvs
+-- o por SQL: SELECT marts.refresh_mvs_informe();
+--
+-- Razon: si el CREATE MATERIALIZED VIEW materializa al crearse, la
+-- migracion tarda >2 min y el healthcheck del container (--start-period=60s
+-- + 3 retries x 30s = 150s) mata el container antes de terminar,
+-- generando zombies en pg_stat_activity y deadlocks.
 --
 -- Refresh: agregar al cron post-ingest junto con los otros REFRESH MV.
 -- =========================================================================
@@ -59,7 +69,8 @@ FROM marts.v_cartera_balance_historica col
 LEFT JOIN marts.v_castigos_12m_historica cas
     ON cas.periodo = col.periodo AND cas.nomb_correg = col.nomb_correg
 LEFT JOIN marts.v_venta_cartera_12m_historica vc
-    ON vc.periodo = col.periodo AND vc.nomb_correg = col.nomb_correg;
+    ON vc.periodo = col.periodo AND vc.nomb_correg = col.nomb_correg
+WITH NO DATA;
 
 CREATE UNIQUE INDEX idx_mv_mora_global_uniq
     ON marts.mv_mora_global_historica (periodo, nomb_correg);
@@ -95,7 +106,8 @@ BEGIN
     ) THEN
         DROP MATERIALIZED VIEW IF EXISTS marts.mv_cobertura_car_historica CASCADE;
         EXECUTE 'CREATE MATERIALIZED VIEW marts.mv_cobertura_car_historica AS
-                 SELECT * FROM marts.v_cobertura_car_historica';
+                 SELECT * FROM marts.v_cobertura_car_historica
+                 WITH NO DATA';
         EXECUTE 'CREATE UNIQUE INDEX idx_mv_cobertura_car_uniq
                  ON marts.mv_cobertura_car_historica (periodo, nomb_correg)';
         EXECUTE 'CREATE INDEX idx_mv_cobertura_car_periodo
@@ -116,9 +128,10 @@ RETURNS TABLE (mv_name TEXT, refreshed_at TIMESTAMPTZ, success BOOLEAN, error TE
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    rec RECORD;
     target TEXT;
-    err TEXT;
+    schema_name TEXT;
+    matview_name TEXT;
+    is_populated BOOLEAN;
 BEGIN
     FOR target IN
         SELECT unnest(ARRAY[
@@ -127,7 +140,32 @@ BEGIN
         ])
     LOOP
         BEGIN
-            EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY %s', target);
+            -- Solo procesar si la MV existe.
+            schema_name := split_part(target, '.', 1);
+            matview_name := split_part(target, '.', 2);
+            SELECT ispopulated INTO is_populated
+            FROM pg_matviews
+            WHERE schemaname = schema_name AND matviewname = matview_name;
+
+            IF is_populated IS NULL THEN
+                -- MV no existe, saltar.
+                mv_name := target;
+                refreshed_at := now();
+                success := FALSE;
+                error := 'MV no existe';
+                RETURN NEXT;
+                CONTINUE;
+            END IF;
+
+            -- Primera vez (MV vacia tras CREATE WITH NO DATA): refresh
+            -- NO concurrente (CONCURRENTLY requiere MV ya poblada).
+            -- Despues siempre CONCURRENTLY para no bloquear lecturas.
+            IF is_populated THEN
+                EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY %s', target);
+            ELSE
+                EXECUTE format('REFRESH MATERIALIZED VIEW %s', target);
+            END IF;
+
             mv_name := target;
             refreshed_at := now();
             success := TRUE;
@@ -144,8 +182,14 @@ BEGIN
 END $$;
 
 COMMENT ON FUNCTION marts.refresh_mvs_informe IS
-    'Refresca las MVs del informe (mora, cobertura CAR). Llamar despues de '
-    'ingest mensual de EEFF. Usa CONCURRENTLY para no bloquear lecturas.';
+    'Refresca las MVs del informe (mora, cobertura CAR). Detecta si la MV '
+    'esta vacia (primera vez tras CREATE WITH NO DATA) y usa REFRESH normal; '
+    'caso contrario usa CONCURRENTLY para no bloquear lecturas. '
+    'Llamar despues de ingest mensual de EEFF.';
 
--- Primer refresh inmediato para popular las MVs.
-SELECT marts.refresh_mvs_informe();
+-- NOTA: el primer refresh NO se hace en la migracion (es pesado, ~60s,
+-- generaba zombies cuando el healthcheck mataba el container). Despues
+-- del deploy hay que disparar manualmente:
+--     POST /api/v1/admin/refresh-mvs    (endpoint admin)
+-- o desde psql:
+--     SELECT marts.refresh_mvs_informe();
