@@ -42,6 +42,10 @@ import type {
 
 import { SelectoresToolbar } from "./selectores-toolbar";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
+import {
+  SeccionHistoricoAccordion,
+  type AccordionMetric,
+} from "./seccion-historico-accordion";
 
 // ============================================================================
 // Helpers de formato y ranking
@@ -361,225 +365,17 @@ export function InformeClient({
         periodoFinalLabel={periodo.label}
       />
 
-      {/* ============ CARTERA BRUTA HISTORICA (MM S/) ============ */}
-      <SeccionHistoricoComparativo
-        titulo="CARTERA BRUTA"
-        subtitulo="Saldo de Cartera por entidad (MM S/)"
-        series={carteraBrutaHistorico}
-        periodoBaseLabel={carteraBrutaHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="moneda_mm"
-      />
-
-      {/* ============ N° DE OFICINAS ============ */}
-      <SeccionHistoricoComparativo
-        titulo="N° DE OFICINAS"
-        subtitulo="Principales competidores"
-        series={oficinasHistorico}
-        periodoBaseLabel={oficinasHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="numero"
-      />
-
-      {/* ============ N° DE PERSONAL ============ */}
-      <SeccionHistoricoComparativo
-        titulo="N° DE PERSONAL"
-        subtitulo="Principales competidores"
-        series={personalHistorico}
-        periodoBaseLabel={personalHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="numero"
-      />
-
-      {/* ============ N° DE CLIENTES DE CREDITO ============ */}
-      <SeccionHistoricoComparativo
-        titulo="N° DE CLIENTES DE CRÉDITO (Miles)"
-        subtitulo="Principales competidores"
-        series={clientesHistorico}
-        periodoBaseLabel={clientesHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="numero"
-      />
-
-      {/* ============ RENDIMIENTO DE CARTERA ============ */}
-      <SeccionHistoricoComparativo
-        titulo="RENDIMIENTO DE CARTERA"
-        subtitulo="Anualizado TTM — %"
-        series={rendimientoCarteraHistorico}
-        periodoBaseLabel={rendimientoCarteraHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ COSTO DE FONDEO ============ */}
-      <SeccionHistoricoComparativo
-        titulo="COSTO DE FONDEO"
-        subtitulo="Anualizado TTM — %"
-        series={costoFondeoHistorico}
-        periodoBaseLabel={costoFondeoHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ COSTO DE PROVISIONES ============ */}
-      <SeccionHistoricoComparativo
-        titulo="COSTO DE PROVISIONES"
-        subtitulo="Gasto Provisiones / Cartera Bruta Prom (%)"
-        series={costoProvisionesHistorico}
-        periodoBaseLabel={costoProvisionesHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ EFICIENCIA (Gastos Op / Mg Bruto) ============ */}
-      <SeccionHistoricoComparativo
-        titulo="EFICIENCIA — Gastos Operacionales / Margen Bruto"
-        subtitulo="Anualizado TTM — %"
-        series={eficienciaHistorico}
-        periodoBaseLabel={eficienciaHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ GASTOS PERSONAL / Mg Bruto ============ */}
-      <SeccionHistoricoComparativo
-        titulo="GASTOS DE PERSONAL / Margen Bruto"
-        subtitulo="Anualizado TTM — %"
-        series={gastosPersonalHistorico}
-        periodoBaseLabel={gastosPersonalHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ GASTOS GENERALES / Mg Bruto ============ */}
-      <SeccionHistoricoComparativo
-        titulo="GASTOS GENERALES / Margen Bruto"
-        subtitulo="Anualizado TTM — %"
-        series={gastosGeneralesHistorico}
-        periodoBaseLabel={gastosGeneralesHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ INGRESOS FINANCIEROS ============ */}
-      <SeccionHistoricoComparativo
-        titulo="INGRESOS FINANCIEROS"
-        subtitulo="Anualizado TTM — MM S/"
-        series={ingresosFinancierosHistorico}
-        periodoBaseLabel={ingresosFinancierosHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="moneda_mm"
-      />
-
-      {/* ============ GASTOS FINANCIEROS ============ */}
-      <SeccionHistoricoComparativo
-        titulo="GASTOS FINANCIEROS"
-        subtitulo="Anualizado TTM — MM S/"
-        series={gastosFinancierosHistorico}
-        periodoBaseLabel={gastosFinancierosHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="moneda_mm"
-      />
-
-      {/* ============ MARGEN FINANCIERO BRUTO ============ */}
-      <SeccionHistoricoComparativo
-        titulo="MARGEN FINANCIERO BRUTO"
-        subtitulo="(Ingresos − Gastos) Financieros, TTM — MM S/"
-        series={margenFinancieroBrutoHistorico}
-        periodoBaseLabel={margenFinancieroBrutoHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="moneda_mm"
-      />
-
-      {/* ============ MARGEN FINANCIERO NETO ============ */}
-      <SeccionHistoricoComparativo
-        titulo="MARGEN FINANCIERO NETO"
-        subtitulo="Margen Bruto + INOF Neto (TTM) — MM S/"
-        series={margenFinancieroNetoHistorico}
-        periodoBaseLabel={margenFinancieroNetoHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="moneda_mm"
-      />
-
-      {/* ============ RENTABILIDAD - UTILIDAD NETA ============ */}
-      <SeccionHistoricoComparativo
-        titulo="RENTABILIDAD — Utilidad Neta"
-        subtitulo="Anualizada TTM — MM S/"
-        series={utilidadNetaHistorico}
-        periodoBaseLabel={utilidadNetaHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="moneda_mm"
-      />
-
-      {/* ============ RENTABILIDAD - ROE ============ */}
-      <SeccionHistoricoComparativo
-        titulo="RENTABILIDAD — % ROE"
-        subtitulo="Utilidad TTM / Patrimonio promedio 12m"
-        series={roeHistorico}
-        periodoBaseLabel={roeHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ RENTABILIDAD - ROA ============ */}
-      <SeccionHistoricoComparativo
-        titulo="RENTABILIDAD — % ROA"
-        subtitulo="Utilidad TTM / Activos promedio 12m"
-        series={roaHistorico}
-        periodoBaseLabel={roaHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ CALIDAD - MORA GLOBAL ============ */}
-      <SeccionHistoricoComparativo
-        titulo="CALIDAD DE CARTERA — % Mora Global"
-        subtitulo="(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta"
-        series={moraGlobalHistorico}
-        periodoBaseLabel={moraGlobalHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ CALIDAD - MORA GLOBAL V/C ============ */}
-      <SeccionHistoricoComparativo
-        titulo="CALIDAD DE CARTERA — % Mora Global (con V/C)"
-        subtitulo="Incluye venta de cartera 12m en el numerador"
-        series={moraGlobalVcHistorico}
-        periodoBaseLabel={moraGlobalVcHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ CALIDAD - CARTERA ATRASADA ============ */}
-      <SeccionHistoricoComparativo
-        titulo="INDICADORES DE CALIDAD — % Cartera Atrasada"
-        subtitulo="Cartera Atrasada / Cartera Bruta"
-        series={carteraAtrasadaHistorico}
-        periodoBaseLabel={carteraAtrasadaHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ CALIDAD - CAR ============ */}
-      <SeccionHistoricoComparativo
-        titulo="INDICADORES DE CALIDAD — % Cartera de Alto Riesgo"
-        subtitulo="(Atrasada + Refinanciada) / Cartera Bruta"
-        series={carHistorico}
-        periodoBaseLabel={carHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
-
-      {/* ============ COBERTURA CAR ============ */}
-      <SeccionHistoricoComparativo
-        titulo="COBERTURA CARTERA ALTO RIESGO"
-        subtitulo="Provisiones / Cartera Alto Riesgo (%)"
-        series={coberturaCarHistorico}
-        periodoBaseLabel={coberturaCarHistorico[0]?.serie[0]?.periodoLabel}
-        periodoActualLabel={periodo.label}
-        formatoValor="pct"
-      />
+      {/* ============ TENDENCIAS HISTORICAS (lazy-load) ============
+          Cada seccion arranca COLAPSADA y solo fetcha su data cuando el
+          usuario la expande. La pagina principal carga rapido porque el
+          SSR no hace estas queries; cada accordion las pide a
+          /api/v1/informe/historico bajo demanda. Misma data, mejor UX. */}
+      <div className="space-y-2 mt-4">
+        <SectionsAccordion
+          periodo={periodo.codigo}
+          peerGroup={competidores.map((c) => c.nombCorreg)}
+        />
+      </div>
 
       {/* ============ FOOTER ============ */}
       <footer className="border-t border-slate-200 pt-4 pb-8 text-center">
@@ -1315,5 +1111,64 @@ function CoberturaWarning({ cobertura }: { cobertura: InformeData["cobertura"] }
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================================================
+// SectionsAccordion — lista de 23 secciones historicas en accordion lazy-load.
+// Cada item arranca colapsado; al expandir fetcha su data al endpoint
+// /api/v1/informe/historico?metric=X. Mismo peerGroup + periodo en TODAS.
+// ============================================================================
+const ACCORDION_SECTIONS: Array<{
+  metric: AccordionMetric;
+  titulo: string;
+  subtitulo: string;
+  formatoValor: "numero" | "pct" | "moneda_mm";
+}> = [
+  { metric: "carteraBruta",    titulo: "CARTERA BRUTA",                                    subtitulo: "Saldo de Cartera por entidad (MM S/)",                          formatoValor: "moneda_mm" },
+  { metric: "oficinas",        titulo: "N° DE OFICINAS",                                   subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
+  { metric: "personal",        titulo: "N° DE PERSONAL",                                   subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
+  { metric: "clientes",        titulo: "N° DE CLIENTES DE CRÉDITO (Miles)",                subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
+  { metric: "rendimiento",     titulo: "RENDIMIENTO DE CARTERA",                           subtitulo: "Anualizado TTM",                                                formatoValor: "pct"       },
+  { metric: "costoFondeo",     titulo: "COSTO DE FONDEO",                                  subtitulo: "Anualizado TTM",                                                formatoValor: "pct"       },
+  { metric: "provisiones",     titulo: "COSTO DE PROVISIONES",                             subtitulo: "Gasto Provisiones / Cartera Bruta Prom",                        formatoValor: "pct"       },
+  { metric: "eficiencia",      titulo: "EFICIENCIA — Gastos Op / Margen Bruto",            subtitulo: "Anualizado TTM",                                                formatoValor: "pct"       },
+  { metric: "gastosPersonal",  titulo: "GASTOS DE PERSONAL / Margen Bruto",                subtitulo: "Anualizado TTM",                                                formatoValor: "pct"       },
+  { metric: "gastosGenerales", titulo: "GASTOS GENERALES / Margen Bruto",                  subtitulo: "Anualizado TTM",                                                formatoValor: "pct"       },
+  { metric: "ingresos",        titulo: "INGRESOS FINANCIEROS",                             subtitulo: "Anualizado TTM — MM S/",                                        formatoValor: "moneda_mm" },
+  { metric: "gastos",          titulo: "GASTOS FINANCIEROS",                               subtitulo: "Anualizado TTM — MM S/",                                        formatoValor: "moneda_mm" },
+  { metric: "margenBruto",     titulo: "MARGEN FINANCIERO BRUTO",                          subtitulo: "(Ingresos − Gastos) Financieros, TTM",                          formatoValor: "moneda_mm" },
+  { metric: "margenNeto",      titulo: "MARGEN FINANCIERO NETO",                           subtitulo: "Margen Bruto + INOF Neto (TTM)",                                formatoValor: "moneda_mm" },
+  { metric: "utilidad",        titulo: "RENTABILIDAD — Utilidad Neta",                     subtitulo: "Anualizada TTM — MM S/",                                        formatoValor: "moneda_mm" },
+  { metric: "roe",             titulo: "RENTABILIDAD — % ROE",                             subtitulo: "Utilidad TTM / Patrimonio promedio 12m",                        formatoValor: "pct"       },
+  { metric: "roa",             titulo: "RENTABILIDAD — % ROA",                             subtitulo: "Utilidad TTM / Activos promedio 12m",                           formatoValor: "pct"       },
+  { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global",               subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct"       },
+  { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m en el numerador",                  formatoValor: "pct"       },
+  { metric: "atrasada",        titulo: "INDICADORES DE CALIDAD — % Cartera Atrasada",      subtitulo: "Cartera Atrasada / Cartera Bruta",                              formatoValor: "pct"       },
+  { metric: "car",             titulo: "INDICADORES DE CALIDAD — % Cartera de Alto Riesgo", subtitulo: "(Atrasada + Refinanciada) / Cartera Bruta",                    formatoValor: "pct"       },
+  { metric: "cobCar",          titulo: "COBERTURA CARTERA ALTO RIESGO",                    subtitulo: "Provisiones / Cartera Alto Riesgo",                             formatoValor: "pct"       },
+];
+
+function SectionsAccordion({
+  periodo,
+  peerGroup,
+}: {
+  periodo: number;
+  peerGroup: string[];
+}) {
+  return (
+    <>
+      {ACCORDION_SECTIONS.map((s) => (
+        <SeccionHistoricoAccordion
+          key={s.metric}
+          metric={s.metric}
+          titulo={s.titulo}
+          subtitulo={s.subtitulo}
+          formatoValor={s.formatoValor}
+          periodo={periodo}
+          peerGroup={peerGroup}
+        />
+      ))}
+    </>
   );
 }
