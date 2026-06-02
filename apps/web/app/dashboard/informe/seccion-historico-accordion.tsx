@@ -96,7 +96,7 @@ export function SeccionHistoricoAccordion({
     } catch (e) {
       const isAbort = (e as { name?: string })?.name === "AbortError";
       const msg = isAbort
-        ? "Timeout (15s) — la query es demasiado lenta. Reportar al equipo."
+        ? "Timeout 15s. Si esta seccion usa mora/cobertura CAR, requiere migracion V128 aplicada. Pedi al equipo aplicar el deploy mas reciente."
         : e instanceof Error
           ? e.message
           : String(e);
