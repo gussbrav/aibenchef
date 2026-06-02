@@ -81,10 +81,10 @@ function periodoDicAnioPrev(periodo: number): number {
 // cliente solicitado no esta sembrado. Permite que la pagina renderice
 // con un cliente "demo" en lugar de tirar 500.
 const CLIENTE_FALLBACK: Cliente = {
-  slug: "caja-arequipa",
-  nombre: "Caja Municipal de Ahorro y Credito Arequipa (fallback)",
-  nombreCorto: "Caja Arequipa",
-  entidadPropia: "CMAC Arequipa",
+  slug: "bcp",
+  nombre: "Banco de Crédito del Perú",
+  nombreCorto: "BCP",
+  entidadPropia: "Banco de Crédito del Perú",
   brand: { primary: "#0F2A5E", secondary: "#FFB300", acento: "#2563EB" },
 };
 
@@ -1893,7 +1893,20 @@ export async function getHistoricoEntidad(opts: {
   );
 }
 
-export async function getTop2PorGrupoByCartera(periodo: number): Promise<string[]> {
+/**
+ * Top N entidades por cartera bruta de CADA grupo SBS (Bancos, Financieras,
+ * CMAC, CRAC, EDPYMES). Default n=1 → 5 entidades (la mas grande de cada
+ * grupo). El benchmark por defecto compara contra los lideres absolutos.
+ *
+ * Antes era top 2 (10 entidades) pero saturaba el peer group y muchas
+ * tendencias quedaban dificiles de leer. Top 1 da el comparativo limpio
+ * de 5 lideres + la entidad propia = 6 puntos por defecto.
+ */
+export async function getTop2PorGrupoByCartera(
+  periodo: number,
+  n = 1,
+): Promise<string[]> {
+  const topN = Math.max(1, Math.min(n, 5));
   return safeQuery(
     "getTop2PorGrupoByCartera",
     async () => {
@@ -1915,9 +1928,6 @@ export async function getTop2PorGrupoByCartera(periodo: number): Promise<string[
             AND NOT e.es_sucursal
             AND e.activa
             AND e.tipo_entidad IS NOT NULL
-            -- Excluir nombres que terminan en " Total" — son agregadores
-            -- que pasaron el filtro NOT es_total pero conceptualmente son
-            -- totales legales y no aportan al benchmark individual.
             AND v.nomb_correg NOT ILIKE '% Total'
             AND v.nomb_correg NOT ILIKE '%TOTAL%'
         ),
@@ -1934,7 +1944,7 @@ export async function getTop2PorGrupoByCartera(periodo: number): Promise<string[
         )
         SELECT nomb_correg, tipo_entidad, cartera_total, rn
         FROM ranked
-        WHERE rn <= 2
+        WHERE rn <= ${topN}
           AND tipo_entidad IN ('BANCOS', 'FINANCIERAS', 'CMAC', 'CRAC', 'EDPYMES')
         ORDER BY
           CASE tipo_entidad
