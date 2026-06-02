@@ -18,11 +18,24 @@ type SearchParams = Promise<{
   consolidar?: string;
 }>;
 
+// Default sin ningun parametro URL: BCP como cliente + entidad resaltada.
+// Forzamos los 3 niveles (slug + entidadPropia + nombreCorto) para que aunque
+// config.cliente tenga datos viejos o getClienteBySlug devuelva fallback raro,
+// la pagina siempre arranca con BCP cuando no hay parametros.
+const BCP_DEFAULT = {
+  slug: "bcp",
+  entidadPropia: "Banco de Crédito del Perú",
+} as const;
+
 export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  // Default cliente = BCP (mayor participacion del sistema). El usuario
-  // puede cambiarlo via ?cliente=<slug> o desde el selector de la UI.
-  const clienteSlug = params.cliente ?? "bcp";
+  const sinParams = !params.cliente && !params.entidadPropia;
+  const clienteSlug = params.cliente ?? BCP_DEFAULT.slug;
+  // Si NO hay params.entidadPropia Y NO hay params.cliente -> forzamos BCP.
+  // Si vino params.cliente pero no params.entidadPropia, dejamos que getClienteBySlug
+  // resuelva la entidad propia segun la config de ese cliente.
+  const entidadPropiaOverride = params.entidadPropia
+    ?? (sinParams ? BCP_DEFAULT.entidadPropia : undefined);
 
   // Si no hay periodo en URL, usar el ultimo disponible
   let periodo: number;
@@ -47,7 +60,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       clienteSlug,
       periodo,
       peerGroupOverride: peerGroup,
-      entidadPropiaOverride: params.entidadPropia,
+      entidadPropiaOverride,
       temaOverride: params.tema,
       ordenOverride: orden,
       consolidar,
