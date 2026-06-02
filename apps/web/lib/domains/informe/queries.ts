@@ -1122,11 +1122,10 @@ export async function getInformeData(opts: {
 
   const consolidar = opts.consolidar !== false; // default true
 
-  // BIG PARALLEL: lanzamos TODAS las queries del informe (PE actual/prev/dic,
-  // cuadro resumen, todos los historicos) en un solo Promise.all. Sin esto
-  // las cargas eran secuenciales -> 5-10s de "Cargando..." en el frontend.
-  // Con paralelismo total, el tiempo total se aproxima al de la query mas
-  // lenta (~1-2s) en vez de la suma.
+  // BIG PARALLEL: todas las queries del informe en un solo Promise.all.
+  // 11 queries paralelas en vez de 15 — consolidamos las 4 de v_mora_global
+  // en getHistoricoMoraConsolidado (1 query que extrae 4 metricas). Esto
+  // reduce la presion sobre el view pesado (multi-join con castigos+venta).
   const [
     peActual,
     pePrev,
@@ -1137,11 +1136,8 @@ export async function getInformeData(opts: {
     clientesHistMap,
     peHistMap,
     kpisHistMap,
-    moraMap,
-    moraVcMap,
+    moraConsolidado,
     cobCarMap,
-    atrasadaMap,
-    carMap,
     carteraBrutaMap,
   ] = await Promise.all([
     getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs, consolidar),
@@ -1166,26 +1162,11 @@ export async function getInformeData(opts: {
     getHistoricoKpisAnuales({
       entidades: entidadesNombs, periodoActual: opts.periodo, consolidar,
     }),
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica", field: "pct_mora_global",
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica", field: "pct_mora_global_vc",
+    getHistoricoMoraConsolidado({
       entidades: entidadesNombs, periodoActual: opts.periodo,
     }),
     getHistoricoFromMartView({
       view: "marts.v_cobertura_car_historica", field: "pct_cobertura_car",
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica",
-      field: "CASE WHEN cartera_bruta > 0 THEN cartera_atrasada / cartera_bruta ELSE NULL END",
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica",
-      field: "CASE WHEN cartera_bruta > 0 THEN (cartera_atrasada + cartera_refin) / cartera_bruta ELSE NULL END",
       entidades: entidadesNombs, periodoActual: opts.periodo,
     }),
     getHistoricoFromMartView({
@@ -1194,6 +1175,10 @@ export async function getInformeData(opts: {
       entidades: entidadesNombs, periodoActual: opts.periodo,
     }),
   ]);
+  const moraMap = moraConsolidado.mora;
+  const moraVcMap = moraConsolidado.moraVc;
+  const atrasadaMap = moraConsolidado.atrasada;
+  const carMap = moraConsolidado.car;
 
   // Detectar cobertura: que entidades del peer group tienen data en MVs
   const conData = new Set(cuadroRaw.keys());
@@ -1402,10 +1387,10 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
 }
 
 /**
- * Devuelve la lista de periodos para mostrar tendencia historica: ultimos
- * 4 cierres Diciembre + el periodo actual. Total 5 periodos espaciados
- * que dan vista anual + ultimo punto, exactamente el patron del informe
- * ejecutivo estilo Caja Arequipa.
+ * Periodos para tendencia historica. Reducidos a 3 (Dic-2, Dic-1, actual)
+ * para evitar la sobrecarga de calculo en getPuntoEquilibrioForPeriodo
+ * (recomputa todo desde EEFF — cada periodo es 1-2s, con 5 se llegaba a
+ * 5-10s de bloqueo). 3 puntos siguen dando trazo de tendencia clara.
  */
 async function getPeriodosTendencia(periodoActual: number): Promise<number[]> {
   return safeQuery(
@@ -1417,7 +1402,7 @@ async function getPeriodosTendencia(periodoActual: number): Promise<number[]> {
           FROM marts.mv_eeff_resultados_ancho
           WHERE periodo % 100 = 12 AND periodo < ${periodoActual}
           ORDER BY periodo DESC
-          LIMIT 4
+          LIMIT 2
         ),
         unified AS (
           SELECT periodo FROM dec_periods
@@ -1529,6 +1514,83 @@ function buildHistoricoFromPE(
       serie,
     };
   });
+}
+
+/**
+ * Variante consolidada para v_mora_global_historica: en una sola query
+ * trae las 4 metricas (mora, mora v/c, atrasada, CAR) y devuelve un Map
+ * con 4 series listas. Sin esto eran 4 queries separadas a un view
+ * pesado (multi-join con castigos + venta cartera) que sobrecargaba el
+ * connection pool.
+ */
+async function getHistoricoMoraConsolidado(opts: {
+  entidades: string[];
+  periodoActual: number;
+}): Promise<{
+  mora: Map<string, Array<{ periodo: number; valor: number | null }>>;
+  moraVc: Map<string, Array<{ periodo: number; valor: number | null }>>;
+  atrasada: Map<string, Array<{ periodo: number; valor: number | null }>>;
+  car: Map<string, Array<{ periodo: number; valor: number | null }>>;
+}> {
+  const empty = {
+    mora: new Map(),
+    moraVc: new Map(),
+    atrasada: new Map(),
+    car: new Map(),
+  };
+  if (opts.entidades.length === 0) return empty;
+  const periodos = await getPeriodosTendencia(opts.periodoActual);
+  if (periodos.length === 0) return empty;
+  return safeQuery(
+    "getHistoricoMoraConsolidado",
+    async () => {
+      const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
+      const entidadesClause = sql.join(opts.entidades.map((e) => sql`${e}`), sql`, `);
+      const rows = await db.execute<{
+        nomb_correg: string;
+        periodo: number;
+        pct_mora_global: number | null;
+        pct_mora_global_vc: number | null;
+        pct_atrasada: number | null;
+        pct_car: number | null;
+      }>(sql`
+        SELECT nomb_correg, periodo,
+               pct_mora_global,
+               pct_mora_global_vc,
+               CASE WHEN cartera_bruta > 0
+                    THEN (cartera_atrasada / cartera_bruta)::numeric
+                    ELSE NULL END AS pct_atrasada,
+               CASE WHEN cartera_bruta > 0
+                    THEN ((cartera_atrasada + cartera_refin) / cartera_bruta)::numeric
+                    ELSE NULL END AS pct_car
+        FROM marts.v_mora_global_historica
+        WHERE periodo IN (${periodosClause})
+          AND nomb_correg IN (${entidadesClause})
+      `);
+      const reshape = (field: "pct_mora_global" | "pct_mora_global_vc" | "pct_atrasada" | "pct_car") => {
+        const idx = new Map<string, Map<number, number | null>>();
+        for (const r of rows) {
+          const k = String(r.nomb_correg);
+          if (!idx.has(k)) idx.set(k, new Map());
+          const v = r[field];
+          idx.get(k)!.set(Number(r.periodo), v == null ? null : Number(v));
+        }
+        const out = new Map<string, Array<{ periodo: number; valor: number | null }>>();
+        for (const ent of opts.entidades) {
+          const e = idx.get(ent);
+          out.set(ent, periodos.map((p) => ({ periodo: p, valor: e?.get(p) ?? null })));
+        }
+        return out;
+      };
+      return {
+        mora: reshape("pct_mora_global"),
+        moraVc: reshape("pct_mora_global_vc"),
+        atrasada: reshape("pct_atrasada"),
+        car: reshape("pct_car"),
+      };
+    },
+    empty,
+  );
 }
 
 /**
