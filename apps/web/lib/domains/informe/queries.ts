@@ -1121,11 +1121,78 @@ export async function getInformeData(opts: {
   const periodoDicPrev = periodoDicAnioPrev(opts.periodo);
 
   const consolidar = opts.consolidar !== false; // default true
-  const [peActual, pePrev, peDicPrev, cuadroRaw] = await Promise.all([
+
+  // BIG PARALLEL: lanzamos TODAS las queries del informe (PE actual/prev/dic,
+  // cuadro resumen, todos los historicos) en un solo Promise.all. Sin esto
+  // las cargas eran secuenciales -> 5-10s de "Cargando..." en el frontend.
+  // Con paralelismo total, el tiempo total se aproxima al de la query mas
+  // lenta (~1-2s) en vez de la suma.
+  const [
+    peActual,
+    pePrev,
+    peDicPrev,
+    cuadroRaw,
+    oficinasHistMap,
+    personalHistMap,
+    clientesHistMap,
+    peHistMap,
+    kpisHistMap,
+    moraMap,
+    moraVcMap,
+    cobCarMap,
+    atrasadaMap,
+    carMap,
+    carteraBrutaMap,
+  ] = await Promise.all([
     getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs, consolidar),
     getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs, consolidar),
     getPuntoEquilibrioForPeriodo(periodoDicPrev, entidadesNombs, consolidar),
     getCuadroResumenRaw(opts.periodo, entidadesNombs, consolidar),
+    getHistoricoEntidad({
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+      metric: "oficinas", consolidar, ultimosN: 5,
+    }),
+    getHistoricoEntidad({
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+      metric: "personal", consolidar, ultimosN: 5,
+    }),
+    getHistoricoEntidad({
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+      metric: "clientes", consolidar, ultimosN: 5,
+    }),
+    getHistoricoPuntoEquilibrio({
+      entidades: entidadesNombs, periodoActual: opts.periodo, consolidar,
+    }),
+    getHistoricoKpisAnuales({
+      entidades: entidadesNombs, periodoActual: opts.periodo, consolidar,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica", field: "pct_mora_global",
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica", field: "pct_mora_global_vc",
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_cobertura_car_historica", field: "pct_cobertura_car",
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica",
+      field: "CASE WHEN cartera_bruta > 0 THEN cartera_atrasada / cartera_bruta ELSE NULL END",
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_mora_global_historica",
+      field: "CASE WHEN cartera_bruta > 0 THEN (cartera_atrasada + cartera_refin) / cartera_bruta ELSE NULL END",
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+    }),
+    getHistoricoFromMartView({
+      view: "marts.v_colocaciones_total_por_entidad",
+      field: "cartera_total / 1000",
+      entidades: entidadesNombs, periodoActual: opts.periodo,
+    }),
   ]);
 
   // Detectar cobertura: que entidades del peer group tienen data en MVs
@@ -1153,43 +1220,14 @@ export async function getInformeData(opts: {
   const { bubble, waterfall } = buildBubbleAndWaterfall(peActual, pePrev, competidores);
   const { waterfall: waterfallVsDic } = buildBubbleAndWaterfall(peActual, peDicPrev, competidores);
 
-  // Historicos para secciones N° Oficinas, N° Personal y N° Clientes
-  // (ultimos 5 periodos disponibles en cada vista).
-  const [oficinasHistMap, personalHistMap, clientesHistMap] = await Promise.all([
-    getHistoricoEntidad({
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-      metric: "oficinas",
-      consolidar,
-      ultimosN: 5,
-    }),
-    getHistoricoEntidad({
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-      metric: "personal",
-      consolidar,
-      ultimosN: 5,
-    }),
-    getHistoricoEntidad({
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-      metric: "clientes",
-      consolidar,
-      ultimosN: 5,
-    }),
-  ]);
+  // Historicos: ya fueron resueltos en el Promise.all gigante de arriba.
+  // Aqui solo transformamos los Map -> HistoricoEntidadSerie[] (sincrono).
   const oficinasHistorico = buildHistoricoSeries(oficinasHistMap, competidores);
   const personalHistorico = buildHistoricoSeries(personalHistMap, competidores);
   const clientesHistorico = buildHistoricoSeries(clientesHistMap, competidores);
 
-  // Historicos de KPIs derivados de Punto Equilibrio (anualizados TTM)
-  // para las secciones Costo Fondeo, Rendimiento, Provisiones, Eficiencia,
-  // Gastos Personal/Mg, Gastos Generales/Mg.
-  const peHistMap = await getHistoricoPuntoEquilibrio({
-    entidades: entidadesNombs,
-    periodoActual: opts.periodo,
-    consolidar,
-  });
+  // KPIs derivados de Punto Equilibrio (anualizados TTM) — peHistMap ya
+  // viene del Promise.all gigante.
   const rendimientoCarteraHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_rendimiento");
   const costoFondeoHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_costo_fondeo");
   const costoProvisionesHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_provisiones");
@@ -1197,14 +1235,8 @@ export async function getInformeData(opts: {
   const gastosPersonalHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_personal");
   const gastosGeneralesHistorico = buildHistoricoFromPE(peHistMap, competidores, "pct_gastos_generales");
 
-  // Historicos de KPIs anuales TTM (Utilidad, ROE, ROA, Ingresos/Gastos
-  // Financieros, Margen Bruto/Neto). Cifras absolutas en miles -> dividimos
-  // por 1000 para mostrarlas en MM S/.
-  const kpisHistMap = await getHistoricoKpisAnuales({
-    entidades: entidadesNombs,
-    periodoActual: opts.periodo,
-    consolidar,
-  });
+  // KPIs anuales TTM — kpisHistMap ya viene del Promise.all gigante.
+  // Cifras absolutas vienen en miles -> dividimos por 1000 para mostrar en MM S/.
   const utilidadNetaHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
     (k) => (k.utilidad_ttm == null ? null : k.utilidad_ttm / 1000));
   const roeHistorico = buildHistoricoFromKpis(kpisHistMap, competidores,
@@ -1235,56 +1267,14 @@ export async function getInformeData(opts: {
       return (bruto + inof) / 1000;
     });
 
-  // Historicos de calidad de cartera (mora, cobertura CAR, atrasada, CAR).
-  // Cada uno trae una columna pct_* desde su mart view.
-  const [moraMap, moraVcMap, cobCarMap, atrasadaMap, carMap] = await Promise.all([
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica",
-      field: "pct_mora_global",
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica",
-      field: "pct_mora_global_vc",
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_cobertura_car_historica",
-      field: "pct_cobertura_car",
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-    }),
-    // %Cartera Atrasada / Cartera Bruta — computado on-the-fly desde v_mora
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica",
-      field: "CASE WHEN cartera_bruta > 0 THEN cartera_atrasada / cartera_bruta ELSE NULL END",
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-    }),
-    // %CAR = (atrasada + refin) / bruta
-    getHistoricoFromMartView({
-      view: "marts.v_mora_global_historica",
-      field: "CASE WHEN cartera_bruta > 0 THEN (cartera_atrasada + cartera_refin) / cartera_bruta ELSE NULL END",
-      entidades: entidadesNombs,
-      periodoActual: opts.periodo,
-    }),
-  ]);
+  // Calidad cartera — maps ya vienen del Promise.all gigante.
   const moraGlobalHistorico = buildHistoricoFromValueMap(moraMap, competidores);
   const moraGlobalVcHistorico = buildHistoricoFromValueMap(moraVcMap, competidores);
   const coberturaCarHistorico = buildHistoricoFromValueMap(cobCarMap, competidores);
   const carteraAtrasadaHistorico = buildHistoricoFromValueMap(atrasadaMap, competidores);
   const carHistorico = buildHistoricoFromValueMap(carMap, competidores);
 
-  // Cartera bruta total por entidad por periodo (MM S/). Dividimos por 1000
-  // en la vista (los saldos vienen en miles).
-  const carteraBrutaMap = await getHistoricoFromMartView({
-    view: "marts.v_colocaciones_total_por_entidad",
-    field: "cartera_total / 1000",  // -> MM S/
-    entidades: entidadesNombs,
-    periodoActual: opts.periodo,
-  });
+  // Cartera bruta MM S/ — ya viene del Promise.all gigante.
   const carteraBrutaHistorico = buildHistoricoFromValueMap(carteraBrutaMap, competidores);
 
   return {
