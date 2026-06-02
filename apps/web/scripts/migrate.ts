@@ -16,8 +16,10 @@ const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? "/app/migrations";
 const log = (msg: string): void => console.log(`[migrator] ${msg}`);
 
 async function waitForDb(url: string, maxAttempts = 10): Promise<postgres.Sql> {
+  // connect_timeout: 30s — si PG esta cargado (REFRESH MV pesados, ETL),
+  // 5s era muy corto y el handshake TCP no alcanzaba a completar.
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const sql = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 5 });
+    const sql = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 30 });
     try {
       await sql`SELECT 1`;
       log(`postgres ready (attempt ${attempt})`);
