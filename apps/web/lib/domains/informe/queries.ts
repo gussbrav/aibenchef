@@ -54,7 +54,7 @@ async function safeQuery<T>(label: string, fn: () => Promise<T>, fallback: T): P
 // Helpers
 // ============================================================================
 
-function periodoLabel(periodo: number): string {
+export function periodoLabel(periodo: number): string {
   const anio = Math.floor(periodo / 100);
   const mes = periodo % 100;
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -253,7 +253,7 @@ const PALETTE_ENTIDADES = [
   "#5D4037", // marron tierra
 ];
 
-function pickColorEstable(nombCorreg: string, usados: Set<string>): string {
+export function pickColorEstable(nombCorreg: string, usados: Set<string>): string {
   // Hash simple (sdbm) sobre el nomb_correg — estable y rapido.
   let h = 0;
   for (let i = 0; i < nombCorreg.length; i++) {
@@ -1306,7 +1306,7 @@ export async function getInformeData(opts: {
  * el frontend: una entrada por competidor con su serie ordenada por periodo
  * + crecimiento delta vs periodo previo + valorBase (primero) + valorActual (ultimo).
  */
-function buildHistoricoSeries(
+export function buildHistoricoSeries(
   map: Map<string, Array<{ periodo: number; valor: number | null }>>,
   competidores: Competidor[],
 ): import("./types").HistoricoEntidadSerie[] {
@@ -1355,7 +1355,7 @@ function buildMargenNetoHistorico(
 }
 
 /** Label compacto tipo "Abr-20" para encabezados. */
-function periodoLabelCorto(periodo: number): string {
+export function periodoLabelCorto(periodo: number): string {
   const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const anio = Math.floor(periodo / 100);
   const mes = periodo % 100;
@@ -1422,7 +1422,7 @@ async function getPeriodosTendencia(periodoActual: number): Promise<number[]> {
  * Devuelve Map<entidad, array<{periodo, pe}>> con todos los periodos
  * (incluso si pe es null para alguno).
  */
-async function getHistoricoPuntoEquilibrio(opts: {
+export async function getHistoricoPuntoEquilibrio(opts: {
   entidades: string[];
   periodoActual: number;
   consolidar?: boolean;
@@ -1497,7 +1497,7 @@ async function getHistoricoPuntoEquilibrio(opts: {
  * Convierte un Map<entidad, array<{periodo, valor}>> a HistoricoEntidadSerie[]
  * directamente (caso simple cuando el valor ya viene listo de la vista).
  */
-function buildHistoricoFromValueMap(
+export function buildHistoricoFromValueMap(
   map: Map<string, Array<{ periodo: number; valor: number | null }>>,
   competidores: Competidor[],
 ): import("./types").HistoricoEntidadSerie[] {
@@ -1528,7 +1528,7 @@ function buildHistoricoFromValueMap(
   });
 }
 
-function buildHistoricoFromPE(
+export function buildHistoricoFromPE(
   map: Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>,
   competidores: Competidor[],
   field: keyof PuntoEqRow,
@@ -1571,7 +1571,7 @@ function buildHistoricoFromPE(
  * pesado (multi-join con castigos + venta cartera) que sobrecargaba el
  * connection pool.
  */
-async function getHistoricoMoraConsolidado(opts: {
+export async function getHistoricoMoraConsolidado(opts: {
   entidades: string[];
   periodoActual: number;
 }): Promise<{
@@ -1647,7 +1647,7 @@ async function getHistoricoMoraConsolidado(opts: {
  * Bulk query con IN (...) generado por sql.join — el ANY(${arr}::T[])
  * con drizzle no serializa bien arrays de strings con acentos.
  */
-async function getHistoricoFromMartView(opts: {
+export async function getHistoricoFromMartView(opts: {
   view: string;          // ej "marts.v_mora_global_historica"
   field: string;         // ej "pct_mora_global"
   entidades: string[];
@@ -1708,7 +1708,7 @@ type KpisAnualesRow = {
   cta_7_ttm: number | null;
 };
 
-async function getHistoricoKpisAnuales(opts: {
+export async function getHistoricoKpisAnuales(opts: {
   entidades: string[];
   periodoActual: number;
   consolidar?: boolean;
@@ -1777,7 +1777,7 @@ async function getHistoricoKpisAnuales(opts: {
  * k.utilidad_ttm / k.activos_prom_12m). Las cifras absolutas se pueden
  * dividir por 1000 (KK) o 1_000_000 (MM) via el factor.
  */
-function buildHistoricoFromKpis(
+export function buildHistoricoFromKpis(
   map: Map<string, Array<{ periodo: number; k: KpisAnualesRow | null }>>,
   competidores: Competidor[],
   compute: (k: KpisAnualesRow) => number | null,

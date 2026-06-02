@@ -44,6 +44,7 @@ export function SeccionHistoricoComparativo({
   periodoActualLabel,
   comentario,
   formatoValor = "numero",
+  noWrapper = false,
 }: {
   /** Titulo grande del header (ej "N° de Oficinas"). */
   titulo: string;
@@ -63,6 +64,12 @@ export function SeccionHistoricoComparativo({
    * moneda_mm → MM S/ con coma de miles (1,234 MM).
    */
   formatoValor?: "numero" | "pct" | "moneda_mm";
+  /**
+   * Si true, renderiza SOLO el grid de comparativo + mini-charts, sin el
+   * <section> wrapper ni el header colorido. Util cuando se monta dentro
+   * de un accordion que ya provee su propio header. Default false.
+   */
+  noWrapper?: boolean;
 }) {
   if (!series || series.length === 0) {
     return (
@@ -94,11 +101,8 @@ export function SeccionHistoricoComparativo({
     (a, b) => (b.valorActual ?? -Infinity) - (a.valorActual ?? -Infinity),
   );
 
-  return (
-    <section className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-      <header className="px-5 py-3 bg-gradient-to-r from-brand-900 to-brand-700 text-white">
-        <h2 className="text-base font-bold tracking-wide">{titulo}</h2>
-      </header>
+  const body = (
+    <>
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 p-5">
         {/* Panel izquierdo: comparativo Base → Actual */}
         <div className="space-y-3">
@@ -177,6 +181,15 @@ export function SeccionHistoricoComparativo({
           </p>
         </div>
       )}
+    </>
+  );
+  if (noWrapper) return body;
+  return (
+    <section className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <header className="px-5 py-3 bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+        <h2 className="text-base font-bold tracking-wide">{titulo}</h2>
+      </header>
+      {body}
     </section>
   );
 }
