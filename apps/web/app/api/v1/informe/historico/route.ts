@@ -91,7 +91,10 @@ export async function GET(req: NextRequest) {
       entidades = await getTop2PorGrupoByCartera(periodo);
     }
     if (entidades.length === 0) {
-      return { series: [] };
+      throw new ValidationError(
+        "No hay entidades en el peer group. Selecciona al menos una via ?peerGroup=...",
+        {},
+      );
     }
 
     // Construir competidores con colores estables (mismo algoritmo que SSR).
