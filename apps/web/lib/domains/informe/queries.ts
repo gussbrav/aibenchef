@@ -1417,9 +1417,13 @@ async function getPeriodosTendencia(periodoActual: number): Promise<number[]> {
 }
 
 /**
- * Para cada periodo de tendencia, computa PuntoEquilibrio de las entidades.
- * Devuelve un Map<entidad, array<{ periodo, pe }>>.
- * Las series ya quedan ordenadas por periodo ascendente.
+ * Lookup snapshot-only de Punto Equilibrio para los periodos de tendencia.
+ * UNA sola query con WHERE periodo IN (...) — sin recompute. Si un periodo
+ * no tiene snapshot, esa entrada queda null (mejor que bloquear el render
+ * llamando compute_kpis_punto_equilibrio en cascada).
+ *
+ * Devuelve Map<entidad, array<{periodo, pe}>> con todos los periodos
+ * (incluso si pe es null para alguno).
  */
 async function getHistoricoPuntoEquilibrio(opts: {
   entidades: string[];
@@ -1428,17 +1432,64 @@ async function getHistoricoPuntoEquilibrio(opts: {
 }): Promise<Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>> {
   if (opts.entidades.length === 0) return new Map();
   const periodos = await getPeriodosTendencia(opts.periodoActual);
-  const maps = await Promise.all(
-    periodos.map((p) => getPuntoEquilibrioForPeriodo(p, opts.entidades, opts.consolidar)),
+  if (periodos.length === 0) return new Map();
+  return safeQuery(
+    "getHistoricoPuntoEquilibrio",
+    async () => {
+      // Bulk SELECT directo de v_punto_equilibrio_ancho (snapshot cached).
+      // Sin recompute — un solo round-trip a Postgres.
+      const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
+      const entidadesClause = sql.join(opts.entidades.map((e) => sql`${e}`), sql`, `);
+      const rows = await db.execute<{
+        nomb_correg: string;
+        periodo: number;
+        pct_rendimiento: number | null;
+        pct_costo_fondeo: number | null;
+        pct_provisiones: number | null;
+        pct_gastos_op: number | null;
+        pct_gastos_personal: number | null;
+        pct_gastos_generales: number | null;
+        pct_deprec: number | null;
+        pct_otros: number | null;
+        pct_punto_eq: number | null;
+        pct_margen_neto: number | null;
+      }>(sql`
+        SELECT pe.nomb_correg, pe.periodo,
+               pe.pct_rendimiento, pe.pct_costo_fondeo, pe.pct_provisiones,
+               pe.pct_gastos_op, pe.pct_gastos_personal, pe.pct_gastos_generales,
+               pe.pct_deprec, pe.pct_otros, pe.pct_punto_eq, pe.pct_margen_neto
+        FROM marts.v_punto_equilibrio_ancho pe
+        WHERE pe.periodo IN (${periodosClause})
+          AND pe.moneda = 'TOTAL'
+          AND pe.nomb_correg IN (${entidadesClause})
+      `);
+      const idx = new Map<string, Map<number, PuntoEqRow>>();
+      for (const r of rows) {
+        const k = String(r.nomb_correg);
+        if (!idx.has(k)) idx.set(k, new Map());
+        idx.get(k)!.set(Number(r.periodo), {
+          nomb_correg: k,
+          pct_rendimiento: r.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
+          pct_costo_fondeo: r.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo),
+          pct_provisiones: r.pct_provisiones == null ? null : Number(r.pct_provisiones),
+          pct_gastos_op: r.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
+          pct_gastos_personal: r.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
+          pct_gastos_generales: r.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
+          pct_deprec: r.pct_deprec == null ? null : Number(r.pct_deprec),
+          pct_otros: r.pct_otros == null ? null : Number(r.pct_otros),
+          pct_punto_eq: r.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
+          pct_margen_neto: r.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
+        });
+      }
+      const out = new Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>();
+      for (const ent of opts.entidades) {
+        const e = idx.get(ent);
+        out.set(ent, periodos.map((p) => ({ periodo: p, pe: e?.get(p) ?? null })));
+      }
+      return out;
+    },
+    new Map(),
   );
-  const out = new Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>();
-  for (const ent of opts.entidades) {
-    out.set(
-      ent,
-      periodos.map((p, i) => ({ periodo: p, pe: maps[i]?.get(ent) ?? null })),
-    );
-  }
-  return out;
 }
 
 /**
