@@ -1122,10 +1122,13 @@ export async function getInformeData(opts: {
 
   const consolidar = opts.consolidar !== false; // default true
 
-  // BIG PARALLEL: todas las queries del informe en un solo Promise.all.
-  // 11 queries paralelas en vez de 15 — consolidamos las 4 de v_mora_global
-  // en getHistoricoMoraConsolidado (1 query que extrae 4 metricas). Esto
-  // reduce la presion sobre el view pesado (multi-join con castigos+venta).
+  // HOTFIX: las queries historicas se deshabilitan en el SSR para garantizar
+  // que la pagina cargue. Las secciones historicas quedan vacias temporalmente
+  // hasta que se implemente lazy-load via client component.
+  // Lo unico que se hace aqui es el cuadro resumen + PE actual/prev/dic +
+  // bubble + waterfalls — lo que YA funcionaba antes del batch de historicos.
+  const HISTORICO_ENABLED = false;
+  const emptyMap = new Map();
   const [
     peActual,
     pePrev,
@@ -1144,36 +1147,30 @@ export async function getInformeData(opts: {
     getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs, consolidar),
     getPuntoEquilibrioForPeriodo(periodoDicPrev, entidadesNombs, consolidar),
     getCuadroResumenRaw(opts.periodo, entidadesNombs, consolidar),
-    getHistoricoEntidad({
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-      metric: "oficinas", consolidar, ultimosN: 5,
-    }),
-    getHistoricoEntidad({
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-      metric: "personal", consolidar, ultimosN: 5,
-    }),
-    getHistoricoEntidad({
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-      metric: "clientes", consolidar, ultimosN: 5,
-    }),
-    getHistoricoPuntoEquilibrio({
-      entidades: entidadesNombs, periodoActual: opts.periodo, consolidar,
-    }),
-    getHistoricoKpisAnuales({
-      entidades: entidadesNombs, periodoActual: opts.periodo, consolidar,
-    }),
-    getHistoricoMoraConsolidado({
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_cobertura_car_historica", field: "pct_cobertura_car",
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-    }),
-    getHistoricoFromMartView({
-      view: "marts.v_colocaciones_total_por_entidad",
-      field: "cartera_total / 1000",
-      entidades: entidadesNombs, periodoActual: opts.periodo,
-    }),
+    HISTORICO_ENABLED
+      ? getHistoricoEntidad({ entidades: entidadesNombs, periodoActual: opts.periodo, metric: "oficinas", consolidar, ultimosN: 5 })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
+    HISTORICO_ENABLED
+      ? getHistoricoEntidad({ entidades: entidadesNombs, periodoActual: opts.periodo, metric: "personal", consolidar, ultimosN: 5 })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
+    HISTORICO_ENABLED
+      ? getHistoricoEntidad({ entidades: entidadesNombs, periodoActual: opts.periodo, metric: "clientes", consolidar, ultimosN: 5 })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
+    HISTORICO_ENABLED
+      ? getHistoricoPuntoEquilibrio({ entidades: entidadesNombs, periodoActual: opts.periodo, consolidar })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; pe: PuntoEqRow | null }>>),
+    HISTORICO_ENABLED
+      ? getHistoricoKpisAnuales({ entidades: entidadesNombs, periodoActual: opts.periodo, consolidar })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; k: KpisAnualesRow | null }>>),
+    HISTORICO_ENABLED
+      ? getHistoricoMoraConsolidado({ entidades: entidadesNombs, periodoActual: opts.periodo })
+      : Promise.resolve({ mora: emptyMap, moraVc: emptyMap, atrasada: emptyMap, car: emptyMap } as Awaited<ReturnType<typeof getHistoricoMoraConsolidado>>),
+    HISTORICO_ENABLED
+      ? getHistoricoFromMartView({ view: "marts.v_cobertura_car_historica", field: "pct_cobertura_car", entidades: entidadesNombs, periodoActual: opts.periodo })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
+    HISTORICO_ENABLED
+      ? getHistoricoFromMartView({ view: "marts.v_colocaciones_total_por_entidad", field: "cartera_total / 1000", entidades: entidadesNombs, periodoActual: opts.periodo })
+      : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
   ]);
   const moraMap = moraConsolidado.mora;
   const moraVcMap = moraConsolidado.moraVc;
