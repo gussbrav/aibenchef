@@ -356,7 +356,7 @@ export function InformeClient({
         data={margenNetoWaterfallVsDic}
         competidores={competidores}
         comentario={""}
-        comparativoLabel={periodoLabel}
+        comparativoLabel={`${periodo.label} vs ${periodoDicPrev.label}`}
         periodoBaseLabel={periodoDicPrev.label}
         periodoFinalLabel={periodo.label}
       />
