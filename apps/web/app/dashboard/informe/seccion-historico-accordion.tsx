@@ -65,6 +65,8 @@ export function SeccionHistoricoAccordion({
 
   const fetchData = useCallback(async () => {
     setState({ status: "loading" });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
     try {
       const params = new URLSearchParams({
         metric,
@@ -72,16 +74,37 @@ export function SeccionHistoricoAccordion({
         peerGroup: peerGroup.join(","),
         consolidar: String(consolidar),
       });
-      const r = await fetch(`/api/v1/informe/historico?${params}`);
-      const json = await r.json();
-      if (json.error) {
-        setState({ status: "error", message: json.error.message ?? "Error" });
+      const url = `/api/v1/informe/historico?${params}`;
+      const r = await fetch(url, { signal: controller.signal });
+      const json = await r.json().catch(() => ({ error: { message: `HTTP ${r.status}` } }));
+      if (!r.ok || json.error) {
+        const msg = json.error?.message ?? `HTTP ${r.status}`;
+        setState({ status: "error", message: msg });
+        // eslint-disable-next-line no-console
+        console.error(`[historico ${metric}] error:`, msg, "URL:", url);
         return;
       }
       const series = (json.data?.series ?? []) as HistoricoEntidadSerie[];
+      if (series.length === 0) {
+        setState({
+          status: "error",
+          message: "El endpoint devolvió 0 series. Posible problema de datos para este peer group.",
+        });
+        return;
+      }
       setState({ status: "ok", series });
     } catch (e) {
-      setState({ status: "error", message: e instanceof Error ? e.message : String(e) });
+      const isAbort = (e as { name?: string })?.name === "AbortError";
+      const msg = isAbort
+        ? "Timeout (15s) — la query es demasiado lenta. Reportar al equipo."
+        : e instanceof Error
+          ? e.message
+          : String(e);
+      setState({ status: "error", message: msg });
+      // eslint-disable-next-line no-console
+      console.error(`[historico ${metric}] exception:`, e);
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }, [metric, periodo, peerGroup, consolidar]);
 
