@@ -20,7 +20,9 @@ type SearchParams = Promise<{
 
 export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const clienteSlug = params.cliente ?? "caja-arequipa";
+  // Default cliente = BCP (mayor participacion del sistema). El usuario
+  // puede cambiarlo via ?cliente=<slug> o desde el selector de la UI.
+  const clienteSlug = params.cliente ?? "bcp";
 
   // Si no hay periodo en URL, usar el ultimo disponible
   let periodo: number;
