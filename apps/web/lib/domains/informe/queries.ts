@@ -1544,9 +1544,8 @@ function buildHistoricoFromPE(
 /**
  * Trae una metrica historica desde una vista mart estandar (que tiene
  * columnas `periodo`, `nomb_correg` y la columna que se especifique).
- * Bulk query con WHERE periodo = ANY(...) y nomb_correg = ANY(...).
- * Usado por las secciones de calidad cartera (Mora, Cobertura CAR,
- * Cartera Atrasada, etc).
+ * Bulk query con IN (...) generado por sql.join — el ANY(${arr}::T[])
+ * con drizzle no serializa bien arrays de strings con acentos.
  */
 async function getHistoricoFromMartView(opts: {
   view: string;          // ej "marts.v_mora_global_historica"
@@ -1561,7 +1560,9 @@ async function getHistoricoFromMartView(opts: {
     `getHistoricoFromMartView[${opts.view}/${opts.field}]`,
     async () => {
       const view = sql.raw(opts.view);
-      const field = sql.raw(opts.field);
+      const field = sql.raw(`(${opts.field})`); // wrap en parens por seguridad de operadores
+      const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
+      const entidadesClause = sql.join(opts.entidades.map((e) => sql`${e}`), sql`, `);
       const rows = await db.execute<{
         nomb_correg: string;
         periodo: number;
@@ -1569,8 +1570,8 @@ async function getHistoricoFromMartView(opts: {
       }>(sql`
         SELECT nomb_correg, periodo, ${field}::numeric AS valor
         FROM ${view}
-        WHERE periodo = ANY(${periodos}::int[])
-          AND nomb_correg = ANY(${opts.entidades}::text[])
+        WHERE periodo IN (${periodosClause})
+          AND nomb_correg IN (${entidadesClause})
       `);
       const indexByEnt = new Map<string, Map<number, number | null>>();
       for (const r of rows) {
@@ -1622,6 +1623,8 @@ async function getHistoricoKpisAnuales(opts: {
       const view = consolidar
         ? sql.raw("marts.mv_kpis_anuales_entidad")
         : sql.raw("marts.v_kpis_anuales_historica");
+      const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
+      const entidadesClause = sql.join(opts.entidades.map((e) => sql`${e}`), sql`, `);
       const rows = await db.execute<{
         nomb_correg: string;
         periodo: number;
@@ -1637,8 +1640,8 @@ async function getHistoricoKpisAnuales(opts: {
                utilidad_ttm, patrimonio_prom_12m, activos_prom_12m,
                cta_1_ttm, cta_2_ttm, cta_6_ttm, cta_7_ttm
         FROM ${view}
-        WHERE periodo = ANY(${periodos}::int[])
-          AND nomb_correg = ANY(${opts.entidades}::text[])
+        WHERE periodo IN (${periodosClause})
+          AND nomb_correg IN (${entidadesClause})
       `);
       const indexByEnt = new Map<string, Map<number, KpisAnualesRow>>();
       for (const r of rows) {
@@ -1759,6 +1762,7 @@ export async function getHistoricoEntidad(opts: {
         : opts.metric === "personal"
           ? sql.raw("n_personal")
           : sql.raw("n_clientes");
+      const entidadesClause = sql.join(opts.entidades.map((e) => sql`${e}`), sql`, `);
       const rows = await db.execute<{
         nomb_correg: string;
         periodo: number;
@@ -1774,7 +1778,7 @@ export async function getHistoricoEntidad(opts: {
         SELECT v.nomb_correg, v.periodo, v.${valorCol}::int AS valor
         FROM ${view} v
         JOIN periodos_ult pu ON pu.periodo = v.periodo
-        WHERE v.nomb_correg = ANY(${opts.entidades}::text[])
+        WHERE v.nomb_correg IN (${entidadesClause})
         ORDER BY v.nomb_correg, v.periodo ASC
       `);
       const map = new Map<string, Array<{ periodo: number; valor: number | null }>>();
@@ -1811,6 +1815,11 @@ export async function getTop2PorGrupoByCartera(periodo: number): Promise<string[
             AND NOT e.es_sucursal
             AND e.activa
             AND e.tipo_entidad IS NOT NULL
+            -- Excluir nombres que terminan en " Total" — son agregadores
+            -- que pasaron el filtro NOT es_total pero conceptualmente son
+            -- totales legales y no aportan al benchmark individual.
+            AND v.nomb_correg NOT ILIKE '% Total'
+            AND v.nomb_correg NOT ILIKE '%TOTAL%'
         ),
         ranked AS (
           SELECT
