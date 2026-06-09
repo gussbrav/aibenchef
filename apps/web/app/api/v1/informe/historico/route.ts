@@ -96,10 +96,28 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Parsear colorOverrides URL param (mismo formato que SSR).
+    const colorOverridesRaw = url.searchParams.get("colorOverrides") ?? undefined;
+    const colorOverrides = (() => {
+      if (!colorOverridesRaw) return new Map<string, string>();
+      const m = new Map<string, string>();
+      for (const pair of colorOverridesRaw.split(",")) {
+        const idx = pair.lastIndexOf(":");
+        if (idx <= 0) continue;
+        const nomb = pair.slice(0, idx).trim();
+        const hex = pair.slice(idx + 1).trim();
+        if (!nomb || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+        m.set(nomb, hex);
+      }
+      return m;
+    })();
+
     // Construir competidores con colores estables (mismo algoritmo que SSR).
+    // Prioridad: colorOverrides > pickColorEstable.
     const usados = new Set<string>();
     const competidores: Competidor[] = entidades.map((nombCorreg, i) => {
-      const color = pickColorEstable(nombCorreg, usados);
+      const override = colorOverrides.get(nombCorreg);
+      const color = override ?? pickColorEstable(nombCorreg, usados);
       usados.add(color);
       return {
         nombCorreg,

@@ -74,6 +74,10 @@ export function SeccionHistoricoAccordion({
         peerGroup: peerGroup.join(","),
         consolidar: String(consolidar),
       });
+      // Propagar colorOverrides desde la URL actual al endpoint, para que
+      // los colores del accordion historico matcheen con los del SSR.
+      const currentColorOverrides = new URLSearchParams(window.location.search).get("colorOverrides");
+      if (currentColorOverrides) params.set("colorOverrides", currentColorOverrides);
       const url = `/api/v1/informe/historico?${params}`;
       const r = await fetch(url, { signal: controller.signal });
       const json = await r.json().catch(() => ({ error: { message: `HTTP ${r.status}` } }));
