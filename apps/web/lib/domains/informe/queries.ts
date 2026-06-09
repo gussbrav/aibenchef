@@ -1384,6 +1384,30 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
 }
 
 /**
+ * Ultimo periodo donde TODOS los archivos SBS estan publicados (no hay
+ * ningun archivo con status='no_publicado_sbs' en raw.archivos_descargados).
+ *
+ * Usado como default del Benchmark cuando no se especifica periodo en la URL.
+ * Evita que el dashboard arranque mostrando un periodo donde EEFF esta
+ * publicado pero colocaciones/depositos/etc todavia no.
+ *
+ * Implementacion en SQL: marts.f_ultimo_periodo_completo() (V129).
+ */
+export async function getUltimoPeriodoCompleto(): Promise<number | null> {
+  return safeQuery(
+    "getUltimoPeriodoCompleto",
+    async () => {
+      const rows = await db.execute<{ periodo: number | null }>(sql`
+        SELECT marts.f_ultimo_periodo_completo() AS periodo
+      `);
+      const p = rows[0]?.periodo;
+      return p == null ? null : Number(p);
+    },
+    null,
+  );
+}
+
+/**
  * Periodos para tendencia historica. Reducidos a 3 (Dic-2, Dic-1, actual)
  * para evitar la sobrecarga de calculo en getPuntoEquilibrioForPeriodo
  * (recomputa todo desde EEFF — cada periodo es 1-2s, con 5 se llegaba a
