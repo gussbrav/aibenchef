@@ -161,6 +161,7 @@ async function buildCompetidores(
   clienteSlug: string,
   peerGroupOverride: string[] | null,
   entidadPropia: string,
+  colorOverrides?: Map<string, string>,
 ): Promise<Competidor[]> {
   const configRows = await safeQuery(
     "buildCompetidores.configRows",
@@ -202,16 +203,21 @@ async function buildCompetidores(
 
   const peerList = peerGroupOverride ?? rowsToUse.map((r) => r.competidor_nomb_correg);
 
-  // Asignacion de colores robusta:
-  //  1. Si config.peer_group tiene color_hex configurado para la entidad → usarlo
-  //  2. Sino: pickColorEstable(nombCorreg, ya_usados) — paleta de 20 colores
+  // Asignacion de colores con 3 niveles de override:
+  //  1. colorOverrides (URL ?colorOverrides=NombA:#hex,NombB:#hex) — maxima
+  //     prioridad. Permite al usuario customizar por entidad sin tocar config.
+  //  2. config.peer_group.color_hex — colores guardados por cliente
+  //  3. pickColorEstable(nombCorreg, ya_usados) — paleta de 20 colores
   //     contrastantes, mismo nombre siempre mismo color, sin duplicados dentro
   //     del peer group actual.
   const usados = new Set<string>();
   return peerList.map((nombCorreg) => {
     const cfg = configByNomb.get(nombCorreg);
     let color: string;
-    if (cfg?.color) {
+    const overrideColor = colorOverrides?.get(nombCorreg);
+    if (overrideColor && /^#[0-9A-Fa-f]{6}$/.test(overrideColor)) {
+      color = overrideColor;
+    } else if (cfg?.color) {
       color = cfg.color;
     } else {
       color = pickColorEstable(nombCorreg, usados);
@@ -1056,6 +1062,12 @@ export async function getInformeData(opts: {
   temaOverride?: string;
   ordenOverride?: string[];
   consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
+  /**
+   * Override de colores por entidad. Map<nomb_correg, "#RRGGBB">.
+   * Si una entidad esta presente en el map y el hex es valido, se usa ese
+   * color en lugar del de config.peer_group o del hash determinista.
+   */
+  colorOverrides?: Map<string, string>;
 }): Promise<InformeData> {
   let cliente = await getClienteBySlug(opts.clienteSlug);
 
@@ -1103,7 +1115,12 @@ export async function getInformeData(opts: {
     peerList = [...peerList, cliente.entidadPropia];
   }
 
-  let competidores = await buildCompetidores(opts.clienteSlug, peerList ?? null, cliente.entidadPropia);
+  let competidores = await buildCompetidores(
+    opts.clienteSlug,
+    peerList ?? null,
+    cliente.entidadPropia,
+    opts.colorOverrides,
+  );
 
   // Override de orden (URL ?orden=A,B,C). Reordena los competidores segun la
   // secuencia. Entidades no listadas en `orden` van al final.

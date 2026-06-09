@@ -14,6 +14,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
+import { ColorPickerPopover } from "./color-picker-popover";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -273,13 +274,13 @@ export function InformeClient({
             <div className="flex items-center gap-2 mt-4 flex-wrap">
               <span className="text-xs uppercase opacity-75">Comparativa:</span>
               {competidores.map((c) => (
-                <span
+                <EntidadChip
                   key={c.nombCorreg}
-                  className={`text-[11px] px-2 py-0.5 rounded ${c.esPropio ? "bg-white text-slate-900 font-semibold" : "bg-white/15"}`}
-                  style={c.esPropio ? {} : { borderLeft: `3px solid ${c.color}` }}
-                >
-                  {c.labelCorto}
-                </span>
+                  nombCorreg={c.nombCorreg}
+                  labelCorto={c.labelCorto}
+                  color={c.color}
+                  esPropio={c.esPropio}
+                />
               ))}
             </div>
           </div>
@@ -1170,5 +1171,55 @@ function SectionsAccordion({
         />
       ))}
     </>
+  );
+}
+
+/**
+ * Chip de entidad en la barra COMPARATIVA del header. Click abre el popover
+ * de color picker para customizar el color de esa entidad. La entidad propia
+ * (esPropio) muestra fondo blanco y NO tiene picker (el cliente customiza
+ * via tema/peer_group config).
+ */
+function EntidadChip({
+  nombCorreg,
+  labelCorto,
+  color,
+  esPropio,
+}: {
+  nombCorreg: string;
+  labelCorto: string;
+  color: string;
+  esPropio: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (esPropio) {
+    return (
+      <span className="text-[11px] px-2 py-0.5 rounded bg-white text-slate-900 font-semibold">
+        {labelCorto}
+      </span>
+    );
+  }
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-[11px] px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
+        style={{ borderLeft: `3px solid ${color}` }}
+        title="Click para cambiar el color"
+      >
+        {labelCorto}
+      </button>
+      {open && (
+        <ColorPickerPopover
+          nombCorreg={nombCorreg}
+          labelCorto={labelCorto}
+          currentColor={color}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </span>
   );
 }
