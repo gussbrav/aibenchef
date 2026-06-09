@@ -1,18 +1,24 @@
 "use client";
 
 /**
- * Popover de color picker per entidad — click en el chip del comparativa
- * abre este popover con:
- *  - Paleta sugerida (16 colores corporativos peruanos)
- *  - Input HTML5 color (custom hex)
- *  - Boton "Reset" para volver al color default (hash determinista)
+ * Popover de color picker per entidad. Renderizado via React Portal a
+ * document.body con position:fixed, para esquivar el overflow:hidden del
+ * header gradiente (que clipeaba el popover dejando solo el titulo visible).
  *
- * Persiste en URL via ?colorOverrides=NombA:#hex,NombB:#hex (parseado en
- * page.tsx con parseColorOverrides). El cambio dispara router.replace
- * que re-SSRea con el color aplicado.
+ * UX:
+ *  - Click en chip de entidad en COMPARATIVA del header
+ *  - Abre popover con paleta sugerida (16 colores corporativos peruanos)
+ *    + HTML5 color picker para custom hex + boton Reset
+ *  - Cambio persiste en URL ?colorOverrides=NombA:#hex,NombB:#hex
+ *  - router.replace dispara re-SSR con el color aplicado
+ *
+ * Positioning:
+ *  - Calculado contra el bounding rect del trigger (el chip)
+ *  - Auto-flip: si no entra abajo, va arriba; si no entra a la derecha, alinea izq
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Palette, RotateCcw } from "lucide-react";
 
@@ -55,58 +61,62 @@ function serializeColorOverrides(m: Map<string, string>): string {
     .join(",");
 }
 
+const POPOVER_WIDTH = 280;
+const POPOVER_HEIGHT = 290;
+const GAP = 4;
+
 export function ColorPickerPopover({
   nombCorreg,
   labelCorto,
   currentColor,
+  triggerRef,
   onClose,
 }: {
   nombCorreg: string;
   labelCorto: string;
   currentColor: string;
+  triggerRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const ref = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [customHex, setCustomHex] = useState<string>(currentColor);
-  // Auto-positioning: si el popover no entra abajo del chip, sube.
-  // Calculado en mount + en resize. Default abajo.
-  const [pos, setPos] = useState<"down" | "up">("down");
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Cerrar con ESC o click fuera
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onClick);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onClick);
-    };
-  }, [onClose]);
+  useEffect(() => setMounted(true), []);
 
-  // Auto-positioning: medir si el popover overflowearia el viewport y
-  // posicionarlo arriba en ese caso. ~280px de alto estimado.
-  useEffect(() => {
+  // Calcular posicion contra el trigger. useLayoutEffect para evitar flicker.
+  useLayoutEffect(() => {
     const compute = () => {
-      if (!ref.current) return;
-      const parent = ref.current.parentElement;
-      if (!parent) return;
-      const rect = parent.getBoundingClientRect();
-      const POPOVER_HEIGHT = 290;
-      const spaceBelow = window.innerHeight - rect.bottom;
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+
+      // Vertical: default abajo. Si no entra, arriba.
+      const spaceBelow = vh - rect.bottom;
       const spaceAbove = rect.top;
-      // Si hay mas espacio arriba que abajo Y abajo no alcanza, subir
-      if (spaceBelow < POPOVER_HEIGHT && spaceAbove > spaceBelow) {
-        setPos("up");
+      let top: number;
+      if (spaceBelow >= POPOVER_HEIGHT + GAP) {
+        top = rect.bottom + GAP;
+      } else if (spaceAbove >= POPOVER_HEIGHT + GAP) {
+        top = rect.top - POPOVER_HEIGHT - GAP;
       } else {
-        setPos("down");
+        // Centrado vertical como ultimo recurso
+        top = Math.max(8, vh / 2 - POPOVER_HEIGHT / 2);
       }
+
+      // Horizontal: default alineado a la izq del trigger. Si overflowea derecha, alinear derecha del trigger.
+      let left = rect.left;
+      if (left + POPOVER_WIDTH > vw - 8) {
+        left = Math.max(8, rect.right - POPOVER_WIDTH);
+      }
+      left = Math.max(8, left); // no menos de 8px del borde izq
+
+      setCoords({ top, left });
     };
     compute();
     window.addEventListener("resize", compute);
@@ -115,7 +125,26 @@ export function ColorPickerPopover({
       window.removeEventListener("resize", compute);
       window.removeEventListener("scroll", compute, true);
     };
-  }, []);
+  }, [triggerRef]);
+
+  // Cerrar con ESC o click fuera (excluyendo el trigger)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (popoverRef.current && popoverRef.current.contains(target)) return;
+      if (triggerRef.current && triggerRef.current.contains(target)) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [onClose, triggerRef]);
 
   const applyColor = (hex: string) => {
     const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
@@ -139,15 +168,19 @@ export function ColorPickerPopover({
     onClose();
   };
 
-  return (
+  if (!mounted || !coords) return null;
+
+  const popover = (
     <div
-      ref={ref}
-      className="absolute z-50 w-[280px] bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-slate-900"
-      style={
-        pos === "down"
-          ? { top: "calc(100% + 4px)", left: 0 }
-          : { bottom: "calc(100% + 4px)", left: 0 }
-      }
+      ref={popoverRef}
+      className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-slate-900"
+      style={{
+        position: "fixed",
+        top: coords.top,
+        left: coords.left,
+        width: POPOVER_WIDTH,
+        zIndex: 9999,
+      }}
     >
       <div className="flex items-center gap-2 mb-2">
         <Palette className="w-4 h-4 text-slate-500" />
@@ -210,4 +243,6 @@ export function ColorPickerPopover({
       </div>
     </div>
   );
+
+  return createPortal(popover, document.body);
 }

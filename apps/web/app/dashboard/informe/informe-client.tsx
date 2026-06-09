@@ -11,7 +11,7 @@
 //   4. Punto de Equilibrio Anualizado
 //   5. Analisis Margen Neto: bubble + waterfall
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
 import { ColorPickerPopover } from "./color-picker-popover";
@@ -1192,6 +1192,7 @@ function EntidadChip({
   esPropio: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   if (esPropio) {
     return (
@@ -1202,8 +1203,9 @@ function EntidadChip({
   }
 
   return (
-    <span className="relative inline-block">
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="text-[11px] px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
@@ -1217,9 +1219,10 @@ function EntidadChip({
           nombCorreg={nombCorreg}
           labelCorto={labelCorto}
           currentColor={color}
+          triggerRef={triggerRef}
           onClose={() => setOpen(false)}
         />
       )}
-    </span>
+    </>
   );
 }
