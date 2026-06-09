@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { getInformeData, listPeriodosDisponibles, listEntidadesDisponibles } from "@/lib/domains/informe/queries";
+import {
+  getInformeData,
+  getUltimoPeriodoCompleto,
+  listPeriodosDisponibles,
+  listEntidadesDisponibles,
+} from "@/lib/domains/informe/queries";
 import { InformeClient } from "./informe-client";
 
 export const metadata: Metadata = {
@@ -37,13 +42,16 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   const entidadPropiaOverride = params.entidadPropia
     ?? (sinParams ? BCP_DEFAULT.entidadPropia : undefined);
 
-  // Si no hay periodo en URL, usar el ultimo disponible
+  // Si no hay periodo en URL, usar el ULTIMO PERIODO COMPLETO de SBS.
+  // No alcanza con "ultimo periodo con data EEFF" porque SBS publica con lag:
+  // EEFF puede estar publicado para Abr 2026 pero colocaciones/depositos NO,
+  // y el dashboard mostraria accordions vacias. f_ultimo_periodo_completo()
+  // filtra periodos con cualquier archivo en estado no_publicado_sbs.
   let periodo: number;
   if (params.periodo) {
     periodo = Number.parseInt(params.periodo, 10);
   } else {
-    const periodos = await listPeriodosDisponibles({ ultimosN: 1 });
-    periodo = periodos[0] ?? 202004;
+    periodo = (await getUltimoPeriodoCompleto()) ?? 202004;
   }
 
   const peerGroup = params.peerGroup
