@@ -1050,7 +1050,7 @@ function EmptyBox({ titulo, texto }: { titulo: string; texto: string }) {
 }
 
 // ============================================================================
-// Wrapper que lee `tema` del URL y lo pasa al toolbar
+// Wrapper que lee `consolidar` del URL y lo pasa al toolbar
 // ============================================================================
 
 function SelectoresToolbarConTema(props: {
@@ -1061,10 +1061,9 @@ function SelectoresToolbarConTema(props: {
   entidadesDisponibles: EntidadDisponible[];
 }) {
   const sp = useSearchParams();
-  const tema = sp.get("tema");
   // consolidar: default true; solo es false si la URL tiene ?consolidar=false
   const consolidar = sp.get("consolidar") !== "false";
-  return <SelectoresToolbar {...props} temaActual={tema} consolidarActual={consolidar} />;
+  return <SelectoresToolbar {...props} consolidarActual={consolidar} />;
 }
 
 // ============================================================================
