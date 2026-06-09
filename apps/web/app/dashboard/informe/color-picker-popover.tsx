@@ -20,7 +20,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Palette, RotateCcw } from "lucide-react";
+import { Palette, RotateCcw, X } from "lucide-react";
 
 const PALETA_SUGERIDA = [
   "#0F2A5E", // azul BCP
@@ -61,8 +61,8 @@ function serializeColorOverrides(m: Map<string, string>): string {
     .join(",");
 }
 
-const POPOVER_WIDTH = 280;
-const POPOVER_HEIGHT = 290;
+const POPOVER_WIDTH = 360;
+const POPOVER_HEIGHT = 310;
 const GAP = 4;
 
 export function ColorPickerPopover({
@@ -146,13 +146,16 @@ export function ColorPickerPopover({
     };
   }, [onClose, triggerRef]);
 
+  // applyColor APLICA el color pero NO cierra el popover — asi el usuario
+  // puede probar varios colores y ver el cambio en vivo. Cierra con ESC,
+  // click afuera, o boton X. Esto da mejor UX que cerrar en cada click.
   const applyColor = (hex: string) => {
     const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
     overrides.set(nombCorreg, hex);
     const next = new URLSearchParams(searchParams.toString());
     next.set("colorOverrides", serializeColorOverrides(overrides));
     router.replace(`?${next.toString()}`, { scroll: false });
-    onClose();
+    setCustomHex(hex); // sync input para que refleje el color aplicado
   };
 
   const resetColor = () => {
@@ -194,23 +197,47 @@ export function ColorPickerPopover({
           <RotateCcw className="w-3 h-3" />
           Reset
         </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-slate-400 hover:text-slate-900 transition-colors"
+          title="Cerrar"
+          aria-label="Cerrar"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
 
-      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Paleta sugerida</p>
-      <div className="grid grid-cols-8 gap-1 mb-3">
-        {PALETA_SUGERIDA.map((hex) => (
-          <button
-            type="button"
-            key={hex}
-            onClick={() => applyColor(hex)}
-            className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${
-              currentColor.toLowerCase() === hex.toLowerCase() ? "border-slate-900" : "border-transparent"
-            }`}
-            style={{ backgroundColor: hex }}
-            title={hex}
-            aria-label={`Color ${hex}`}
-          />
-        ))}
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+        Paleta sugerida — click para aplicar
+      </p>
+      <div className="grid grid-cols-8 gap-1.5 mb-3">
+        {PALETA_SUGERIDA.map((hex) => {
+          const isSelected = currentColor.toLowerCase() === hex.toLowerCase();
+          return (
+            <button
+              type="button"
+              key={hex}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                applyColor(hex);
+              }}
+              className={`relative w-9 h-9 rounded-md border-2 cursor-pointer transition-all hover:shadow-md ${
+                isSelected ? "border-slate-900 ring-2 ring-slate-900/30" : "border-white/0 hover:border-slate-300"
+              }`}
+              style={{ backgroundColor: hex }}
+              title={hex}
+              aria-label={`Aplicar color ${hex}`}
+            >
+              {isSelected && (
+                <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold drop-shadow">
+                  ✓
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Custom (hex)</p>
