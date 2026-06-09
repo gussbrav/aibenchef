@@ -19,7 +19,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 import { Palette, RotateCcw, X } from "lucide-react";
 
 const PALETA_SUGERIDA = [
@@ -79,6 +80,7 @@ export function ColorPickerPopover({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const popoverRef = useRef<HTMLDivElement>(null);
   const [customHex, setCustomHex] = useState<string>(currentColor);
@@ -149,13 +151,19 @@ export function ColorPickerPopover({
   // applyColor APLICA el color pero NO cierra el popover — asi el usuario
   // puede probar varios colores y ver el cambio en vivo. Cierra con ESC,
   // click afuera, o boton X. Esto da mejor UX que cerrar en cada click.
+  //
+  // IMPORTANTE: usar pathname + router.refresh() para que Next.js 15 App
+  // Router re-renderee el server component. router.replace('?query') solo
+  // no siempre triggerea re-fetch del RSC.
   const applyColor = (hex: string) => {
     const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
     overrides.set(nombCorreg, hex);
     const next = new URLSearchParams(searchParams.toString());
     next.set("colorOverrides", serializeColorOverrides(overrides));
-    router.replace(`?${next.toString()}`, { scroll: false });
-    setCustomHex(hex); // sync input para que refleje el color aplicado
+    const url = `${pathname}?${next.toString()}` as Route;
+    router.replace(url, { scroll: false });
+    router.refresh();
+    setCustomHex(hex);
   };
 
   const resetColor = () => {
@@ -167,7 +175,9 @@ export function ColorPickerPopover({
     } else {
       next.set("colorOverrides", serializeColorOverrides(overrides));
     }
-    router.replace(`?${next.toString()}`, { scroll: false });
+    const url = `${pathname}?${next.toString()}` as Route;
+    router.replace(url, { scroll: false });
+    router.refresh();
     onClose();
   };
 
