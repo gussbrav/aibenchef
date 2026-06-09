@@ -70,6 +70,9 @@ export function ColorPickerPopover({
   const searchParams = useSearchParams();
   const ref = useRef<HTMLDivElement>(null);
   const [customHex, setCustomHex] = useState<string>(currentColor);
+  // Auto-positioning: si el popover no entra abajo del chip, sube.
+  // Calculado en mount + en resize. Default abajo.
+  const [pos, setPos] = useState<"down" | "up">("down");
 
   // Cerrar con ESC o click fuera
   useEffect(() => {
@@ -86,6 +89,33 @@ export function ColorPickerPopover({
       document.removeEventListener("mousedown", onClick);
     };
   }, [onClose]);
+
+  // Auto-positioning: medir si el popover overflowearia el viewport y
+  // posicionarlo arriba en ese caso. ~280px de alto estimado.
+  useEffect(() => {
+    const compute = () => {
+      if (!ref.current) return;
+      const parent = ref.current.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      const POPOVER_HEIGHT = 290;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // Si hay mas espacio arriba que abajo Y abajo no alcanza, subir
+      if (spaceBelow < POPOVER_HEIGHT && spaceAbove > spaceBelow) {
+        setPos("up");
+      } else {
+        setPos("down");
+      }
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    window.addEventListener("scroll", compute, true);
+    return () => {
+      window.removeEventListener("resize", compute);
+      window.removeEventListener("scroll", compute, true);
+    };
+  }, []);
 
   const applyColor = (hex: string) => {
     const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
@@ -112,8 +142,12 @@ export function ColorPickerPopover({
   return (
     <div
       ref={ref}
-      className="absolute z-50 mt-1 w-[280px] bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-slate-900"
-      style={{ top: "100%", left: 0 }}
+      className="absolute z-50 w-[280px] bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-slate-900"
+      style={
+        pos === "down"
+          ? { top: "calc(100% + 4px)", left: 0 }
+          : { bottom: "calc(100% + 4px)", left: 0 }
+      }
     >
       <div className="flex items-center gap-2 mb-2">
         <Palette className="w-4 h-4 text-slate-500" />

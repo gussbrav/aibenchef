@@ -988,16 +988,32 @@ function buildBubbleAndWaterfall(
 
 // Limpia anotaciones decorativas que la SBS pega a los nombres:
 // asteriscos al final (** marca consolidacion con subsidiarias),
-// superindices unicode (¹²³), notas al pie "N/", whitespace excesivo.
+// superindices unicode (¹²³), notas al pie "N/" (con o sin espacio antes),
+// notas al pie tipo "a/" "b/", whitespace excesivo.
+//
+// IMPORTANTE: las notas al pie aparecen pegadas sin espacio (ej.
+// "Financiera Confianza2/") porque el OCR del PDF de SBS las junta.
+// El regex debe tolerar ausencia de espacio antes del digito/letra.
 function limpiarNombreEntidad(raw: string): string {
   let s = raw.trim();
-  // Asteriscos finales
-  s = s.replace(/\*+\s*$/u, "");
-  // Superindices unicode
-  s = s.replace(/[²³¹⁰-₟]+\s*$/u, "");
-  // Notas al pie tipo " 1/" al final
-  s = s.replace(/\s+\d{1,3}\/\s*$/u, "");
-  return s.trim();
+  // Aplicar hasta 3 pasadas porque puede haber multiples sufijos
+  // (ej. "Banco X **2/" tiene asterisco + footnote)
+  for (let i = 0; i < 3; i++) {
+    const antes = s;
+    // Asteriscos finales (1+)
+    s = s.replace(/\*+\s*$/u, "");
+    // Superindices unicode (¹²³ etc.)
+    s = s.replace(/[²³¹⁰-₟]+\s*$/u, "");
+    // Notas al pie tipo "1/" o "2/" (con o sin espacio antes)
+    s = s.replace(/\s*\d{1,3}\/\s*$/u, "");
+    // Notas al pie tipo "a/" "b/" (con o sin espacio antes)
+    s = s.replace(/\s*[a-z]\/\s*$/u, "");
+    // Pegada o sola: una barra final aislada
+    s = s.replace(/\s*\/\s*$/u, "");
+    s = s.trim();
+    if (s === antes) break;
+  }
+  return s;
 }
 
 // Resuelve el "nombre largo / legal" de una entidad para usar en el header
