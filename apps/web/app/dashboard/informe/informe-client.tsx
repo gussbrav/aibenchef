@@ -1193,13 +1193,24 @@ function EntidadChip({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  if (esPropio) {
-    return (
-      <span className="text-[11px] px-2 py-0.5 rounded bg-white text-slate-900 font-semibold">
-        {labelCorto}
-      </span>
-    );
-  }
+  // Estilos diferenciados:
+  // - esPropio: fondo blanco solido con texto oscuro (visual destacado)
+  //   pero igual clickable para customizar color (afecta charts/headers)
+  // - competidor: fondo semi-transparente con border-left del color
+  const chipStyle = esPropio
+    ? {
+        backgroundColor: "#ffffff",
+        color: "#0f172a",
+        fontWeight: 600,
+        borderLeft: `3px solid ${color}`,
+      }
+    : {
+        borderLeft: `3px solid ${color}`,
+      };
+
+  const chipClassName = esPropio
+    ? "text-[11px] px-2 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+    : "text-[11px] px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 transition-colors cursor-pointer";
 
   return (
     <>
@@ -1207,8 +1218,8 @@ function EntidadChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="text-[11px] px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 transition-colors cursor-pointer"
-        style={{ borderLeft: `3px solid ${color}` }}
+        className={chipClassName}
+        style={chipStyle}
         title="Click para cambiar el color"
       >
         {labelCorto}
