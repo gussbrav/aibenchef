@@ -296,7 +296,10 @@ export function ColorPickerPopover({
         <button
           type="button"
           onClick={() => {
-            if (/^#[0-9A-Fa-f]{6}$/.test(customHex)) applyColor(customHex);
+            if (/^#[0-9A-Fa-f]{6}$/.test(customHex)) {
+              applyColor(customHex);
+              onClose(); // Aplicar custom + cerrar popover (UX esperado)
+            }
           }}
           disabled={!/^#[0-9A-Fa-f]{6}$/.test(customHex)}
           className="px-3 py-1 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"

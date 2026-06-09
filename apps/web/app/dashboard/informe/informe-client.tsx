@@ -212,7 +212,7 @@ export function InformeClient({
     periodo,
     periodoComparativo,
     periodoDicPrev,
-    competidores,
+    competidores: serverCompetidores,
     cuadroResumen,
     puntoEquilibrio,
     margenNetoHistorico,
@@ -244,6 +244,38 @@ export function InformeClient({
     comentarios,
   } = data;
   const [exportando, setExportando] = useState(false);
+
+  // ============================================================================
+  // colorOverrides CLIENT-SIDE
+  // ============================================================================
+  // Leemos colorOverrides desde el URL via useSearchParams (reactivo a cambios)
+  // y los aplicamos a competidores. Asi los charts (bubble, waterfall, lineas,
+  // barras, etc) cambian de color AL INSTANTE cuando el user pickea un color,
+  // sin tener que esperar que el Server Component se re-renderee (que en
+  // Next.js 15 puede tardar o quedar cacheado).
+  const searchParamsForColors = useSearchParams();
+  const colorOverrides = useMemo(() => {
+    const raw = searchParamsForColors.get("colorOverrides");
+    const m = new Map<string, string>();
+    if (!raw) return m;
+    for (const pair of raw.split(",")) {
+      const idx = pair.lastIndexOf(":");
+      if (idx <= 0) continue;
+      const nomb = pair.slice(0, idx).trim();
+      const hex = pair.slice(idx + 1).trim();
+      if (!nomb || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+      m.set(nomb, hex);
+    }
+    return m;
+  }, [searchParamsForColors]);
+  const competidores = useMemo(
+    () =>
+      serverCompetidores.map((c) => {
+        const override = colorOverrides.get(c.nombCorreg);
+        return override ? { ...c, color: override } : c;
+      }),
+    [serverCompetidores, colorOverrides],
+  );
 
   const onExport = (formato: "pptx" | "pdf") => {
     setExportando(true);
