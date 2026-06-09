@@ -253,12 +253,17 @@ export function InformeClient({
   // barras, etc) cambian de color AL INSTANTE cuando el user pickea un color,
   // sin tener que esperar que el Server Component se re-renderee (que en
   // Next.js 15 puede tardar o quedar cacheado).
+  //
+  // CRITICO: useMemo depende del STRING del param, NO del objeto searchParams.
+  // useSearchParams retorna instancias que pueden no cambiar referencia
+  // aunque el contenido si — depender del string garantiza recomputo cuando
+  // el contenido cambia.
   const searchParamsForColors = useSearchParams();
+  const colorOverridesRaw = searchParamsForColors.get("colorOverrides") ?? "";
   const colorOverrides = useMemo(() => {
-    const raw = searchParamsForColors.get("colorOverrides");
     const m = new Map<string, string>();
-    if (!raw) return m;
-    for (const pair of raw.split(",")) {
+    if (!colorOverridesRaw) return m;
+    for (const pair of colorOverridesRaw.split(",")) {
       const idx = pair.lastIndexOf(":");
       if (idx <= 0) continue;
       const nomb = pair.slice(0, idx).trim();
@@ -267,7 +272,7 @@ export function InformeClient({
       m.set(nomb, hex);
     }
     return m;
-  }, [searchParamsForColors]);
+  }, [colorOverridesRaw]);
   const competidores = useMemo(
     () =>
       serverCompetidores.map((c) => {

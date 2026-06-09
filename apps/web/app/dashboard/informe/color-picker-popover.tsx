@@ -179,20 +179,23 @@ export function ColorPickerPopover({
     setLiveColor(hex);
     setCustomHex(hex);
     onColorChange?.(hex);
-    // 2. Persistir en URL para reload/share.
+    // 2. Persistir en URL para reload/share. router.replace dispara que
+    //    useSearchParams en InformeClient re-detecte cambios -> los charts
+    //    se actualizan client-side via useMemo. NO usamos router.refresh()
+    //    porque eso forzaria un re-fetch del RSC que en Next.js 15 puede
+    //    llegar tarde y "pisar" el estado client con cache viejo.
     const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
     overrides.set(nombCorreg, hex);
     const next = new URLSearchParams(searchParams.toString());
     next.set("colorOverrides", serializeColorOverrides(overrides));
     const url = `${pathname}?${next.toString()}` as Route;
     router.replace(url, { scroll: false });
-    router.refresh();
   };
 
   const resetColor = () => {
     // 1. Optimista: notificar al padre que vuelva al color server
     onColorChange?.(null);
-    // 2. Persistir cambio de URL
+    // 2. Persistir cambio de URL — sin router.refresh (mismo motivo arriba)
     const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
     overrides.delete(nombCorreg);
     const next = new URLSearchParams(searchParams.toString());
@@ -203,7 +206,6 @@ export function ColorPickerPopover({
     }
     const url = `${pathname}?${next.toString()}` as Route;
     router.replace(url, { scroll: false });
-    router.refresh();
     onClose();
   };
 
