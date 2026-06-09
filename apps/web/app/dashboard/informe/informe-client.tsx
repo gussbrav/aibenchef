@@ -11,7 +11,7 @@
 //   4. Punto de Equilibrio Anualizado
 //   5. Analisis Margen Neto: bubble + waterfall
 
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
 import { ColorPickerPopover } from "./color-picker-popover";
@@ -1192,6 +1192,16 @@ function EntidadChip({
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Estado local optimista: el chip muestra este color sin esperar que el
+  // server re-renderee. Si el user override desde el picker -> se actualiza
+  // al instante. Si el server re-llega con otro color (via useEffect), sync.
+  const [liveColor, setLiveColor] = useState(color);
+
+  // Sync cuando el server prop cambia (RSC re-fetch llego).
+  // Tambien sync cuando esPropio cambia (resaltar otra entidad).
+  useEffect(() => {
+    setLiveColor(color);
+  }, [color]);
 
   // Estilos diferenciados:
   // - esPropio: fondo blanco solido con texto oscuro (visual destacado)
@@ -1202,10 +1212,10 @@ function EntidadChip({
         backgroundColor: "#ffffff",
         color: "#0f172a",
         fontWeight: 600,
-        borderLeft: `3px solid ${color}`,
+        borderLeft: `3px solid ${liveColor}`,
       }
     : {
-        borderLeft: `3px solid ${color}`,
+        borderLeft: `3px solid ${liveColor}`,
       };
 
   const chipClassName = esPropio
@@ -1228,8 +1238,12 @@ function EntidadChip({
         <ColorPickerPopover
           nombCorreg={nombCorreg}
           labelCorto={labelCorto}
-          currentColor={color}
+          currentColor={liveColor}
           triggerRef={triggerRef}
+          onColorChange={(hex) => {
+            // hex === null -> reset al color del server
+            setLiveColor(hex ?? color);
+          }}
           onClose={() => setOpen(false)}
         />
       )}
