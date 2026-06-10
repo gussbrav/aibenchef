@@ -11,9 +11,8 @@
 //   4. Punto de Equilibrio Anualizado
 //   5. Analisis Margen Neto: bubble + waterfall
 
-import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Route } from "next";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Download, FileText, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
 import { ColorPickerPopover } from "./color-picker-popover";
 import {
@@ -260,10 +259,8 @@ export function InformeClient({
   //
   // Resultado: clicks en el color picker son completamente sincrónos a nivel
   // UI. URL eventualmente consistente para sharing/reload.
-  const router = useRouter();
   const pathname = usePathname();
   const searchParamsForColors = useSearchParams();
-  const [, startTransition] = useTransition();
 
   const parseFromUrl = (raw: string): Map<string, string> => {
     const m = new Map<string, string>();
@@ -299,17 +296,27 @@ export function InformeClient({
     setColorOverrides(fromUrl);
   }, [colorOverridesRaw]);
 
-  // Sync TO URL — background, non-blocking via startTransition
+  // Sync TO URL — usando window.history.replaceState DIRECTO en vez de
+  // router.replace de Next.js. Razon: router.replace en Next.js 15 ignora
+  // scroll:false en algunos casos y scrollea al top, ademas dispara un
+  // re-render del RSC que en deploys con cache puede pisar el state client.
+  // window.history.replaceState solo cambia el URL en la barra, sin scroll,
+  // sin re-render, sin nada — perfecto para 'derived state' como aca.
+  //
+  // Debounce 300ms para que cambios rapidos (probar 5 colores seguidos)
+  // generen 1 sola actualizacion de URL al final, no 5.
   useEffect(() => {
-    const serialized = serializeForUrl(colorOverrides);
-    if (serialized === colorOverridesRaw) return;
-    lastUrlSyncRef.current = serialized;
-    const next = new URLSearchParams(searchParamsForColors.toString());
-    if (serialized) next.set("colorOverrides", serialized);
-    else next.delete("colorOverrides");
-    startTransition(() => {
-      router.replace(`${pathname}?${next.toString()}` as Route, { scroll: false });
-    });
+    const timeout = setTimeout(() => {
+      const serialized = serializeForUrl(colorOverrides);
+      if (serialized === colorOverridesRaw) return;
+      lastUrlSyncRef.current = serialized;
+      const next = new URLSearchParams(searchParamsForColors.toString());
+      if (serialized) next.set("colorOverrides", serialized);
+      else next.delete("colorOverrides");
+      const newUrl = `${pathname}?${next.toString()}`;
+      window.history.replaceState(window.history.state, "", newUrl);
+    }, 300);
+    return () => clearTimeout(timeout);
   }, [colorOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Setter expuesto al color picker: actualiza state INSTANT

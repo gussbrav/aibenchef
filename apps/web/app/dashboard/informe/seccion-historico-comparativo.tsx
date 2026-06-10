@@ -30,10 +30,16 @@ const fmtNum = (n: number | null | undefined): string => {
   return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 0 }).format(n);
 };
 
-const fmtSigno = (n: number | null | undefined): string => {
+// fmtSigno con decimales configurables. Para variaciones en pp (decimales
+// chicos como 0.46), usar 2 decimales sino el redondeo las muestra como 0.
+const fmtSigno = (n: number | null | undefined, decimals: number = 0): string => {
   if (n == null || !Number.isFinite(n)) return "—";
   const sign = n > 0 ? "+" : "";
-  return `${sign}${fmtNum(n)}`;
+  const formatted = new Intl.NumberFormat("es-PE", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n);
+  return `${sign}${formatted}`;
 };
 
 export function SeccionHistoricoComparativo({
@@ -152,7 +158,8 @@ export function SeccionHistoricoComparativo({
                         variacionPositiva ? "text-emerald-700" : "text-rose-700"
                       }`}
                     >
-                      {variacionPositiva ? "△" : "▽"} {fmtSigno(variacion)}{" "}
+                      {variacionPositiva ? "△" : "▽"}{" "}
+                      {fmtSigno(variacion, formatoValor === "pct" || formatoValor === "moneda_mm" ? 2 : 0)}{" "}
                       {formatoValor === "pct" ? "pp" : ""}
                     </p>
                   )}
