@@ -2810,12 +2810,11 @@ def pipeline_grp() -> None:
 def pipeline_refresh_marts(concurrent: bool) -> None:
     """Refresca las 24 MVs marts.* tras un import.
 
-    Sin esto, raw.* tiene la data nueva pero el dashboard sigue mostrando el
-    periodo anterior porque lee de las MVs. Fix del bug descubierto al
-    cargar abril 2026 (sigue #126).
-
     Llama marts.refresh_all_marts(p_concurrent) creada en V133. Reporta una
     fila por MV con duracion + success/error.
+
+    NOTA: este comando NO recalcula dw.entidad_microfinanciera_periodo ni
+    refresh_kpis_anuales. Para post-import completo, usar `refresh-derived`.
     """
     import psycopg
 
@@ -2845,6 +2844,68 @@ def pipeline_refresh_marts(concurrent: bool) -> None:
             click.echo(f"  [{status}] {mv:<48} {duration_ms:>8} ms  {error}")
     click.echo("")
     click.echo(f"# TOTAL: {total} MVs procesadas — OK={ok}, FAIL={fail}")
+
+
+@pipeline_grp.command("refresh-derived")
+@click.option(
+    "--periodo",
+    type=str,
+    default=None,
+    help="YYYYMM. Si vacio recalcula TODO el historico (caro, evitar en cron).",
+)
+@click.option(
+    "--concurrent/--no-concurrent",
+    default=False,
+    show_default=True,
+    help="Refresh CONCURRENTLY de las MVs (lento, pero no bloquea reads).",
+)
+def pipeline_refresh_derived(periodo: str | None, concurrent: bool) -> None:
+    """Orquesta TODOS los recalculos derivados tras un import.
+
+    Llama marts.refresh_all_derived(periodo, concurrent) creada en V134:
+      1. dw.recalcular_microfinancieras(periodo)  → cartera_mype, smf flags
+      2. marts.refresh_kpis_anuales()             → kpis_anuales_entidad/historica
+      3. marts.refresh_all_marts(concurrent)      → 24 MVs marts.*
+
+    Sin esto, el dashboard muestra celdas vacias (caso real: 'Cartera MYPE /
+    Total %' aparecio en blanco para abril 2026 porque
+    dw.entidad_microfinanciera_periodo no se recalculo post-import).
+
+    Idempotente. Para post-import del cron, pasar --periodo explicito para
+    evitar recalcular TODO el historico.
+    """
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    periodo_int: int | None = None
+    if periodo:
+        try:
+            periodo_int = int(periodo)
+            if not (200001 <= periodo_int <= 209912):
+                raise ValueError
+        except ValueError as exc:
+            raise click.UsageError(
+                f"--periodo debe ser YYYYMM valido (recibido: {periodo})"
+            ) from exc
+
+    click.echo(f"# refresh-derived periodo={periodo or 'TODOS'} concurrent={concurrent}")
+    grand_ok = 0
+    grand_fail = 0
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT step_name, duration_ms, success, COALESCE(detail,'') "
+            "FROM marts.refresh_all_derived(%s, %s)",
+            (periodo_int, concurrent),
+        )
+        for step, duration_ms, success, detail in cur.fetchall():
+            status = "OK" if success else "FAIL"
+            if success:
+                grand_ok += 1
+            else:
+                grand_fail += 1
+            click.echo(f"  [{status}] {step:<40} {duration_ms:>8} ms  {detail}")
+    click.echo("")
+    click.echo(f"# TOTAL: pasos OK={grand_ok}, FAIL={grand_fail}")
 
 
 @pipeline_grp.command("post-import-check")
@@ -3343,18 +3404,34 @@ def sbs_work_jobs(max_jobs: int) -> None:
                         ):
                             any_imported = True
 
-                # Refresh de marts MVs SOLO si entro data nueva (fix #126 fase 3).
-                # Sin esto, raw.* tiene data nueva pero el dashboard muestra el
-                # periodo anterior. Es lento (eeff_*_ancho tarda 15+ min cada
-                # uno) — timeout 2h. Si falla, no marcamos el job como failed:
-                # la data ya esta en raw, el siguiente cron puede reintentar.
+                # Refresh de TODAS las derivadas (fix #126 fase 3 + V134).
+                # Por cada periodo importado: refresh-derived orquesta
+                # dw.recalcular_microfinancieras(p) + refresh_kpis_anuales +
+                # refresh_all_marts. Sin esto, el dashboard tiene celdas vacias
+                # (Cartera MYPE/Total fue el primer sintoma — bug raiz issue #134).
+                # Es lento (mv_eeff_balance_ancho tarda 15+ min) — timeout 2h.
+                # Failure NO marca el job como failed: data ya en raw, retry OK.
                 if ok and any_imported:
-                    cmd_refresh = ["aibenchef", "pipeline", "refresh-marts"]
-                    log_lines.append(f"$ {' '.join(cmd_refresh)}")
-                    r = subprocess.run(cmd_refresh, capture_output=True, text=True, timeout=7200)
-                    log_lines.append(r.stdout[-800:] if r.stdout else "")
-                    if r.returncode != 0:
-                        log_lines.append(f"WARN refresh-marts rc={r.returncode}: {r.stderr[-500:]}")
+                    for p in range(desde, hasta + 1):
+                        if (p % 100) < 1 or (p % 100) > 12:
+                            continue
+                        cmd_refresh = [
+                            "aibenchef",
+                            "pipeline",
+                            "refresh-derived",
+                            "--periodo",
+                            str(p),
+                        ]
+                        log_lines.append(f"$ {' '.join(cmd_refresh)}")
+                        r = subprocess.run(
+                            cmd_refresh, capture_output=True, text=True, timeout=7200
+                        )
+                        log_lines.append(r.stdout[-800:] if r.stdout else "")
+                        if r.returncode != 0:
+                            log_lines.append(
+                                f"WARN refresh-derived periodo={p} rc={r.returncode}: "
+                                f"{r.stderr[-500:]}"
+                            )
 
                 if ok:
                     _update(
