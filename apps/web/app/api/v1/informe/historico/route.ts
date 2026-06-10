@@ -137,9 +137,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (metric === "carteraBruta") {
+      // Usar la fuente del BALANCE (EEFF) para que matchee con el Cuadro
+      // Resumen. v_colocaciones_total_por_entidad usa raw.colocaciones que
+      // duplica valores por moneda (MN + ME + TOTAL = 2 * TOTAL). El view
+      // v_cartera_balance_historica viene de EEFF filtrado por moneda=TOTAL,
+      // misma fuente que la cartera bruta del Cuadro Resumen.
       const map = await getHistoricoFromMartView({
-        view: "marts.v_colocaciones_total_por_entidad",
-        field: "cartera_total / 1000",
+        view: "marts.v_cartera_balance_historica",
+        field: "cartera_bruta / 1000",
         entidades, periodoActual: periodo,
       });
       return { series: buildHistoricoFromValueMap(map, competidores) };
