@@ -2795,6 +2795,58 @@ def pipeline_grp() -> None:
     """Observabilidad del pipeline: post-import-check, audit, status."""
 
 
+@pipeline_grp.command("refresh-marts")
+@click.option(
+    "--concurrent/--no-concurrent",
+    default=False,
+    show_default=True,
+    help=(
+        "Usar REFRESH MATERIALIZED VIEW CONCURRENTLY (no bloquea reads pero "
+        "es muy lento en MVs grandes — eeff_*_ancho tarda 15+ min). "
+        "Default (no-concurrent) bloquea reads brevemente pero es mucho mas rapido. "
+        "Para correr post-import en cron, dejar default."
+    ),
+)
+def pipeline_refresh_marts(concurrent: bool) -> None:
+    """Refresca las 24 MVs marts.* tras un import.
+
+    Sin esto, raw.* tiene la data nueva pero el dashboard sigue mostrando el
+    periodo anterior porque lee de las MVs. Fix del bug descubierto al
+    cargar abril 2026 (sigue #126).
+
+    Llama marts.refresh_all_marts(p_concurrent) creada en V133. Reporta una
+    fila por MV con duracion + success/error.
+    """
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    click.echo(
+        f"# refresh-marts iniciado (concurrent={concurrent}). "
+        f"Sin --concurrent las MVs bloquean reads brevemente; "
+        f"con --concurrent es mucho mas lento. Tiempo estimado: 15-60 min."
+    )
+    total = 0
+    ok = 0
+    fail = 0
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT mv_name, duration_ms, success, COALESCE(error,'') "
+            "FROM marts.refresh_all_marts(%s)",
+            (concurrent,),
+        )
+        for mv, duration_ms, success, error in cur.fetchall():
+            total += 1
+            status = "OK" if success else "FAIL"
+            if success:
+                ok += 1
+            else:
+                fail += 1
+            click.echo(f"  [{status}] {mv:<48} {duration_ms:>8} ms  {error}")
+    click.echo("")
+    click.echo(f"# TOTAL: {total} MVs procesadas — OK={ok}, FAIL={fail}")
+
+
 @pipeline_grp.command("post-import-check")
 @click.option(
     "--periodo",
@@ -3269,6 +3321,7 @@ def sbs_work_jobs(max_jobs: int) -> None:
                 # Sin esto, los archivos quedan en status='descargado' eterno y
                 # nunca llegan a marts/dashboards. Idempotente: ON CONFLICT en
                 # las tablas raw + audit trail actualiza status='procesado'.
+                any_imported = False
                 if ok:
                     for p in range(desde, hasta + 1):
                         # Saltar gaps de mes (13, 14, etc) sin romper si desde/hasta
@@ -3285,6 +3338,23 @@ def sbs_work_jobs(max_jobs: int) -> None:
                                 f"{r.stderr[-500:]}"
                             )
                             ok = False
+                        elif "rows_insertadas=" in (r.stdout or "") and (
+                            "rows_insertadas=0" not in (r.stdout or "")
+                        ):
+                            any_imported = True
+
+                # Refresh de marts MVs SOLO si entro data nueva (fix #126 fase 3).
+                # Sin esto, raw.* tiene data nueva pero el dashboard muestra el
+                # periodo anterior. Es lento (eeff_*_ancho tarda 15+ min cada
+                # uno) — timeout 2h. Si falla, no marcamos el job como failed:
+                # la data ya esta en raw, el siguiente cron puede reintentar.
+                if ok and any_imported:
+                    cmd_refresh = ["aibenchef", "pipeline", "refresh-marts"]
+                    log_lines.append(f"$ {' '.join(cmd_refresh)}")
+                    r = subprocess.run(cmd_refresh, capture_output=True, text=True, timeout=7200)
+                    log_lines.append(r.stdout[-800:] if r.stdout else "")
+                    if r.returncode != 0:
+                        log_lines.append(f"WARN refresh-marts rc={r.returncode}: {r.stderr[-500:]}")
 
                 if ok:
                     _update(
