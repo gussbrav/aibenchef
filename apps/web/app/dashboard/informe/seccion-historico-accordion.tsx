@@ -15,7 +15,7 @@
  * el usuario decide que profundizar. Cada seccion = 1 query indep ~ 200-800ms.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
@@ -44,6 +44,8 @@ export function SeccionHistoricoAccordion({
   formatoValor,
   periodo,
   peerGroup,
+  colorOverrides,
+  labelCortoToNombCorreg,
   consolidar = true,
   defaultOpen = false,
 }: {
@@ -55,6 +57,14 @@ export function SeccionHistoricoAccordion({
   periodo: number;
   /** Lista de entidades canonicas en el peer group activo. */
   peerGroup: string[];
+  /**
+   * Map<nombCorreg, hex> con colores override del usuario. Se aplican EN VIVO
+   * sobre las series cacheadas — sin refetch — para que el cambio de color
+   * en el header propague INSTANT a estos graficos (fix bug Cartera Bruta).
+   */
+  colorOverrides?: Map<string, string>;
+  /** Map labelCorto -> nombCorreg para resolver el override correcto. */
+  labelCortoToNombCorreg?: Map<string, string>;
   consolidar?: boolean;
   defaultOpen?: boolean;
 }) {
@@ -125,6 +135,24 @@ export function SeccionHistoricoAccordion({
     }
   }, [open, state.status, fetchData]);
 
+  // Aplica overrides EN VIVO sobre las series cacheadas. Sin esto, los
+  // graficos del accordion conservan los colores del fetch original aunque
+  // el usuario haya cambiado los colores desde el header (fix bug Cartera Bruta).
+  // El series.entidad es labelCorto (puede diferir de nombCorreg si
+  // config.peer_group.label_corto esta seteado). Resolvemos primero a
+  // nombCorreg via labelCortoToNombCorreg, luego buscamos en colorOverrides.
+  // Fallback: intentar match directo por labelCorto (caso default sin label_corto).
+  const seriesConOverrides = useMemo(() => {
+    if (state.status !== "ok") return [];
+    if (!colorOverrides || colorOverrides.size === 0) return state.series;
+    return state.series.map((s) => {
+      const nombCorreg = labelCortoToNombCorreg?.get(s.entidad) ?? s.entidad;
+      const override =
+        colorOverrides.get(nombCorreg) ?? colorOverrides.get(s.entidad);
+      return override ? { ...s, color: override } : s;
+    });
+  }, [state, colorOverrides, labelCortoToNombCorreg]);
+
   const toggle = () => setOpen((v) => !v);
 
   return (
@@ -181,7 +209,7 @@ export function SeccionHistoricoAccordion({
             <SeccionHistoricoComparativo
               titulo={titulo}
               subtitulo={subtitulo}
-              series={state.series}
+              series={seriesConOverrides}
               periodoBaseLabel={state.series[0]?.serie[0]?.periodoLabel}
               periodoActualLabel={
                 state.series[0]?.serie[state.series[0]?.serie.length - 1]

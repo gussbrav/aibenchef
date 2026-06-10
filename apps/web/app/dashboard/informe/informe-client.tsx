@@ -11,9 +11,10 @@
 //   4. Punto de Equilibrio Anualizado
 //   5. Analisis Margen Neto: bubble + waterfall
 
-import { Suspense, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Download, FileText, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
+import { ColorPickerPopover } from "./color-picker-popover";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -211,7 +212,7 @@ export function InformeClient({
     periodo,
     periodoComparativo,
     periodoDicPrev,
-    competidores,
+    competidores: serverCompetidores,
     cuadroResumen,
     puntoEquilibrio,
     margenNetoHistorico,
@@ -244,6 +245,102 @@ export function InformeClient({
   } = data;
   const [exportando, setExportando] = useState(false);
 
+  // ============================================================================
+  // colorOverrides como CLIENT STATE (single source of truth)
+  // ============================================================================
+  // Arquitectura "world-class" para color picking instantaneo:
+  //
+  // 1. El estado vive en useState — INSTANT a cualquier cambio
+  // 2. El URL es DERIVED state — se sincroniza via useEffect + startTransition
+  //    en background, sin bloquear el render
+  // 3. Init desde URL (para soportar URLs compartidos + reload)
+  // 4. Sync FROM url solo si cambia por navegacion externa (back/forward),
+  //    no cuando nosotros mismos lo cambiamos (evita loop infinito)
+  //
+  // Resultado: clicks en el color picker son completamente sincrónos a nivel
+  // UI. URL eventualmente consistente para sharing/reload.
+  const pathname = usePathname();
+  const searchParamsForColors = useSearchParams();
+
+  const parseFromUrl = (raw: string): Map<string, string> => {
+    const m = new Map<string, string>();
+    if (!raw) return m;
+    for (const pair of raw.split(",")) {
+      const idx = pair.lastIndexOf(":");
+      if (idx <= 0) continue;
+      const nomb = pair.slice(0, idx).trim();
+      const hex = pair.slice(idx + 1).trim();
+      if (!nomb || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+      m.set(nomb, hex);
+    }
+    return m;
+  };
+  const serializeForUrl = (m: Map<string, string>): string =>
+    Array.from(m.entries())
+      .map(([k, v]) => `${k}:${v}`)
+      .join(",");
+
+  // Estado: inicial desde URL (SSR-friendly, soporta URLs compartidos)
+  const colorOverridesRaw = searchParamsForColors.get("colorOverrides") ?? "";
+  const [colorOverrides, setColorOverrides] = useState<Map<string, string>>(() =>
+    parseFromUrl(colorOverridesRaw),
+  );
+  // Ref para distinguir cambios propios vs externos (back/forward)
+  const lastUrlSyncRef = useRef<string>(colorOverridesRaw);
+
+  // Sync FROM URL — solo si cambio externamente (no por nuestro propio update)
+  useEffect(() => {
+    if (colorOverridesRaw === lastUrlSyncRef.current) return;
+    lastUrlSyncRef.current = colorOverridesRaw;
+    const fromUrl = parseFromUrl(colorOverridesRaw);
+    setColorOverrides(fromUrl);
+  }, [colorOverridesRaw]);
+
+  // Sync TO URL — usando window.history.replaceState DIRECTO en vez de
+  // router.replace de Next.js. Razon: router.replace en Next.js 15 ignora
+  // scroll:false en algunos casos y scrollea al top, ademas dispara un
+  // re-render del RSC que en deploys con cache puede pisar el state client.
+  // window.history.replaceState solo cambia el URL en la barra, sin scroll,
+  // sin re-render, sin nada — perfecto para 'derived state' como aca.
+  //
+  // Debounce 300ms para que cambios rapidos (probar 5 colores seguidos)
+  // generen 1 sola actualizacion de URL al final, no 5.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const serialized = serializeForUrl(colorOverrides);
+      if (serialized === colorOverridesRaw) return;
+      lastUrlSyncRef.current = serialized;
+      const next = new URLSearchParams(searchParamsForColors.toString());
+      if (serialized) next.set("colorOverrides", serialized);
+      else next.delete("colorOverrides");
+      const newUrl = `${pathname}?${next.toString()}`;
+      window.history.replaceState(window.history.state, "", newUrl);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [colorOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Setter expuesto al color picker: actualiza state INSTANT
+  const setColorForEntity = (nombCorreg: string, hex: string | null) => {
+    setColorOverrides((prev) => {
+      const next = new Map(prev);
+      if (hex === null) next.delete(nombCorreg);
+      else next.set(nombCorreg, hex);
+      return next;
+    });
+  };
+
+  // Reset all colors — UX de "deshacer global"
+  const resetAllColors = () => setColorOverrides(new Map());
+
+  const competidores = useMemo(
+    () =>
+      serverCompetidores.map((c) => {
+        const override = colorOverrides.get(c.nombCorreg);
+        return override ? { ...c, color: override } : c;
+      }),
+    [serverCompetidores, colorOverrides],
+  );
+
   const onExport = (formato: "pptx" | "pdf") => {
     setExportando(true);
     setTimeout(() => {
@@ -273,14 +370,26 @@ export function InformeClient({
             <div className="flex items-center gap-2 mt-4 flex-wrap">
               <span className="text-xs uppercase opacity-75">Comparativa:</span>
               {competidores.map((c) => (
-                <span
+                <EntidadChip
                   key={c.nombCorreg}
-                  className={`text-[11px] px-2 py-0.5 rounded ${c.esPropio ? "bg-white text-slate-900 font-semibold" : "bg-white/15"}`}
-                  style={c.esPropio ? {} : { borderLeft: `3px solid ${c.color}` }}
-                >
-                  {c.labelCorto}
-                </span>
+                  nombCorreg={c.nombCorreg}
+                  labelCorto={c.labelCorto}
+                  color={c.color}
+                  esPropio={c.esPropio}
+                  onColorChange={(hex) => setColorForEntity(c.nombCorreg, hex)}
+                />
               ))}
+              {colorOverrides.size > 0 && (
+                <button
+                  type="button"
+                  onClick={resetAllColors}
+                  className="text-[10px] uppercase tracking-wider text-white/70 hover:text-white inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded hover:bg-white/10 transition-colors"
+                  title="Restaurar colores por defecto de todas las entidades"
+                >
+                  <Paintbrush className="w-3 h-3" />
+                  Reset colores
+                </button>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-2 flex-shrink-0">
@@ -375,6 +484,10 @@ export function InformeClient({
         <SectionsAccordion
           periodo={periodo.codigo}
           peerGroup={competidores.map((c) => c.nombCorreg)}
+          colorOverrides={colorOverrides}
+          labelCortoToNombCorreg={
+            new Map(competidores.map((c) => [c.labelCorto, c.nombCorreg]))
+          }
         />
       </div>
 
@@ -780,8 +893,7 @@ function SeccionMargenNetoBubble({
                 />
                 <Scatter
                   data={scatterData}
-                  isAnimationActive={true}
-                  animationDuration={600}
+                  isAnimationActive={false}
                   shape={(props: { cx?: number; cy?: number; size?: number; payload?: BubbleChartPayload }) => {
                     const { cx, cy, size, payload } = props;
                     if (cx == null || cy == null || !payload) return <g />;
@@ -1050,7 +1162,7 @@ function EmptyBox({ titulo, texto }: { titulo: string; texto: string }) {
 }
 
 // ============================================================================
-// Wrapper que lee `tema` del URL y lo pasa al toolbar
+// Wrapper que lee `consolidar` del URL y lo pasa al toolbar
 // ============================================================================
 
 function SelectoresToolbarConTema(props: {
@@ -1062,10 +1174,9 @@ function SelectoresToolbarConTema(props: {
   entidadesDisponibles: EntidadDisponible[];
 }) {
   const sp = useSearchParams();
-  const tema = sp.get("tema");
   // consolidar: default true; solo es false si la URL tiene ?consolidar=false
   const consolidar = sp.get("consolidar") !== "false";
-  return <SelectoresToolbar {...props} temaActual={tema} consolidarActual={consolidar} />;
+  return <SelectoresToolbar {...props} consolidarActual={consolidar} />;
 }
 
 // ============================================================================
@@ -1154,9 +1265,18 @@ const ACCORDION_SECTIONS: Array<{
 function SectionsAccordion({
   periodo,
   peerGroup,
+  colorOverrides,
+  labelCortoToNombCorreg,
 }: {
   periodo: number;
   peerGroup: string[];
+  /** Map<nombCorreg, hex>. Cambios se aplican EN VIVO a todas las secciones
+   *  sin necesidad de refetch — cada acordeon re-pinta las series localmente. */
+  colorOverrides: Map<string, string>;
+  /** Map labelCorto -> nombCorreg. Necesario porque series.entidad es labelCorto
+   *  (puede diferir de nombCorreg si config.peer_group.label_corto esta seteado),
+   *  pero colorOverrides usa nombCorreg como key (canonical). */
+  labelCortoToNombCorreg: Map<string, string>;
 }) {
   return (
     <>
@@ -1169,8 +1289,81 @@ function SectionsAccordion({
           formatoValor={s.formatoValor}
           periodo={periodo}
           peerGroup={peerGroup}
+          colorOverrides={colorOverrides}
+          labelCortoToNombCorreg={labelCortoToNombCorreg}
         />
       ))}
+    </>
+  );
+}
+
+/**
+ * Chip de entidad en la barra COMPARATIVA del header. Click abre el popover
+ * de color picker para customizar el color de esa entidad. La entidad propia
+ * (esPropio) muestra fondo blanco y NO tiene picker (el cliente customiza
+ * via tema/peer_group config).
+ */
+function EntidadChip({
+  nombCorreg,
+  labelCorto,
+  color,
+  esPropio,
+  onColorChange,
+}: {
+  nombCorreg: string;
+  labelCorto: string;
+  color: string;
+  esPropio: boolean;
+  /**
+   * Callback que actualiza el estado client-side de colorOverrides en el padre.
+   * hex = string aplica color; hex = null resetea al default del server.
+   */
+  onColorChange: (hex: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Estilos diferenciados:
+  // - esPropio: fondo blanco solido con texto oscuro (visual destacado)
+  //   pero igual clickable para customizar color (afecta charts/headers)
+  // - competidor: fondo semi-transparente con border-left del color
+  const chipStyle = esPropio
+    ? {
+        backgroundColor: "#ffffff",
+        color: "#0f172a",
+        fontWeight: 600,
+        borderLeft: `3px solid ${color}`,
+      }
+    : {
+        borderLeft: `3px solid ${color}`,
+      };
+
+  const chipClassName = esPropio
+    ? "text-[11px] px-2 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+    : "text-[11px] px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 transition-colors cursor-pointer";
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={chipClassName}
+        style={chipStyle}
+        title="Click para cambiar el color"
+      >
+        {labelCorto}
+      </button>
+      {open && (
+        <ColorPickerPopover
+          nombCorreg={nombCorreg}
+          labelCorto={labelCorto}
+          currentColor={color}
+          triggerRef={triggerRef}
+          onColorChange={onColorChange}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
