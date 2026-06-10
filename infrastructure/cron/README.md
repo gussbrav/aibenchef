@@ -15,14 +15,20 @@ Sincronización automática diaria de archivos SBS — scrape + import + quality
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  [1/4] queue-monthly                                     │
-│  → admin.sync_jobs INSERT job (mes anterior, idempotente)│
+│  [1/4] queue-monthly (sliding window + retry, idemp.)    │
+│  → encola los ultimos 3 meses (default --months-back=3)  │
+│  → re-encola periodos con archivos no_publicado_sbs      │
+│    actualizados hace < 90 dias (publicacion tardia SBS)  │
+│  → NO duplica jobs pending/running del mismo periodo     │
 ├──────────────────────────────────────────────────────────┤
 │  [2/4] work-jobs --max-jobs 10                           │
-│  → playwright scrape SBS                                 │
+│  → scrape SBS (http_downloader)                          │
 │  → escribe a /app/local-data/raw/<grupo>/<topico>/...    │
-│  → status archivo: descargado | no_publicado_sbs | error │
-│  → import monthly-* de archivos con status descargado    │
+│  → storage scan: tamanio/formato/status (fix #126)       │
+│    si tamanio >= 2KB y era no_publicado -> 'descargado'  │
+│  → import all-monthly --periodo X (fix #126)             │
+│    procesa los 10 topicos: status 'descargado'->'procesado'│
+│  → archivo final: procesado | descargado | no_publicado  │
 ├──────────────────────────────────────────────────────────┤
 │  [3/4] dump_archivo_contenido --skip-existing            │
 │  → parsea .xls nuevos y vuelca grid a raw.archivo_contenido│

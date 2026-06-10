@@ -4,6 +4,7 @@ import {
   getUltimoPeriodoCompleto,
   listPeriodosDisponibles,
   listEntidadesDisponibles,
+  parseColorsOverride,
 } from "@/lib/domains/informe/queries";
 import { InformeClient } from "./informe-client";
 
@@ -23,29 +24,13 @@ type SearchParams = Promise<{
   consolidar?: string;
   /**
    * Override de colores por entidad. Formato CSV:
-   *   ?colorOverrides=Banco%20de%20Cr%C3%A9dito%20del%20Per%C3%BA:#0F2A5E,Caja%20Arequipa:#FFB300
+   *   ?colors=Banco%20de%20Cr%C3%A9dito%20del%20Per%C3%BA:0F2A5E,Caja%20Arequipa:FFB300
    * Permite customizar color de cualquier entidad sin tocar config.peer_group.
    */
+  colors?: string;
+  /** Alias retrocompat de `colors`. */
   colorOverrides?: string;
 }>;
-
-/**
- * Parsea ?colorOverrides=NombA:#hex,NombB:#hex en Map<nombCorreg, hex>.
- * Ignora pares mal formados, hex invalidos, y nombres vacios.
- */
-function parseColorOverrides(raw: string | undefined): Map<string, string> | undefined {
-  if (!raw) return undefined;
-  const map = new Map<string, string>();
-  for (const pair of raw.split(",")) {
-    const idx = pair.lastIndexOf(":");
-    if (idx <= 0) continue;
-    const nomb = pair.slice(0, idx).trim();
-    const hex = pair.slice(idx + 1).trim();
-    if (!nomb || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
-    map.set(nomb, hex);
-  }
-  return map.size > 0 ? map : undefined;
-}
 
 // Default sin ningun parametro URL: BCP como cliente + entidad resaltada.
 // Forzamos los 3 niveles (slug + entidadPropia + nombreCorto) para que aunque
@@ -86,7 +71,11 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
     : undefined;
   // consolidar: default true. Solo se desactiva si viene "?consolidar=false".
   const consolidar = params.consolidar !== "false";
-  const colorOverrides = parseColorOverrides(params.colorOverrides);
+
+  // Colores ad-hoc del usuario: ?colors=Mibanco:0F2A5E,BCP:E91E63
+  // Override transitorio en URL — no se persiste en DB.
+  // Soportamos `colorOverrides` como alias retrocompat (era el nombre original).
+  const colorsOverride = parseColorsOverride(params.colors ?? params.colorOverrides);
 
   const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
     getInformeData({
@@ -96,8 +85,8 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       entidadPropiaOverride,
       temaOverride: params.tema,
       ordenOverride: orden,
+      colorsOverride,
       consolidar,
-      colorOverrides,
     }),
     listPeriodosDisponibles({ ultimosN: 240 }),
     listEntidadesDisponibles({}),

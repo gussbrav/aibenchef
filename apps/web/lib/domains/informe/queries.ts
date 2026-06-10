@@ -161,7 +161,7 @@ async function buildCompetidores(
   clienteSlug: string,
   peerGroupOverride: string[] | null,
   entidadPropia: string,
-  colorOverrides?: Map<string, string>,
+  colorsOverride: Map<string, string> | null = null,
 ): Promise<Competidor[]> {
   const configRows = await safeQuery(
     "buildCompetidores.configRows",
@@ -203,19 +203,19 @@ async function buildCompetidores(
 
   const peerList = peerGroupOverride ?? rowsToUse.map((r) => r.competidor_nomb_correg);
 
-  // Asignacion de colores con 3 niveles de override:
-  //  1. colorOverrides (URL ?colorOverrides=NombA:#hex,NombB:#hex) — maxima
-  //     prioridad. Permite al usuario customizar por entidad sin tocar config.
-  //  2. config.peer_group.color_hex — colores guardados por cliente
-  //  3. pickColorEstable(nombCorreg, ya_usados) — paleta de 20 colores
+  // Asignacion de colores robusta — orden de prioridad:
+  //  1. Override URL (?colors=A:HEX,B:HEX) → ad-hoc del usuario, transitorio.
+  //     Validado upstream por parseColorsOverride (formato #rrggbb).
+  //  2. config.peer_group.color_hex → persistido por cliente.
+  //  3. pickColorEstable(nombCorreg, ya_usados) → paleta de 20 colores
   //     contrastantes, mismo nombre siempre mismo color, sin duplicados dentro
   //     del peer group actual.
   const usados = new Set<string>();
   return peerList.map((nombCorreg) => {
     const cfg = configByNomb.get(nombCorreg);
+    const overrideColor = colorsOverride?.get(nombCorreg);
     let color: string;
-    const overrideColor = colorOverrides?.get(nombCorreg);
-    if (overrideColor && /^#[0-9A-Fa-f]{6}$/.test(overrideColor)) {
+    if (overrideColor) {
       color = overrideColor;
     } else if (cfg?.color) {
       color = cfg.color;
@@ -230,6 +230,24 @@ async function buildCompetidores(
       esPropio: nombCorreg === entidadPropia,
     };
   });
+}
+
+// Parsea el query param ?colors=NOMB1:HEX1,NOMB2:HEX2 a un Map.
+// Valida que HEX sea formato #rrggbb (6 hex). Ignora entradas invalidas.
+export function parseColorsOverride(raw: string | null | undefined): Map<string, string> | null {
+  if (!raw) return null;
+  const map = new Map<string, string>();
+  const pattern = /^#[0-9a-fA-F]{6}$/;
+  for (const pair of raw.split(",")) {
+    const idx = pair.lastIndexOf(":");
+    if (idx <= 0) continue;
+    const nomb = pair.slice(0, idx).trim();
+    const hexRaw = pair.slice(idx + 1).trim();
+    const hex = hexRaw.startsWith("#") ? hexRaw : `#${hexRaw}`;
+    if (!nomb || !pattern.test(hex)) continue;
+    map.set(nomb, hex.toUpperCase());
+  }
+  return map.size > 0 ? map : null;
 }
 
 // Paleta amplia (20 colores) elegida para contraste alto y diferenciacion
@@ -1077,13 +1095,14 @@ export async function getInformeData(opts: {
   entidadPropiaOverride?: string;
   temaOverride?: string;
   ordenOverride?: string[];
-  consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
   /**
-   * Override de colores por entidad. Map<nomb_correg, "#RRGGBB">.
-   * Si una entidad esta presente en el map y el hex es valido, se usa ese
-   * color en lugar del de config.peer_group o del hash determinista.
+   * Override ad-hoc de colores por entidad — Map<nomb_correg, "#RRGGBB">.
+   * Se construye en la page desde ?colors=A:HEX,B:HEX (parseColorsOverride).
+   * Si una entidad esta en el map y el hex es valido, se usa ese color en
+   * lugar del de config.peer_group o del hash determinista.
    */
-  colorOverrides?: Map<string, string>;
+  colorsOverride?: Map<string, string> | null;
+  consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
 }): Promise<InformeData> {
   let cliente = await getClienteBySlug(opts.clienteSlug);
 
@@ -1135,7 +1154,7 @@ export async function getInformeData(opts: {
     opts.clienteSlug,
     peerList ?? null,
     cliente.entidadPropia,
-    opts.colorOverrides,
+    opts.colorsOverride ?? null,
   );
 
   // Override de orden (URL ?orden=A,B,C). Reordena los competidores segun la

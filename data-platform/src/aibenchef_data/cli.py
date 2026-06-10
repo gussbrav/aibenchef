@@ -218,14 +218,32 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 conn.commit()
 
         if updated_rows:
+            # Fix bug #126: si un archivo estaba marcado `no_publicado_sbs` (tamanio=0)
+            # y ahora tiene contenido valido en disco (>=2KB), debe pasar a
+            # `descargado` para que los imports lo procesen. Sin esto, el dashboard
+            # muestra `no_publicado_sbs` aunque el archivo este fisicamente
+            # presente — exactamente el caso real de abril 2026.
+            # Estados terminales (`procesado`, `error`, `omitido`) NO se tocan.
             update_sql = """
                 UPDATE raw.archivos_descargados
                 SET tamanio_bytes = %s,
                     formato = %s,
-                    actualizado_en = now()
+                    actualizado_en = now(),
+                    status = CASE
+                        WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN 'descargado'
+                        ELSE status
+                    END,
+                    error_mensaje = CASE
+                        WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN NULL
+                        ELSE error_mensaje
+                    END
                 WHERE path_local = %s
             """
-            for batch in _chunked(updated_rows, BATCH):
+            # Re-armar tuplas con el size duplicado para los CASE WHEN.
+            update_rows_expanded = [
+                (size, fmt, size, size, path_str) for (size, fmt, path_str) in updated_rows
+            ]
+            for batch in _chunked(update_rows_expanded, BATCH):
                 with conn.cursor() as cur:
                     cur.executemany(update_sql, batch)
                 conn.commit()
@@ -2149,6 +2167,181 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+# Mapeo topico -> (importer_class_name, audit_topico_name).
+# Usado por `import all-monthly` para iterar sobre todos los topicos de un periodo.
+# Importante: el `audit_topico_name` es el string que `_import_file_with_audit`
+# escribe en raw.archivos_descargados.topico_norm — debe matchear lo que ya
+# graba storage scan y el resto de la CLI.
+_MONTHLY_TOPICO_IMPORTERS: list[tuple[str, str, str]] = [
+    # (topico_db, importer_class_name, audit_topico)
+    ("eeff", "MonthlyEeffImporter", "eeff"),
+    ("oficinas", "MonthlyOficinasGridImporter", "oficinas"),
+    ("creditos_depositos_geo", "MonthlyOficinasImporter", "creditos_depositos_geo"),
+    ("clientes_credito", "MonthlyClientesImporter", "clientes_credito"),
+    ("clientes_ahorro", "MonthlyClientesAhorroImporter", "clientes_ahorro"),
+    ("personal", "MonthlyPersonalImporter", "personal"),
+    ("indicadores", "MonthlyIndicadoresImporter", "indicadores"),
+    ("colocaciones", "MonthlyColocacionesImporter", "colocaciones"),
+    ("depositos", "MonthlyDepositosImporter", "depositos"),
+    ("castigos", "MonthlyCastigosImporter", "castigos"),
+]
+
+
+@import_grp.command("all-monthly")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM. Procesa todos los archivos del periodo en estado 'descargado'.",
+)
+@click.option(
+    "--batch-size",
+    type=int,
+    default=5_000,
+    show_default=True,
+    help="Filas por batch para todos los importers.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Lista archivos candidatos sin ejecutar imports.",
+)
+def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
+    """Procesa todos los topicos monthly-* de un periodo en una sola corrida.
+
+    Wrapper sobre los 10 comandos monthly-*. Fix de #126 para cerrar el flujo
+    automatizado: scrape -> storage scan -> all-monthly -> procesado.
+
+    Estrategia:
+    1. Para cada topico, consulta raw.archivos_descargados con periodo=X y
+       status='descargado'.
+    2. Llama al importer correspondiente. `_import_file_with_audit` actualiza
+       status a 'procesado' o 'error'.
+    3. Devuelve resumen agregado.
+    """
+    import asyncio
+    import contextlib
+    import importlib
+    from pathlib import Path as _P
+
+    import psycopg
+
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    try:
+        periodo_int = int(periodo)
+        if not (200001 <= periodo_int <= 209912):
+            raise ValueError
+    except ValueError as exc:
+        raise click.UsageError(f"--periodo debe ser YYYYMM valido (recibido: {periodo})") from exc
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # 1. Cargar mapa topico -> [path_local, ...] desde DB.
+    archivos_por_topico: dict[str, list[str]] = {}
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT topico, path_local
+            FROM raw.archivos_descargados
+            WHERE periodo = %s AND status = 'descargado'
+            ORDER BY topico, path_local
+            """,
+            (periodo_int,),
+        )
+        for topico_db, path_local in cur.fetchall():
+            archivos_por_topico.setdefault(topico_db, []).append(path_local)
+
+    total_archivos = sum(len(v) for v in archivos_por_topico.values())
+    click.echo(
+        f"# periodo={periodo_int} archivos_descargado={total_archivos} "
+        f"topicos={sorted(archivos_por_topico.keys())}"
+    )
+
+    if total_archivos == 0:
+        click.echo("# Nada que importar (no hay archivos en estado 'descargado').")
+        return
+
+    if dry_run:
+        for topico, paths in archivos_por_topico.items():
+            click.echo(f"  [dry] {topico}: {len(paths)} archivos")
+            for p in paths:
+                click.echo(f"        ~ {p}")
+        return
+
+    loading_module = importlib.import_module("aibenchef_data.domains.loading")
+
+    grand_inserted = 0
+    grand_errors = 0
+    grand_ok = 0
+    grand_fail = 0
+
+    async def _run_topico(topico_db: str, importer_class_name: str, audit_topico: str) -> None:
+        """Procesa un topico. Asume que el pool global ya esta abierto."""
+        nonlocal grand_inserted, grand_errors, grand_ok, grand_fail
+        paths = archivos_por_topico.get(topico_db, [])
+        if not paths:
+            return
+
+        importer_cls = getattr(loading_module, importer_class_name, None)
+        if importer_cls is None:
+            click.echo(f"  ! topico={topico_db}: importer {importer_class_name} no existe (skip)")
+            return
+
+        click.echo(f"\n## topico={topico_db} archivos={len(paths)} importer={importer_class_name}")
+
+        async with connection() as conn:
+            importer = importer_cls(conn, batch_size=batch_size)
+            for i, p_str in enumerate(paths, start=1):
+                f = _P(p_str)
+                if not f.exists():
+                    grand_fail += 1
+                    click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} SKIP: no existe en disco")
+                    continue
+                try:
+                    result = await _import_file_with_audit(importer, f, topico=audit_topico)
+                    grand_inserted += result.rows_inserted
+                    if result.errors:
+                        grand_errors += len(result.errors)
+                        grand_fail += 1
+                        status_str = f"ERR x{len(result.errors)}"
+                    else:
+                        grand_ok += 1
+                        status_str = "OK"
+                    click.echo(
+                        f"  [{i:>3}/{len(paths)}] {f.name:<40} "
+                        f"rows={result.rows_inserted:>7,}  "
+                        f"({result.duration_seconds:.1f}s)  {status_str}"
+                    )
+                except Exception as e:
+                    grand_fail += 1
+                    grand_errors += 1
+                    click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} FATAL: {e}")
+                    with contextlib.suppress(Exception):
+                        await conn.rollback()
+
+    async def _main() -> None:
+        # Pool abierto UNA vez para todos los topicos. psycopg_pool no permite
+        # reabrir un pool cerrado — abrir/cerrar por topico tira PoolClosed
+        # al segundo topico (bug #126 fase 2).
+        await open_pool()
+        try:
+            for topico_db, importer_name, audit_name in _MONTHLY_TOPICO_IMPORTERS:
+                await _run_topico(topico_db, importer_name, audit_name)
+        finally:
+            await close_pool()
+
+    asyncio.run(_main())
+
+    click.echo("")
+    click.echo(
+        f"# TOTAL periodo={periodo_int}: "
+        f"OK={grand_ok}  FAIL={grand_fail}  "
+        f"rows_insertadas={grand_inserted:,}  errores={grand_errors}"
+    )
+
+
 def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: int) -> None:
     """Helper para correr un importer simple con DB pool + commit."""
     import asyncio
@@ -2602,6 +2795,58 @@ def pipeline_grp() -> None:
     """Observabilidad del pipeline: post-import-check, audit, status."""
 
 
+@pipeline_grp.command("refresh-marts")
+@click.option(
+    "--concurrent/--no-concurrent",
+    default=False,
+    show_default=True,
+    help=(
+        "Usar REFRESH MATERIALIZED VIEW CONCURRENTLY (no bloquea reads pero "
+        "es muy lento en MVs grandes — eeff_*_ancho tarda 15+ min). "
+        "Default (no-concurrent) bloquea reads brevemente pero es mucho mas rapido. "
+        "Para correr post-import en cron, dejar default."
+    ),
+)
+def pipeline_refresh_marts(concurrent: bool) -> None:
+    """Refresca las 24 MVs marts.* tras un import.
+
+    Sin esto, raw.* tiene la data nueva pero el dashboard sigue mostrando el
+    periodo anterior porque lee de las MVs. Fix del bug descubierto al
+    cargar abril 2026 (sigue #126).
+
+    Llama marts.refresh_all_marts(p_concurrent) creada en V133. Reporta una
+    fila por MV con duracion + success/error.
+    """
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    click.echo(
+        f"# refresh-marts iniciado (concurrent={concurrent}). "
+        f"Sin --concurrent las MVs bloquean reads brevemente; "
+        f"con --concurrent es mucho mas lento. Tiempo estimado: 15-60 min."
+    )
+    total = 0
+    ok = 0
+    fail = 0
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT mv_name, duration_ms, success, COALESCE(error,'') "
+            "FROM marts.refresh_all_marts(%s)",
+            (concurrent,),
+        )
+        for mv, duration_ms, success, error in cur.fetchall():
+            total += 1
+            status = "OK" if success else "FAIL"
+            if success:
+                ok += 1
+            else:
+                fail += 1
+            click.echo(f"  [{status}] {mv:<48} {duration_ms:>8} ms  {error}")
+    click.echo("")
+    click.echo(f"# TOTAL: {total} MVs procesadas — OK={ok}, FAIL={fail}")
+
+
 @pipeline_grp.command("post-import-check")
 @click.option(
     "--periodo",
@@ -2997,9 +3242,9 @@ def sbs_work_jobs(max_jobs: int) -> None:
     Por cada job:
       1. status -> 'running'
       2. ejecuta scrape para el rango periodos+topicos+grupos
-      3. computa md5 de archivos descargados; compara con md5 previo en
-         raw.archivos_descargados para detectar cambios
-      4. ejecuta storage scan (registra) e imports correspondientes
+      3. ejecuta storage scan (registra + actualiza tamanio/formato/status)
+      4. ejecuta import all-monthly --periodo X (descargado -> procesado)
+         para cada periodo del rango. Fix de issue #126.
       5. status -> 'completed' con metricas, o 'failed' con error_mensaje
     """
     import subprocess
@@ -3059,7 +3304,7 @@ def sbs_work_jobs(max_jobs: int) -> None:
                         log_lines.append(f"ERROR rc={r.returncode}: {r.stderr[-500:]}")
                         ok = False
 
-                # Storage scan (registra archivos + actualiza md5)
+                # Storage scan (registra archivos + actualiza md5 + status)
                 log_lines.append("$ aibenchef storage scan --root ./local-data/raw")
                 r = subprocess.run(
                     ["aibenchef", "storage", "scan", "--root", "./local-data/raw"],
@@ -3068,6 +3313,48 @@ def sbs_work_jobs(max_jobs: int) -> None:
                     timeout=1800,
                 )
                 log_lines.append(r.stdout[-500:] if r.stdout else "")
+                if r.returncode != 0:
+                    log_lines.append(f"ERROR storage-scan rc={r.returncode}: {r.stderr[-500:]}")
+                    ok = False
+
+                # Import all-monthly por cada periodo del rango (fix #126).
+                # Sin esto, los archivos quedan en status='descargado' eterno y
+                # nunca llegan a marts/dashboards. Idempotente: ON CONFLICT en
+                # las tablas raw + audit trail actualiza status='procesado'.
+                any_imported = False
+                if ok:
+                    for p in range(desde, hasta + 1):
+                        # Saltar gaps de mes (13, 14, etc) sin romper si desde/hasta
+                        # son YYYYMM contiguos del mismo anio.
+                        if (p % 100) < 1 or (p % 100) > 12:
+                            continue
+                        cmd_imp = ["aibenchef", "import", "all-monthly", "--periodo", str(p)]
+                        log_lines.append(f"$ {' '.join(cmd_imp)}")
+                        r = subprocess.run(cmd_imp, capture_output=True, text=True, timeout=3600)
+                        log_lines.append(r.stdout[-500:] if r.stdout else "")
+                        if r.returncode != 0:
+                            log_lines.append(
+                                f"ERROR all-monthly periodo={p} rc={r.returncode}: "
+                                f"{r.stderr[-500:]}"
+                            )
+                            ok = False
+                        elif "rows_insertadas=" in (r.stdout or "") and (
+                            "rows_insertadas=0" not in (r.stdout or "")
+                        ):
+                            any_imported = True
+
+                # Refresh de marts MVs SOLO si entro data nueva (fix #126 fase 3).
+                # Sin esto, raw.* tiene data nueva pero el dashboard muestra el
+                # periodo anterior. Es lento (eeff_*_ancho tarda 15+ min cada
+                # uno) — timeout 2h. Si falla, no marcamos el job como failed:
+                # la data ya esta en raw, el siguiente cron puede reintentar.
+                if ok and any_imported:
+                    cmd_refresh = ["aibenchef", "pipeline", "refresh-marts"]
+                    log_lines.append(f"$ {' '.join(cmd_refresh)}")
+                    r = subprocess.run(cmd_refresh, capture_output=True, text=True, timeout=7200)
+                    log_lines.append(r.stdout[-800:] if r.stdout else "")
+                    if r.returncode != 0:
+                        log_lines.append(f"WARN refresh-marts rc={r.returncode}: {r.stderr[-500:]}")
 
                 if ok:
                     _update(
@@ -3104,34 +3391,147 @@ def sbs_work_jobs(max_jobs: int) -> None:
     click.echo(f"# Terminado: {procesados} jobs procesados")
 
 
-@sbs_group.command("queue-monthly")
-def sbs_queue_monthly() -> None:
-    """Encola un job 'cron' para sincronizar el mes anterior.
+def _sliding_window_periodos(anio_actual: int, mes_actual: int, months_back: int) -> list[int]:
+    """Devuelve los ultimos `months_back` periodos YYYYMM (incluyendo mes anterior, NO el actual).
 
-    Recomendado en cron: 0 2 25 * *  aibenchef sbs queue-monthly && aibenchef sbs work-jobs
+    Args:
+        anio_actual: anio de hoy (1-9999).
+        mes_actual: mes de hoy (1-12).
+        months_back: cuantos meses atras incluir. Debe ser >= 1.
+
+    Returns:
+        Lista descendente de periodos YYYYMM. Para (2026, 6, 3) -> [202605, 202604, 202603].
+        Maneja correctamente cruce de anio: (2026, 1, 3) -> [202512, 202511, 202510].
+    """
+    out: list[int] = []
+    for i in range(1, months_back + 1):
+        # mes_actual=1..12 -> base 0..11. Restamos i meses y dividimos.
+        total = anio_actual * 12 + (mes_actual - 1) - i
+        anio, mes_base = divmod(total, 12)
+        out.append(anio * 100 + (mes_base + 1))
+    return out
+
+
+@sbs_group.command("queue-monthly")
+@click.option(
+    "--months-back",
+    type=int,
+    default=3,
+    show_default=True,
+    help=(
+        "Cuantos meses atras encolar (ventana deslizante). SBS publica con retraso "
+        "variable de 30-45 dias — un solo mes deja gaps cuando publican tarde."
+    ),
+)
+@click.option(
+    "--retry-no-publicado-days",
+    type=int,
+    default=90,
+    show_default=True,
+    help=(
+        "Re-encolar periodos cuyos archivos no_publicado_sbs fueron registrados hace "
+        "menos de N dias. SBS a veces publica con 2-3 meses de retraso (issue #126)."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Listar periodos candidatos sin insertar jobs.",
+)
+def sbs_queue_monthly(
+    months_back: int,
+    retry_no_publicado_days: int,
+    dry_run: bool,
+) -> None:
+    """Encola jobs 'cron' para sincronizar SBS — ventana deslizante + re-intentos.
+
+    Estrategia (refs #126):
+
+    1. Ventana deslizante: encola los ultimos `--months-back` meses (default 3).
+       SBS no publica todo el mes el dia 25 — hay archivos que aparecen hasta
+       45 dias despues. Re-procesarlos cada cron evita perderlos.
+
+    2. Re-intento no_publicado_sbs: busca periodos con archivos en estado
+       `no_publicado_sbs` registrados hace < `--retry-no-publicado-days` dias.
+       Si SBS publica tardiamente, el cron los volvera a tomar.
+
+    3. Idempotente: si ya existe un job pending/running para un periodo, no
+       lo duplica (evita 3 jobs/dia del mismo periodo desde cron 3x/dia).
+
+    Recomendado en cron (3x al dia):
+        0 11,19,3 * * *  aibenchef sbs queue-monthly && aibenchef sbs work-jobs
     """
     from datetime import datetime
 
     import psycopg
 
+    if months_back < 1:
+        raise click.UsageError("--months-back debe ser >= 1")
+    if retry_no_publicado_days < 0:
+        raise click.UsageError("--retry-no-publicado-days debe ser >= 0")
+
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
     now = datetime.now()
-    # Mes anterior
-    if now.month == 1:
-        anio, mes = now.year - 1, 12
-    else:
-        anio, mes = now.year, now.month - 1
-    periodo = anio * 100 + mes
 
-    with psycopg.connect(url) as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO admin.sync_jobs (periodo_desde, periodo_hasta, triggered_by) "
-            "VALUES (%s, %s, 'cron') RETURNING id",
-            (periodo, periodo),
+    # 1. Ventana deslizante de los ultimos N meses.
+    sliding = _sliding_window_periodos(now.year, now.month, months_back)
+    candidatos: set[int] = set(sliding)
+
+    # 2. Re-intentar periodos con no_publicado_sbs recientes (publicacion tardia).
+    retry_periodos: list[int] = []
+    if retry_no_publicado_days > 0:
+        with psycopg.connect(url) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT periodo
+                FROM raw.archivos_descargados
+                WHERE status = 'no_publicado_sbs'
+                  AND actualizado_en > NOW() - (%s || ' days')::interval
+                ORDER BY periodo DESC
+                """,
+                (retry_no_publicado_days,),
+            )
+            retry_periodos = [row[0] for row in cur.fetchall()]
+    candidatos.update(retry_periodos)
+
+    click.echo(f"# Candidatos: {len(candidatos)} (sliding={sliding}, retry={retry_periodos})")
+
+    if dry_run:
+        click.echo("# DRY-RUN: no se insertara nada.")
+        for periodo in sorted(candidatos, reverse=True):
+            click.echo(f"  ~ periodo {periodo}")
+        return
+
+    # 3. Insert idempotente: solo si no hay pending/running para ese periodo.
+    encolados: list[tuple[int, int]] = []
+    skipeados: list[int] = []
+    insert_sql = """
+        INSERT INTO admin.sync_jobs (periodo_desde, periodo_hasta, triggered_by)
+        SELECT %s, %s, 'cron'
+        WHERE NOT EXISTS (
+            SELECT 1 FROM admin.sync_jobs
+            WHERE status IN ('pending', 'running')
+              AND periodo_desde = %s
+              AND periodo_hasta = %s
         )
-        job_id = cur.fetchone()[0]
+        RETURNING id
+    """
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        for periodo in sorted(candidatos, reverse=True):
+            cur.execute(insert_sql, (periodo, periodo, periodo, periodo))
+            row = cur.fetchone()
+            if row is not None:
+                encolados.append((row[0], periodo))
+            else:
+                skipeados.append(periodo)
         conn.commit()
-    click.echo(f"# Encolado job {job_id} para periodo {periodo}")
+
+    for job_id, periodo in encolados:
+        click.echo(f"  + encolado job {job_id} para periodo {periodo}")
+    for periodo in skipeados:
+        click.echo(f"  = skip periodo {periodo} (ya hay pending/running)")
+    click.echo(f"# Encolados: {len(encolados)}, skipeados: {len(skipeados)}")
 
 
 if __name__ == "__main__":
