@@ -2278,6 +2278,7 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
     grand_fail = 0
 
     async def _run_topico(topico_db: str, importer_class_name: str, audit_topico: str) -> None:
+        """Procesa un topico. Asume que el pool global ya esta abierto."""
         nonlocal grand_inserted, grand_errors, grand_ok, grand_fail
         paths = archivos_por_topico.get(topico_db, [])
         if not paths:
@@ -2290,43 +2291,46 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
 
         click.echo(f"\n## topico={topico_db} archivos={len(paths)} importer={importer_class_name}")
 
-        await open_pool()
-        try:
-            async with connection() as conn:
-                importer = importer_cls(conn, batch_size=batch_size)
-                for i, p_str in enumerate(paths, start=1):
-                    f = _P(p_str)
-                    if not f.exists():
+        async with connection() as conn:
+            importer = importer_cls(conn, batch_size=batch_size)
+            for i, p_str in enumerate(paths, start=1):
+                f = _P(p_str)
+                if not f.exists():
+                    grand_fail += 1
+                    click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} SKIP: no existe en disco")
+                    continue
+                try:
+                    result = await _import_file_with_audit(importer, f, topico=audit_topico)
+                    grand_inserted += result.rows_inserted
+                    if result.errors:
+                        grand_errors += len(result.errors)
                         grand_fail += 1
-                        click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} SKIP: no existe en disco")
-                        continue
-                    try:
-                        result = await _import_file_with_audit(importer, f, topico=audit_topico)
-                        grand_inserted += result.rows_inserted
-                        if result.errors:
-                            grand_errors += len(result.errors)
-                            grand_fail += 1
-                            status_str = f"ERR x{len(result.errors)}"
-                        else:
-                            grand_ok += 1
-                            status_str = "OK"
-                        click.echo(
-                            f"  [{i:>3}/{len(paths)}] {f.name:<40} "
-                            f"rows={result.rows_inserted:>7,}  "
-                            f"({result.duration_seconds:.1f}s)  {status_str}"
-                        )
-                    except Exception as e:
-                        grand_fail += 1
-                        grand_errors += 1
-                        click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} FATAL: {e}")
-                        with contextlib.suppress(Exception):
-                            await conn.rollback()
-        finally:
-            await close_pool()
+                        status_str = f"ERR x{len(result.errors)}"
+                    else:
+                        grand_ok += 1
+                        status_str = "OK"
+                    click.echo(
+                        f"  [{i:>3}/{len(paths)}] {f.name:<40} "
+                        f"rows={result.rows_inserted:>7,}  "
+                        f"({result.duration_seconds:.1f}s)  {status_str}"
+                    )
+                except Exception as e:
+                    grand_fail += 1
+                    grand_errors += 1
+                    click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} FATAL: {e}")
+                    with contextlib.suppress(Exception):
+                        await conn.rollback()
 
     async def _main() -> None:
-        for topico_db, importer_name, audit_name in _MONTHLY_TOPICO_IMPORTERS:
-            await _run_topico(topico_db, importer_name, audit_name)
+        # Pool abierto UNA vez para todos los topicos. psycopg_pool no permite
+        # reabrir un pool cerrado — abrir/cerrar por topico tira PoolClosed
+        # al segundo topico (bug #126 fase 2).
+        await open_pool()
+        try:
+            for topico_db, importer_name, audit_name in _MONTHLY_TOPICO_IMPORTERS:
+                await _run_topico(topico_db, importer_name, audit_name)
+        finally:
+            await close_pool()
 
     asyncio.run(_main())
 
