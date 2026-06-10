@@ -77,13 +77,20 @@ export function SelectoresToolbar({
       else sp.delete("peerGroup");
     }
     if (changes.colors !== undefined) {
+      // Param canonico: colorOverrides (compartido con state local del informe
+      // y endpoint API). Format: NOMB:#HEX,NOMB:#HEX (con # — parseFromUrl
+      // en informe-client exige formato #RRGGBB).
       if (changes.colors && changes.colors.size > 0) {
-        // Format: NOMB1:HEX1,NOMB2:HEX2 — el HEX sin '#' para no escapar.
         const serialized = [...changes.colors.entries()]
-          .map(([nomb, hex]) => `${nomb}:${hex.replace("#", "")}`)
+          .map(([nomb, hex]) => {
+            const withHash = hex.startsWith("#") ? hex : `#${hex}`;
+            return `${nomb}:${withHash.toUpperCase()}`;
+          })
           .join(",");
-        sp.set("colors", serialized);
+        sp.set("colorOverrides", serialized);
+        sp.delete("colors"); // limpia param viejo si quedo en URL
       } else {
+        sp.delete("colorOverrides");
         sp.delete("colors");
       }
     }

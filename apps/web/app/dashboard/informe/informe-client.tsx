@@ -484,6 +484,10 @@ export function InformeClient({
         <SectionsAccordion
           periodo={periodo.codigo}
           peerGroup={competidores.map((c) => c.nombCorreg)}
+          colorOverrides={colorOverrides}
+          labelCortoToNombCorreg={
+            new Map(competidores.map((c) => [c.labelCorto, c.nombCorreg]))
+          }
         />
       </div>
 
@@ -1261,9 +1265,18 @@ const ACCORDION_SECTIONS: Array<{
 function SectionsAccordion({
   periodo,
   peerGroup,
+  colorOverrides,
+  labelCortoToNombCorreg,
 }: {
   periodo: number;
   peerGroup: string[];
+  /** Map<nombCorreg, hex>. Cambios se aplican EN VIVO a todas las secciones
+   *  sin necesidad de refetch — cada acordeon re-pinta las series localmente. */
+  colorOverrides: Map<string, string>;
+  /** Map labelCorto -> nombCorreg. Necesario porque series.entidad es labelCorto
+   *  (puede diferir de nombCorreg si config.peer_group.label_corto esta seteado),
+   *  pero colorOverrides usa nombCorreg como key (canonical). */
+  labelCortoToNombCorreg: Map<string, string>;
 }) {
   return (
     <>
@@ -1276,6 +1289,8 @@ function SectionsAccordion({
           formatoValor={s.formatoValor}
           periodo={periodo}
           peerGroup={peerGroup}
+          colorOverrides={colorOverrides}
+          labelCortoToNombCorreg={labelCortoToNombCorreg}
         />
       ))}
     </>
