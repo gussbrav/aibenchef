@@ -11,9 +11,10 @@
 //   4. Punto de Equilibrio Anualizado
 //   5. Analisis Margen Neto: bubble + waterfall
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Download, FileText, Info, AlertCircle, AlertTriangle } from "lucide-react";
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
+import { Download, FileText, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
 import { ColorPickerPopover } from "./color-picker-popover";
 import {
   ResponsiveContainer,
@@ -246,24 +247,28 @@ export function InformeClient({
   const [exportando, setExportando] = useState(false);
 
   // ============================================================================
-  // colorOverrides CLIENT-SIDE
+  // colorOverrides como CLIENT STATE (single source of truth)
   // ============================================================================
-  // Leemos colorOverrides desde el URL via useSearchParams (reactivo a cambios)
-  // y los aplicamos a competidores. Asi los charts (bubble, waterfall, lineas,
-  // barras, etc) cambian de color AL INSTANTE cuando el user pickea un color,
-  // sin tener que esperar que el Server Component se re-renderee (que en
-  // Next.js 15 puede tardar o quedar cacheado).
+  // Arquitectura "world-class" para color picking instantaneo:
   //
-  // CRITICO: useMemo depende del STRING del param, NO del objeto searchParams.
-  // useSearchParams retorna instancias que pueden no cambiar referencia
-  // aunque el contenido si — depender del string garantiza recomputo cuando
-  // el contenido cambia.
+  // 1. El estado vive en useState — INSTANT a cualquier cambio
+  // 2. El URL es DERIVED state — se sincroniza via useEffect + startTransition
+  //    en background, sin bloquear el render
+  // 3. Init desde URL (para soportar URLs compartidos + reload)
+  // 4. Sync FROM url solo si cambia por navegacion externa (back/forward),
+  //    no cuando nosotros mismos lo cambiamos (evita loop infinito)
+  //
+  // Resultado: clicks en el color picker son completamente sincrónos a nivel
+  // UI. URL eventualmente consistente para sharing/reload.
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParamsForColors = useSearchParams();
-  const colorOverridesRaw = searchParamsForColors.get("colorOverrides") ?? "";
-  const colorOverrides = useMemo(() => {
+  const [, startTransition] = useTransition();
+
+  const parseFromUrl = (raw: string): Map<string, string> => {
     const m = new Map<string, string>();
-    if (!colorOverridesRaw) return m;
-    for (const pair of colorOverridesRaw.split(",")) {
+    if (!raw) return m;
+    for (const pair of raw.split(",")) {
       const idx = pair.lastIndexOf(":");
       if (idx <= 0) continue;
       const nomb = pair.slice(0, idx).trim();
@@ -272,7 +277,54 @@ export function InformeClient({
       m.set(nomb, hex);
     }
     return m;
+  };
+  const serializeForUrl = (m: Map<string, string>): string =>
+    Array.from(m.entries())
+      .map(([k, v]) => `${k}:${v}`)
+      .join(",");
+
+  // Estado: inicial desde URL (SSR-friendly, soporta URLs compartidos)
+  const colorOverridesRaw = searchParamsForColors.get("colorOverrides") ?? "";
+  const [colorOverrides, setColorOverrides] = useState<Map<string, string>>(() =>
+    parseFromUrl(colorOverridesRaw),
+  );
+  // Ref para distinguir cambios propios vs externos (back/forward)
+  const lastUrlSyncRef = useRef<string>(colorOverridesRaw);
+
+  // Sync FROM URL — solo si cambio externamente (no por nuestro propio update)
+  useEffect(() => {
+    if (colorOverridesRaw === lastUrlSyncRef.current) return;
+    lastUrlSyncRef.current = colorOverridesRaw;
+    const fromUrl = parseFromUrl(colorOverridesRaw);
+    setColorOverrides(fromUrl);
   }, [colorOverridesRaw]);
+
+  // Sync TO URL — background, non-blocking via startTransition
+  useEffect(() => {
+    const serialized = serializeForUrl(colorOverrides);
+    if (serialized === colorOverridesRaw) return;
+    lastUrlSyncRef.current = serialized;
+    const next = new URLSearchParams(searchParamsForColors.toString());
+    if (serialized) next.set("colorOverrides", serialized);
+    else next.delete("colorOverrides");
+    startTransition(() => {
+      router.replace(`${pathname}?${next.toString()}` as Route, { scroll: false });
+    });
+  }, [colorOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Setter expuesto al color picker: actualiza state INSTANT
+  const setColorForEntity = (nombCorreg: string, hex: string | null) => {
+    setColorOverrides((prev) => {
+      const next = new Map(prev);
+      if (hex === null) next.delete(nombCorreg);
+      else next.set(nombCorreg, hex);
+      return next;
+    });
+  };
+
+  // Reset all colors — UX de "deshacer global"
+  const resetAllColors = () => setColorOverrides(new Map());
+
   const competidores = useMemo(
     () =>
       serverCompetidores.map((c) => {
@@ -317,8 +369,20 @@ export function InformeClient({
                   labelCorto={c.labelCorto}
                   color={c.color}
                   esPropio={c.esPropio}
+                  onColorChange={(hex) => setColorForEntity(c.nombCorreg, hex)}
                 />
               ))}
+              {colorOverrides.size > 0 && (
+                <button
+                  type="button"
+                  onClick={resetAllColors}
+                  className="text-[10px] uppercase tracking-wider text-white/70 hover:text-white inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded hover:bg-white/10 transition-colors"
+                  title="Restaurar colores por defecto de todas las entidades"
+                >
+                  <Paintbrush className="w-3 h-3" />
+                  Reset colores
+                </button>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-2 flex-shrink-0">
@@ -817,8 +881,7 @@ function SeccionMargenNetoBubble({
                 />
                 <Scatter
                   data={scatterData}
-                  isAnimationActive={true}
-                  animationDuration={600}
+                  isAnimationActive={false}
                   shape={(props: { cx?: number; cy?: number; size?: number; payload?: BubbleChartPayload }) => {
                     const { cx, cy, size, payload } = props;
                     if (cx == null || cy == null || !payload) return <g />;
@@ -1221,24 +1284,20 @@ function EntidadChip({
   labelCorto,
   color,
   esPropio,
+  onColorChange,
 }: {
   nombCorreg: string;
   labelCorto: string;
   color: string;
   esPropio: boolean;
+  /**
+   * Callback que actualiza el estado client-side de colorOverrides en el padre.
+   * hex = string aplica color; hex = null resetea al default del server.
+   */
+  onColorChange: (hex: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  // Estado local optimista: el chip muestra este color sin esperar que el
-  // server re-renderee. Si el user override desde el picker -> se actualiza
-  // al instante. Si el server re-llega con otro color (via useEffect), sync.
-  const [liveColor, setLiveColor] = useState(color);
-
-  // Sync cuando el server prop cambia (RSC re-fetch llego).
-  // Tambien sync cuando esPropio cambia (resaltar otra entidad).
-  useEffect(() => {
-    setLiveColor(color);
-  }, [color]);
 
   // Estilos diferenciados:
   // - esPropio: fondo blanco solido con texto oscuro (visual destacado)
@@ -1249,10 +1308,10 @@ function EntidadChip({
         backgroundColor: "#ffffff",
         color: "#0f172a",
         fontWeight: 600,
-        borderLeft: `3px solid ${liveColor}`,
+        borderLeft: `3px solid ${color}`,
       }
     : {
-        borderLeft: `3px solid ${liveColor}`,
+        borderLeft: `3px solid ${color}`,
       };
 
   const chipClassName = esPropio
@@ -1275,12 +1334,9 @@ function EntidadChip({
         <ColorPickerPopover
           nombCorreg={nombCorreg}
           labelCorto={labelCorto}
-          currentColor={liveColor}
+          currentColor={color}
           triggerRef={triggerRef}
-          onColorChange={(hex) => {
-            // hex === null -> reset al color del server
-            setLiveColor(hex ?? color);
-          }}
+          onColorChange={onColorChange}
           onClose={() => setOpen(false)}
         />
       )}

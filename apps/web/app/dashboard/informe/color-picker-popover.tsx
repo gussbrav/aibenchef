@@ -1,26 +1,26 @@
 "use client";
 
 /**
- * Popover de color picker per entidad. Renderizado via React Portal a
- * document.body con position:fixed, para esquivar el overflow:hidden del
- * header gradiente (que clipeaba el popover dejando solo el titulo visible).
+ * Popover de color picker per entidad.
+ *
+ * Arquitectura: este componente es PURE PRESENTATION. No conoce URLs,
+ * routers o estado global. Solo recibe el color actual y un callback
+ * onColorChange. El parent (InformeClient) maneja el estado de
+ * colorOverrides y sincroniza con la URL.
+ *
+ * Renderizado via React Portal a document.body con position:fixed para
+ * esquivar el overflow:hidden del header gradiente.
  *
  * UX:
- *  - Click en chip de entidad en COMPARATIVA del header
- *  - Abre popover con paleta sugerida (16 colores corporativos peruanos)
- *    + HTML5 color picker para custom hex + boton Reset
- *  - Cambio persiste en URL ?colorOverrides=NombA:#hex,NombB:#hex
- *  - router.replace dispara re-SSR con el color aplicado
- *
- * Positioning:
- *  - Calculado contra el bounding rect del trigger (el chip)
- *  - Auto-flip: si no entra abajo, va arriba; si no entra a la derecha, alinea izq
+ *  - Click en chip de entidad abre el popover
+ *  - Paleta sugerida (16 colores corporativos peruanos) + HTML5 color picker
+ *  - Click en paleta o "Aplicar" en custom hex: aplica + (opcionalmente cierra)
+ *  - Boton Reset: vuelve al color default y cierra
+ *  - Boton X / ESC / click fuera: cierra
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Route } from "next";
 import { Palette, RotateCcw, X } from "lucide-react";
 
 const PALETA_SUGERIDA = [
@@ -42,32 +42,11 @@ const PALETA_SUGERIDA = [
   "#475569", // slate
 ];
 
-function parseColorOverridesParam(raw: string | null): Map<string, string> {
-  const m = new Map<string, string>();
-  if (!raw) return m;
-  for (const pair of raw.split(",")) {
-    const idx = pair.lastIndexOf(":");
-    if (idx <= 0) continue;
-    const nomb = pair.slice(0, idx).trim();
-    const hex = pair.slice(idx + 1).trim();
-    if (!nomb || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
-    m.set(nomb, hex);
-  }
-  return m;
-}
-
-function serializeColorOverrides(m: Map<string, string>): string {
-  return Array.from(m.entries())
-    .map(([k, v]) => `${k}:${v}`)
-    .join(",");
-}
-
 const POPOVER_WIDTH = 360;
 const POPOVER_HEIGHT = 310;
 const GAP = 4;
 
 export function ColorPickerPopover({
-  nombCorreg,
   labelCorto,
   currentColor,
   triggerRef,
@@ -78,32 +57,19 @@ export function ColorPickerPopover({
   labelCorto: string;
   currentColor: string;
   triggerRef: React.RefObject<HTMLElement | null>;
-  /**
-   * Callback al cambiar de color — usado por el padre (EntidadChip) para
-   * actualizar estado local optimista, asi el chip cambia de color al
-   * instante sin esperar el re-render del Server Component (que en Next.js
-   * 15 puede tardar o quedar cacheado).
-   */
-  onColorChange?: (hex: string | null) => void;
+  /** hex = aplica; null = reset al color del server */
+  onColorChange: (hex: string | null) => void;
   onClose: () => void;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const popoverRef = useRef<HTMLDivElement>(null);
   const [customHex, setCustomHex] = useState<string>(currentColor);
-  // liveColor: estado local optimista del color aplicado. Se sincroniza con
-  // currentColor cuando el server re-renderea (via useEffect). Se usa para
-  // el tick y la seleccion visual asi se ve el cambio al instante.
-  const [liveColor, setLiveColor] = useState<string>(currentColor);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
-  // Sync liveColor cuando el currentColor prop cambia (server re-render llego).
+  // Sync customHex cuando el currentColor prop cambia (parent state se actualizo)
   useEffect(() => {
-    setLiveColor(currentColor);
     setCustomHex(currentColor);
   }, [currentColor]);
 
@@ -116,7 +82,6 @@ export function ColorPickerPopover({
       const vh = window.innerHeight;
       const vw = window.innerWidth;
 
-      // Vertical: default abajo. Si no entra, arriba.
       const spaceBelow = vh - rect.bottom;
       const spaceAbove = rect.top;
       let top: number;
@@ -125,16 +90,14 @@ export function ColorPickerPopover({
       } else if (spaceAbove >= POPOVER_HEIGHT + GAP) {
         top = rect.top - POPOVER_HEIGHT - GAP;
       } else {
-        // Centrado vertical como ultimo recurso
         top = Math.max(8, vh / 2 - POPOVER_HEIGHT / 2);
       }
 
-      // Horizontal: default alineado a la izq del trigger. Si overflowea derecha, alinear derecha del trigger.
       let left = rect.left;
       if (left + POPOVER_WIDTH > vw - 8) {
         left = Math.max(8, rect.right - POPOVER_WIDTH);
       }
-      left = Math.max(8, left); // no menos de 8px del borde izq
+      left = Math.max(8, left);
 
       setCoords({ top, left });
     };
@@ -147,7 +110,7 @@ export function ColorPickerPopover({
     };
   }, [triggerRef]);
 
-  // Cerrar con ESC o click fuera (excluyendo el trigger)
+  // Cerrar con ESC o click fuera
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -166,46 +129,16 @@ export function ColorPickerPopover({
     };
   }, [onClose, triggerRef]);
 
-  // applyColor APLICA el color pero NO cierra el popover — asi el usuario
-  // puede probar varios colores y ver el cambio en vivo. Cierra con ESC,
-  // click afuera, o boton X. Esto da mejor UX que cerrar en cada click.
-  //
-  // IMPORTANTE: usar pathname + router.refresh() para que Next.js 15 App
-  // Router re-renderee el server component. router.replace('?query') solo
-  // no siempre triggerea re-fetch del RSC.
+  // Aplicar color: notifica al parent. El popover NO se cierra para que el
+  // user pueda probar varios colores en vivo. Cierre manual via X, ESC o
+  // click afuera.
   const applyColor = (hex: string) => {
-    // 1. Optimista: actualizar estado local PRIMERO. Tick se mueve al toque,
-    //    el chip cambia color via onColorChange. No esperamos al server.
-    setLiveColor(hex);
     setCustomHex(hex);
-    onColorChange?.(hex);
-    // 2. Persistir en URL para reload/share. router.replace dispara que
-    //    useSearchParams en InformeClient re-detecte cambios -> los charts
-    //    se actualizan client-side via useMemo. NO usamos router.refresh()
-    //    porque eso forzaria un re-fetch del RSC que en Next.js 15 puede
-    //    llegar tarde y "pisar" el estado client con cache viejo.
-    const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
-    overrides.set(nombCorreg, hex);
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("colorOverrides", serializeColorOverrides(overrides));
-    const url = `${pathname}?${next.toString()}` as Route;
-    router.replace(url, { scroll: false });
+    onColorChange(hex);
   };
 
   const resetColor = () => {
-    // 1. Optimista: notificar al padre que vuelva al color server
-    onColorChange?.(null);
-    // 2. Persistir cambio de URL — sin router.refresh (mismo motivo arriba)
-    const overrides = parseColorOverridesParam(searchParams.get("colorOverrides"));
-    overrides.delete(nombCorreg);
-    const next = new URLSearchParams(searchParams.toString());
-    if (overrides.size === 0) {
-      next.delete("colorOverrides");
-    } else {
-      next.set("colorOverrides", serializeColorOverrides(overrides));
-    }
-    const url = `${pathname}?${next.toString()}` as Route;
-    router.replace(url, { scroll: false });
+    onColorChange(null);
     onClose();
   };
 
@@ -251,7 +184,7 @@ export function ColorPickerPopover({
       </p>
       <div className="grid grid-cols-8 gap-1.5 mb-3">
         {PALETA_SUGERIDA.map((hex) => {
-          const isSelected = liveColor.toLowerCase() === hex.toLowerCase();
+          const isSelected = currentColor.toLowerCase() === hex.toLowerCase();
           return (
             <button
               type="button"
@@ -300,7 +233,7 @@ export function ColorPickerPopover({
           onClick={() => {
             if (/^#[0-9A-Fa-f]{6}$/.test(customHex)) {
               applyColor(customHex);
-              onClose(); // Aplicar custom + cerrar popover (UX esperado)
+              onClose();
             }
           }}
           disabled={!/^#[0-9A-Fa-f]{6}$/.test(customHex)}
