@@ -1202,7 +1202,7 @@ export async function getInformeData(opts: {
       ? getHistoricoFromMartView({ view: "marts.v_cobertura_car_historica", field: "pct_cobertura_car", entidades: entidadesNombs, periodoActual: opts.periodo })
       : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
     HISTORICO_ENABLED
-      ? getHistoricoFromMartView({ view: "marts.v_colocaciones_total_por_entidad", field: "cartera_total / 1000", entidades: entidadesNombs, periodoActual: opts.periodo })
+      ? getHistoricoFromMartView({ view: "marts.v_cartera_balance_historica", field: "cartera_bruta / 1000", entidades: entidadesNombs, periodoActual: opts.periodo })
       : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
   ]);
   const moraMap = moraConsolidado.mora;
