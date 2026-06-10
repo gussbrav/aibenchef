@@ -31,6 +31,7 @@ export function SelectoresToolbar({
   entidadPropia,
   temaActual,
   consolidarActual,
+  coloresActuales,
   periodosDisponibles,
   entidadesDisponibles,
 }: {
@@ -39,6 +40,8 @@ export function SelectoresToolbar({
   entidadPropia: string;
   temaActual: string | null;
   consolidarActual: boolean;
+  /** Map nombCorreg -> hex. Refleja lo que ven los graficos hoy (incluye URL override + DB + fallback). */
+  coloresActuales: Map<string, string>;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
 }) {
@@ -54,6 +57,7 @@ export function SelectoresToolbar({
     entidadPropia?: string;
     tema?: string | null;
     consolidar?: boolean;
+    colors?: Map<string, string> | null;
   }) => {
     const sp = new URLSearchParams(searchParams.toString());
     if (changes.periodo !== undefined) sp.set("periodo", String(changes.periodo));
@@ -76,6 +80,17 @@ export function SelectoresToolbar({
       // re-agrega al final y se pierde el orden del usuario.
       if (changes.peerGroup.length > 0) sp.set("peerGroup", changes.peerGroup.join(","));
       else sp.delete("peerGroup");
+    }
+    if (changes.colors !== undefined) {
+      if (changes.colors && changes.colors.size > 0) {
+        // Format: NOMB1:HEX1,NOMB2:HEX2 — el HEX sin '#' para no escapar.
+        const serialized = [...changes.colors.entries()]
+          .map(([nomb, hex]) => `${nomb}:${hex.replace("#", "")}`)
+          .join(",");
+        sp.set("colors", serialized);
+      } else {
+        sp.delete("colors");
+      }
     }
     startTransition(() => {
       router.push(`${pathname}?${sp.toString()}` as Route);
@@ -154,10 +169,11 @@ export function SelectoresToolbar({
           peerGroupActual={peerGroupActual}
           entidadPropia={entidadPropia}
           entidadesDisponibles={entidadesDisponibles}
+          coloresActuales={coloresActuales}
           onClose={() => setEditorAbierto(false)}
-          onAplicar={(nuevo) => {
+          onAplicar={(nuevo, colores) => {
             setEditorAbierto(false);
-            navegar({ peerGroup: nuevo });
+            navegar({ peerGroup: nuevo, colors: colores });
           }}
         />
       )}
@@ -301,23 +317,56 @@ function SelectorTema({
 // Modal Peer Group Editor
 // ============================================================================
 
+// Paleta sugerida de 20 colores con buen contraste — espejo de la del backend
+// (lib/domains/informe/queries.ts PALETTE_ENTIDADES). Si la backend la cambia,
+// actualizar aca tambien para que la UI no muestre opciones obsoletas.
+const SUGGESTED_PALETTE = [
+  "#0F2A5E", "#E91E63", "#4CAF50", "#C8102E", "#722F37",
+  "#1E90FF", "#FF9800", "#9C27B0", "#8D6E63", "#00BCD4",
+  "#FFEB3B", "#3F51B5", "#795548", "#009688", "#FFC107",
+  "#673AB7", "#F44336", "#607D8B", "#7CB342", "#5D4037",
+];
+
 function PeerGroupEditor({
   peerGroupActual,
   entidadPropia,
   entidadesDisponibles,
+  coloresActuales,
   onClose,
   onAplicar,
 }: {
   peerGroupActual: string[];
   entidadPropia: string;
   entidadesDisponibles: EntidadDisponible[];
+  coloresActuales: Map<string, string>;
   onClose: () => void;
-  onAplicar: (nuevo: string[]) => void;
+  onAplicar: (nuevo: string[], colores: Map<string, string>) => void;
 }) {
   // Usamos array en lugar de Set para preservar el orden que el usuario
   // elige. El primero del array se renderea como primera columna en las
   // tablas del informe.
   const [orden, setOrden] = useState<string[]>([...peerGroupActual]);
+  // Map de colores en edicion. Inicializa con los colores actuales (URL +
+  // DB + fallback) — asi el usuario VE lo que actualmente se renderiza.
+  const [colores, setColores] = useState<Map<string, string>>(
+    () => new Map(coloresActuales),
+  );
+  const [colorPickerAbierto, setColorPickerAbierto] = useState<string | null>(null);
+
+  const setColor = (nomb: string, hex: string) => {
+    setColores((prev) => {
+      const next = new Map(prev);
+      next.set(nomb, hex.toUpperCase());
+      return next;
+    });
+  };
+  const resetColor = (nomb: string) => {
+    setColores((prev) => {
+      const next = new Map(prev);
+      next.delete(nomb);
+      return next;
+    });
+  };
   const seleccionadas = useMemo(() => new Set(orden), [orden]);
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
@@ -498,6 +547,8 @@ function PeerGroupEditor({
                   const esPropio = nomb === entidadPropia;
                   const isDragging = draggingIdx === idx;
                   const isDropTarget = dropTargetIdx === idx && draggingIdx !== null && draggingIdx !== idx;
+                  const colorActual = colores.get(nomb) ?? coloresActuales.get(nomb) ?? "#888888";
+                  const colorPickerOpen = colorPickerAbierto === nomb;
                   return (
                     <li
                       key={nomb}
@@ -507,7 +558,7 @@ function PeerGroupEditor({
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, idx)}
                       onDragEnd={handleDragEnd}
-                      className={`flex items-center gap-2 px-2 py-1.5 bg-white border rounded text-sm transition-all ${
+                      className={`relative flex items-center gap-2 px-2 py-1.5 bg-white border rounded text-sm transition-all ${
                         isDragging
                           ? "opacity-40 border-brand-400"
                           : isDropTarget
@@ -522,6 +573,14 @@ function PeerGroupEditor({
                         <GripVertical className="w-4 h-4" />
                       </span>
                       <span className="text-[10px] font-mono text-slate-400 w-4 text-right">{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setColorPickerAbierto(colorPickerOpen ? null : nomb)}
+                        className="w-6 h-6 rounded border-2 border-white shadow ring-1 ring-slate-300 hover:ring-slate-500 hover:scale-110 transition-all flex-shrink-0"
+                        style={{ backgroundColor: colorActual }}
+                        title={`Cambiar color (actual: ${colorActual.toUpperCase()})`}
+                        aria-label={`Cambiar color de ${nomb}`}
+                      />
                       <span className="flex-1 truncate text-slate-900">
                         {nomb}
                         {esPropio && (
@@ -539,6 +598,76 @@ function PeerGroupEditor({
                       >
                         <X className="w-3.5 h-3.5 text-rose-600" />
                       </button>
+
+                      {colorPickerOpen && (
+                        <div
+                          className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-2xl p-3 w-[260px]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                              Color para {nomb}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setColorPickerAbierto(null)}
+                              className="p-0.5 rounded hover:bg-slate-100"
+                            >
+                              <X className="w-3 h-3 text-slate-500" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-10 gap-1 mb-2">
+                            {SUGGESTED_PALETTE.map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => {
+                                  setColor(nomb, p);
+                                  setColorPickerAbierto(null);
+                                }}
+                                className="w-5 h-5 rounded border border-slate-200 hover:scale-125 hover:ring-2 hover:ring-slate-400 transition-transform"
+                                style={{ backgroundColor: p }}
+                                title={p}
+                                aria-label={`Color ${p}`}
+                              />
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <label className="text-[10px] text-slate-600">Hex:</label>
+                            <input
+                              type="color"
+                              value={colorActual}
+                              onChange={(e) => setColor(nomb, e.target.value)}
+                              className="w-7 h-7 cursor-pointer rounded border border-slate-300"
+                              aria-label="Selector de color personalizado"
+                            />
+                            <input
+                              type="text"
+                              value={colorActual.toUpperCase()}
+                              onChange={(e) => {
+                                const v = e.target.value.trim();
+                                if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
+                                  setColor(nomb, v.startsWith("#") ? v : `#${v}`);
+                                }
+                              }}
+                              placeholder="#0F2A5E"
+                              maxLength={7}
+                              className="flex-1 h-7 px-2 text-xs font-mono border border-slate-300 rounded"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              resetColor(nomb);
+                              setColorPickerAbierto(null);
+                            }}
+                            className="w-full text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+                            title="Vuelve al color asignado por defecto (config / paleta estable)"
+                          >
+                            Restablecer color por defecto
+                          </button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -561,7 +690,7 @@ function PeerGroupEditor({
             </button>
             <button
               type="button"
-              onClick={() => onAplicar(orden)}
+              onClick={() => onAplicar(orden, colores)}
               disabled={orden.length === 0}
               className="h-9 px-4 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
             >

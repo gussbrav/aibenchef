@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { getInformeData, listPeriodosDisponibles, listEntidadesDisponibles } from "@/lib/domains/informe/queries";
+import {
+  getInformeData,
+  listPeriodosDisponibles,
+  listEntidadesDisponibles,
+  parseColorsOverride,
+} from "@/lib/domains/informe/queries";
 import { InformeClient } from "./informe-client";
 
 export const metadata: Metadata = {
@@ -16,6 +21,7 @@ type SearchParams = Promise<{
   tema?: string;
   orden?: string;
   consolidar?: string;
+  colors?: string;
 }>;
 
 // Default sin ningun parametro URL: BCP como cliente + entidad resaltada.
@@ -55,6 +61,10 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   // consolidar: default true. Solo se desactiva si viene "?consolidar=false".
   const consolidar = params.consolidar !== "false";
 
+  // Colores ad-hoc del usuario: ?colors=Mibanco:0F2A5E,BCP:E91E63
+  // Override transitorio en URL — no se persiste en DB.
+  const colorsOverride = parseColorsOverride(params.colors);
+
   const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
     getInformeData({
       clienteSlug,
@@ -63,6 +73,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       entidadPropiaOverride,
       temaOverride: params.tema,
       ordenOverride: orden,
+      colorsOverride,
       consolidar,
     }),
     listPeriodosDisponibles({ ultimosN: 240 }),

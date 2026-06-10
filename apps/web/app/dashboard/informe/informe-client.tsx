@@ -312,6 +312,7 @@ export function InformeClient({
           periodoActual={periodo.codigo}
           peerGroupActual={competidores.map((c) => c.nombCorreg)}
           entidadPropia={cliente.entidadPropia}
+          coloresActuales={new Map(competidores.map((c) => [c.nombCorreg, c.color]))}
           periodosDisponibles={periodosDisponibles}
           entidadesDisponibles={entidadesDisponibles}
         />
@@ -1056,6 +1057,7 @@ function SelectoresToolbarConTema(props: {
   periodoActual: number;
   peerGroupActual: string[];
   entidadPropia: string;
+  coloresActuales: Map<string, string>;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
 }) {

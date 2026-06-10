@@ -161,6 +161,7 @@ async function buildCompetidores(
   clienteSlug: string,
   peerGroupOverride: string[] | null,
   entidadPropia: string,
+  colorsOverride: Map<string, string> | null = null,
 ): Promise<Competidor[]> {
   const configRows = await safeQuery(
     "buildCompetidores.configRows",
@@ -202,16 +203,20 @@ async function buildCompetidores(
 
   const peerList = peerGroupOverride ?? rowsToUse.map((r) => r.competidor_nomb_correg);
 
-  // Asignacion de colores robusta:
-  //  1. Si config.peer_group tiene color_hex configurado para la entidad → usarlo
-  //  2. Sino: pickColorEstable(nombCorreg, ya_usados) — paleta de 20 colores
+  // Asignacion de colores robusta — orden de prioridad:
+  //  1. Override URL (?colors=A:HEX,B:HEX) → ad-hoc del usuario, transitorio.
+  //  2. config.peer_group.color_hex → persistido por cliente.
+  //  3. pickColorEstable(nombCorreg, ya_usados) → paleta de 20 colores
   //     contrastantes, mismo nombre siempre mismo color, sin duplicados dentro
   //     del peer group actual.
   const usados = new Set<string>();
   return peerList.map((nombCorreg) => {
     const cfg = configByNomb.get(nombCorreg);
+    const overrideColor = colorsOverride?.get(nombCorreg);
     let color: string;
-    if (cfg?.color) {
+    if (overrideColor) {
+      color = overrideColor;
+    } else if (cfg?.color) {
       color = cfg.color;
     } else {
       color = pickColorEstable(nombCorreg, usados);
@@ -224,6 +229,24 @@ async function buildCompetidores(
       esPropio: nombCorreg === entidadPropia,
     };
   });
+}
+
+// Parsea el query param ?colors=NOMB1:HEX1,NOMB2:HEX2 a un Map.
+// Valida que HEX sea formato #rrggbb (6 hex). Ignora entradas invalidas.
+export function parseColorsOverride(raw: string | null | undefined): Map<string, string> | null {
+  if (!raw) return null;
+  const map = new Map<string, string>();
+  const pattern = /^#[0-9a-fA-F]{6}$/;
+  for (const pair of raw.split(",")) {
+    const idx = pair.lastIndexOf(":");
+    if (idx <= 0) continue;
+    const nomb = pair.slice(0, idx).trim();
+    const hexRaw = pair.slice(idx + 1).trim();
+    const hex = hexRaw.startsWith("#") ? hexRaw : `#${hexRaw}`;
+    if (!nomb || !pattern.test(hex)) continue;
+    map.set(nomb, hex.toUpperCase());
+  }
+  return map.size > 0 ? map : null;
 }
 
 // Paleta amplia (20 colores) elegida para contraste alto y diferenciacion
@@ -1055,6 +1078,7 @@ export async function getInformeData(opts: {
   entidadPropiaOverride?: string;
   temaOverride?: string;
   ordenOverride?: string[];
+  colorsOverride?: Map<string, string> | null; // ?colors=Mibanco:0F2A5E,BCP:E91E63
   consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
 }): Promise<InformeData> {
   let cliente = await getClienteBySlug(opts.clienteSlug);
@@ -1103,7 +1127,12 @@ export async function getInformeData(opts: {
     peerList = [...peerList, cliente.entidadPropia];
   }
 
-  let competidores = await buildCompetidores(opts.clienteSlug, peerList ?? null, cliente.entidadPropia);
+  let competidores = await buildCompetidores(
+    opts.clienteSlug,
+    peerList ?? null,
+    cliente.entidadPropia,
+    opts.colorsOverride ?? null,
+  );
 
   // Override de orden (URL ?orden=A,B,C). Reordena los competidores segun la
   // secuencia. Entidades no listadas en `orden` van al final.
