@@ -218,14 +218,32 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 conn.commit()
 
         if updated_rows:
+            # Fix bug #126: si un archivo estaba marcado `no_publicado_sbs` (tamanio=0)
+            # y ahora tiene contenido valido en disco (>=2KB), debe pasar a
+            # `descargado` para que los imports lo procesen. Sin esto, el dashboard
+            # muestra `no_publicado_sbs` aunque el archivo este fisicamente
+            # presente — exactamente el caso real de abril 2026.
+            # Estados terminales (`procesado`, `error`, `omitido`) NO se tocan.
             update_sql = """
                 UPDATE raw.archivos_descargados
                 SET tamanio_bytes = %s,
                     formato = %s,
-                    actualizado_en = now()
+                    actualizado_en = now(),
+                    status = CASE
+                        WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN 'descargado'
+                        ELSE status
+                    END,
+                    error_mensaje = CASE
+                        WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN NULL
+                        ELSE error_mensaje
+                    END
                 WHERE path_local = %s
             """
-            for batch in _chunked(updated_rows, BATCH):
+            # Re-armar tuplas con el size duplicado para los CASE WHEN.
+            update_rows_expanded = [
+                (size, fmt, size, size, path_str) for (size, fmt, path_str) in updated_rows
+            ]
+            for batch in _chunked(update_rows_expanded, BATCH):
                 with conn.cursor() as cur:
                     cur.executemany(update_sql, batch)
                 conn.commit()
@@ -2149,6 +2167,177 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+# Mapeo topico -> (importer_class_name, audit_topico_name).
+# Usado por `import all-monthly` para iterar sobre todos los topicos de un periodo.
+# Importante: el `audit_topico_name` es el string que `_import_file_with_audit`
+# escribe en raw.archivos_descargados.topico_norm — debe matchear lo que ya
+# graba storage scan y el resto de la CLI.
+_MONTHLY_TOPICO_IMPORTERS: list[tuple[str, str, str]] = [
+    # (topico_db, importer_class_name, audit_topico)
+    ("eeff", "MonthlyEeffImporter", "eeff"),
+    ("oficinas", "MonthlyOficinasGridImporter", "oficinas"),
+    ("creditos_depositos_geo", "MonthlyOficinasImporter", "creditos_depositos_geo"),
+    ("clientes_credito", "MonthlyClientesImporter", "clientes_credito"),
+    ("clientes_ahorro", "MonthlyClientesAhorroImporter", "clientes_ahorro"),
+    ("personal", "MonthlyPersonalImporter", "personal"),
+    ("indicadores", "MonthlyIndicadoresImporter", "indicadores"),
+    ("colocaciones", "MonthlyColocacionesImporter", "colocaciones"),
+    ("depositos", "MonthlyDepositosImporter", "depositos"),
+    ("castigos", "MonthlyCastigosImporter", "castigos"),
+]
+
+
+@import_grp.command("all-monthly")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM. Procesa todos los archivos del periodo en estado 'descargado'.",
+)
+@click.option(
+    "--batch-size",
+    type=int,
+    default=5_000,
+    show_default=True,
+    help="Filas por batch para todos los importers.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Lista archivos candidatos sin ejecutar imports.",
+)
+def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
+    """Procesa todos los topicos monthly-* de un periodo en una sola corrida.
+
+    Wrapper sobre los 10 comandos monthly-*. Fix de #126 para cerrar el flujo
+    automatizado: scrape -> storage scan -> all-monthly -> procesado.
+
+    Estrategia:
+    1. Para cada topico, consulta raw.archivos_descargados con periodo=X y
+       status='descargado'.
+    2. Llama al importer correspondiente. `_import_file_with_audit` actualiza
+       status a 'procesado' o 'error'.
+    3. Devuelve resumen agregado.
+    """
+    import asyncio
+    import contextlib
+    import importlib
+    from pathlib import Path as _P
+
+    import psycopg
+
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    try:
+        periodo_int = int(periodo)
+        if not (200001 <= periodo_int <= 209912):
+            raise ValueError
+    except ValueError as exc:
+        raise click.UsageError(f"--periodo debe ser YYYYMM valido (recibido: {periodo})") from exc
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # 1. Cargar mapa topico -> [path_local, ...] desde DB.
+    archivos_por_topico: dict[str, list[str]] = {}
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT topico, path_local
+            FROM raw.archivos_descargados
+            WHERE periodo = %s AND status = 'descargado'
+            ORDER BY topico, path_local
+            """,
+            (periodo_int,),
+        )
+        for topico_db, path_local in cur.fetchall():
+            archivos_por_topico.setdefault(topico_db, []).append(path_local)
+
+    total_archivos = sum(len(v) for v in archivos_por_topico.values())
+    click.echo(
+        f"# periodo={periodo_int} archivos_descargado={total_archivos} "
+        f"topicos={sorted(archivos_por_topico.keys())}"
+    )
+
+    if total_archivos == 0:
+        click.echo("# Nada que importar (no hay archivos en estado 'descargado').")
+        return
+
+    if dry_run:
+        for topico, paths in archivos_por_topico.items():
+            click.echo(f"  [dry] {topico}: {len(paths)} archivos")
+            for p in paths:
+                click.echo(f"        ~ {p}")
+        return
+
+    loading_module = importlib.import_module("aibenchef_data.domains.loading")
+
+    grand_inserted = 0
+    grand_errors = 0
+    grand_ok = 0
+    grand_fail = 0
+
+    async def _run_topico(topico_db: str, importer_class_name: str, audit_topico: str) -> None:
+        nonlocal grand_inserted, grand_errors, grand_ok, grand_fail
+        paths = archivos_por_topico.get(topico_db, [])
+        if not paths:
+            return
+
+        importer_cls = getattr(loading_module, importer_class_name, None)
+        if importer_cls is None:
+            click.echo(f"  ! topico={topico_db}: importer {importer_class_name} no existe (skip)")
+            return
+
+        click.echo(f"\n## topico={topico_db} archivos={len(paths)} importer={importer_class_name}")
+
+        await open_pool()
+        try:
+            async with connection() as conn:
+                importer = importer_cls(conn, batch_size=batch_size)
+                for i, p_str in enumerate(paths, start=1):
+                    f = _P(p_str)
+                    if not f.exists():
+                        grand_fail += 1
+                        click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} SKIP: no existe en disco")
+                        continue
+                    try:
+                        result = await _import_file_with_audit(importer, f, topico=audit_topico)
+                        grand_inserted += result.rows_inserted
+                        if result.errors:
+                            grand_errors += len(result.errors)
+                            grand_fail += 1
+                            status_str = f"ERR x{len(result.errors)}"
+                        else:
+                            grand_ok += 1
+                            status_str = "OK"
+                        click.echo(
+                            f"  [{i:>3}/{len(paths)}] {f.name:<40} "
+                            f"rows={result.rows_inserted:>7,}  "
+                            f"({result.duration_seconds:.1f}s)  {status_str}"
+                        )
+                    except Exception as e:
+                        grand_fail += 1
+                        grand_errors += 1
+                        click.echo(f"  [{i:>3}/{len(paths)}] {f.name:<40} FATAL: {e}")
+                        with contextlib.suppress(Exception):
+                            await conn.rollback()
+        finally:
+            await close_pool()
+
+    async def _main() -> None:
+        for topico_db, importer_name, audit_name in _MONTHLY_TOPICO_IMPORTERS:
+            await _run_topico(topico_db, importer_name, audit_name)
+
+    asyncio.run(_main())
+
+    click.echo("")
+    click.echo(
+        f"# TOTAL periodo={periodo_int}: "
+        f"OK={grand_ok}  FAIL={grand_fail}  "
+        f"rows_insertadas={grand_inserted:,}  errores={grand_errors}"
+    )
+
+
 def _run_simple_import(importer_cls, path: str, sheet: str | None, batch_size: int) -> None:
     """Helper para correr un importer simple con DB pool + commit."""
     import asyncio
@@ -2997,9 +3186,9 @@ def sbs_work_jobs(max_jobs: int) -> None:
     Por cada job:
       1. status -> 'running'
       2. ejecuta scrape para el rango periodos+topicos+grupos
-      3. computa md5 de archivos descargados; compara con md5 previo en
-         raw.archivos_descargados para detectar cambios
-      4. ejecuta storage scan (registra) e imports correspondientes
+      3. ejecuta storage scan (registra + actualiza tamanio/formato/status)
+      4. ejecuta import all-monthly --periodo X (descargado -> procesado)
+         para cada periodo del rango. Fix de issue #126.
       5. status -> 'completed' con metricas, o 'failed' con error_mensaje
     """
     import subprocess
@@ -3059,7 +3248,7 @@ def sbs_work_jobs(max_jobs: int) -> None:
                         log_lines.append(f"ERROR rc={r.returncode}: {r.stderr[-500:]}")
                         ok = False
 
-                # Storage scan (registra archivos + actualiza md5)
+                # Storage scan (registra archivos + actualiza md5 + status)
                 log_lines.append("$ aibenchef storage scan --root ./local-data/raw")
                 r = subprocess.run(
                     ["aibenchef", "storage", "scan", "--root", "./local-data/raw"],
@@ -3068,6 +3257,30 @@ def sbs_work_jobs(max_jobs: int) -> None:
                     timeout=1800,
                 )
                 log_lines.append(r.stdout[-500:] if r.stdout else "")
+                if r.returncode != 0:
+                    log_lines.append(f"ERROR storage-scan rc={r.returncode}: {r.stderr[-500:]}")
+                    ok = False
+
+                # Import all-monthly por cada periodo del rango (fix #126).
+                # Sin esto, los archivos quedan en status='descargado' eterno y
+                # nunca llegan a marts/dashboards. Idempotente: ON CONFLICT en
+                # las tablas raw + audit trail actualiza status='procesado'.
+                if ok:
+                    for p in range(desde, hasta + 1):
+                        # Saltar gaps de mes (13, 14, etc) sin romper si desde/hasta
+                        # son YYYYMM contiguos del mismo anio.
+                        if (p % 100) < 1 or (p % 100) > 12:
+                            continue
+                        cmd_imp = ["aibenchef", "import", "all-monthly", "--periodo", str(p)]
+                        log_lines.append(f"$ {' '.join(cmd_imp)}")
+                        r = subprocess.run(cmd_imp, capture_output=True, text=True, timeout=3600)
+                        log_lines.append(r.stdout[-500:] if r.stdout else "")
+                        if r.returncode != 0:
+                            log_lines.append(
+                                f"ERROR all-monthly periodo={p} rc={r.returncode}: "
+                                f"{r.stderr[-500:]}"
+                            )
+                            ok = False
 
                 if ok:
                     _update(
