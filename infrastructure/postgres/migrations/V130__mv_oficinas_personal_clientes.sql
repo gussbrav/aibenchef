@@ -61,6 +61,11 @@ BEGIN
         RETURN;
     END IF;
 
+    -- FIX CRITICO: pg_get_viewdef retorna la def con ';' final.
+    -- Si no lo stripeamos, queda 'CREATE MV ... AS <def>; WITH NO DATA' que
+    -- es SQL invalido (el ';' termina el CREATE y WITH NO DATA queda huerfano).
+    view_def := rtrim(view_def, E' ;\n\r\t');
+
     -- Limpiar MV vieja (si existia de un intento previo)
     EXECUTE format('DROP MATERIALIZED VIEW IF EXISTS %s CASCADE', mv_name);
     -- Limpiar view (CASCADE para dependencias downstream)
