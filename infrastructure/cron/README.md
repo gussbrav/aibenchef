@@ -15,8 +15,11 @@ Sincronización automática diaria de archivos SBS — scrape + import + quality
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  [1/4] queue-monthly                                     │
-│  → admin.sync_jobs INSERT job (mes anterior, idempotente)│
+│  [1/4] queue-monthly (sliding window + retry, idemp.)    │
+│  → encola los ultimos 3 meses (default --months-back=3)  │
+│  → re-encola periodos con archivos no_publicado_sbs      │
+│    actualizados hace < 90 dias (publicacion tardia SBS)  │
+│  → NO duplica jobs pending/running del mismo periodo     │
 ├──────────────────────────────────────────────────────────┤
 │  [2/4] work-jobs --max-jobs 10                           │
 │  → playwright scrape SBS                                 │

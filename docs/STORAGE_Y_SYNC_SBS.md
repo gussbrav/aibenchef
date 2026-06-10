@@ -58,20 +58,24 @@ La SBS publica datos del mes anterior **entre los días 20-25** de cada mes. Y a
 
 Para detectar y manejar esto, la plataforma usa una **cola de jobs** en `admin.sync_jobs`.
 
-### A) Cron mensual (recomendado)
+### A) Cron diario 3x/día (recomendado)
 
-En EasyPanel, agregar dos cron jobs al contenedor `aibenchef-data-platform`:
+Configurado en `infrastructure/cron/aibenchef-daily-sync.sh`, instalado en `/etc/cron.d/aibenchef-daily`:
 
 ```cron
-# Día 25, 02:00 AM: encolar job de sincronización del mes anterior
-0 2 25 * *   cd /app && aibenchef sbs queue-monthly
-
-# Cada hora a partir de las 03:00 AM del 25: procesar jobs pendientes
-0 3-23 25 * * cd /app && aibenchef sbs work-jobs
-0 * 26-31 * * cd /app && aibenchef sbs work-jobs
+# 11:00, 19:00, 03:00 UTC  =  06:00, 14:00, 22:00 Lima
+0 11,19,3 * * * root /usr/local/bin/aibenchef-daily-sync.sh
 ```
 
-`queue-monthly` encola un job para el mes anterior. `work-jobs` toma jobs `pending` y los procesa (scrape + detect md5 changes + import).
+El script ejecuta `aibenchef sbs queue-monthly && aibenchef sbs work-jobs --max-jobs 10`.
+
+**`queue-monthly` (fix de issue #126):**
+
+- **Ventana deslizante** — encola los últimos `--months-back` meses (default **3**). SBS publica con retraso variable de 30-45 días: si el cron solo encolara el mes anterior, archivos que aparezcan tarde quedarían en `no_publicado_sbs` para siempre.
+- **Retry no_publicado_sbs** — busca periodos cuyos archivos quedaron `no_publicado_sbs` y se registraron hace menos de `--retry-no-publicado-days` días (default **90**), y los re-encola.
+- **Idempotente** — si ya hay un job `pending` o `running` para un periodo, no lo duplica. El cron 3x/día no genera duplicados.
+
+`work-jobs` toma jobs `pending` y los procesa (scrape + detect md5 changes + import).
 
 ### B) Sincronización manual desde dashboard
 
@@ -101,14 +105,17 @@ Estados de archivo:
 
 ## 4. Flujo end-to-end de un día normal
 
-1. **Día 25** 02:00 AM — cron dispara `queue-monthly` → inserta job para mes anterior
-2. **Día 25** 03:00 AM — cron dispara `work-jobs`:
-   - toma el job, status → `running`
-   - ejecuta `scrape --desde X --hasta X` (todos los tópicos)
-   - ejecuta `storage scan` (actualiza md5_hash)
-   - status → `completed`, log_text con summary
-3. **Dashboard `/admin/archivos`** muestra la celda Mes/Año con color verde (procesado)
-4. Si la SBS reemplaza un archivo después del cron, el siguiente `storage scan` detecta md5 distinto → posible re-procesamiento
+1. **Cada 8 horas** (06:00, 14:00, 22:00 Lima) — cron dispara `aibenchef-daily-sync.sh`:
+   - `queue-monthly` encola los últimos 3 meses + periodos con archivos `no_publicado_sbs` recientes (idempotente: no duplica pending/running)
+   - `work-jobs --max-jobs 10` procesa los jobs:
+     - toma cada job, status → `running`
+     - ejecuta `scrape --desde X --hasta X` (todos los tópicos)
+     - ejecuta `storage scan` (actualiza md5_hash)
+     - status → `completed`, `log_text` con summary
+   - `dump_archivo_contenido --skip-existing` vuelca grid de archivos nuevos
+   - `quality-check` los últimos 2 períodos
+2. **Dashboard `/admin/archivos`** refleja el estado actualizado
+3. Si SBS publica un archivo tardíamente (días/semanas después), el sliding window lo capturará en la siguiente corrida del cron sin intervención manual
 
 ---
 

@@ -3104,34 +3104,147 @@ def sbs_work_jobs(max_jobs: int) -> None:
     click.echo(f"# Terminado: {procesados} jobs procesados")
 
 
-@sbs_group.command("queue-monthly")
-def sbs_queue_monthly() -> None:
-    """Encola un job 'cron' para sincronizar el mes anterior.
+def _sliding_window_periodos(anio_actual: int, mes_actual: int, months_back: int) -> list[int]:
+    """Devuelve los ultimos `months_back` periodos YYYYMM (incluyendo mes anterior, NO el actual).
 
-    Recomendado en cron: 0 2 25 * *  aibenchef sbs queue-monthly && aibenchef sbs work-jobs
+    Args:
+        anio_actual: anio de hoy (1-9999).
+        mes_actual: mes de hoy (1-12).
+        months_back: cuantos meses atras incluir. Debe ser >= 1.
+
+    Returns:
+        Lista descendente de periodos YYYYMM. Para (2026, 6, 3) -> [202605, 202604, 202603].
+        Maneja correctamente cruce de anio: (2026, 1, 3) -> [202512, 202511, 202510].
+    """
+    out: list[int] = []
+    for i in range(1, months_back + 1):
+        # mes_actual=1..12 -> base 0..11. Restamos i meses y dividimos.
+        total = anio_actual * 12 + (mes_actual - 1) - i
+        anio, mes_base = divmod(total, 12)
+        out.append(anio * 100 + (mes_base + 1))
+    return out
+
+
+@sbs_group.command("queue-monthly")
+@click.option(
+    "--months-back",
+    type=int,
+    default=3,
+    show_default=True,
+    help=(
+        "Cuantos meses atras encolar (ventana deslizante). SBS publica con retraso "
+        "variable de 30-45 dias — un solo mes deja gaps cuando publican tarde."
+    ),
+)
+@click.option(
+    "--retry-no-publicado-days",
+    type=int,
+    default=90,
+    show_default=True,
+    help=(
+        "Re-encolar periodos cuyos archivos no_publicado_sbs fueron registrados hace "
+        "menos de N dias. SBS a veces publica con 2-3 meses de retraso (issue #126)."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Listar periodos candidatos sin insertar jobs.",
+)
+def sbs_queue_monthly(
+    months_back: int,
+    retry_no_publicado_days: int,
+    dry_run: bool,
+) -> None:
+    """Encola jobs 'cron' para sincronizar SBS — ventana deslizante + re-intentos.
+
+    Estrategia (refs #126):
+
+    1. Ventana deslizante: encola los ultimos `--months-back` meses (default 3).
+       SBS no publica todo el mes el dia 25 — hay archivos que aparecen hasta
+       45 dias despues. Re-procesarlos cada cron evita perderlos.
+
+    2. Re-intento no_publicado_sbs: busca periodos con archivos en estado
+       `no_publicado_sbs` registrados hace < `--retry-no-publicado-days` dias.
+       Si SBS publica tardiamente, el cron los volvera a tomar.
+
+    3. Idempotente: si ya existe un job pending/running para un periodo, no
+       lo duplica (evita 3 jobs/dia del mismo periodo desde cron 3x/dia).
+
+    Recomendado en cron (3x al dia):
+        0 11,19,3 * * *  aibenchef sbs queue-monthly && aibenchef sbs work-jobs
     """
     from datetime import datetime
 
     import psycopg
 
+    if months_back < 1:
+        raise click.UsageError("--months-back debe ser >= 1")
+    if retry_no_publicado_days < 0:
+        raise click.UsageError("--retry-no-publicado-days debe ser >= 0")
+
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
     now = datetime.now()
-    # Mes anterior
-    if now.month == 1:
-        anio, mes = now.year - 1, 12
-    else:
-        anio, mes = now.year, now.month - 1
-    periodo = anio * 100 + mes
 
-    with psycopg.connect(url) as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO admin.sync_jobs (periodo_desde, periodo_hasta, triggered_by) "
-            "VALUES (%s, %s, 'cron') RETURNING id",
-            (periodo, periodo),
+    # 1. Ventana deslizante de los ultimos N meses.
+    sliding = _sliding_window_periodos(now.year, now.month, months_back)
+    candidatos: set[int] = set(sliding)
+
+    # 2. Re-intentar periodos con no_publicado_sbs recientes (publicacion tardia).
+    retry_periodos: list[int] = []
+    if retry_no_publicado_days > 0:
+        with psycopg.connect(url) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT periodo
+                FROM raw.archivos_descargados
+                WHERE status = 'no_publicado_sbs'
+                  AND actualizado_en > NOW() - (%s || ' days')::interval
+                ORDER BY periodo DESC
+                """,
+                (retry_no_publicado_days,),
+            )
+            retry_periodos = [row[0] for row in cur.fetchall()]
+    candidatos.update(retry_periodos)
+
+    click.echo(f"# Candidatos: {len(candidatos)} (sliding={sliding}, retry={retry_periodos})")
+
+    if dry_run:
+        click.echo("# DRY-RUN: no se insertara nada.")
+        for periodo in sorted(candidatos, reverse=True):
+            click.echo(f"  ~ periodo {periodo}")
+        return
+
+    # 3. Insert idempotente: solo si no hay pending/running para ese periodo.
+    encolados: list[tuple[int, int]] = []
+    skipeados: list[int] = []
+    insert_sql = """
+        INSERT INTO admin.sync_jobs (periodo_desde, periodo_hasta, triggered_by)
+        SELECT %s, %s, 'cron'
+        WHERE NOT EXISTS (
+            SELECT 1 FROM admin.sync_jobs
+            WHERE status IN ('pending', 'running')
+              AND periodo_desde = %s
+              AND periodo_hasta = %s
         )
-        job_id = cur.fetchone()[0]
+        RETURNING id
+    """
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        for periodo in sorted(candidatos, reverse=True):
+            cur.execute(insert_sql, (periodo, periodo, periodo, periodo))
+            row = cur.fetchone()
+            if row is not None:
+                encolados.append((row[0], periodo))
+            else:
+                skipeados.append(periodo)
         conn.commit()
-    click.echo(f"# Encolado job {job_id} para periodo {periodo}")
+
+    for job_id, periodo in encolados:
+        click.echo(f"  + encolado job {job_id} para periodo {periodo}")
+    for periodo in skipeados:
+        click.echo(f"  = skip periodo {periodo} (ya hay pending/running)")
+    click.echo(f"# Encolados: {len(encolados)}, skipeados: {len(skipeados)}")
 
 
 if __name__ == "__main__":
