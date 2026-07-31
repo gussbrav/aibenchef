@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       periodoHasta?: number;
       topicos?: string[];
       grupos?: string[];
+      forceRedownload?: boolean;
     };
 
     const desde = Number(body.periodoDesde);
@@ -41,15 +42,18 @@ export async function POST(req: NextRequest) {
     }
     const topicos = body.topicos && body.topicos.length > 0 ? body.topicos : null;
     const grupos = body.grupos && body.grupos.length > 0 ? body.grupos : null;
+    const forceRedownload = body.forceRedownload === true;
 
     const rows = await db.execute<{ id: number }>(sql`
       INSERT INTO admin.sync_jobs (
         periodo_desde, periodo_hasta, topicos, grupos,
+        force_redownload,
         triggered_by, triggered_by_email
       ) VALUES (
         ${desde}, ${hasta},
         ${topicos as unknown as string}::text[],
         ${grupos as unknown as string}::text[],
+        ${forceRedownload}::boolean,
         'manual',
         ${session.email ?? null}::text
       )
@@ -70,6 +74,7 @@ export async function POST(req: NextRequest) {
         periodoHasta: hasta,
         topicos,
         grupos,
+        forceRedownload,
       },
     });
 
@@ -92,7 +97,9 @@ export async function GET(req: NextRequest) {
 
     const rows = await db.execute<Record<string, unknown>>(sql`
       SELECT id, periodo_desde AS "periodoDesde", periodo_hasta AS "periodoHasta",
-             topicos, grupos, status,
+             topicos, grupos,
+             COALESCE(force_redownload, false) AS "forceRedownload",
+             status,
              archivos_descargados AS "archivosDescargados",
              archivos_cambiados   AS "archivosCambiados",
              filas_importadas     AS "filasImportadas",

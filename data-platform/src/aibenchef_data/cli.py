@@ -2441,8 +2441,10 @@ async def _import_file_with_audit(
 
     from aibenchef_data.domains.shared import (
         carga_log_context,
+        check_partial_ingest,
         mark_archivo_error,
         mark_archivo_procesado,
+        mark_archivo_sospechoso,
         resolve_archivo_id,
     )
     from aibenchef_data.infrastructure.db import connection
@@ -2500,6 +2502,11 @@ async def _import_file_with_audit(
 
         # G1: marca archivo como procesado solo si NO hubo errores parciales
         # (si los hay, queda en 'error' para inspección humana).
+        # G1.5 (V135): si NO hubo errores, correr detect_partial_ingest y si
+        # detecta carga sospechosa (rows << promedio historico), degradar el
+        # estado a 'sospechoso'. Cierra el gap del incidente C-4103-my2026:
+        # archivo SBS truncado que carga sin excepcion, marcado 'procesado'
+        # invisible, dejando el peer group entero en "—".
         if archivo_id is not None:
             try:
                 async with connection() as conn_mark:
@@ -2509,13 +2516,35 @@ async def _import_file_with_audit(
                             archivo_id=archivo_id,
                             error_mensaje=f"Parsed con {len(result.errors)} errores; rows_inserted={result.rows_inserted}",
                         )
+                        await conn_mark.commit()
                     else:
                         await mark_archivo_procesado(
                             conn_mark,
                             archivo_id=archivo_id,
                             filas_insertadas=result.rows_inserted,
                         )
-                    await conn_mark.commit()
+                        await conn_mark.commit()
+                        check = await check_partial_ingest(conn_mark, archivo_id=archivo_id)
+                        if check is not None:
+                            log.metadata["partial_ingest_check"] = check
+                        if check and check.get("ok") is False:
+                            reason = check.get("reason", "unknown")
+                            ratio = check.get("ratio")
+                            rows_prom = check.get("rows_promedio")
+                            msg = (
+                                f"Carga sospechosa (reason={reason}, "
+                                f"rows={result.rows_inserted} vs prom={rows_prom}, "
+                                f"ratio={ratio}). Re-encolar con "
+                                f"force_redownload=true si SBS ya publico corregido."
+                            )
+                            log.metadata["marked_sospechoso"] = True
+                            await mark_archivo_sospechoso(
+                                conn_mark,
+                                archivo_id=archivo_id,
+                                filas_insertadas=result.rows_inserted,
+                                error_mensaje=msg,
+                            )
+                            await conn_mark.commit()
             except Exception:
                 # Best-effort. Si el UPDATE falla no es razón para fallar el import.
                 pass
@@ -3325,10 +3354,13 @@ def sbs_work_jobs(max_jobs: int) -> None:
     procesados = 0
     with psycopg.connect(url, connect_timeout=10) as conn:
         for _ in range(max_jobs):
-            # Tomar el job pending mas antiguo
+            # Tomar el job pending mas antiguo. force_redownload (V135) permite
+            # forzar re-baja aunque el archivo exista en storage — clave para
+            # recuperarse de descargas SBS truncadas cacheadas.
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, periodo_desde, periodo_hasta, topicos, grupos "
+                    "SELECT id, periodo_desde, periodo_hasta, topicos, grupos, "
+                    "       COALESCE(force_redownload, false) "
                     "FROM admin.sync_jobs WHERE status='pending' "
                     "ORDER BY requested_at LIMIT 1 FOR UPDATE SKIP LOCKED"
                 )
@@ -3337,9 +3369,10 @@ def sbs_work_jobs(max_jobs: int) -> None:
                 click.echo(f"# No hay jobs pendientes (procesados={procesados})")
                 break
 
-            job_id, desde, hasta, topicos, grupos = row
+            job_id, desde, hasta, topicos, grupos, force_redownload = row
             click.echo(
-                f"# Procesando job {job_id}: {desde}-{hasta} topicos={topicos} grupos={grupos}"
+                f"# Procesando job {job_id}: {desde}-{hasta} topicos={topicos} "
+                f"grupos={grupos} force={force_redownload}"
             )
             _update(conn, job_id, status="running", started_at=datetime.utcnow())
 
@@ -3348,6 +3381,8 @@ def sbs_work_jobs(max_jobs: int) -> None:
             try:
                 # Ejecutar scrape (sin --topico -> todos)
                 cmd = ["aibenchef", "scrape", "--desde", str(desde), "--hasta", str(hasta)]
+                if force_redownload:
+                    cmd.append("--force")
                 if topicos:
                     for t in topicos:
                         cmd_t = [*cmd, "--topico", t]

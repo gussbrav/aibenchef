@@ -152,6 +152,26 @@ class MonthlyEeffImporter:
                 context={"file": path.name, "sheets": [s.name for s in sheets]},
             )
 
+        # Los .xls mensuales SBS de EEFF SIEMPRE traen ambos sheets. Si falta
+        # uno es senal de descarga corrupta/truncada (incidente C-4103-my2026).
+        # Fallar explicito para que _import_file_with_audit lo marque como
+        # error en raw.archivos_descargados y no queden ratios financieros
+        # en "—" para todas las entidades del grupo. Si algun periodo historico
+        # legitimamente publicaba solo uno, agregar excepcion en base a
+        # (grupo, periodo <= YYYYMM) — pero HOY no conocemos ninguno.
+        if not balance_sheets or not resultado_sheets:
+            missing = "balance" if not balance_sheets else "resultados"
+            raise ValidationError(
+                f"Archivo .xls no trae sheet de '{missing}' — probable descarga "
+                f"truncada. Re-descargar con force_redownload=true.",
+                context={
+                    "file": path.name,
+                    "sheets_encontrados": [s.name for s in sheets],
+                    "balance_sheets": [s.name for s in balance_sheets],
+                    "resultado_sheets": [s.name for s in resultado_sheets],
+                },
+            )
+
         inserted = 0
         errors: list[str] = []
 

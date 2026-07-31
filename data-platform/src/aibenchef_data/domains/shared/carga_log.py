@@ -258,6 +258,68 @@ async def mark_archivo_procesado(
         )
 
 
+async def mark_archivo_sospechoso(
+    conn: psycopg.AsyncConnection,
+    *,
+    archivo_id: UUID,
+    filas_insertadas: int,
+    error_mensaje: str,
+) -> None:
+    """Marca un archivo como sospechoso: el import termino sin excepcion
+    pero el detector post-ingest (raw.detect_partial_ingest) encontro que
+    las filas insertadas son muy pocas vs el promedio historico.
+
+    A diferencia de mark_archivo_error, mantenemos filas_insertadas para
+    que el admin UI muestre el ratio real (ej. "1,368 de 2,322 esperadas").
+
+    Introducido por V135 tras el incidente C-4103-my2026.xls (jul-2026).
+    """
+    if archivo_id is None:
+        return
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            UPDATE raw.archivos_descargados
+               SET status           = 'sospechoso',
+                   filas_insertadas = %s,
+                   error_mensaje    = %s,
+                   procesado_en     = now(),
+                   actualizado_en   = now()
+             WHERE id = %s
+            """,
+            (filas_insertadas, error_mensaje[:500], archivo_id),
+        )
+
+
+async def check_partial_ingest(
+    conn: psycopg.AsyncConnection,
+    *,
+    archivo_id: UUID,
+) -> dict[str, object] | None:
+    """Corre raw.detect_partial_ingest(archivo_id) y devuelve el JSONB parsed.
+
+    Devuelve None si archivo_id es None o si la funcion aun no existe
+    (ej. DB sin V135 aplicada — no rompemos importers viejos).
+    """
+    if archivo_id is None:
+        return None
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT raw.detect_partial_ingest(%s)::text",
+                (archivo_id,),
+            )
+            row = await cur.fetchone()
+            if not row or row[0] is None:
+                return None
+            import json
+
+            parsed = json.loads(row[0])
+            return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
 async def mark_archivo_error(
     conn: psycopg.AsyncConnection,
     *,

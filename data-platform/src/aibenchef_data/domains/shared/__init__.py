@@ -3,8 +3,10 @@
 from .carga_log import (
     CargaLogState,
     carga_log_context,
+    check_partial_ingest,
     mark_archivo_error,
     mark_archivo_procesado,
+    mark_archivo_sospechoso,
     resolve_archivo_id,
 )
 from .errors import (
@@ -29,10 +31,12 @@ __all__ = [
     "Result",
     "ValidationError",
     "carga_log_context",
+    "check_partial_ingest",
     "configure_logging",
     "get_logger",
     "is_domain_error",
     "mark_archivo_error",
     "mark_archivo_procesado",
+    "mark_archivo_sospechoso",
     "resolve_archivo_id",
 ]
