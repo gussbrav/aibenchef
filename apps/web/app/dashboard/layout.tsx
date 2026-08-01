@@ -110,6 +110,7 @@ export default async function DashboardLayout({
                 items={[
                   { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
                   { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad ingesta SBS" },
+                  { href: "/dashboard/admin/data-quality", label: "Data Quality", description: "Completeness, freshness, cargas sospechosas" },
                   { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados SBS" },
                   { href: "/dashboard/admin/renombres", label: "Maestra", description: "Renombres y entidades" },
                   { href: "/dashboard/admin/eeff-inspector", label: "EEFF Inspector", description: "Validar extracción cuenta-por-cuenta" },

@@ -2888,20 +2888,28 @@ def pipeline_refresh_marts(concurrent: bool) -> None:
     show_default=True,
     help="Refresh CONCURRENTLY de las MVs (lento, pero no bloquea reads).",
 )
-def pipeline_refresh_derived(periodo: str | None, concurrent: bool) -> None:
+@click.option(
+    "--triggered-by",
+    type=str,
+    default="cli:manual",
+    help="Etiqueta para admin.mv_refresh_log (cli:cron, sync_job:123, etc).",
+)
+def pipeline_refresh_derived(periodo: str | None, concurrent: bool, triggered_by: str) -> None:
     """Orquesta TODOS los recalculos derivados tras un import.
 
-    Llama marts.refresh_all_derived(periodo, concurrent) creada en V134:
-      1. dw.recalcular_microfinancieras(periodo)  → cartera_mype, smf flags
-      2. marts.refresh_kpis_anuales()             → kpis_anuales_entidad/historica
-      3. marts.refresh_all_marts(concurrent)      → 24 MVs marts.*
+    Llama marts.refresh_all_derived_logged(periodo, concurrent, triggered_by)
+    creada en V137 (wrapper de la V134 que persiste en admin.mv_refresh_log):
+      1. dw.recalcular_microfinancieras(periodo)  -> cartera_mype, smf flags
+      2. marts.refresh_kpis_anuales()             -> kpis_anuales_entidad/historica
+      3. marts.refresh_all_marts(concurrent)      -> 24 MVs marts.*
 
     Sin esto, el dashboard muestra celdas vacias (caso real: 'Cartera MYPE /
     Total %' aparecio en blanco para abril 2026 porque
     dw.entidad_microfinanciera_periodo no se recalculo post-import).
 
     Idempotente. Para post-import del cron, pasar --periodo explicito para
-    evitar recalcular TODO el historico.
+    evitar recalcular TODO el historico. Cada corrida queda registrada en
+    admin.mv_refresh_log para /dashboard/admin/data-quality (freshness).
     """
     import psycopg
 
@@ -2917,15 +2925,28 @@ def pipeline_refresh_derived(periodo: str | None, concurrent: bool) -> None:
                 f"--periodo debe ser YYYYMM valido (recibido: {periodo})"
             ) from exc
 
-    click.echo(f"# refresh-derived periodo={periodo or 'TODOS'} concurrent={concurrent}")
+    click.echo(
+        f"# refresh-derived periodo={periodo or 'TODOS'} concurrent={concurrent} "
+        f"triggered_by={triggered_by}"
+    )
     grand_ok = 0
     grand_fail = 0
     with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT step_name, duration_ms, success, COALESCE(detail,'') "
-            "FROM marts.refresh_all_derived(%s, %s)",
-            (periodo_int, concurrent),
-        )
+        # Fallback graceful si la DB aun no tiene V137 (rollback deploy):
+        # intentamos _logged primero, si no existe usamos la version base.
+        try:
+            cur.execute(
+                "SELECT step_name, duration_ms, success, COALESCE(detail,'') "
+                "FROM marts.refresh_all_derived_logged(%s, %s, %s)",
+                (periodo_int, concurrent, triggered_by),
+            )
+        except psycopg.errors.UndefinedFunction:
+            conn.rollback()
+            cur.execute(
+                "SELECT step_name, duration_ms, success, COALESCE(detail,'') "
+                "FROM marts.refresh_all_derived(%s, %s)",
+                (periodo_int, concurrent),
+            )
         for step, duration_ms, success, detail in cur.fetchall():
             status = "OK" if success else "FAIL"
             if success:
@@ -3456,6 +3477,8 @@ def sbs_work_jobs(max_jobs: int) -> None:
                             "refresh-derived",
                             "--periodo",
                             str(p),
+                            "--triggered-by",
+                            f"sync_job:{job_id}",
                         ]
                         log_lines.append(f"$ {' '.join(cmd_refresh)}")
                         r = subprocess.run(
@@ -3466,6 +3489,28 @@ def sbs_work_jobs(max_jobs: int) -> None:
                             log_lines.append(
                                 f"WARN refresh-derived periodo={p} rc={r.returncode}: "
                                 f"{r.stderr[-500:]}"
+                            )
+
+                        # Post-refresh (V138): correr quality-check para poblar
+                        # admin.data_quality_checks y dejar la senal disponible
+                        # en /admin/data-quality. NO afecta el status del job:
+                        # es informativo, un fallo de quality-check no aborta.
+                        cmd_qc = [
+                            "aibenchef",
+                            "pipeline",
+                            "quality-check",
+                            "--periodo",
+                            str(p),
+                            "--triggered-by",
+                            f"sync_job:{job_id}",
+                        ]
+                        log_lines.append(f"$ {' '.join(cmd_qc)}")
+                        r_qc = subprocess.run(cmd_qc, capture_output=True, text=True, timeout=1800)
+                        log_lines.append(r_qc.stdout[-500:] if r_qc.stdout else "")
+                        if r_qc.returncode != 0:
+                            log_lines.append(
+                                f"WARN quality-check periodo={p} rc={r_qc.returncode}: "
+                                f"{r_qc.stderr[-500:]}"
                             )
 
                 if ok:

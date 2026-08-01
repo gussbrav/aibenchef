@@ -1,6 +1,7 @@
 export * from "./queries";
 export * from "./eeff-inspector";
 export * from "./cabecera-aligner";
+export * from "./data-quality";
 export type {
   AnomaliaReviewInput,
   AnomaliaRow,
