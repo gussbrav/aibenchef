@@ -462,6 +462,10 @@ export function InformeClient({
         clienteSlug={cliente.slug}
         entidadPropia={cliente.entidadPropia}
         peerGroup={competidores.map((c) => c.nombCorreg)}
+        waterfallYoY={margenNetoWaterfall}
+        waterfallVsDic={margenNetoWaterfallVsDic}
+        periodoLabelYoY={periodoComparativo.label}
+        periodoLabelVsDic={periodoDicPrev.label}
       />
 
       {/* ============ WATERFALL vs mismo mes año previo ============ */}
@@ -800,6 +804,10 @@ function SeccionMargenNetoBubble({
   clienteSlug,
   entidadPropia,
   peerGroup,
+  waterfallYoY,
+  waterfallVsDic,
+  periodoLabelYoY,
+  periodoLabelVsDic,
 }: {
   data: BubblePoint[];
   competidores: Competidor[];
@@ -809,6 +817,10 @@ function SeccionMargenNetoBubble({
   clienteSlug: string;
   entidadPropia: string;
   peerGroup: string[];
+  waterfallYoY: WaterfallData[];
+  waterfallVsDic: WaterfallData[];
+  periodoLabelYoY: string;
+  periodoLabelVsDic: string;
 }) {
   if (data.length === 0) {
     return (
@@ -986,6 +998,31 @@ function SeccionMargenNetoBubble({
                 deltaRend: d.y,
                 margenNetoActual: d.margenNeto,
               })),
+              // Cascada por competidor — para que el LLM pueda decir
+              // "el margen de X subio +40bps: +25 de rendimiento, -15 de
+              // provisiones, +30 de costos operativos".
+              waterfallYoY: {
+                periodoBaseLabel: periodoLabelYoY,
+                periodoFinalLabel: comparativoLabel,
+                series: waterfallYoY.map((w) => ({
+                  entidad: w.competidor,
+                  basePct: w.base,
+                  finalPct: w.final,
+                  totalBps: w.totalBps,
+                  componentes: w.componentes,
+                })),
+              },
+              waterfallVsDic: {
+                periodoBaseLabel: periodoLabelVsDic,
+                periodoFinalLabel: comparativoLabel,
+                series: waterfallVsDic.map((w) => ({
+                  entidad: w.competidor,
+                  basePct: w.base,
+                  finalPct: w.final,
+                  totalBps: w.totalBps,
+                  componentes: w.componentes,
+                })),
+              },
             }}
           />
           {comentario ? <ComentarioBox texto={comentario} /> : null}

@@ -260,21 +260,48 @@ export function SeccionHistoricoAccordion({
  * Adapta el shape de HistoricoEntidadSerie[] al contexto que espera cada
  * prompt template. Cada seccion tiene su propio formato de tabla — ver
  * prompts/*.ts para la shape esperada.
+ *
+ * Enriquece con serie completa (5 puntos), MoM y vs Dic para que el LLM
+ * pueda razonar sobre CAUSAS de las tendencias y no solo describir.
  */
 function buildInsightsContexto(
   seccion: InsightSeccion,
   series: HistoricoEntidadSerie[],
 ): Record<string, unknown> {
+  // Helper: extrae puntos claves de la serie de 5.
+  // La serie viene ordenada del mas viejo al mas nuevo. En modo NO-diciembre
+  // el shape es [Dic-3, Dic-2, MismoMes-1, Dic-1, actual]; en modo diciembre
+  // son 5 Diciembres. En ambos casos el ultimo es "actual" y el penultimo
+  // es la referencia inmediata (mes anterior en efecto para el usuario).
+  const enriquecerSerie = (s: HistoricoEntidadSerie) => {
+    const puntos = s.serie ?? [];
+    const actual = puntos.at(-1)?.valor ?? null;
+    const previoInmediato = puntos.at(-2)?.valor ?? null; // "mes anterior" en efecto
+    const dicPrev = puntos.at(-2)?.valor ?? null; // en muchos casos coincide (ver serie de 5 puntos)
+    const mismoMesAnioPrev = puntos.at(-3)?.valor ?? null;
+    const dosAniosPrev = puntos.at(1)?.valor ?? null;
+    const puntosLabels = puntos.map((p) => ({
+      periodo: p.periodoLabel,
+      valor: p.valor,
+    }));
+    return { actual, previoInmediato, dicPrev, mismoMesAnioPrev, dosAniosPrev, puntos: puntosLabels };
+  };
+
   if (seccion === "cartera_bruta") {
     return {
       serie: series.map((s) => {
-        const actual = s.valorActual ?? 0;
-        const base = s.valorBase ?? 0;
+        const e = enriquecerSerie(s);
+        const actual = e.actual ?? 0;
+        const yoY = e.mismoMesAnioPrev ?? 0;
+        const mom = e.previoInmediato ?? 0;
         return {
           entidad: s.entidad,
           valorActual: actual,
-          valorAnioPrev: base,
-          crecimientoPct: base > 0 ? (actual - base) / base : 0,
+          valorAnioPrev: yoY,
+          valorMesPrev: mom,
+          crecimientoYoYPct: yoY > 0 ? (actual - yoY) / yoY : 0,
+          crecimientoMoMPct: mom > 0 ? (actual - mom) / mom : 0,
+          serie5Puntos: e.puntos,
         };
       }),
     };
@@ -283,20 +310,30 @@ function buildInsightsContexto(
   if (seccion === "mora_global") {
     return {
       serie: series.map((s) => {
-        const actual = s.valorActual ?? 0;
-        const base = s.valorBase ?? 0;
+        const e = enriquecerSerie(s);
+        const actual = e.actual ?? 0;
+        const yoY = e.mismoMesAnioPrev ?? 0;
+        const mom = e.previoInmediato ?? 0;
         return {
           entidad: s.entidad,
           moraActual: actual,
-          moraAnioPrev: base,
-          deltaPp: (actual - base) * 100,
+          moraAnioPrev: yoY,
+          moraMesPrev: mom,
+          deltaYoYPp: (actual - yoY) * 100,
+          deltaMoMPp: (actual - mom) * 100,
+          serie5Puntos: e.puntos,
         };
       }),
     };
   }
 
-  // Default generico: pasar la serie tal cual (para futuros prompts)
-  return { series };
+  // Default generico: pasar la serie tal cual con puntos enriquecidos
+  return {
+    series: series.map((s) => ({
+      entidad: s.entidad,
+      ...enriquecerSerie(s),
+    })),
+  };
 }
 
 /**
