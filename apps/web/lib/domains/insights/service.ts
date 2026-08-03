@@ -162,12 +162,13 @@ export async function generateInsight(
   };
   const { system, user } = template.build(promptCtx);
 
-  // Llamar al LLM. maxTokens=1500 permite output de 5-7 bullets de 1-3
-  // lineas cada uno + margen. Bajo esto los prompts v2 se truncan.
+  // Llamar al LLM. maxTokens=4000 permite output de 5-7 bullets de 2-4
+  // lineas cada uno con analisis causal + cierre prescriptivo (Implica/
+  // Accion/Riesgo). Bajo esto los prompts v4 se truncan a mitad del array.
   const t0 = Date.now();
   let result;
   try {
-    result = await provider.generate(user, { system, maxTokens: 1500 });
+    result = await provider.generate(user, { system, maxTokens: 4000 });
   } catch (err) {
     throw new InsightsError(
       err instanceof Error ? err.message : String(err),
@@ -261,7 +262,8 @@ export async function generateInsight(
 
 /**
  * Parsea el output del LLM como JSON array de strings.
- * Tolera pequenas desviaciones: markdown fences, whitespace, trailing commas.
+ * Tolera desviaciones: markdown fences, whitespace, trailing commas y
+ * truncados (si el LLM se corto a mitad de bullet, salvamos los completos).
  */
 function parseBulletsJson(text: string): string[] {
   const cleaned = text
@@ -271,16 +273,44 @@ function parseBulletsJson(text: string): string[] {
     .replace(/\s*```$/i, "")
     .trim();
 
+  // Intento directo
   try {
     const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((x): x is string => typeof x === "string")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
   } catch {
-    return [];
+    // fallthrough
   }
+
+  // Recuperacion de truncados: intenta cerrar el array recortando hasta
+  // el ultimo string bien cerrado. Ejemplo: `["a", "b", "c incom`
+  //   -> retry como `["a", "b"]`
+  const startIdx = cleaned.indexOf("[");
+  if (startIdx < 0) return [];
+  const body = cleaned.slice(startIdx);
+  // Encuentra la ultima comilla-doble que abre O cierra un string bien
+  // formado, y recorta ahi para intentar reparar.
+  for (let end = body.length - 1; end > 0; end--) {
+    if (body[end] !== "\"") continue;
+    const candidate = body.slice(0, end + 1).replace(/,\s*$/, "") + "]";
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+          .filter((x): x is string => typeof x === "string")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+      }
+    } catch {
+      // sigue buscando
+    }
+  }
+
+  return [];
 }
 
 function calcularPeriodoAnterior(periodo: number): number {
