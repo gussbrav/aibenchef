@@ -69,8 +69,12 @@ export function ReportInsights({
       const res = await fetch(`/api/v1/informe/insights?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      if (json?.insight) {
-        setState({ kind: "ready", insight: json.insight, fromCache: true });
+      // El helper handleRoute() del proyecto envuelve toda respuesta
+      // exitosa en { data: <payload>, requestId }. Soportamos ambos
+      // shapes por si en el futuro se cambia el wrapper.
+      const insight = (json?.data?.insight ?? json?.insight) as Insight | null;
+      if (insight) {
+        setState({ kind: "ready", insight, fromCache: true });
       } else {
         setState({ kind: "empty" });
       }
