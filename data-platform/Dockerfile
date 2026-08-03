@@ -22,7 +22,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    # Timeout de descarga de wheels. Default uv es 30s, insuficiente en
+    # redes lentas (EasyPanel timeoutea con sqlalchemy 2.0.49 en 30s).
+    # Subimos a 180s + habilitamos 3 retries automaticos.
+    UV_HTTP_TIMEOUT=180 \
+    UV_CONCURRENT_DOWNLOADS=4
 
 # uv como binario standalone (mas reproducible que pip install uv)
 COPY --from=ghcr.io/astral-sh/uv:0.5.18 /uv /usr/local/bin/uv
