@@ -1143,18 +1143,22 @@ export async function getInformeData(opts: {
     peerList = await getTop2PorGrupoByCartera(opts.periodo);
   }
 
-  // Garantizar que la entidad propia esta siempre en el peer group.
-  // REGLA DE ORO: al agregarla, respetar la jerarquia regulatoria SBS
-  // (Bancos -> Financieras -> CMAC -> CRAC -> EDPYMES) y colocarla PRIMERA
-  // dentro de su tipo. Si el usuario provee peerGroupOverride en URL,
-  // se respeta EXACTAMENTE ese orden (usuario final manda sobre defaults).
-  if (peerList && !peerList.includes(cliente.entidadPropia)) {
-    const conPropia = [...peerList, cliente.entidadPropia];
-    // Solo aplicar jerarquia si NO hay override manual del usuario en URL —
-    // el override manual siempre gana como fuente de verdad.
-    peerList = opts.peerGroupOverride
-      ? conPropia
-      : await ordenarPorJerarquiaSbs(conPropia, cliente.entidadPropia);
+  // REGLA DE ORO del default del peer group:
+  //   1. Exactamente 5 entidades — top 1 de cada tipo regulatorio SBS.
+  //   2. Orden jerarquico: Bancos > Financieras > CMAC > CRAC > EDPYMES.
+  //   3. La ENTIDAD PROPIA REEMPLAZA al top de su mismo tipo (no suma).
+  //      Si el cliente es BCP (BANCOS) y Santander es el top de BANCOS por
+  //      cartera, el peer default = [BCP, Confianza, CMAC-A, CRAC-L, Volvo]
+  //      (Santander desplazado). El usuario final puede agregar Santander
+  //      manualmente via 'Editar comparativa' si quiere ambos.
+  //   4. Si el override manual del usuario viene en URL (?peerGroup=...),
+  //      se respeta EXACTAMENTE — usuario final manda sobre defaults.
+  if (peerList && !opts.peerGroupOverride) {
+    peerList = await aplicarReglaPeerDefault(peerList, cliente.entidadPropia);
+  } else if (peerList && !peerList.includes(cliente.entidadPropia)) {
+    // Override manual del usuario que se olvido de incluir a la propia:
+    // agregarla al final para no perderla, pero SIN reordenar el resto.
+    peerList = [...peerList, cliente.entidadPropia];
   }
 
   let competidores = await buildCompetidores(
@@ -2037,30 +2041,45 @@ export async function getHistoricoEntidad(opts: {
   );
 }
 
+const JERARQUIA_SBS: Record<string, number> = {
+  BANCOS: 0,
+  FINANCIERAS: 1,
+  CMAC: 2,
+  CRAC: 3,
+  EDPYMES: 4,
+};
+
 /**
- * REGLA DE ORO — Ordena un peer group siguiendo la jerarquia regulatoria SBS:
+ * REGLA DE ORO — Arma el peer group DEFAULT del /dashboard/informe:
  *
- *   Bancos → Financieras → CMAC → CRAC → EDPYMES
+ *   1. Reordena por jerarquia regulatoria SBS:
+ *      Bancos > Financieras > CMAC > CRAC > EDPYMES.
+ *   2. La ENTIDAD PROPIA REEMPLAZA al top de su mismo tipo (no suma).
+ *      Ejemplo: si el cliente es BCP (BANCOS) y en peerList venia Santander
+ *      como top BANCOS por cartera, el resultado tiene BCP y Santander sale.
+ *      Objetivo: mantener exactamente 5 entidades (top 1 por tipo).
+ *   3. Si la propia es de un tipo NO representado en peerList, se inserta
+ *      en la posicion jerarquica correcta (no al final).
  *
- * Dentro de cada tipo, la ENTIDAD PROPIA (si esta) va primero. El resto
- * mantiene su orden original (stable sort). Entidades sin tipo conocido
- * en dw.dim_entidad van al final.
+ * NO se aplica cuando el usuario provee peerGroupOverride en URL — ese
+ * caso preserva el orden manual del usuario exactamente como vino.
  *
- * Se usa cuando se auto-agrega la entidad propia al peer group para que
- * no aparezca al final rompiendo la jerarquia visual. Si el usuario final
- * provee peerGroupOverride en URL, esta funcion NO se aplica — respetamos
- * el orden manual del usuario.
+ * 1 sola query a dw.dim_entidad (todos los tipos en batch).
  */
-async function ordenarPorJerarquiaSbs(
-  entidades: string[],
+async function aplicarReglaPeerDefault(
+  peerList: string[],
   entidadPropia: string,
 ): Promise<string[]> {
-  if (entidades.length <= 1) return entidades;
+  const entidadesUnicas = Array.from(new Set([...peerList, entidadPropia]));
+  if (entidadesUnicas.length === 0) return peerList;
 
   const rows = await safeQuery(
-    "ordenarPorJerarquiaSbs",
+    "aplicarReglaPeerDefault.tipos",
     async () => {
-      const entArr = sql`ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[]`;
+      const entArr = sql`ARRAY[${sql.join(
+        entidadesUnicas.map((e) => sql`${e}`),
+        sql`, `,
+      )}]::text[]`;
       return db.execute<{ nomb_correg: string; tipo_entidad: string | null }>(sql`
         SELECT nomb_correg, UPPER(tipo_entidad) AS tipo_entidad
         FROM dw.dim_entidad
@@ -2070,27 +2089,39 @@ async function ordenarPorJerarquiaSbs(
     [] as Array<{ nomb_correg: string; tipo_entidad: string | null }>,
   );
 
-  const tipoMap = new Map(rows.map((r) => [String(r.nomb_correg), r.tipo_entidad ?? ""]));
-  const jerarquia: Record<string, number> = {
-    BANCOS: 0,
-    FINANCIERAS: 1,
-    CMAC: 2,
-    CRAC: 3,
-    EDPYMES: 4,
+  const tipoOf = (nomb: string): string => {
+    const found = rows.find((r) => String(r.nomb_correg) === nomb);
+    return found?.tipo_entidad ?? "";
   };
-  const idxOriginal = new Map(entidades.map((e, i) => [e, i]));
 
-  return [...entidades].sort((a, b) => {
-    const tipoA = tipoMap.get(a) ?? "";
-    const tipoB = tipoMap.get(b) ?? "";
-    const orderA = jerarquia[tipoA] ?? 99;
-    const orderB = jerarquia[tipoB] ?? 99;
+  const tipoPropia = tipoOf(entidadPropia);
+  let out = [...peerList];
+
+  // Paso 1: si la propia no esta, REEMPLAZAR al primer competidor de su
+  // mismo tipo (o insertar si el tipo no esta representado).
+  if (!out.includes(entidadPropia)) {
+    const idxMismoTipo = tipoPropia
+      ? out.findIndex((e) => tipoOf(e) === tipoPropia)
+      : -1;
+    if (idxMismoTipo >= 0) {
+      out[idxMismoTipo] = entidadPropia;
+    } else {
+      out.push(entidadPropia);
+    }
+  }
+
+  // Paso 2: ordenar por jerarquia SBS. Dentro del mismo tipo, propia primero.
+  const idxOriginal = new Map(out.map((e, i) => [e, i]));
+  out.sort((a, b) => {
+    const orderA = JERARQUIA_SBS[tipoOf(a)] ?? 99;
+    const orderB = JERARQUIA_SBS[tipoOf(b)] ?? 99;
     if (orderA !== orderB) return orderA - orderB;
-    // Mismo tipo -> entidad propia primero, resto en orden original.
     if (a === entidadPropia) return -1;
     if (b === entidadPropia) return 1;
     return (idxOriginal.get(a) ?? 0) - (idxOriginal.get(b) ?? 0);
   });
+
+  return out;
 }
 
 /**
