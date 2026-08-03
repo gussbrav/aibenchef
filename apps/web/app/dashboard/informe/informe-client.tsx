@@ -856,8 +856,8 @@ function SeccionMargenNetoBubble({
       <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
         Analisis Margen Neto — {comparativoLabel}
       </h2>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+      <div className="flex flex-col gap-4 mt-4">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
           <p className="text-sm text-slate-500 mb-4">
             Eje X: variación del Punto de Equilibrio (pp). Eje Y: variación del Rendimiento de Cartera (pp). Tamaño de burbuja proporcional al %Margen Neto actual.
           </p>
@@ -984,7 +984,7 @@ function SeccionMargenNetoBubble({
             ))}
           </div>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 w-full">
           <ReportInsights
             periodo={periodo}
             seccion="margen_neto"
@@ -1071,8 +1071,8 @@ function SeccionMargenNetoWaterfall({
         <strong>bps</strong> = <em>basis points</em> o puntos b&aacute;sicos. 1 bps = 0.01% =
         1/100 de punto porcentual. As&iacute; un cambio de 100 bps equivale a 1 pp (punto porcentual).
       </p>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="flex flex-col gap-4 mt-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {data.map((w) => {
             const compConfig = competidores.find((c) => c.labelCorto === w.competidor);
             const color = compConfig?.color ?? "#888";
@@ -1094,7 +1094,7 @@ function SeccionMargenNetoWaterfall({
             );
           })}
         </div>
-        <ComentarioBox texto={comentario} />
+        {comentario ? <ComentarioBox texto={comentario} /> : null}
       </div>
       <div className="mt-3 text-[10px] text-slate-500 px-2 space-y-1">
         <p>

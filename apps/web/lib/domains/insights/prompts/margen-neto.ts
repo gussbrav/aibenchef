@@ -69,7 +69,7 @@ function formatWaterfallTabla(w: Waterfall, entidadPropia: string): string {
 }
 
 export const promptMargenNeto: PromptTemplate = {
-  version: "v4",
+  version: "v5",
   seccion: "margen_neto",
   build(ctx: PromptContext): { system: string; user: string } {
     const bubbles = (ctx.contexto.bubbles ?? []) as Bubble[];

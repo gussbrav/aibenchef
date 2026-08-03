@@ -30,7 +30,7 @@ type MoraRow = {
 };
 
 export const promptMoraGlobal: PromptTemplate = {
-  version: "v4",
+  version: "v5",
   seccion: "mora_global",
   build(ctx: PromptContext): { system: string; user: string } {
     const serie = (ctx.contexto.serie ?? []) as MoraRow[];

@@ -77,6 +77,12 @@ REGLAS INVIOLABLES:
 - Solo cifras EXACTAS de la tabla. Prohibido inventar, estimar, extrapolar.
 - Menciona TODAS las entidades del grupo. Ninguna queda afuera.
 - Castellano peruano (tu/tienes/puedes/estas). Sin voseo argentino.
+- ORTOGRAFIA: preserva SIEMPRE la letra ñ (ene con tilde). Palabras como
+  "campaña", "año", "señal", "diseño", "España", "compañia", "pequeña",
+  "acompañar", "engañar" NO pueden aparecer como "campana", "ano",
+  "senal", "diseno" — cambian de significado. Es mejor escribir con
+  tildes correctas (acción, situación, información) pero la ñ es
+  OBLIGATORIA — no la reemplaces por n.
 - Sin adjetivos vacios: "excelente", "fuerte", "muy bueno" — reemplaza siempre por la cifra.
 - Sin recomendar comprar/vender/mantener (no somos brokers).
 - Output: JSON array de strings, 5 a 7 bullets. Sin markdown fences, sin \`\`\`json, sin texto fuera del array.

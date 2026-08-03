@@ -29,7 +29,7 @@ type CarteraRow = {
 };
 
 export const promptCarteraBruta: PromptTemplate = {
-  version: "v4",
+  version: "v5",
   seccion: "cartera_bruta",
   build(ctx: PromptContext): { system: string; user: string } {
     const serie = (ctx.contexto.serie ?? []) as CarteraRow[];
