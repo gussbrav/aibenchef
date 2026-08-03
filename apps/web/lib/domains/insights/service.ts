@@ -168,6 +168,14 @@ export async function generateInsight(
 
   // Persistir en cache + usage
   const hash = peerGroupHash(input.peerGroup, input.entidadPropia);
+  // Drizzle serializa arrays JS como tupla/record cuando se pasan como
+  // parametro con cast ::text[]. Fix: construir array literal explicito
+  // con ARRAY[...]::text[] usando sql.join sobre cada bullet.
+  const bulletsSql =
+    bullets.length === 0
+      ? sql`ARRAY[]::text[]`
+      : sql`ARRAY[${sql.join(bullets.map((b) => sql`${b}`), sql`, `)}]::text[]`;
+
   await db.execute(sql`
     INSERT INTO admin.report_insights (
       periodo, seccion, peer_group_hash, cliente_slug,
@@ -180,7 +188,7 @@ export async function generateInsight(
       ${input.seccion}::text,
       ${hash}::text,
       ${input.clienteSlug}::text,
-      ${bullets}::text[],
+      ${bulletsSql},
       ${result.model}::text,
       ${template.version}::text,
       ${JSON.stringify(input.contexto)}::jsonb,
