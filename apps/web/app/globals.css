@@ -94,3 +94,64 @@ body {
 .ag-theme-quartz .ag-center-header .ag-header-cell-label {
   justify-content: center;
 }
+
+/* =========================================================================
+ * PRINT / PDF export — CSS aplicado cuando el usuario elige "Descargar PDF"
+ * (que dispara window.print()). Objetivo: PDF limpio y legible sin toolbars
+ * ni elementos interactivos.
+ * ========================================================================= */
+@media print {
+  /* Ocultar chrome del app: nav, botones, selectores, elementos marcados */
+  nav,
+  header nav,
+  button.no-print,
+  .no-print,
+  [data-testid="dashboard-nav"],
+  [data-testid="periodo-selector"],
+  [data-testid="peer-group-editor"] {
+    display: none !important;
+  }
+
+  /* Fondo blanco puro + tinta oscura para tinta/toner */
+  body,
+  html {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Evitar cortes de pagina en el medio de un chart / tarjeta */
+  section,
+  .print-avoid-break,
+  article {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Ancho completo — sin max-w que deje bordes vacios */
+  main,
+  .max-w-7xl {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 8px !important;
+  }
+
+  /* Expandir todos los <details> (acordeones colapsados) para que el
+   * PDF muestre TODO el contenido, no solo lo abierto en pantalla. */
+  details {
+    display: block !important;
+  }
+  details > *:not(summary) {
+    display: block !important;
+  }
+
+  /* Reducir ligeramente el tamaño de charts recharts para caber mejor */
+  .recharts-responsive-container {
+    max-height: 250px !important;
+  }
+
+  /* Ajustes de margen de pagina PDF (A4 landscape ideal para dashboards) */
+  @page {
+    size: A4 landscape;
+    margin: 12mm 10mm;
+  }
+}

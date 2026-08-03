@@ -5,7 +5,7 @@
 // que invoca getInformeData() del dominio informe.
 //
 // Las secciones:
-//   1. Header: cliente + periodo + boton descargar PPT
+//   1. Header: cliente + periodo + boton Descargar PDF (via window.print)
 //   2. Toolbar de selectores (periodo + peer group editor)
 //   3. Cuadro Resumen
 //   4. Punto de Equilibrio Anualizado
@@ -13,7 +13,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Download, FileText, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
+import { FileText, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
 import { ColorPickerPopover } from "./color-picker-popover";
 import {
   ResponsiveContainer,
@@ -341,12 +341,17 @@ export function InformeClient({
     [serverCompetidores, colorOverrides],
   );
 
-  const onExport = (formato: "pptx" | "pdf") => {
+  // Export a PDF: usa el print dialog del navegador (mejor renderer que
+  // cualquier lib client-side, ademas permite al usuario elegir "Guardar
+  // como PDF" o mandar a impresora fisica). El CSS @media print oculta
+  // toolbars/botones para que el PDF salga limpio.
+  const onExport = () => {
     setExportando(true);
+    // Timeout minimo para dar feedback visual antes del bloqueo del print.
     setTimeout(() => {
-      alert(`Export ${formato.toUpperCase()} — feature pendiente (Fase 4 del roadmap). Ver docs/PRODUCT_VISION.md`);
+      window.print();
       setExportando(false);
-    }, 300);
+    }, 150);
   };
 
   // El label que matchea con competidores[i].labelCorto del cliente propio
@@ -392,24 +397,16 @@ export function InformeClient({
               )}
             </div>
           </div>
-          <div className="flex flex-col gap-2 flex-shrink-0">
+          <div className="flex flex-col gap-2 flex-shrink-0 no-print">
             <button
               type="button"
-              onClick={() => onExport("pptx")}
+              onClick={onExport}
               disabled={exportando}
+              title="Abre el dialogo de impresion del navegador — elegi 'Guardar como PDF' en Destino"
               className="h-9 px-4 bg-white text-slate-900 hover:bg-slate-100 text-sm font-medium rounded transition-colors inline-flex items-center gap-2 disabled:opacity-60"
             >
-              <Download className="w-4 h-4" />
-              {exportando ? "Generando..." : "Descargar PPT"}
-            </button>
-            <button
-              type="button"
-              onClick={() => onExport("pdf")}
-              disabled={exportando}
-              className="h-9 px-4 bg-white/15 hover:bg-white/25 text-white text-sm font-medium rounded transition-colors inline-flex items-center gap-2 disabled:opacity-60"
-            >
               <FileText className="w-4 h-4" />
-              Descargar PDF
+              {exportando ? "Preparando..." : "Descargar PDF"}
             </button>
           </div>
         </div>
