@@ -16,7 +16,11 @@ export type InsightSeccion =
   | "eficiencia"
   | "utilidad_neta"
   | "roe"
-  | "roa";
+  | "roa"
+  // V143 — framework clasificadoras
+  | "solvencia"
+  | "liquidez"
+  | "cobertura";
 
 export const INSIGHT_SECCIONES: InsightSeccion[] = [
   "margen_neto",
@@ -29,6 +33,9 @@ export const INSIGHT_SECCIONES: InsightSeccion[] = [
   "utilidad_neta",
   "roe",
   "roa",
+  "solvencia",
+  "liquidez",
+  "cobertura",
 ];
 
 export type ReportInsight = {

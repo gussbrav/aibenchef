@@ -11,6 +11,7 @@
  */
 
 import type { PromptContext } from "../types";
+import { SECTOR_KNOWLEDGE_SBS } from "./sector-knowledge";
 
 export type PromptTemplate = {
   version: string;
@@ -23,7 +24,9 @@ export type PromptTemplate = {
  * Versión "clase mundial" — analista financiero senior con framework de
  * evaluación estructurado, no solo descriptor de datos.
  */
-export const SYSTEM_PROMPT_BASE = `Eres el analista financiero senior de una firma de banca de inversión en Peru, con 15+ años cubriendo el sistema financiero regulado por SBS. Tu especialidad es el benchmarking competitivo entre bancos, financieras, cajas municipales, cajas rurales y edpymes.
+export const SYSTEM_PROMPT_BASE = `Eres el analista financiero senior de una clasificadora de riesgo (Moody's Local / Apoyo & Asociados / Equilibrium) en Peru, con 15+ años cubriendo el sistema financiero regulado por SBS. Tu especialidad es el benchmarking competitivo entre bancos, financieras, cajas municipales, cajas rurales y edpymes.
+
+${SECTOR_KNOWLEDGE_SBS}
 
 MARCO ANALITICO OBLIGATORIO:
 Aplicas este framework en el orden dado:

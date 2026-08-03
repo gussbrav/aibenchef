@@ -23,6 +23,9 @@ import { peerGroupHash } from "./hash";
 import { promptMargenNeto } from "./prompts/margen-neto";
 import { promptCarteraBruta } from "./prompts/cartera-bruta";
 import { promptMoraGlobal } from "./prompts/mora-global";
+import { promptSolvencia } from "./prompts/solvencia";
+import { promptLiquidez } from "./prompts/liquidez";
+import { promptCobertura } from "./prompts/cobertura";
 import type { PromptTemplate } from "./prompts/base";
 import type {
   GenerateInsightInput,
@@ -36,6 +39,9 @@ const PROMPT_REGISTRY: Partial<Record<InsightSeccion, PromptTemplate>> = {
   margen_neto: promptMargenNeto,
   cartera_bruta: promptCarteraBruta,
   mora_global: promptMoraGlobal,
+  solvencia: promptSolvencia,
+  liquidez: promptLiquidez,
+  cobertura: promptCobertura,
 };
 
 export class InsightsError extends Error {
