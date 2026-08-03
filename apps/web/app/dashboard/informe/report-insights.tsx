@@ -50,13 +50,20 @@ export function ReportInsights({
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
+  // ESTABILIZAR REFERENCIAS: peerGroup y contexto son arrays/objetos
+  // nuevos en cada render del padre. Sin estos keys, useCallback recrea
+  // fetchCached en cada render, useEffect re-corre infinitamente y pisa
+  // cualquier state (spinner de generate, bullets renderizados, etc).
+  const peerGroupKey = peerGroup.join("|");
+  const contextoKey = JSON.stringify(contexto);
+
   const fetchCached = useCallback(async () => {
     setState({ kind: "loading" });
     try {
       const params = new URLSearchParams({
         periodo: String(periodo),
         seccion,
-        peerGroup: peerGroup.join(","),
+        peerGroup: peerGroupKey.split("|").join(","),
         entidadPropia,
       });
       const res = await fetch(`/api/v1/informe/insights?${params}`);
@@ -74,7 +81,8 @@ export function ReportInsights({
         canRetry: true,
       });
     }
-  }, [periodo, seccion, peerGroup, entidadPropia]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodo, seccion, peerGroupKey, entidadPropia]);
 
   const generate = useCallback(async () => {
     setState({ kind: "generating" });
@@ -87,8 +95,8 @@ export function ReportInsights({
           seccion,
           clienteSlug,
           entidadPropia,
-          peerGroup,
-          contexto,
+          peerGroup: peerGroupKey.split("|"),
+          contexto: JSON.parse(contextoKey),
         }),
       });
       const json = await res.json();
@@ -97,7 +105,7 @@ export function ReportInsights({
         setState({ kind: "error", message: String(msg), canRetry: res.status !== 429 });
         return;
       }
-      // Post-generate: hacer un GET para traer el insight persistido en formato standard
+      // Post-generate: GET para traer el insight persistido en formato standard
       await fetchCached();
     } catch (err) {
       setState({
@@ -106,7 +114,8 @@ export function ReportInsights({
         canRetry: true,
       });
     }
-  }, [periodo, seccion, clienteSlug, entidadPropia, peerGroup, contexto, fetchCached]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodo, seccion, clienteSlug, entidadPropia, peerGroupKey, contextoKey, fetchCached]);
 
   useEffect(() => {
     void fetchCached();
