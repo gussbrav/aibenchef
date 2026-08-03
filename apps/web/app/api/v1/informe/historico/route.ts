@@ -21,7 +21,7 @@ import {
   getHistoricoMoraConsolidado,
   getHistoricoPuntoEquilibrio,
   getTop2PorGrupoByCartera,
-  getUltimoPeriodoCompleto,
+  getUltimoPeriodoPublicable,
   periodoLabel,
   pickColorEstable,
 } from "@/lib/domains/informe/queries";
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
     if (periodoStr) {
       periodo = Number.parseInt(periodoStr, 10);
     } else {
-      periodo = (await getUltimoPeriodoCompleto()) ?? 202004;
+      periodo = (await getUltimoPeriodoPublicable()) ?? 202004;
     }
 
     let entidades: string[];

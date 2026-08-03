@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import {
   getInformeData,
-  getUltimoPeriodoCompleto,
+  getUltimoPeriodoPublicable,
   listPeriodosDisponibles,
   listEntidadesDisponibles,
   parseColorsOverride,
@@ -51,16 +51,16 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   const entidadPropiaOverride = params.entidadPropia
     ?? (sinParams ? BCP_DEFAULT.entidadPropia : undefined);
 
-  // Si no hay periodo en URL, usar el ULTIMO PERIODO COMPLETO de SBS.
-  // No alcanza con "ultimo periodo con data EEFF" porque SBS publica con lag:
-  // EEFF puede estar publicado para Abr 2026 pero colocaciones/depositos NO,
-  // y el dashboard mostraria accordions vacias. f_ultimo_periodo_completo()
-  // filtra periodos con cualquier archivo en estado no_publicado_sbs.
+  // REGLA DE ORO V139: sin periodo en URL, arrancar en el ultimo mes con
+  // EEFF publicado (>=4/5 grupos regulados). Los topicos secundarios
+  // (castigos, tasas, geo, indicadores) que SBS publica con mas lag NO
+  // bloquean — sus campos quedan en "—" si faltan, pero no privan al
+  // usuario de ver los KPIs core del informe. Prioriza time-to-insight.
   let periodo: number;
   if (params.periodo) {
     periodo = Number.parseInt(params.periodo, 10);
   } else {
-    periodo = (await getUltimoPeriodoCompleto()) ?? 202004;
+    periodo = (await getUltimoPeriodoPublicable()) ?? 202004;
   }
 
   const peerGroup = params.peerGroup

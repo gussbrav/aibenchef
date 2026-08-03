@@ -1436,24 +1436,64 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
 }
 
 /**
- * Ultimo periodo donde TODOS los archivos SBS estan publicados (no hay
- * ningun archivo con status='no_publicado_sbs' en raw.archivos_descargados).
+ * REGLA DE ORO — Ultimo periodo publicable en el /dashboard/informe.
  *
- * Usado como default del Benchmark cuando no se especifica periodo en la URL.
- * Evita que el dashboard arranque mostrando un periodo donde EEFF esta
- * publicado pero colocaciones/depositos/etc todavia no.
+ * Criterio (V139): EEFF (balance + resultados) procesado para al menos
+ * 4 de los 5 grupos regulados (bancos/cmac/crac/edpyme/financiera).
+ * Los topicos secundarios (castigos, tasas, indicadores, geo) NO bloquean
+ * — sus valores especificos aparecen en "—" si aun no estan publicados,
+ * pero el informe se muestra apenas hay EEFF.
  *
- * Implementacion en SQL: marts.f_ultimo_periodo_completo() (V129).
+ * Antes de V139 el default era f_ultimo_periodo_completo (todos los
+ * topicos), lo que provocaba que durante 2-4 semanas al mes el dashboard
+ * mostrara el mes anterior aunque el EEFF del mes corriente ya estuviera
+ * listo. La nueva regla prioriza time-to-insight.
+ *
+ * Implementacion SQL: marts.f_ultimo_periodo_publicable().
+ * Para status detallado de un periodo (que topicos faltan) usar
+ * getPeriodoCompletenessStatus().
  */
-export async function getUltimoPeriodoCompleto(): Promise<number | null> {
+export async function getUltimoPeriodoPublicable(): Promise<number | null> {
   return safeQuery(
-    "getUltimoPeriodoCompleto",
+    "getUltimoPeriodoPublicable",
     async () => {
       const rows = await db.execute<{ periodo: number | null }>(sql`
-        SELECT marts.f_ultimo_periodo_completo() AS periodo
+        SELECT marts.f_ultimo_periodo_publicable() AS periodo
       `);
       const p = rows[0]?.periodo;
       return p == null ? null : Number(p);
+    },
+    null,
+  );
+}
+
+/**
+ * Status detallado de completitud de un periodo — que topicos estan
+ * completos vs parciales vs faltantes. Consumir desde la UI para
+ * mostrar tooltip/badge en el selector de periodo cuando el usuario
+ * elige un periodo con topicos secundarios pendientes.
+ *
+ * Devuelve null si SQL falla (fallback graceful — la UI muestra sin badge).
+ */
+export type PeriodoCompletenessStatus = {
+  periodo: number;
+  eeff_completo: boolean;
+  grupos_eeff_ok: number;
+  topicos_completos: string[];
+  topicos_parciales: string[];
+  topicos_faltantes: string[];
+};
+
+export async function getPeriodoCompletenessStatus(
+  periodo: number,
+): Promise<PeriodoCompletenessStatus | null> {
+  return safeQuery(
+    "getPeriodoCompletenessStatus",
+    async () => {
+      const rows = await db.execute<{ status: PeriodoCompletenessStatus }>(sql`
+        SELECT marts.f_ultimo_periodo_completeness_status(${periodo}) AS status
+      `);
+      return rows[0]?.status ?? null;
     },
     null,
   );
