@@ -44,6 +44,15 @@ const PROMPT_REGISTRY: Partial<Record<InsightSeccion, PromptTemplate>> = {
   cobertura: promptCobertura,
 };
 
+/**
+ * Version actual del prompt para una seccion. Se usa como cache-key
+ * implicito: si la version cambia, un cache "hit" con version distinta
+ * se trata como MISS y se regenera (invalidacion transparente).
+ */
+export function getCurrentPromptVersion(seccion: InsightSeccion): string | null {
+  return PROMPT_REGISTRY[seccion]?.version ?? null;
+}
+
 export class InsightsError extends Error {
   constructor(
     message: string,
@@ -102,9 +111,12 @@ export async function generateInsight(
     );
   }
 
-  // Cache check
+  // Cache check — solo hit si la version del cache coincide con la
+  // version actual del template. Si un override manual existe, respetarlo
+  // incluso si la version base cambio.
   const cached = await getCachedInsight(input);
-  if (cached) {
+  const versionMatch = cached?.promptVersion === template.version;
+  if (cached && (versionMatch || cached.overrideBullets)) {
     return {
       bullets: cached.overrideBullets ?? cached.bullets,
       model: cached.model,
@@ -207,14 +219,16 @@ export async function generateInsight(
     )
     ON CONFLICT (periodo, seccion, peer_group_hash)
     DO UPDATE SET
-      bullets       = EXCLUDED.bullets,
-      model         = EXCLUDED.model,
-      tokens_input  = EXCLUDED.tokens_input,
-      tokens_output = EXCLUDED.tokens_output,
-      cost_usd      = EXCLUDED.cost_usd,
-      generated_at  = now(),
-      generated_by  = EXCLUDED.generated_by,
-      duration_ms   = EXCLUDED.duration_ms
+      bullets        = EXCLUDED.bullets,
+      model          = EXCLUDED.model,
+      prompt_version = EXCLUDED.prompt_version,
+      contexto_json  = EXCLUDED.contexto_json,
+      tokens_input   = EXCLUDED.tokens_input,
+      tokens_output  = EXCLUDED.tokens_output,
+      cost_usd       = EXCLUDED.cost_usd,
+      generated_at   = now(),
+      generated_by   = EXCLUDED.generated_by,
+      duration_ms    = EXCLUDED.duration_ms
   `);
 
   // Registrar usage del usuario para rate limit

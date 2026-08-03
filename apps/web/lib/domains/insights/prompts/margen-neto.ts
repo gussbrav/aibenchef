@@ -22,7 +22,7 @@ type Bubble = {
 };
 
 export const promptMargenNeto: PromptTemplate = {
-  version: "v2",
+  version: "v3",
   seccion: "margen_neto",
   build(ctx: PromptContext): { system: string; user: string } {
     const bubbles = (ctx.contexto.bubbles ?? []) as Bubble[];

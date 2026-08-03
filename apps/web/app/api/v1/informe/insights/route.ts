@@ -12,7 +12,12 @@ import type { NextRequest } from "next/server";
 
 import { requireSession } from "@/lib/auth-helpers";
 import { handleRoute, ValidationError } from "@/lib/domains/shared";
-import { getCachedInsight, INSIGHT_SECCIONES, type InsightSeccion } from "@/lib/domains/insights";
+import {
+  getCachedInsight,
+  getCurrentPromptVersion,
+  INSIGHT_SECCIONES,
+  type InsightSeccion,
+} from "@/lib/domains/insights";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +48,18 @@ export async function GET(req: NextRequest) {
       peerGroup,
       entidadPropia,
     });
+
+    // Cache stale (version del prompt cambio y no hay override) — tratar
+    // como miss. La UI ofrecera regenerar y consumir la version nueva.
+    const currentVersion = getCurrentPromptVersion(seccion as InsightSeccion);
+    if (
+      insight &&
+      currentVersion &&
+      insight.promptVersion !== currentVersion &&
+      !insight.overrideBullets
+    ) {
+      return { insight: null };
+    }
 
     // Nunca devolver contexto_json al cliente (puede tener data sensible)
     if (insight) {

@@ -5,6 +5,7 @@
 export {
   generateInsight,
   getCachedInsight,
+  getCurrentPromptVersion,
   InsightsError,
 } from "./service";
 
