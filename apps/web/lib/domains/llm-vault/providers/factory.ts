@@ -1,18 +1,16 @@
 /**
  * Factory que resuelve el InsightsProvider adecuado para un cliente.
  *
- * Prioridad de resolucion:
- *   1. Provider active + default con cliente_slug = <clienteSlug>
- *   2. Provider active + default global (cliente_slug = NULL)
- *   3. Cualquier provider active del cliente (primero por displayName)
- *   4. Cualquier provider active global
- *   5. Error (no hay provider configurado)
+ * Prioridad de resolucion (sistema unificado):
+ *   1. app.ai_providers (sistema LEGACY compartido con /dashboard/settings
+ *      -> tab "Proveedores AI" y modulo Aiben NL2SQL). Es donde el
+ *      usuario final configura las keys. Se busca en orden: claude ->
+ *      gemini -> openai -> ollama y se usa el primero enabled + con key.
+ *   2. admin.llm_providers (V140, sistema nuevo con scope multi-tenant).
+ *      Solo se consulta si el legacy no tiene ninguno habilitado.
  *
- * El consumer del insights nunca sabe que provider se usa — solo pide
- * uno y llama generate(). Esto habilita:
- *   - Multi-tenant (cada cliente puede tener su LLM preferido)
- *   - Multi-proveedor (Claude, OpenAI, Ollama transparente al caller)
- *   - Failover (si un provider falla, agregar otro y marcarlo default)
+ * Este orden garantiza que el usuario que configuro Claude desde
+ * /dashboard/settings vea insights funcionando sin doble configuracion.
  */
 
 import "server-only";
@@ -21,8 +19,22 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 import { AnthropicProvider } from "./anthropic";
 import { getDecryptedApiKey } from "../queries";
+import { getProviderApiKey, type AiProviderId } from "@/lib/domains/ai-providers";
 import { LlmProviderError, type InsightsProvider } from "./base";
 import type { ProviderType } from "../types";
+
+/**
+ * Prioridad para elegir un provider del sistema legacy app.ai_providers.
+ * Alineado con el orden visual en /dashboard/settings.
+ */
+const LEGACY_PRIORITY: AiProviderId[] = ["claude", "gemini", "openai", "ollama"];
+
+const LEGACY_TO_TYPE: Record<AiProviderId, { type: ProviderType; defaultModel: string }> = {
+  claude: { type: "anthropic", defaultModel: "claude-haiku-4-5" },
+  openai: { type: "openai", defaultModel: "gpt-4o-mini" },
+  ollama: { type: "ollama", defaultModel: "qwen2.5:7b" },
+  gemini: { type: "google", defaultModel: "gemini-2.0-flash" },
+};
 
 type ResolvedRow = {
   id: string;
@@ -40,38 +52,38 @@ type ResolvedRow = {
 export async function getProviderForCliente(
   clienteSlug: string | null,
 ): Promise<InsightsProvider> {
-  // 1 sola query con priorizacion via ORDER BY.
+  // Intento 1: sistema legacy app.ai_providers (donde el usuario carga
+  // las keys desde /dashboard/settings). Es lo que ya conoce y usa.
+  const legacy = await tryResolveLegacy();
+  if (legacy) return legacy;
+
+  // Intento 2: sistema nuevo admin.llm_providers (V140). Multi-tenant
+  // con overrides por cliente_slug. Path para configuraciones avanzadas
+  // via /dashboard/admin/llm-settings.
   const rows = await db.execute<ResolvedRow>(sql`
     SELECT id, provider_type, model, base_url, max_tokens_output, temperature
       FROM admin.llm_providers
      WHERE is_active = true
        AND (cliente_slug IS NULL OR cliente_slug = ${clienteSlug ?? ""}::text)
      ORDER BY
-       -- Match exacto por cliente_slug primero
        (cliente_slug = ${clienteSlug ?? ""}::text) DESC NULLS LAST,
-       -- Luego los default
        is_default DESC,
-       -- Luego el mas reciente (para estabilidad)
        created_at DESC
      LIMIT 1
   `);
   const row = rows[0];
   if (!row) {
     throw new LlmProviderError(
-      "No hay LLM provider configurado. Agregar uno en /dashboard/admin/llm-settings",
+      "No hay LLM provider configurado. Habilita Claude/OpenAI/Ollama/Gemini " +
+        "en /dashboard/settings -> pestaña 'Proveedores AI'.",
       "factory",
     );
   }
 
-  // Descifrar api key (null-safe para Ollama sin auth)
   const apiKey = await getDecryptedApiKey(row.id);
-
-  // Update last_used_at (best-effort, no await para no bloquear generacion)
   db.execute(sql`
     UPDATE admin.llm_providers SET last_used_at = now() WHERE id = ${row.id}::uuid
-  `).catch(() => {
-    // silent
-  });
+  `).catch(() => {});
 
   return instantiate({
     id: row.id,
@@ -82,6 +94,48 @@ export async function getProviderForCliente(
     maxTokens: Number(row.max_tokens_output),
     temperature: Number(row.temperature),
   });
+}
+
+/**
+ * Intenta resolver un provider desde app.ai_providers (sistema legacy).
+ * Devuelve null si ninguno esta enabled + tiene api key configurada.
+ */
+async function tryResolveLegacy(): Promise<InsightsProvider | null> {
+  const rows = await db.execute<{
+    provider: AiProviderId;
+    model_default: string | null;
+    base_url: string | null;
+  }>(sql`
+    SELECT provider, model_default, base_url
+      FROM app.ai_providers
+     WHERE enabled = true
+       AND api_key_encrypted IS NOT NULL
+  `);
+  if (rows.length === 0) return null;
+
+  const disponibles = new Map(rows.map((r) => [r.provider, r]));
+  for (const providerId of LEGACY_PRIORITY) {
+    const cfg = disponibles.get(providerId);
+    if (!cfg) continue;
+    const mapping = LEGACY_TO_TYPE[providerId];
+    if (!mapping) continue;
+    // MVP: solo anthropic implementado. Los demas caen al sistema V140.
+    if (mapping.type !== "anthropic") continue;
+
+    const apiKey = await getProviderApiKey(providerId);
+    if (!apiKey) continue;
+
+    return instantiate({
+      id: `legacy:${providerId}`,
+      providerType: mapping.type,
+      model: cfg.model_default ?? mapping.defaultModel,
+      apiKey,
+      baseUrl: cfg.base_url,
+      maxTokens: 800,
+      temperature: 0.3,
+    });
+  }
+  return null;
 }
 
 /**
