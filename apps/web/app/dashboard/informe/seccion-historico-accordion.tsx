@@ -21,6 +21,8 @@ import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { HistoricoEntidadSerie } from "@/lib/domains/informe/types";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
+import { ReportInsights } from "./report-insights";
+import type { InsightSeccion } from "@/lib/domains/insights";
 
 export type AccordionMetric =
   | "oficinas" | "personal" | "clientes"
@@ -48,6 +50,9 @@ export function SeccionHistoricoAccordion({
   labelCortoToNombCorreg,
   consolidar = true,
   defaultOpen = false,
+  insightsSeccion,
+  clienteSlug,
+  entidadPropia,
 }: {
   metric: AccordionMetric;
   titulo: string;
@@ -67,6 +72,14 @@ export function SeccionHistoricoAccordion({
   labelCortoToNombCorreg?: Map<string, string>;
   consolidar?: boolean;
   defaultOpen?: boolean;
+  /**
+   * Si se define, habilita el panel de insights AI al pie del accordion.
+   * Requiere clienteSlug + entidadPropia. La forma del contexto varia
+   * segun la seccion (ver prompts/*.ts).
+   */
+  insightsSeccion?: InsightSeccion;
+  clienteSlug?: string;
+  entidadPropia?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [state, setState] = useState<FetchState>({ status: "idle" });
@@ -210,23 +223,80 @@ export function SeccionHistoricoAccordion({
             </div>
           )}
           {state.status === "ok" && (
-            <SeccionHistoricoComparativo
-              titulo={titulo}
-              subtitulo={subtitulo}
-              series={seriesConOverrides}
-              periodoBaseLabel={state.series[0]?.serie[0]?.periodoLabel}
-              periodoActualLabel={
-                state.series[0]?.serie[state.series[0]?.serie.length - 1]
-                  ?.periodoLabel
-              }
-              formatoValor={formatoValor}
-              noWrapper
-            />
+            <>
+              <SeccionHistoricoComparativo
+                titulo={titulo}
+                subtitulo={subtitulo}
+                series={seriesConOverrides}
+                periodoBaseLabel={state.series[0]?.serie[0]?.periodoLabel}
+                periodoActualLabel={
+                  state.series[0]?.serie[state.series[0]?.serie.length - 1]
+                    ?.periodoLabel
+                }
+                formatoValor={formatoValor}
+                noWrapper
+              />
+              {insightsSeccion && clienteSlug && entidadPropia && (
+                <div className="border-t border-slate-100 p-4 bg-slate-50/50">
+                  <ReportInsights
+                    periodo={periodo}
+                    seccion={insightsSeccion}
+                    clienteSlug={clienteSlug}
+                    entidadPropia={entidadPropia}
+                    peerGroup={peerGroup}
+                    contexto={buildInsightsContexto(insightsSeccion, seriesConOverrides)}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
     </section>
   );
+}
+
+/**
+ * Adapta el shape de HistoricoEntidadSerie[] al contexto que espera cada
+ * prompt template. Cada seccion tiene su propio formato de tabla — ver
+ * prompts/*.ts para la shape esperada.
+ */
+function buildInsightsContexto(
+  seccion: InsightSeccion,
+  series: HistoricoEntidadSerie[],
+): Record<string, unknown> {
+  if (seccion === "cartera_bruta") {
+    return {
+      serie: series.map((s) => {
+        const actual = s.valorActual ?? 0;
+        const base = s.valorBase ?? 0;
+        return {
+          entidad: s.entidad,
+          valorActual: actual,
+          valorAnioPrev: base,
+          crecimientoPct: base > 0 ? (actual - base) / base : 0,
+        };
+      }),
+    };
+  }
+
+  if (seccion === "mora_global") {
+    return {
+      serie: series.map((s) => {
+        const actual = s.valorActual ?? 0;
+        const base = s.valorBase ?? 0;
+        return {
+          entidad: s.entidad,
+          moraActual: actual,
+          moraAnioPrev: base,
+          deltaPp: (actual - base) * 100,
+        };
+      }),
+    };
+  }
+
+  // Default generico: pasar la serie tal cual (para futuros prompts)
+  return { series };
 }
 
 /**

@@ -144,11 +144,12 @@ export async function generateInsight(
   };
   const { system, user } = template.build(promptCtx);
 
-  // Llamar al LLM
+  // Llamar al LLM. maxTokens=1500 permite output de 5-7 bullets de 1-3
+  // lineas cada uno + margen. Bajo esto los prompts v2 se truncan.
   const t0 = Date.now();
   let result;
   try {
-    result = await provider.generate(user, { system });
+    result = await provider.generate(user, { system, maxTokens: 1500 });
   } catch (err) {
     throw new InsightsError(
       err instanceof Error ? err.message : String(err),

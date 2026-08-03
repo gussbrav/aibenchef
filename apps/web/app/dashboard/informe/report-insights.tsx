@@ -126,7 +126,7 @@ export function ReportInsights({
   }, [fetchCached]);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 no-print">
+    <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 print-avoid-break">
       <header className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-brand-700" />
@@ -139,7 +139,7 @@ export function ReportInsights({
             type="button"
             onClick={generate}
             title="Regenerar analisis"
-            className="text-slate-400 hover:text-slate-700 p-1 rounded transition-colors"
+            className="text-slate-400 hover:text-slate-700 p-1 rounded transition-colors no-print"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>

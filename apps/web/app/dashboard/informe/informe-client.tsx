@@ -497,6 +497,8 @@ export function InformeClient({
           labelCortoToNombCorreg={
             new Map(competidores.map((c) => [c.labelCorto, c.nombCorreg]))
           }
+          clienteSlug={cliente.slug}
+          entidadPropia={cliente.entidadPropia}
         />
       </div>
 
@@ -1266,13 +1268,17 @@ function CoberturaWarning({ cobertura }: { cobertura: InformeData["cobertura"] }
 // Cada item arranca colapsado; al expandir fetcha su data al endpoint
 // /api/v1/informe/historico?metric=X. Mismo peerGroup + periodo en TODAS.
 // ============================================================================
+import type { InsightSeccion } from "@/lib/domains/insights";
+
 const ACCORDION_SECTIONS: Array<{
   metric: AccordionMetric;
   titulo: string;
   subtitulo: string;
   formatoValor: "numero" | "pct" | "moneda_mm";
+  /** Si esta definido, habilita el panel de insights AI en esa seccion. */
+  insightsSeccion?: InsightSeccion;
 }> = [
-  { metric: "carteraBruta",    titulo: "CARTERA BRUTA",                                    subtitulo: "Saldo de Cartera por entidad (MM S/)",                          formatoValor: "moneda_mm" },
+  { metric: "carteraBruta",    titulo: "CARTERA BRUTA",                                    subtitulo: "Saldo de Cartera por entidad (MM S/)",                          formatoValor: "moneda_mm", insightsSeccion: "cartera_bruta" },
   { metric: "oficinas",        titulo: "N° DE OFICINAS",                                   subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
   { metric: "personal",        titulo: "N° DE PERSONAL",                                   subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
   { metric: "clientes",        titulo: "N° DE CLIENTES DE CRÉDITO (Miles)",                subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
@@ -1289,7 +1295,7 @@ const ACCORDION_SECTIONS: Array<{
   { metric: "utilidad",        titulo: "RENTABILIDAD — Utilidad Neta",                     subtitulo: "Anualizada TTM — MM S/",                                        formatoValor: "moneda_mm" },
   { metric: "roe",             titulo: "RENTABILIDAD — % ROE",                             subtitulo: "Utilidad TTM / Patrimonio promedio 12m",                        formatoValor: "pct"       },
   { metric: "roa",             titulo: "RENTABILIDAD — % ROA",                             subtitulo: "Utilidad TTM / Activos promedio 12m",                           formatoValor: "pct"       },
-  { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global",               subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct"       },
+  { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global",               subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct",       insightsSeccion: "mora_global" },
   { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m en el numerador",                  formatoValor: "pct"       },
   { metric: "atrasada",        titulo: "INDICADORES DE CALIDAD — % Cartera Atrasada",      subtitulo: "Cartera Atrasada / Cartera Bruta",                              formatoValor: "pct"       },
   { metric: "car",             titulo: "INDICADORES DE CALIDAD — % Cartera de Alto Riesgo", subtitulo: "(Atrasada + Refinanciada) / Cartera Bruta",                    formatoValor: "pct"       },
@@ -1301,6 +1307,8 @@ function SectionsAccordion({
   peerGroup,
   colorOverrides,
   labelCortoToNombCorreg,
+  clienteSlug,
+  entidadPropia,
 }: {
   periodo: number;
   peerGroup: string[];
@@ -1311,6 +1319,9 @@ function SectionsAccordion({
    *  (puede diferir de nombCorreg si config.peer_group.label_corto esta seteado),
    *  pero colorOverrides usa nombCorreg como key (canonical). */
   labelCortoToNombCorreg: Map<string, string>;
+  /** Contexto para insights AI en secciones habilitadas via insightsSeccion. */
+  clienteSlug: string;
+  entidadPropia: string;
 }) {
   return (
     <>
@@ -1325,6 +1336,9 @@ function SectionsAccordion({
           peerGroup={peerGroup}
           colorOverrides={colorOverrides}
           labelCortoToNombCorreg={labelCortoToNombCorreg}
+          insightsSeccion={s.insightsSeccion}
+          clienteSlug={clienteSlug}
+          entidadPropia={entidadPropia}
         />
       ))}
     </>
