@@ -1144,10 +1144,17 @@ export async function getInformeData(opts: {
   }
 
   // Garantizar que la entidad propia esta siempre en el peer group.
-  // Solo agregamos al final si NO esta ya en el array — si esta, respetamos
-  // su posicion (el usuario puede ponerla primero, en medio o donde quiera).
+  // REGLA DE ORO: al agregarla, respetar la jerarquia regulatoria SBS
+  // (Bancos -> Financieras -> CMAC -> CRAC -> EDPYMES) y colocarla PRIMERA
+  // dentro de su tipo. Si el usuario provee peerGroupOverride en URL,
+  // se respeta EXACTAMENTE ese orden (usuario final manda sobre defaults).
   if (peerList && !peerList.includes(cliente.entidadPropia)) {
-    peerList = [...peerList, cliente.entidadPropia];
+    const conPropia = [...peerList, cliente.entidadPropia];
+    // Solo aplicar jerarquia si NO hay override manual del usuario en URL —
+    // el override manual siempre gana como fuente de verdad.
+    peerList = opts.peerGroupOverride
+      ? conPropia
+      : await ordenarPorJerarquiaSbs(conPropia, cliente.entidadPropia);
   }
 
   let competidores = await buildCompetidores(
@@ -2028,6 +2035,62 @@ export async function getHistoricoEntidad(opts: {
     },
     new Map(),
   );
+}
+
+/**
+ * REGLA DE ORO — Ordena un peer group siguiendo la jerarquia regulatoria SBS:
+ *
+ *   Bancos → Financieras → CMAC → CRAC → EDPYMES
+ *
+ * Dentro de cada tipo, la ENTIDAD PROPIA (si esta) va primero. El resto
+ * mantiene su orden original (stable sort). Entidades sin tipo conocido
+ * en dw.dim_entidad van al final.
+ *
+ * Se usa cuando se auto-agrega la entidad propia al peer group para que
+ * no aparezca al final rompiendo la jerarquia visual. Si el usuario final
+ * provee peerGroupOverride en URL, esta funcion NO se aplica — respetamos
+ * el orden manual del usuario.
+ */
+async function ordenarPorJerarquiaSbs(
+  entidades: string[],
+  entidadPropia: string,
+): Promise<string[]> {
+  if (entidades.length <= 1) return entidades;
+
+  const rows = await safeQuery(
+    "ordenarPorJerarquiaSbs",
+    async () => {
+      const entArr = sql`ARRAY[${sql.join(entidades.map((e) => sql`${e}`), sql`, `)}]::text[]`;
+      return db.execute<{ nomb_correg: string; tipo_entidad: string | null }>(sql`
+        SELECT nomb_correg, UPPER(tipo_entidad) AS tipo_entidad
+        FROM dw.dim_entidad
+        WHERE nomb_correg = ANY(${entArr})
+      `);
+    },
+    [] as Array<{ nomb_correg: string; tipo_entidad: string | null }>,
+  );
+
+  const tipoMap = new Map(rows.map((r) => [String(r.nomb_correg), r.tipo_entidad ?? ""]));
+  const jerarquia: Record<string, number> = {
+    BANCOS: 0,
+    FINANCIERAS: 1,
+    CMAC: 2,
+    CRAC: 3,
+    EDPYMES: 4,
+  };
+  const idxOriginal = new Map(entidades.map((e, i) => [e, i]));
+
+  return [...entidades].sort((a, b) => {
+    const tipoA = tipoMap.get(a) ?? "";
+    const tipoB = tipoMap.get(b) ?? "";
+    const orderA = jerarquia[tipoA] ?? 99;
+    const orderB = jerarquia[tipoB] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+    // Mismo tipo -> entidad propia primero, resto en orden original.
+    if (a === entidadPropia) return -1;
+    if (b === entidadPropia) return 1;
+    return (idxOriginal.get(a) ?? 0) - (idxOriginal.get(b) ?? 0);
+  });
 }
 
 /**
