@@ -49,6 +49,7 @@ import {
   type AccordionMetric,
 } from "./seccion-historico-accordion";
 import { PeriodoCompletenessBadge } from "./periodo-completeness-badge";
+import { ReportInsights } from "./report-insights";
 
 // ============================================================================
 // Helpers de formato y ranking
@@ -457,6 +458,10 @@ export function InformeClient({
         competidores={competidores}
         comentario={comentarios.margen_neto_bubble}
         comparativoLabel={periodoLabel}
+        periodo={periodo.codigo}
+        clienteSlug={cliente.slug}
+        entidadPropia={cliente.entidadPropia}
+        peerGroup={competidores.map((c) => c.nombCorreg)}
       />
 
       {/* ============ WATERFALL vs mismo mes año previo ============ */}
@@ -789,11 +794,19 @@ function SeccionMargenNetoBubble({
   competidores,
   comentario,
   comparativoLabel,
+  periodo,
+  clienteSlug,
+  entidadPropia,
+  peerGroup,
 }: {
   data: BubblePoint[];
   competidores: Competidor[];
   comentario: string;
   comparativoLabel: string;
+  periodo: number;
+  clienteSlug: string;
+  entidadPropia: string;
+  peerGroup: string[];
 }) {
   if (data.length === 0) {
     return (
@@ -948,7 +961,7 @@ function SeccionMargenNetoBubble({
               </ScatterChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-wrap gap-3 mt-2 justify-center">
+          <div className="flex flex-wrap gap-3 mt-2 justify-center print:hidden">
             {competidores.map((c) => (
               <span key={c.nombCorreg} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
@@ -957,7 +970,24 @@ function SeccionMargenNetoBubble({
             ))}
           </div>
         </div>
-        <ComentarioBox texto={comentario} />
+        <div className="space-y-3">
+          <ReportInsights
+            periodo={periodo}
+            seccion="margen_neto"
+            clienteSlug={clienteSlug}
+            entidadPropia={entidadPropia}
+            peerGroup={peerGroup}
+            contexto={{
+              bubbles: scatterData.map((d) => ({
+                entidad: d.label,
+                deltaPe: d.x,
+                deltaRend: d.y,
+                margenNetoActual: d.margenNeto,
+              })),
+            }}
+          />
+          {comentario ? <ComentarioBox texto={comentario} /> : null}
+        </div>
       </div>
     </section>
   );
