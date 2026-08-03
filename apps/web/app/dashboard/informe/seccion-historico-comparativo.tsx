@@ -17,6 +17,7 @@ import {
   Bar,
   BarChart,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -217,19 +218,28 @@ function MiniBarChart({
   const fmtLabel = (v: number) =>
     formatoValor === "pct" ? `${(v * 100).toFixed(1)}%` : fmtNum(v);
 
+  // Data label encima de cada barra. Formato compacto para que 5 barras
+  // quepan sin solapar (para "pct" usamos 1 decimal, para numeros grandes
+  // el fmtNum con miles separator, para moneda idem numero).
+  const fmtBarLabel = (v: number | undefined) => {
+    if (v == null || !Number.isFinite(v) || v === 0) return "";
+    return fmtLabel(v);
+  };
+
   return (
     <div className="border border-slate-200 rounded p-2 bg-white">
       <p className="text-xs font-semibold text-slate-700 truncate text-center mb-1">
         {serie.entidad}
       </p>
-      <div className="h-24">
+      <div className="h-32">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 16, right: 4, left: 4, bottom: 0 }}>
+          <BarChart data={data} margin={{ top: 20, right: 2, left: 2, bottom: 0 }}>
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 9 }}
+              tick={{ fontSize: 8 }}
               tickLine={false}
               axisLine={false}
+              interval={0}
             />
             <YAxis hide />
             <Tooltip
@@ -238,6 +248,12 @@ function MiniBarChart({
               contentStyle={{ fontSize: 11 }}
             />
             <Bar dataKey="valor" radius={[2, 2, 0, 0]}>
+              <LabelList
+                dataKey="valor"
+                position="top"
+                formatter={fmtBarLabel}
+                style={{ fontSize: 9, fill: "#334155", fontWeight: 600 }}
+              />
               {data.map((_, i) => (
                 <Cell key={i} fill={serie.color} fillOpacity={i === data.length - 1 ? 1 : 0.6} />
               ))}

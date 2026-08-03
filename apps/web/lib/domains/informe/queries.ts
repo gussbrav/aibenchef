@@ -1460,28 +1460,49 @@ export async function getUltimoPeriodoCompleto(): Promise<number | null> {
 }
 
 /**
- * Periodos para tendencia historica. Reducidos a 3 (Dic-2, Dic-1, actual)
- * para evitar la sobrecarga de calculo en getPuntoEquilibrioForPeriodo
- * (recomputa todo desde EEFF — cada periodo es 1-2s, con 5 se llegaba a
- * 5-10s de bloqueo). 3 puntos siguen dando trazo de tendencia clara.
+ * Periodos para tendencia historica — 5 puntos que dan contexto
+ * multi-anual con snap a diciembres.
+ *
+ * Regla acordada con el negocio:
+ *   - Si periodoActual NO es diciembre (ej. May 2026):
+ *       [Dic year-3, Dic year-2, Mismo mes year-1, Dic year-1, actual]
+ *       ej. May 2026 -> Dic 2023, Dic 2024, May 2025, Dic 2025, May 2026
+ *   - Si periodoActual ES diciembre (ej. Dic 2026):
+ *       [Dic year-4, Dic year-3, Dic year-2, Dic year-1, actual]
+ *       ej. Dic 2026 -> Dic 2022, Dic 2023, Dic 2024, Dic 2025, Dic 2026
+ *
+ * Los periodos que no existan en marts.mv_eeff_resultados_ancho se
+ * filtran para que el bar chart no renderice barras vacias.
  */
 async function getPeriodosTendencia(periodoActual: number): Promise<number[]> {
+  const anio = Math.floor(periodoActual / 100);
+  const mes = periodoActual % 100;
+  const candidatos: number[] =
+    mes === 12
+      ? [
+          (anio - 4) * 100 + 12,
+          (anio - 3) * 100 + 12,
+          (anio - 2) * 100 + 12,
+          (anio - 1) * 100 + 12,
+          periodoActual,
+        ]
+      : [
+          (anio - 3) * 100 + 12,
+          (anio - 2) * 100 + 12,
+          (anio - 1) * 100 + mes,
+          (anio - 1) * 100 + 12,
+          periodoActual,
+        ];
+
   return safeQuery(
     "getPeriodosTendencia",
     async () => {
+      const candidatosClause = sql.join(candidatos.map((p) => sql`${p}`), sql`, `);
       const rows = await db.execute<{ periodo: number }>(sql`
-        WITH dec_periods AS (
-          SELECT DISTINCT periodo
+        SELECT DISTINCT periodo
           FROM marts.mv_eeff_resultados_ancho
-          WHERE periodo % 100 = 12 AND periodo < ${periodoActual}
-          ORDER BY periodo DESC
-          LIMIT 2
-        ),
-        unified AS (
-          SELECT periodo FROM dec_periods
-          UNION SELECT ${periodoActual}
-        )
-        SELECT DISTINCT periodo FROM unified ORDER BY periodo ASC
+         WHERE periodo IN (${candidatosClause})
+         ORDER BY periodo ASC
       `);
       return rows.map((r) => Number(r.periodo));
     },
