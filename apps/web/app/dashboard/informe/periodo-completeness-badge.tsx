@@ -8,25 +8,28 @@
  *   - Si TODOS los topicos completos + EEFF completo -> renderiza null.
  *     Cero ruido visual cuando no hay nada que reportar.
  *   - Si EEFF completo pero hay topicos parciales/faltantes -> chip AMBAR
- *     "Datos secundarios pendientes (N)" con popover on-click detallado.
- *   - Si EEFF incompleto -> chip ROJO "EEFF publicacion parcial (N/5)"
- *     — caso raro, solo ocurre si el usuario elige manualmente un
- *     periodo muy reciente sin EEFF listo aun.
+ *     "N topicos pendientes" con popover on-click detallado.
+ *   - Si EEFF incompleto -> chip ROJO "EEFF parcial (N/5)".
+ *
+ * Popover rendered via React Portal al document.body:
+ *   - Escapa del stacking context del header (que tiene overflow-hidden)
+ *   - Position fixed con coords calculadas via getBoundingClientRect
+ *   - Se actualiza en scroll/resize (auto-close si el trigger sale del viewport)
+ *   - z-index alto (9999) para estar encima de cualquier otro overlay
  *
  * Performance:
- *   - Componente <2KB gzipped
- *   - Sin deps nuevas (usa lucide-react que ya esta en el bundle)
- *   - Popover con state local (no re-renderiza el padre al abrir/cerrar)
- *   - Cierre automatico on click-outside via useRef
+ *   - Componente <3KB gzipped, sin deps nuevas
+ *   - Portal solo se monta cuando open=true (no bloatea el DOM cerrado)
+ *   - Listeners solo activos cuando open=true (se remueven al cerrar)
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, XCircle, X } from "lucide-react";
 
 import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
-// Mapeo topico -> label legible castellano. Mantener en sync con los
-// topicos SBS que scrapeamos. Los que no esten aca se muestran raw.
+// Mapeo topico -> label legible castellano.
 const TOPICO_LABELS: Record<string, string> = {
   eeff: "Estados Financieros",
   colocaciones: "Colocaciones",
@@ -49,31 +52,82 @@ const labelOf = (topico: string): string =>
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join(" ");
 
+const POPOVER_WIDTH = 340;
+const GAP = 8;
+
 export function PeriodoCompletenessBadge({
   status,
 }: {
   status: PeriodoCompletenessStatus | null;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Click-outside para cerrar el popover — mejor UX que solo boton X.
+  // Portal solo despues del mount para evitar hydration mismatch (SSR).
+  useEffect(() => setMounted(true), []);
+
+  // Calcular posicion del popover relative al trigger. Se llama al abrir
+  // y al scroll/resize para mantener el popover pegado al trigger.
+  const updateCoords = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    // Preferir debajo del trigger. Si no cabe, arriba.
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const popoverEstH = popoverRef.current?.offsetHeight ?? 380;
+
+    let top = rect.bottom + GAP;
+    if (top + popoverEstH > viewportH - 8) {
+      // No cabe abajo -> ponerlo arriba del trigger
+      top = Math.max(8, rect.top - popoverEstH - GAP);
+    }
+
+    // Alinear left al trigger, pero clamp al viewport (con 8px margin).
+    let left = rect.left;
+    if (left + POPOVER_WIDTH > viewportW - 8) {
+      left = Math.max(8, viewportW - POPOVER_WIDTH - 8);
+    }
+
+    setCoords({ top, left });
+  }, []);
+
+  // Recalcular coords cuando se abre.
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateCoords();
+  }, [open, updateCoords]);
+
+  // Listeners de scroll/resize/click-outside/ESC.
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+
+    const onScroll = () => updateCoords();
+    const onResize = () => updateCoords();
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
+
+    window.addEventListener("scroll", onScroll, true); // capture=true para nested scrollers
+    window.addEventListener("resize", onResize);
+    document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onEsc);
+
     return () => {
-      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [open]);
+  }, [open, updateCoords]);
 
   if (!status) return null;
 
@@ -81,98 +135,110 @@ export function PeriodoCompletenessBadge({
   const nFaltantes = status.topicos_faltantes.length;
   const eeffOk = status.eeff_completo;
 
-  // Caso 1: todo OK -> no renderizar
+  // Todo OK -> no renderizar el chip
   if (eeffOk && nParciales === 0 && nFaltantes === 0) return null;
 
-  // Caso 2: EEFF incompleto (rojo)
   const isCritical = !eeffOk;
   const chipClass = isCritical
     ? "bg-red-500/20 hover:bg-red-500/30 border-red-300/50 text-white"
     : "bg-amber-400/25 hover:bg-amber-400/40 border-amber-200/50 text-white";
   const Icon = isCritical ? XCircle : AlertTriangle;
+  const totalPend = nParciales + nFaltantes;
   const chipLabel = isCritical
     ? `EEFF parcial (${status.grupos_eeff_ok}/5)`
-    : `${nParciales + nFaltantes} topico${nParciales + nFaltantes === 1 ? "" : "s"} pendiente${nParciales + nFaltantes === 1 ? "" : "s"}`;
+    : `${totalPend} topico${totalPend === 1 ? "" : "s"} pendiente${totalPend === 1 ? "" : "s"}`;
 
   return (
-    <div ref={rootRef} className="relative inline-flex no-print">
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-colors ${chipClass}`}
+        className={`no-print inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-colors ${chipClass}`}
         aria-label={`Estado de publicacion SBS: ${chipLabel}. Click para ver detalle.`}
         aria-expanded={open}
+        aria-haspopup="dialog"
       >
         <Icon className="w-3.5 h-3.5" aria-hidden="true" />
         <span>{chipLabel}</span>
       </button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Detalle de publicacion SBS"
-          className="absolute top-full left-0 mt-2 z-30 w-80 bg-white text-slate-900 rounded-lg shadow-xl border border-slate-200 overflow-hidden"
-        >
-          <header className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <Icon
-                className={`w-4 h-4 ${isCritical ? "text-red-600" : "text-amber-600"}`}
-                aria-hidden="true"
+      {open && mounted && coords &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            role="dialog"
+            aria-label="Detalle de publicacion SBS"
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: POPOVER_WIDTH,
+              zIndex: 9999,
+            }}
+            className="no-print bg-white text-slate-900 rounded-lg shadow-2xl border border-slate-200 overflow-hidden"
+          >
+            <header className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <Icon
+                  className={`w-4 h-4 ${isCritical ? "text-red-600" : "text-amber-600"}`}
+                  aria-hidden="true"
+                />
+                <h3 className="text-xs font-semibold text-slate-900">
+                  Publicacion SBS · periodo {status.periodo}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-slate-400 hover:text-slate-700 -mr-1"
+                aria-label="Cerrar detalle"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </header>
+
+            <div className="p-3 space-y-2.5 text-xs max-h-[70vh] overflow-y-auto">
+              <StatusRow
+                label="Estados Financieros (EEFF)"
+                detail={`${status.grupos_eeff_ok} de 5 grupos regulados`}
+                ok={eeffOk}
+                critical={!eeffOk}
               />
-              <h3 className="text-xs font-semibold text-slate-900">
-                Publicacion SBS · periodo {status.periodo}
-              </h3>
+
+              {status.topicos_completos.length > 0 && (
+                <TopicoBlock
+                  titulo="Publicados"
+                  items={status.topicos_completos.filter((t) => t !== "eeff")}
+                  variant="ok"
+                />
+              )}
+              {status.topicos_parciales.length > 0 && (
+                <TopicoBlock
+                  titulo="Publicacion parcial"
+                  items={status.topicos_parciales}
+                  variant="warn"
+                />
+              )}
+              {status.topicos_faltantes.length > 0 && (
+                <TopicoBlock
+                  titulo="No publicados aun por SBS"
+                  items={status.topicos_faltantes}
+                  variant="pending"
+                />
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="text-slate-400 hover:text-slate-700 -mr-1"
-              aria-label="Cerrar detalle"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </header>
 
-          <div className="p-3 space-y-2.5 text-xs">
-            <StatusRow
-              label="Estados Financieros (EEFF)"
-              detail={`${status.grupos_eeff_ok} de 5 grupos regulados`}
-              ok={eeffOk}
-              critical={!eeffOk}
-            />
-
-            {status.topicos_completos.length > 0 && (
-              <TopicoBlock
-                titulo="Publicados"
-                items={status.topicos_completos.filter((t) => t !== "eeff")}
-                variant="ok"
-              />
-            )}
-            {status.topicos_parciales.length > 0 && (
-              <TopicoBlock
-                titulo="Publicacion parcial"
-                items={status.topicos_parciales}
-                variant="warn"
-              />
-            )}
-            {status.topicos_faltantes.length > 0 && (
-              <TopicoBlock
-                titulo="No publicados aun por SBS"
-                items={status.topicos_faltantes}
-                variant="pending"
-              />
-            )}
-          </div>
-
-          <footer className="px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 leading-relaxed">
-            SBS publica los estados financieros primero. Los reportes
-            secundarios pueden tardar 2-4 semanas mas. El informe muestra
-            los KPIs disponibles y deja los pendientes en{" "}
-            <span className="font-mono">—</span> hasta que SBS los publique.
-          </footer>
-        </div>
-      )}
-    </div>
+            <footer className="px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 leading-relaxed">
+              SBS publica los estados financieros primero. Los reportes
+              secundarios pueden tardar 2-4 semanas mas. El informe muestra
+              los KPIs disponibles y deja los pendientes en{" "}
+              <span className="font-mono">—</span> hasta que SBS los publique.
+            </footer>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
