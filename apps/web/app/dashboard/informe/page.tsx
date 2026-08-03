@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import {
   getInformeData,
+  getPeriodoCompletenessStatus,
   getUltimoPeriodoPublicable,
   listPeriodosDisponibles,
   listEntidadesDisponibles,
@@ -77,26 +78,33 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   // Soportamos `colorOverrides` como alias retrocompat (era el nombre original).
   const colorsOverride = parseColorsOverride(params.colors ?? params.colorOverrides);
 
-  const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
-    getInformeData({
-      clienteSlug,
-      periodo,
-      peerGroupOverride: peerGroup,
-      entidadPropiaOverride,
-      temaOverride: params.tema,
-      ordenOverride: orden,
-      colorsOverride,
-      consolidar,
-    }),
-    listPeriodosDisponibles({ ultimosN: 240 }),
-    listEntidadesDisponibles({}),
-  ]);
+  // 4 queries en paralelo — el completenessStatus es la mas rapida (<10ms,
+  // agregacion sobre raw.archivos_descargados con indice (periodo, topico,
+  // status)) y NO extiende el wall-clock del render porque Promise.all
+  // corre todas simultaneas. Impacto en TTFB: 0ms adicional.
+  const [data, periodosDisponibles, entidadesDisponibles, completenessStatus] =
+    await Promise.all([
+      getInformeData({
+        clienteSlug,
+        periodo,
+        peerGroupOverride: peerGroup,
+        entidadPropiaOverride,
+        temaOverride: params.tema,
+        ordenOverride: orden,
+        colorsOverride,
+        consolidar,
+      }),
+      listPeriodosDisponibles({ ultimosN: 240 }),
+      listEntidadesDisponibles({}),
+      getPeriodoCompletenessStatus(periodo),
+    ]);
 
   return (
     <InformeClient
       data={data}
       periodosDisponibles={periodosDisponibles}
       entidadesDisponibles={entidadesDisponibles}
+      completenessStatus={completenessStatus}
     />
   );
 }

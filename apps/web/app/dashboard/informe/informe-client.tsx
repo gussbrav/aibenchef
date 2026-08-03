@@ -40,6 +40,7 @@ import type {
   Competidor,
   KpiUnidad,
 } from "@/lib/domains/informe";
+import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
 import { SelectoresToolbar } from "./selectores-toolbar";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
@@ -47,6 +48,7 @@ import {
   SeccionHistoricoAccordion,
   type AccordionMetric,
 } from "./seccion-historico-accordion";
+import { PeriodoCompletenessBadge } from "./periodo-completeness-badge";
 
 // ============================================================================
 // Helpers de formato y ranking
@@ -202,10 +204,12 @@ export function InformeClient({
   data,
   periodosDisponibles,
   entidadesDisponibles,
+  completenessStatus,
 }: {
   data: InformeData;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
+  completenessStatus: PeriodoCompletenessStatus | null;
 }) {
   const {
     cliente,
@@ -371,7 +375,10 @@ export function InformeClient({
           <div>
             <p className="text-xs uppercase tracking-wider opacity-75 mb-2">Informe Ejecutivo de Benchmark</p>
             <h1 className="text-3xl font-bold mb-1">{cliente.nombre}</h1>
-            <p className="text-lg opacity-90">Cierre {periodo.label}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-lg opacity-90">Cierre {periodo.label}</p>
+              <PeriodoCompletenessBadge status={completenessStatus} />
+            </div>
             <div className="flex items-center gap-2 mt-4 flex-wrap">
               <span className="text-xs uppercase opacity-75">Comparativa:</span>
               {competidores.map((c) => (
