@@ -108,6 +108,14 @@ function generarPeriodos(
 
 /**
  * Historico del PE para UNA entidad en un rango dado + granularidad.
+ *
+ * IMPORTANTE — Canonizacion de nombres: el view v_punto_equilibrio_ancho
+ * guarda por nomb_correg SIN fusionar aliases historicos. Para entidades
+ * que cambiaron de nombre (ej. BBVA Continental -> Banco BBVA Peru), la
+ * data queda partida en 2 registros.
+ * Esta query resuelve TODOS los aliases via dw.entidad_maestra +
+ * dw.entidad_nombre y hace el WHERE con IN (...aliases) para fusionar
+ * la historia completa bajo el nombre canonico actual.
  */
 export async function getPuntoEquilibrioHistorico(opts: {
   entidad: string;
@@ -121,6 +129,10 @@ export async function getPuntoEquilibrioHistorico(opts: {
   if (periodos.length === 0) return [];
   const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
 
+  // Resolver todos los aliases del canonico. Si la entidad no esta en la
+  // maestra (fallback), buscamos por su nombre tal cual. Con DISTINCT ON
+  // por periodo tomamos el primer nombre en caso de que un periodo tenga
+  // multiple registros (transiciones de nombre).
   const rows = await db.execute<{
     periodo: number;
     pct_rendimiento: number | null;
@@ -131,13 +143,23 @@ export async function getPuntoEquilibrioHistorico(opts: {
     pct_punto_eq: number | null;
     pct_margen_neto: number | null;
   }>(sql`
-    SELECT periodo, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
-           pct_gastos_op, pct_otros, pct_punto_eq, pct_margen_neto
-    FROM marts.v_punto_equilibrio_ancho
-    WHERE nomb_correg = ${opts.entidad}
-      AND moneda = ${moneda}
-      AND periodo IN (${periodosClause})
-    ORDER BY periodo ASC
+    WITH aliases AS (
+      SELECT LOWER(TRIM(en.nombre)) AS nombre_lower
+      FROM dw.entidad_maestra em
+      JOIN dw.entidad_nombre en ON en.entidad_id = em.id
+      WHERE em.nomb_correg_canonico = ${opts.entidad}
+        AND en.consolidar = TRUE
+      UNION
+      SELECT LOWER(TRIM(${opts.entidad}::text))
+    )
+    SELECT DISTINCT ON (v.periodo)
+           v.periodo, v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
+           v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto
+    FROM marts.v_punto_equilibrio_ancho v
+    WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+      AND v.moneda = ${moneda}
+      AND v.periodo IN (${periodosClause})
+    ORDER BY v.periodo ASC, v.nomb_correg
   `);
 
   const byPeriodo = new Map<number, (typeof rows)[number]>();
@@ -160,7 +182,8 @@ export async function getPuntoEquilibrioHistorico(opts: {
 }
 
 /**
- * Comparativo tabla al mismo periodo para N entidades.
+ * Comparativo tabla al mismo periodo para N entidades — con canonizacion
+ * de aliases (misma logica que getPuntoEquilibrioHistorico).
  */
 export async function getPuntoEquilibrioComparativo(opts: {
   entidades: Array<{ nombCorreg: string; color: string; esPropio: boolean }>;
@@ -174,8 +197,11 @@ export async function getPuntoEquilibrioComparativo(opts: {
     sql`, `,
   );
 
+  // Query con canonizacion: por cada entidad canonica, buscar todos sus
+  // aliases y traer el registro del periodo. Devuelve una fila por entidad
+  // canonica con la data fusionada.
   const rows = await db.execute<{
-    nomb_correg: string;
+    canonico: string;
     pct_rendimiento: number | null;
     pct_costo_fondeo: number | null;
     pct_provisiones: number | null;
@@ -184,16 +210,32 @@ export async function getPuntoEquilibrioComparativo(opts: {
     pct_punto_eq: number | null;
     pct_margen_neto: number | null;
   }>(sql`
-    SELECT nomb_correg, pct_rendimiento, pct_costo_fondeo, pct_provisiones,
-           pct_gastos_op, pct_otros, pct_punto_eq, pct_margen_neto
-    FROM marts.v_punto_equilibrio_ancho
-    WHERE nomb_correg IN (${entidadesClause})
-      AND moneda = ${moneda}
-      AND periodo = ${opts.periodo}
+    WITH entidades_solicitadas AS (
+      SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
+    ),
+    aliases AS (
+      SELECT es.canonico, LOWER(TRIM(en.nombre)) AS nombre_lower
+      FROM entidades_solicitadas es
+      JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = es.canonico
+      JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
+      UNION
+      -- fallback: si la entidad no esta en la maestra, buscar por nombre directo
+      SELECT es.canonico, LOWER(TRIM(es.canonico))
+      FROM entidades_solicitadas es
+    )
+    SELECT DISTINCT ON (a.canonico)
+           a.canonico, v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
+           v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto
+    FROM aliases a
+    JOIN marts.v_punto_equilibrio_ancho v
+      ON LOWER(TRIM(v.nomb_correg)) = a.nombre_lower
+     AND v.moneda = ${moneda}
+     AND v.periodo = ${opts.periodo}
+    ORDER BY a.canonico, v.nomb_correg
   `);
 
   const byEntidad = new Map<string, (typeof rows)[number]>();
-  for (const r of rows) byEntidad.set(String(r.nomb_correg), r);
+  for (const r of rows) byEntidad.set(String(r.canonico), r);
 
   return opts.entidades.map((e) => {
     const r = byEntidad.get(e.nombCorreg);
@@ -213,9 +255,9 @@ export async function getPuntoEquilibrioComparativo(opts: {
 }
 
 /**
- * Series temporales por entidad — para el line chart comparativo que
- * muestra evolucion del PE (o margen o rendimiento) en el tiempo lado
- * a lado.
+ * Series temporales por entidad — para el line chart comparativo.
+ * Canoniza aliases igual que las otras queries: cada entidad canonica
+ * agrega todos sus nombres historicos para fusionar la serie completa.
  */
 export async function getPuntoEquilibrioSeries(opts: {
   entidades: Array<{ nombCorreg: string; color: string; esPropio: boolean }>;
@@ -235,24 +277,41 @@ export async function getPuntoEquilibrioSeries(opts: {
   );
   const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
 
+  // Canonizacion via UNION de aliases + fallback al nombre directo.
+  // DISTINCT ON (canonico, periodo) para colapsar duplicados de transicion
+  // de nombre (ej. 2 filas para el mismo mes cuando cambio de nombre).
   const rows = await db.execute<{
-    nomb_correg: string;
+    canonico: string;
     periodo: number;
     pct_punto_eq: number | null;
     pct_margen_neto: number | null;
     pct_rendimiento: number | null;
   }>(sql`
-    SELECT nomb_correg, periodo, pct_punto_eq, pct_margen_neto, pct_rendimiento
-    FROM marts.v_punto_equilibrio_ancho
-    WHERE nomb_correg IN (${entidadesClause})
-      AND moneda = ${moneda}
-      AND periodo IN (${periodosClause})
-    ORDER BY nomb_correg, periodo ASC
+    WITH entidades_solicitadas AS (
+      SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
+    ),
+    aliases AS (
+      SELECT es.canonico, LOWER(TRIM(en.nombre)) AS nombre_lower
+      FROM entidades_solicitadas es
+      JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = es.canonico
+      JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
+      UNION
+      SELECT es.canonico, LOWER(TRIM(es.canonico))
+      FROM entidades_solicitadas es
+    )
+    SELECT DISTINCT ON (a.canonico, v.periodo)
+           a.canonico, v.periodo, v.pct_punto_eq, v.pct_margen_neto, v.pct_rendimiento
+    FROM aliases a
+    JOIN marts.v_punto_equilibrio_ancho v
+      ON LOWER(TRIM(v.nomb_correg)) = a.nombre_lower
+     AND v.moneda = ${moneda}
+     AND v.periodo IN (${periodosClause})
+    ORDER BY a.canonico, v.periodo ASC, v.nomb_correg
   `);
 
   const byEntidad = new Map<string, Map<number, (typeof rows)[number]>>();
   for (const r of rows) {
-    const k = String(r.nomb_correg);
+    const k = String(r.canonico);
     if (!byEntidad.has(k)) byEntidad.set(k, new Map());
     byEntidad.get(k)!.set(Number(r.periodo), r);
   }
@@ -278,7 +337,13 @@ export async function getPuntoEquilibrioSeries(opts: {
 }
 
 /**
- * Lista de todas las entidades con data de PE — para el selector.
+ * Lista de entidades con data de PE, agrupadas por nombre canonico y con
+ * rango primer/ultimo periodo FUSIONADO sobre todos los aliases. Asi el
+ * dropdown muestra 'Banco BBVA Peru' con rango 201001-202606 (no solo
+ * 202304-202606 que es el rango solo del nombre nuevo).
+ *
+ * Fallback: si un nomb_correg del view no tiene entrada en la maestra,
+ * lo devolvemos con su nombre tal cual (compat con data legacy).
  */
 export async function listEntidadesConDataPE(): Promise<
   Array<{ nombCorreg: string; primerPeriodo: number; ultimoPeriodo: number }>
@@ -288,12 +353,40 @@ export async function listEntidadesConDataPE(): Promise<
     primer_periodo: number;
     ultimo_periodo: number;
   }>(sql`
-    SELECT nomb_correg,
-           MIN(periodo) AS primer_periodo,
-           MAX(periodo) AS ultimo_periodo
-    FROM marts.v_punto_equilibrio_ancho
-    WHERE moneda = 'TOTAL'
-    GROUP BY nomb_correg
+    WITH pe_por_nombre AS (
+      SELECT LOWER(TRIM(nomb_correg)) AS nombre_lower,
+             MIN(periodo) AS primer,
+             MAX(periodo) AS ultimo
+      FROM marts.v_punto_equilibrio_ancho
+      WHERE moneda = 'TOTAL'
+      GROUP BY LOWER(TRIM(nomb_correg))
+    ),
+    canonicos AS (
+      -- Todos los canonicos con al menos un alias que tiene data en PE
+      SELECT em.nomb_correg_canonico AS nomb_correg,
+             MIN(pe.primer) AS primer_periodo,
+             MAX(pe.ultimo) AS ultimo_periodo
+      FROM dw.entidad_maestra em
+      JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
+      JOIN pe_por_nombre pe ON pe.nombre_lower = LOWER(TRIM(en.nombre))
+      GROUP BY em.nomb_correg_canonico
+    ),
+    huerfanos AS (
+      -- Nombres en PE que NO estan en la maestra — devolver tal cual para
+      -- no perder data si la maestra esta incompleta.
+      SELECT pe.nombre_lower AS nomb_correg,
+             pe.primer AS primer_periodo,
+             pe.ultimo AS ultimo_periodo
+      FROM pe_por_nombre pe
+      WHERE NOT EXISTS (
+        SELECT 1 FROM dw.entidad_nombre en
+        WHERE en.consolidar = TRUE
+          AND LOWER(TRIM(en.nombre)) = pe.nombre_lower
+      )
+    )
+    SELECT nomb_correg, primer_periodo, ultimo_periodo FROM canonicos
+    UNION ALL
+    SELECT nomb_correg, primer_periodo, ultimo_periodo FROM huerfanos
     ORDER BY nomb_correg
   `);
   return rows.map((r) => ({

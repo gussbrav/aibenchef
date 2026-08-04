@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  BarChart3, Building2, Calendar, Info, Layers, TrendingUp, Users, X,
+  BarChart3, Calendar, Info, Layers, TrendingUp, Users, X,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -32,6 +32,7 @@ import type {
   PuntoEquilibrioRow,
   PuntoEquilibrioSerie,
 } from "@/lib/domains/punto-equilibrio";
+import { EntityCombobox } from "./entity-combobox";
 
 type EntidadDisponible = {
   nombCorreg: string;
@@ -80,14 +81,20 @@ export function PuntoEquilibrioClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Actualizar URL preservando otros params — refresca la SSR
+  // Actualizar URL preservando otros params + posicion de scroll.
+  // router.replace en vez de push: no crea entry en history (mejor UX para
+  // filtros) y scroll:false evita el jump al top que rompe el flujo del
+  // usuario cuando esta leyendo la tabla y cambia un selector.
   const updateUrl = (updates: Record<string, string | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
     for (const [k, v] of Object.entries(updates)) {
       if (v == null || v === "") params.delete(k);
       else params.set(k, v);
     }
-    router.push(`/dashboard/punto-equilibrio?${params.toString()}` as never);
+    router.replace(
+      `/dashboard/punto-equilibrio?${params.toString()}` as never,
+      { scroll: false },
+    );
   };
 
   return (
@@ -200,24 +207,13 @@ function SelectoresBar({
   return (
     <section className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Entidad */}
-        <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
-            <Building2 className="w-3 h-3" />
-            Entidad
-          </label>
-          <select
-            value={entidadActual}
-            onChange={(e) => onChangeEntidad(e.target.value)}
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
-          >
-            {entidadesDisponibles.map((e) => (
-              <option key={e.nombCorreg} value={e.nombCorreg}>
-                {e.nombCorreg}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Entidad — combobox con search */}
+        <EntityCombobox
+          label="Entidad"
+          value={entidadActual}
+          options={entidadesDisponibles}
+          onChange={onChangeEntidad}
+        />
 
         {/* Desde año */}
         <div>
@@ -285,13 +281,17 @@ function SelectoresBar({
               Comparar contra ({config.peerGroup.length} entidades)
             </p>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {config.peerGroup.map((p) => (
-                <span
-                  key={p}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded"
-                >
-                  {p}
-                  {config.peerGroup.length > 1 && (
+              {config.peerGroup.length === 0 ? (
+                <span className="text-xs text-slate-500 italic">
+                  Sin entidades seleccionadas — click en &quot;Editar comparación&quot; para agregar.
+                </span>
+              ) : (
+                config.peerGroup.map((p) => (
+                  <span
+                    key={p}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded"
+                  >
+                    {p}
                     <button
                       type="button"
                       onClick={() => onChangePeers(config.peerGroup.filter((x) => x !== p))}
@@ -300,9 +300,9 @@ function SelectoresBar({
                     >
                       <X className="w-3 h-3" />
                     </button>
-                  )}
-                </span>
-              ))}
+                  </span>
+                ))
+              )}
             </div>
           </div>
           <button
@@ -416,10 +416,9 @@ function PeerGroupModal({
           </button>
           <button
             onClick={() => onSave(Array.from(sel))}
-            disabled={sel.size === 0}
-            className="px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded"
+            className="px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded"
           >
-            Aplicar
+            Aplicar {sel.size > 0 && `(${sel.size})`}
           </button>
         </footer>
       </div>
@@ -592,7 +591,19 @@ function ComparativoView({ series }: { series: PuntoEquilibrioSerie[] }) {
   const [metrica, setMetrica] = useState<"pctPuntoEq" | "pctMargenNeto" | "pctRendimiento">(
     "pctPuntoEq",
   );
-  if (series.length === 0) return <EmptyState />;
+  if (series.length === 0) {
+    return (
+      <div className="bg-white border border-dashed border-slate-300 rounded-lg p-12 text-center">
+        <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+        <p className="text-sm font-semibold text-slate-700 mb-1">
+          Sin entidades para comparar
+        </p>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          Agrega al menos una entidad usando el botón &quot;Editar comparación&quot; en los selectores de arriba.
+        </p>
+      </div>
+    );
+  }
 
   // Recharts data: array de objects donde cada key es una entidad
   const chartData = useMemo(() => {
