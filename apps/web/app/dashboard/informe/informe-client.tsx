@@ -42,7 +42,13 @@ import type {
 } from "@/lib/domains/informe";
 import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
-import { PrintCover, PrintFooter } from "./print-cover";
+import {
+  PrintCover,
+  PrintFooter,
+  PrintRunningFooter,
+  PrintRunningHeader,
+  PrintWatermark,
+} from "./print-cover";
 import { SelectoresToolbar } from "./selectores-toolbar";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
 import {
@@ -373,13 +379,20 @@ export function InformeClient({
       {/* ============ PORTADA PDF (solo visible al imprimir) ============ */}
       <PrintCover
         clienteNombre={cliente.nombre}
+        clienteSlug={cliente.slug}
+        periodo={periodo.codigo}
         periodoLabel={periodo.label}
         periodoComparativoLabel={periodoComparativo.label}
-        peerGroup={competidores.map((c) => c.nombCorreg)}
+        peerGroup={competidores.map((c) => ({ nombre: c.nombCorreg, color: c.color }))}
         entidadPropia={cliente.entidadPropia}
         brandPrimary={cliente.brand.primary}
         brandAcento={cliente.brand.acento}
       />
+
+      {/* Running header/footer + watermark: fixed en cada pagina de contenido */}
+      <PrintRunningHeader clienteNombre={cliente.nombre} periodoLabel={periodo.label} />
+      <PrintRunningFooter clienteNombre={cliente.nombre} />
+      <PrintWatermark />
 
       {/* ============ HEADER ============ */}
       <header
