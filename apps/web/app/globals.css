@@ -96,35 +96,53 @@ body {
 }
 
 /* =========================================================================
- * PRINT / PDF export — CSS aplicado cuando el usuario elige "Descargar PDF"
- * (que dispara window.print()). Objetivo: PDF limpio y legible sin toolbars
- * ni elementos interactivos.
+ * PRINT / PDF export — CSS aplicado cuando el usuario elige "Descargar PDF".
+ * Objetivo: PDF clase mundial — portada, encabezado/pie, page breaks
+ * inteligentes, colores que se imprimen, tipografia legible.
+ *
+ * Diseño A4 landscape (297x210 mm) con margenes 15mm horizontal, 20mm vertical
+ * para dejar espacio a encabezado/pie via @page.
  * ========================================================================= */
+
+/* Elementos visibles SOLO en print (portada, pie, encabezado repetido) */
+.print-only {
+  display: none;
+}
+
 @media print {
+  /* Forzar impresion de colores (backgrounds, gradientes, etc). Sin esto
+   * el navegador ahorra tinta y el header queda blanco/gris. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Elementos SOLO print vs SOLO screen */
+  .print-only { display: block !important; }
+  .screen-only { display: none !important; }
+
   /* Ocultar chrome del app: nav, botones, selectores, elementos marcados */
   nav,
   header nav,
   button.no-print,
   .no-print,
+  .print\:hidden,
   [data-testid="dashboard-nav"],
   [data-testid="periodo-selector"],
   [data-testid="peer-group-editor"] {
     display: none !important;
   }
 
-  /* Fondo blanco puro + tinta oscura para tinta/toner */
+  /* Fondo blanco + tinta oscura por defecto (los headers con brand mantienen
+   * su color gracias al color-adjust:exact de arriba) */
   body,
   html {
     background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  /* Evitar cortes de pagina en el medio de un chart / tarjeta */
-  section,
-  .print-avoid-break,
-  article {
-    page-break-inside: avoid;
-    break-inside: avoid;
+    color: #0f172a !important;
+    font-family: -apple-system, Segoe UI, sans-serif !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
   }
 
   /* Ancho completo — sin max-w que deje bordes vacios */
@@ -132,11 +150,25 @@ body {
   .max-w-7xl {
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 8px !important;
+    padding: 0 !important;
   }
 
-  /* Expandir todos los <details> (acordeones colapsados) para que el
-   * PDF muestre TODO el contenido, no solo lo abierto en pantalla. */
+  /* Section: page-break-inside evita cortes feos a mitad de una tarjeta */
+  section,
+  .print-avoid-break,
+  article {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Headings: no quedar como huerfanos al final de la pagina */
+  h1, h2, h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Los <details> (acordeones colapsados) se expanden para que TODO el
+   * contenido salga en el PDF, no solo lo que el usuario tenia abierto. */
   details {
     display: block !important;
   }
@@ -144,14 +176,153 @@ body {
     display: block !important;
   }
 
-  /* Reducir ligeramente el tamaño de charts recharts para caber mejor */
+  /* Charts recharts: tamaño razonable para landscape A4 (267mm de ancho util).
+   * Antes 250px era demasiado chico y quedaba pixelado. */
   .recharts-responsive-container {
-    max-height: 250px !important;
+    max-height: 380px !important;
+    height: 320px !important;
+  }
+  .recharts-wrapper {
+    max-width: 100% !important;
   }
 
-  /* Ajustes de margen de pagina PDF (A4 landscape ideal para dashboards) */
+  /* Tablas: evitar overflow horizontal, ajustar font-size, borders visibles */
+  table {
+    font-size: 9pt !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  th, td {
+    padding: 4px 6px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+  thead {
+    display: table-header-group; /* Repetir encabezado en cada pagina */
+  }
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Cards / bordes: mantener contornos sutiles para separacion visual */
+  .border-slate-200,
+  .border-slate-100,
+  .border-slate-300 {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Headers con gradiente (bg-gradient-to-r) — que se impriman los colores */
+  [style*="linear-gradient"],
+  [class*="bg-gradient"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Espaciado entre secciones: reducir para caber mas por pagina */
+  .space-y-8 > * + *,
+  .space-y-6 > * + *,
+  .space-y-5 > * + *,
+  .space-y-4 > * + * {
+    margin-top: 12px !important;
+  }
+
+  /* Sombras: quitar (no aportan en tinta y ensucian) */
+  .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: none !important;
+  }
+
+  /* Radios de border grandes se ven raros impresos — suavizar */
+  .rounded-xl, .rounded-2xl { border-radius: 8px !important; }
+
+  /* Anti-orphan/widow para parrafos largos (ej. bullets de insights) */
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Force page break: se usa antes/despues de secciones logicas */
+  .print-page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+  .print-page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* ---------- Portada solo-print ---------- */
+  .print-cover {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 180mm; /* Casi toda la pagina landscape */
+    padding: 24mm 20mm;
+    box-sizing: border-box;
+    page-break-after: always;
+    break-after: page;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .print-cover-brand {
+    font-size: 10pt;
+    color: #64748b;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .print-cover-title {
+    font-size: 32pt;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: #0f172a !important;
+    margin: 0;
+  }
+  .print-cover-subtitle {
+    font-size: 16pt;
+    color: #334155;
+    margin-top: 4mm;
+    font-weight: 500;
+  }
+  .print-cover-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+    padding-top: 12mm;
+    border-top: 2px solid #0f172a;
+  }
+  .print-cover-meta-label {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+    margin-bottom: 2mm;
+    font-weight: 600;
+  }
+  .print-cover-meta-value {
+    font-size: 12pt;
+    color: #0f172a;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .print-cover-footer {
+    font-size: 8pt;
+    color: #94a3b8;
+    text-align: center;
+  }
+  .print-cover-brand-bar {
+    height: 6mm;
+    border-radius: 3mm;
+    margin-bottom: 8mm;
+  }
+
+  /* Ajustes de pagina PDF (A4 landscape ideal para dashboards) + counter
+   * de paginas via @page { @bottom-right { content: ... } } */
   @page {
     size: A4 landscape;
-    margin: 12mm 10mm;
+    margin: 15mm 15mm 18mm 15mm;
+  }
+  @page :first {
+    margin: 0; /* Portada full-bleed sin margenes */
   }
 }

@@ -42,6 +42,7 @@ import type {
 } from "@/lib/domains/informe";
 import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
+import { PrintCover, PrintFooter } from "./print-cover";
 import { SelectoresToolbar } from "./selectores-toolbar";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
 import {
@@ -367,6 +368,17 @@ export function InformeClient({
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-2">
+      {/* ============ PORTADA PDF (solo visible al imprimir) ============ */}
+      <PrintCover
+        clienteNombre={cliente.nombre}
+        periodoLabel={periodo.label}
+        periodoComparativoLabel={periodoComparativo.label}
+        peerGroup={competidores.map((c) => c.nombCorreg)}
+        entidadPropia={cliente.entidadPropia}
+        brandPrimary={cliente.brand.primary}
+        brandAcento={cliente.brand.acento}
+      />
+
       {/* ============ HEADER ============ */}
       <header
         className="rounded-xl text-white p-8 relative overflow-hidden"
@@ -506,8 +518,8 @@ export function InformeClient({
         />
       </div>
 
-      {/* ============ FOOTER ============ */}
-      <footer className="border-t border-slate-200 pt-4 pb-8 text-center">
+      {/* ============ FOOTER (solo pantalla) ============ */}
+      <footer className="border-t border-slate-200 pt-4 pb-8 text-center screen-only">
         <p className="text-xs text-slate-500">
           Fuente: SBS · Benchmark generado por Aibenchef · {new Date().toLocaleDateString("es-PE", { dateStyle: "long" })}
         </p>
@@ -515,6 +527,9 @@ export function InformeClient({
           Los KPIs marcados como "—" requieren datasets adicionales (Oficinas, Personal, Clientes, Mora) aun no ingeridos. Ver docs/ROADMAP.md Fase 1.
         </p>
       </footer>
+
+      {/* ============ FOOTER PDF (solo print) ============ */}
+      <PrintFooter clienteNombre={cliente.nombre} periodoLabel={periodo.label} />
     </div>
   );
 }
