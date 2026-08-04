@@ -12,7 +12,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  BarChart3, Calendar, Info, Layers, TrendingUp, Users, X,
+  BarChart3, Calendar, GripVertical, Info, Layers, RotateCcw, TrendingUp, Users, X,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -620,48 +620,316 @@ function TabButton({
 }
 
 /**
- * Tabla histórica: filas = componentes, columnas = periodos.
+ * Definicion de las filas — cada una es un componente del cuadro.
+ * variant define el estilo visual:
+ *   - 'sum': verde, prefix (+)
+ *   - 'sub': rojo, prefix (-)
+ *   - 'bold': fila calculada tipo Margen (fondo gris, bold)
+ *   - 'highlight': fila resumen PE (fondo brand, uppercase, mas grande)
+ */
+type RowDef = {
+  key: string;
+  label: string;
+  field: keyof PuntoEquilibrioRow;
+  variant: "sum" | "sub" | "bold" | "highlight";
+};
+
+const DEFAULT_ROW_ORDER: RowDef[] = [
+  { key: "rendimiento", label: "Rendimiento de cartera", field: "pctRendimiento", variant: "sum" },
+  { key: "otros", label: "Otros Ingresos (Egresos)", field: "pctOtros", variant: "sum" },
+  { key: "costoFondeo", label: "Gasto Financiero", field: "pctCostoFondeo", variant: "sub" },
+  { key: "provisiones", label: "Costo de Provisión", field: "pctProvisiones", variant: "sub" },
+  { key: "gastosOp", label: "Gastos Operacionales", field: "pctGastosOp", variant: "sub" },
+  { key: "margenNeto", label: "Margen antes de Impuestos", field: "pctMargenNeto", variant: "bold" },
+  { key: "puntoEq", label: "Punto de Equilibrio", field: "pctPuntoEq", variant: "highlight" },
+];
+
+const LS_ROW_ORDER = "pe-row-order-v1";
+const LS_COL_ORDER = "pe-col-order-v1";
+
+/**
+ * Cuadro historico con drag & drop libre de filas Y columnas.
+ * Persiste orden en localStorage — el usuario mantiene su layout entre
+ * sesiones. Boton 'Restablecer orden' vuelve al default cronologico.
+ *
+ * NOTA: el orden visual NO afecta el calculo del Margen ni del PE.
+ * Ambos vienen pre-computados del backend sobre los componentes.
  */
 function HistoricoTable({
   data, entidad,
 }: { data: PuntoEquilibrioRow[]; entidad: string }) {
+  // Orden de filas (por key) y columnas (por periodo). Se hidratan desde
+  // localStorage al mount para preservar el layout del usuario.
+  const [rowOrder, setRowOrder] = useState<string[]>(() =>
+    DEFAULT_ROW_ORDER.map((r) => r.key),
+  );
+  const [colOrder, setColOrder] = useState<number[] | null>(null);
+
+  // Hidratar desde localStorage
+  useEffect(() => {
+    try {
+      const rowsRaw = localStorage.getItem(LS_ROW_ORDER);
+      if (rowsRaw) {
+        const arr = JSON.parse(rowsRaw) as string[];
+        // Validar: mismo set de keys que el default
+        const defaultKeys = new Set(DEFAULT_ROW_ORDER.map((r) => r.key));
+        if (arr.every((k) => defaultKeys.has(k)) && arr.length === defaultKeys.size) {
+          setRowOrder(arr);
+        }
+      }
+      const colsRaw = localStorage.getItem(LS_COL_ORDER);
+      if (colsRaw) {
+        setColOrder(JSON.parse(colsRaw) as number[]);
+      }
+    } catch {
+      /* localStorage no disponible o corrupto — usar defaults */
+    }
+  }, []);
+
+  // Persistir cuando cambia
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_ROW_ORDER, JSON.stringify(rowOrder));
+    } catch { /* ignore */ }
+  }, [rowOrder]);
+
+  useEffect(() => {
+    if (colOrder === null) return;
+    try {
+      localStorage.setItem(LS_COL_ORDER, JSON.stringify(colOrder));
+    } catch { /* ignore */ }
+  }, [colOrder]);
+
+  // Columnas efectivas: si hay orden guardado y matchea con los periodos
+  // actuales, usarlo. Si no, usar el orden que vino del backend.
+  const effectiveCols = useMemo(() => {
+    const currentPeriodos = data.map((d) => d.periodo);
+    if (!colOrder) return currentPeriodos;
+    const saved = colOrder.filter((p) => currentPeriodos.includes(p));
+    // Agregar periodos nuevos que no estaban en el orden guardado
+    for (const p of currentPeriodos) {
+      if (!saved.includes(p)) saved.push(p);
+    }
+    return saved;
+  }, [colOrder, data]);
+
+  // Filas efectivas ordenadas
+  const effectiveRows = useMemo(() => {
+    return rowOrder
+      .map((k) => DEFAULT_ROW_ORDER.find((r) => r.key === k))
+      .filter((r): r is RowDef => Boolean(r));
+  }, [rowOrder]);
+
+  const dataByPeriodo = useMemo(() => {
+    const m = new Map<number, PuntoEquilibrioRow>();
+    for (const d of data) m.set(d.periodo, d);
+    return m;
+  }, [data]);
+
+  // Drag state
+  const [draggedRow, setDraggedRow] = useState<string | null>(null);
+  const [draggedCol, setDraggedCol] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ type: "row" | "col"; id: string | number } | null>(null);
+
+  const resetOrder = () => {
+    setRowOrder(DEFAULT_ROW_ORDER.map((r) => r.key));
+    setColOrder(null);
+    try {
+      localStorage.removeItem(LS_ROW_ORDER);
+      localStorage.removeItem(LS_COL_ORDER);
+    } catch { /* ignore */ }
+  };
+
+  const isCustomOrder =
+    rowOrder.join(",") !== DEFAULT_ROW_ORDER.map((r) => r.key).join(",") ||
+    colOrder !== null;
+
+  const moveRow = (from: string, to: string) => {
+    if (from === to) return;
+    setRowOrder((prev) => {
+      const arr = [...prev];
+      const fromIdx = arr.indexOf(from);
+      const toIdx = arr.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, from);
+      return arr;
+    });
+  };
+
+  const moveCol = (from: number, to: number) => {
+    if (from === to) return;
+    setColOrder((prev) => {
+      const base = prev ?? data.map((d) => d.periodo);
+      const arr = [...base];
+      const fromIdx = arr.indexOf(from);
+      const toIdx = arr.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, from);
+      return arr;
+    });
+  };
+
   if (data.length === 0) return <EmptyState />;
+
   return (
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-      <header className="px-5 py-3 border-b border-slate-200 bg-slate-50">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Cuadro histórico — {entidad}
-        </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Valores anualizados TTM (últimos 12 meses) sobre cartera promedio de 12 meses.
-        </p>
+      <header className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">
+            Cuadro histórico — {entidad}
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Valores anualizados TTM. Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> para
+            reordenar filas o columnas. El orden se guarda en tu navegador.
+          </p>
+        </div>
+        {isCustomOrder && (
+          <button
+            type="button"
+            onClick={resetOrder}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+            title="Restablecer al orden por defecto (cronológico + contable)"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Restablecer orden
+          </button>
+        )}
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-100 border-b border-slate-200">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-700 min-w-[220px] sticky left-0 bg-slate-100 z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-700 min-w-[240px] sticky left-0 bg-slate-100 z-10">
                 Componente
               </th>
-              {data.map((p) => (
-                <th
-                  key={p.periodo}
-                  className="text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-700 min-w-[85px] whitespace-nowrap"
-                >
-                  {p.periodoLabel}
-                </th>
-              ))}
+              {effectiveCols.map((periodo) => {
+                const label = dataByPeriodo.get(periodo)?.periodoLabel ?? String(periodo);
+                const isDropTarget = dropTarget?.type === "col" && dropTarget.id === periodo;
+                const isDragging = draggedCol === periodo;
+                return (
+                  <th
+                    key={periodo}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedCol(periodo);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => {
+                      setDraggedCol(null);
+                      setDropTarget(null);
+                    }}
+                    onDragOver={(e) => {
+                      if (draggedCol != null && draggedCol !== periodo) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDropTarget({ type: "col", id: periodo });
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dropTarget?.id === periodo) setDropTarget(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedCol != null) moveCol(draggedCol, periodo);
+                      setDropTarget(null);
+                    }}
+                    className={cn(
+                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-700 min-w-[95px] whitespace-nowrap cursor-move select-none",
+                      "hover:bg-slate-200 transition-colors group",
+                      isDragging && "opacity-40",
+                      isDropTarget && "bg-brand-100 ring-2 ring-brand-500 ring-inset",
+                    )}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500" />
+                      {label}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            <Row label="Rendimiento de cartera" prefix="(+)" data={data} field="pctRendimiento" positive />
-            <Row label="Otros Ingresos (Egresos)" prefix="(+)" data={data} field="pctOtros" positive />
-            <Row label="Gasto Financiero" prefix="(-)" data={data} field="pctCostoFondeo" negative />
-            <Row label="Costo de Provisión" prefix="(-)" data={data} field="pctProvisiones" negative />
-            <Row label="Gastos Operacionales" prefix="(-)" data={data} field="pctGastosOp" negative />
-            <SeparatorRow cols={data.length + 1} />
-            <RowBold label="Margen antes de Impuestos" data={data} field="pctMargenNeto" />
-            <RowHighlight label="Punto de Equilibrio" data={data} field="pctPuntoEq" />
+            {effectiveRows.map((row, idx) => {
+              const isDropTarget = dropTarget?.type === "row" && dropTarget.id === row.key;
+              const isDragging = draggedRow === row.key;
+              const rowStyle = getRowStyle(row.variant);
+              return (
+                <tr
+                  key={row.key}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedRow(row.key);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => {
+                    setDraggedRow(null);
+                    setDropTarget(null);
+                  }}
+                  onDragOver={(e) => {
+                    if (draggedRow && draggedRow !== row.key) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDropTarget({ type: "row", id: row.key });
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dropTarget?.id === row.key) setDropTarget(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedRow) moveRow(draggedRow, row.key);
+                    setDropTarget(null);
+                  }}
+                  className={cn(
+                    "cursor-move transition-colors",
+                    idx > 0 && "border-t border-slate-100",
+                    row.variant === "bold" && "border-t border-slate-200 bg-slate-50",
+                    row.variant === "highlight" && "border-t-2 border-slate-800 bg-brand-50",
+                    isDragging && "opacity-40",
+                    isDropTarget && "ring-2 ring-brand-500 ring-inset bg-brand-50",
+                  )}
+                >
+                  <td
+                    className={cn(
+                      "px-4 sticky left-0 z-10 group",
+                      rowStyle.labelClass,
+                      row.variant === "bold" && "bg-slate-50",
+                      row.variant === "highlight" && "bg-brand-50",
+                      !["bold", "highlight"].includes(row.variant) && "bg-white hover:bg-slate-50",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
+                      {rowStyle.prefix && (
+                        <span className="text-slate-400 font-mono">{rowStyle.prefix}</span>
+                      )}
+                      <span>{row.label}</span>
+                    </div>
+                  </td>
+                  {effectiveCols.map((periodo) => {
+                    const d = dataByPeriodo.get(periodo);
+                    const v = d ? (d[row.field] as number | null) : null;
+                    return (
+                      <td
+                        key={periodo}
+                        className={cn(
+                          "text-right px-3 font-mono tabular-nums whitespace-nowrap",
+                          rowStyle.valueClass,
+                          row.variant === "sum" && v != null && "text-emerald-700",
+                          row.variant === "sub" && v != null && "text-rose-700",
+                          v == null && "text-slate-400 italic",
+                        )}
+                      >
+                        {fmtPct(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -669,90 +937,33 @@ function HistoricoTable({
   );
 }
 
-function Row({
-  label, prefix, data, field, positive, negative,
-}: {
-  label: string;
-  prefix: "(+)" | "(-)";
-  data: PuntoEquilibrioRow[];
-  field: keyof PuntoEquilibrioRow;
-  positive?: boolean;
-  negative?: boolean;
-}) {
-  return (
-    <tr className="border-t border-slate-100 hover:bg-slate-50">
-      <td className="px-4 py-2 text-slate-700 sticky left-0 bg-white z-10">
-        <span className="text-slate-400 font-mono mr-1">{prefix}</span>
-        {label}
-      </td>
-      {data.map((p) => {
-        const v = p[field] as number | null;
-        return (
-          <td
-            key={p.periodo}
-            className={cn(
-              "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap",
-              positive && v != null && "text-emerald-700",
-              negative && v != null && "text-rose-700",
-              v == null && "text-slate-400 italic",
-            )}
-          >
-            {fmtPct(v)}
-          </td>
-        );
-      })}
-    </tr>
-  );
-}
-
-function RowBold({
-  label, data, field,
-}: { label: string; data: PuntoEquilibrioRow[]; field: keyof PuntoEquilibrioRow }) {
-  return (
-    <tr className="border-t border-slate-200 bg-slate-50">
-      <td className="px-4 py-2.5 font-semibold text-slate-900 sticky left-0 bg-slate-50 z-10">
-        {label}
-      </td>
-      {data.map((p) => {
-        const v = p[field] as number | null;
-        return (
-          <td
-            key={p.periodo}
-            className="text-right px-3 py-2.5 font-mono tabular-nums font-semibold text-slate-900 whitespace-nowrap"
-          >
-            {fmtPct(v)}
-          </td>
-        );
-      })}
-    </tr>
-  );
-}
-
-function RowHighlight({
-  label, data, field,
-}: { label: string; data: PuntoEquilibrioRow[]; field: keyof PuntoEquilibrioRow }) {
-  return (
-    <tr className="border-t-2 border-slate-800 bg-brand-50">
-      <td className="px-4 py-3 font-bold text-slate-900 uppercase text-xs tracking-wider sticky left-0 bg-brand-50 z-10">
-        {label}
-      </td>
-      {data.map((p) => {
-        const v = p[field] as number | null;
-        return (
-          <td
-            key={p.periodo}
-            className="text-right px-3 py-3 font-mono tabular-nums font-bold text-slate-900 whitespace-nowrap"
-          >
-            {fmtPct(v)}
-          </td>
-        );
-      })}
-    </tr>
-  );
-}
-
-function SeparatorRow({ cols }: { cols: number }) {
-  return <tr><td colSpan={cols} className="h-px bg-slate-200 p-0" /></tr>;
+function getRowStyle(variant: RowDef["variant"]) {
+  switch (variant) {
+    case "sum":
+      return {
+        prefix: "(+)",
+        labelClass: "py-2 text-slate-700",
+        valueClass: "py-2",
+      };
+    case "sub":
+      return {
+        prefix: "(-)",
+        labelClass: "py-2 text-slate-700",
+        valueClass: "py-2",
+      };
+    case "bold":
+      return {
+        prefix: null,
+        labelClass: "py-2.5 font-semibold text-slate-900",
+        valueClass: "py-2.5 font-semibold text-slate-900",
+      };
+    case "highlight":
+      return {
+        prefix: null,
+        labelClass: "py-3 font-bold text-slate-900 uppercase text-xs tracking-wider",
+        valueClass: "py-3 font-bold text-slate-900",
+      };
+  }
 }
 
 /**
