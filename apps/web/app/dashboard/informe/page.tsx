@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import {
   getInformeData,
   getPeriodoCompletenessStatus,
@@ -7,6 +8,8 @@ import {
   listEntidadesDisponibles,
   parseColorsOverride,
 } from "@/lib/domains/informe/queries";
+import { auth } from "@/lib/auth";
+import { getUser } from "@/lib/domains/users";
 import { InformeClient } from "./informe-client";
 
 export const metadata: Metadata = {
@@ -45,12 +48,31 @@ const BCP_DEFAULT = {
 export default async function InformeEjecutivoPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const sinParams = !params.cliente && !params.entidadPropia;
-  const clienteSlug = params.cliente ?? BCP_DEFAULT.slug;
-  // Si NO hay params.entidadPropia Y NO hay params.cliente -> forzamos BCP.
-  // Si vino params.cliente pero no params.entidadPropia, dejamos que getClienteBySlug
-  // resuelva la entidad propia segun la config de ese cliente.
+
+  // Preferencia del usuario: si no vino ?cliente en la URL, intentamos usar
+  // su default_cliente_slug guardado en el perfil. Si tampoco tiene, cae
+  // al BCP_DEFAULT global. Esto NO restringe — cualquiera puede navegar a
+  // otro ?cliente=X (modelo B / abierto), solo mejora el landing por default.
+  let userDefaultCliente: string | null = null;
+  if (!params.cliente) {
+    try {
+      const session = await auth.api.getSession({ headers: await headers() });
+      if (session) {
+        const user = await getUser(session.user.id);
+        userDefaultCliente = user.defaultClienteSlug;
+      }
+    } catch {
+      // No romper el SSR si falla el lookup de perfil — cae a BCP.
+    }
+  }
+
+  const clienteSlug = params.cliente ?? userDefaultCliente ?? BCP_DEFAULT.slug;
+  // entidadPropia: si viene explicita, respetar. Si no vino cliente ni
+  // entidadPropia, forzar BCP (para preservar landing default consistente).
+  // Si vino un default de usuario, dejamos que getClienteBySlug resuelva
+  // la entidad propia canonica de ese cliente.
   const entidadPropiaOverride = params.entidadPropia
-    ?? (sinParams ? BCP_DEFAULT.entidadPropia : undefined);
+    ?? (sinParams && !userDefaultCliente ? BCP_DEFAULT.entidadPropia : undefined);
 
   // REGLA DE ORO V139: sin periodo en URL, arrancar en el ultimo mes con
   // EEFF publicado (>=4/5 grupos regulados). Los topicos secundarios

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Mail, Save, User as UserIcon } from "lucide-react";
+import { Building2, Check, Loader2, Mail, Save, User as UserIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 import { authClient } from "@/lib/auth/client";
@@ -14,8 +14,11 @@ type Me = {
   image: string | null;
   role: "admin" | "usuario";
   status: "active" | "suspended" | "invited";
+  defaultClienteSlug: string | null;
   createdAt: string;
 };
+
+type ClienteOpcion = { slug: string; nombre: string; nombreCorto: string };
 
 export function ProfileSection() {
   const [me, setMe] = useState<Me | null>(null);
@@ -67,6 +70,7 @@ export function ProfileSection() {
       </div>
 
       <NameForm me={me} onSaved={cargar} />
+      <DefaultClienteForm me={me} onSaved={cargar} />
       <PasswordForm />
 
       <section className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-xs text-slate-600 space-y-1">
@@ -151,6 +155,106 @@ function NameForm({ me, onSaved }: { me: Me; onSaved: () => void }) {
           type="button"
           onClick={guardar}
           disabled={saving || !name.trim() || name.trim() === me.name}
+          className="px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded inline-flex items-center gap-1"
+        >
+          {saving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : ok ? (
+            <Check className="w-4 h-4" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          {ok ? "Guardado" : "Guardar"}
+        </button>
+      </div>
+      {err && (
+        <p className="mt-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
+          {err}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function DefaultClienteForm({ me, onSaved }: { me: Me; onSaved: () => void }) {
+  const [clientes, setClientes] = useState<ClienteOpcion[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [selected, setSelected] = useState<string>(me.defaultClienteSlug ?? "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/v1/clientes");
+        const json = await r.json();
+        if (json.data?.rows) setClientes(json.data.rows as ClienteOpcion[]);
+      } catch {
+        /* ignore */
+      } finally {
+        setLoadingList(false);
+      }
+    })();
+  }, []);
+
+  const guardar = async () => {
+    if (selected === (me.defaultClienteSlug ?? "")) return;
+    setSaving(true);
+    setErr(null);
+    setOk(false);
+    try {
+      const r = await fetch("/api/v1/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          defaultClienteSlug: selected === "" ? null : selected,
+        }),
+      });
+      const json = await r.json();
+      if (json.error) setErr(json.error.message ?? "Error");
+      else {
+        setOk(true);
+        onSaved();
+        setTimeout(() => setOk(false), 2500);
+      }
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cambio = selected !== (me.defaultClienteSlug ?? "");
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-lg p-5">
+      <h3 className="text-sm font-semibold text-slate-900 mb-1 flex items-center gap-2">
+        <Building2 className="w-4 h-4 text-slate-500" />
+        Cliente por defecto
+      </h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Al abrir el Benchmark aterrizas directo en este cliente. Podes navegar a
+        otros libremente desde la barra superior o via URL.
+      </p>
+      <div className="flex gap-2">
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          disabled={loadingList}
+          className="flex-1 h-9 px-3 text-sm rounded border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white transition-colors"
+        >
+          <option value="">Sin preferencia (default global)</option>
+          {clientes.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.nombre}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={saving || !cambio}
           className="px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded inline-flex items-center gap-1"
         >
           {saving ? (

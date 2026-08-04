@@ -31,6 +31,11 @@ export type User = {
   role: UserRole;
   status: UserStatus;
   invitedBy: string | null;
+  /**
+   * Cliente que el usuario ve por defecto al entrar al informe. NULL =
+   * fallback global. Se puede cambiar desde Settings > Mi perfil.
+   */
+  defaultClienteSlug: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -45,6 +50,7 @@ function mapRow(r: Record<string, unknown>): User {
     role: (r.role as UserRole) ?? "usuario",
     status: (r.status as UserStatus) ?? "active",
     invitedBy: (r.invited_by as string | null) ?? null,
+    defaultClienteSlug: (r.default_cliente_slug as string | null) ?? null,
     createdAt: toIso(r.created_at),
     updatedAt: toIso(r.updated_at),
   };
@@ -54,7 +60,7 @@ export async function getUser(userId: string): Promise<User> {
   const rows = await db.execute<Record<string, unknown>>(
     sql`
       SELECT id, email, name, email_verified, image, role, status,
-             invited_by, created_at, updated_at
+             invited_by, default_cliente_slug, created_at, updated_at
       FROM auth.users
       WHERE id = ${userId}
       LIMIT 1
@@ -83,7 +89,11 @@ export async function requireAdmin(userId: string): Promise<void> {
 
 export async function updateMyProfile(
   userId: string,
-  data: { name?: string; image?: string | null },
+  data: {
+    name?: string;
+    image?: string | null;
+    defaultClienteSlug?: string | null;
+  },
 ): Promise<User> {
   const sets: ReturnType<typeof sql>[] = [];
   if (data.name !== undefined) {
@@ -94,6 +104,23 @@ export async function updateMyProfile(
   }
   if (data.image !== undefined) {
     sets.push(sql`image = ${data.image}`);
+  }
+  if (data.defaultClienteSlug !== undefined) {
+    const slug = data.defaultClienteSlug;
+    if (slug !== null) {
+      // Validar contra config.cliente activos — evita guardar slugs invalidos
+      // que despues rompan el default en el SSR.
+      const exists = await db.execute<{ slug: string }>(
+        sql`SELECT slug FROM config.cliente WHERE slug = ${slug} AND activo LIMIT 1`,
+      );
+      if (exists.length === 0) {
+        throw new ValidationError(
+          `Cliente '${slug}' no existe o esta inactivo`,
+          { slug },
+        );
+      }
+    }
+    sets.push(sql`default_cliente_slug = ${slug}`);
   }
   if (sets.length === 0) return getUser(userId);
 
@@ -119,7 +146,7 @@ export async function listUsers(): Promise<User[]> {
   const rows = await db.execute<Record<string, unknown>>(
     sql`
       SELECT id, email, name, email_verified, image, role, status,
-             invited_by, created_at, updated_at
+             invited_by, default_cliente_slug, created_at, updated_at
       FROM auth.users
       ORDER BY
         CASE role WHEN 'admin' THEN 0 ELSE 1 END,

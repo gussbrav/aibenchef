@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 const patchBody = z.object({
   name: z.string().min(1).max(120).optional(),
   image: z.string().url().nullable().optional(),
+  /** Cliente default del usuario para el informe. null = fallback global. */
+  defaultClienteSlug: z.string().min(1).max(80).nullable().optional(),
 });
 
 async function requireUserId(): Promise<string> {
