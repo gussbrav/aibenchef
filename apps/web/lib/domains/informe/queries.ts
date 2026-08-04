@@ -1986,11 +1986,17 @@ export async function getHistoricoEntidad(opts: {
   periodoActual: number;
   metric: "oficinas" | "personal" | "clientes";
   consolidar?: boolean;
+  /** @deprecated ya no se usa — la serie sigue la regla de 5 puntos tendencia. */
   ultimosN?: number;
 }): Promise<Map<string, Array<{ periodo: number; valor: number | null }>>> {
-  const ultimosN = opts.ultimosN ?? 5;
   const consolidar = opts.consolidar !== false;
   if (opts.entidades.length === 0) return new Map();
+  // Regla de oro: la serie es la misma 5 puntos que usan cartera bruta,
+  // mora y demas metricas (no-Dic: [Dic-3, Dic-2, MismoMes-1, Dic-1, actual];
+  // Dic: 5 Diciembres consecutivos). Antes usabamos "los 5 mas recientes"
+  // (Feb, Mar, Abr, May, Jun) — no comparable a las otras secciones.
+  const periodos = await getPeriodosTendencia(opts.periodoActual);
+  if (periodos.length === 0) return new Map();
   return safeQuery(
     `getHistoricoEntidad[${opts.metric}]`,
     async () => {
@@ -2011,22 +2017,16 @@ export async function getHistoricoEntidad(opts: {
           ? sql.raw("n_personal")
           : sql.raw("n_clientes");
       const entidadesClause = sql.join(opts.entidades.map((e) => sql`${e}`), sql`, `);
+      const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
       const rows = await db.execute<{
         nomb_correg: string;
         periodo: number;
         valor: number | null;
       }>(sql`
-        WITH periodos_ult AS (
-          SELECT DISTINCT periodo
-          FROM ${view}
-          WHERE periodo <= ${opts.periodoActual}
-          ORDER BY periodo DESC
-          LIMIT ${ultimosN}
-        )
         SELECT v.nomb_correg, v.periodo, v.${valorCol}::int AS valor
         FROM ${view} v
-        JOIN periodos_ult pu ON pu.periodo = v.periodo
-        WHERE v.nomb_correg IN (${entidadesClause})
+        WHERE v.periodo IN (${periodosClause})
+          AND v.nomb_correg IN (${entidadesClause})
         ORDER BY v.nomb_correg, v.periodo ASC
       `);
       const map = new Map<string, Array<{ periodo: number; valor: number | null }>>();
