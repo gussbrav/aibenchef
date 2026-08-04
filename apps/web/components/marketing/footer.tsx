@@ -22,8 +22,8 @@ export function Footer() {
                   </Link>
                 </li>
                 <li>
-                  <Link href="/waitlist" className="hover:text-white transition-colors">
-                    Waitlist
+                  <Link href={"/solicitar-acceso" as never} className="hover:text-white transition-colors">
+                    Solicitar acceso
                   </Link>
                 </li>
               </ul>

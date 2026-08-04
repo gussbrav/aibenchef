@@ -21,8 +21,8 @@ export default function WaitlistOkPage() {
               Ya estás en la lista
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed">
-              Te vamos a avisar por email apenas Aibenchef esté disponible. Los
-              primeros en entrar al beta tienen <strong className="text-slate-900">50% off el primer trimestre</strong>.
+              Te vamos a avisar por email apenas revisemos tu solicitud. Los
+              primeros en acceder tienen <strong className="text-slate-900">50% off el primer trimestre</strong>.
             </p>
           </div>
           <div className="pt-2">

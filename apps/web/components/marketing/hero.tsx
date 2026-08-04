@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { Button, Container, Badge } from "@/components/ui";
+import { ArrowRight } from "lucide-react";
+import { Button, Container } from "@/components/ui";
 
 export function Hero() {
   return (
@@ -11,10 +11,6 @@ export function Hero() {
       />
       <Container size="xl" className="py-24 lg:py-32">
         <div className="mx-auto max-w-4xl text-center space-y-8">
-          <Badge>
-            <Sparkles className="w-3 h-3" />
-            Beta privada · Súmate antes que tu competencia
-          </Badge>
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.05]">
             Inteligencia financiera para
             <br />
@@ -28,9 +24,9 @@ export function Hero() {
             no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-            <Link href="/waitlist">
+            <Link href={"/solicitar-acceso" as never}>
               <Button size="lg" className="group">
-                Sumarme a la waitlist
+                Solicitar acceso
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>
@@ -41,7 +37,7 @@ export function Hero() {
             </Link>
           </div>
           <p className="text-sm text-slate-500 pt-2">
-            Los primeros en la lista entran al beta con <strong className="text-slate-700">50% off el primer trimestre</strong>
+            Los primeros en registrarse acceden con <strong className="text-slate-700">50% off el primer trimestre</strong>
           </p>
         </div>
       </Container>

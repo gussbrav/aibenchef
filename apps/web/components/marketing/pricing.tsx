@@ -89,7 +89,7 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Link href="/waitlist" className="mt-8">
+              <Link href={"/solicitar-acceso" as never} className="mt-8">
                 <Button
                   fullWidth
                   size="lg"
@@ -103,7 +103,7 @@ export function Pricing() {
         </div>
         <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
           ¿Necesitas más usuarios, API ilimitada, white-label o SLA enterprise?{" "}
-          <Link href="/waitlist?plan=enterprise" className="text-brand-600 hover:underline font-medium">
+          <Link href={"/solicitar-acceso?plan=enterprise" as never} className="text-brand-600 hover:underline font-medium">
             Hablemos del plan Enterprise
           </Link>
           .

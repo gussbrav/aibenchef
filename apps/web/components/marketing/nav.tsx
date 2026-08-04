@@ -27,8 +27,8 @@ export function Nav() {
             >
               Entrar
             </Link>
-            <Link href="/waitlist">
-              <Button size="sm">Waitlist</Button>
+            <Link href={"/solicitar-acceso" as never}>
+              <Button size="sm">Solicitar acceso</Button>
             </Link>
           </div>
         </div>

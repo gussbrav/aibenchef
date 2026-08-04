@@ -8,7 +8,7 @@ import { RequestAccessForm } from "./request-access-form";
 export const metadata: Metadata = {
   title: "Solicitar acceso",
   description:
-    "Aibenchef es beta privado. Solicita una invitacion contandonos brevemente quien eres y para que lo quieres usar.",
+    "Solicita una invitacion contandonos brevemente quien eres y para que lo quieres usar.",
 };
 
 export default function SolicitarAccesoPage() {
@@ -28,7 +28,7 @@ export default function SolicitarAccesoPage() {
             Solicita acceso al beta
           </h1>
           <p className="text-slate-600 max-w-xl mx-auto">
-            Aibenchef está en beta privado para entidades del sistema financiero peruano.
+            Aibenchef es una plataforma para entidades del sistema financiero peruano.
             Cuéntanos quién eres en 30 segundos y te respondemos en 24–48h hábiles.
           </p>
         </div>

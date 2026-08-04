@@ -15,13 +15,12 @@ export function CTABanner() {
             Empieza con 50% off el primer trimestre
           </h2>
           <p className="text-lg text-slate-300 max-w-xl mx-auto">
-            Súmate a la waitlist y entra al beta privado. Cupo limitado para asegurar
-            calidad de servicio.
+            Registrate y empieza a usarlo. Cupo limitado para asegurar calidad de servicio.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-            <Link href="/waitlist">
+            <Link href={"/solicitar-acceso" as never}>
               <Button size="lg" className="group">
-                Sumarme a la waitlist
+                Solicitar acceso
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>

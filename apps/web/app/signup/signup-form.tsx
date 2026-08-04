@@ -55,7 +55,7 @@ export function SignupForm() {
         </div>
         <h2 className="text-lg font-semibold text-slate-900">Registro por invitacion</h2>
         <p className="text-sm text-slate-600 leading-relaxed">
-          Aibenchef es <strong>beta privado</strong>. Si ya tienes un link de invitacion,
+          Aibenchef requiere <strong>invitacion</strong>. Si ya tienes un link,
           abrelo desde tu correo. Si todavia no, puedes solicitar acceso y te respondemos
           en 24–48h.
         </p>

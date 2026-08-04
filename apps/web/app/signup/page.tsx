@@ -31,7 +31,7 @@ export default function SignupPage() {
             Crea tu cuenta
           </h1>
           <p className="text-slate-600">
-            Acceso al beta privado. Solo por invitacion del administrador.
+            Acceso solo por invitacion del administrador.
           </p>
         </div>
 
