@@ -9,7 +9,7 @@
  * URL sincronizada — selectores modifican la URL para poder compartir.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart3, Calendar, Info, Layers, TrendingUp, Users, X,
@@ -81,11 +81,17 @@ export function PuntoEquilibrioClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Actualizar URL preservando otros params + posicion de scroll.
-  // router.replace en vez de push: no crea entry en history (mejor UX para
-  // filtros) y scroll:false evita el jump al top que rompe el flujo del
-  // usuario cuando esta leyendo la tabla y cambia un selector.
+  // Preservacion manual del scroll. router.replace con scroll:false no
+  // es suficiente en Next.js App Router cuando el server component se
+  // re-fetcha — el arbol DOM puede reemplazarse y el browser resetear.
+  // Estrategia:
+  //   1. Antes de navegar guardamos window.scrollY en un ref.
+  //   2. useLayoutEffect al cambiar la data (props) restaura scroll ANTES
+  //      del paint, sin flicker.
+  const scrollToRestore = useRef<number | null>(null);
+
   const updateUrl = (updates: Record<string, string | undefined>) => {
+    scrollToRestore.current = window.scrollY;
     const params = new URLSearchParams(searchParams.toString());
     for (const [k, v] of Object.entries(updates)) {
       if (v == null || v === "") params.delete(k);
@@ -96,6 +102,30 @@ export function PuntoEquilibrioClient({
       { scroll: false },
     );
   };
+
+  // Se dispara cada vez que la data cambia (post-SSR fetch). Si hay un
+  // scroll pendiente de restaurar, lo aplicamos ANTES del paint via
+  // useLayoutEffect para evitar flash de la posicion.
+  useLayoutEffect(() => {
+    if (scrollToRestore.current !== null) {
+      const y = scrollToRestore.current;
+      scrollToRestore.current = null;
+      // rAF para asegurar que el DOM ya se pinto tras el re-render
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    }
+    // La dep es historico+series+config — cambia cuando SSR re-fetcha.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historico, series, config.desdeAnio, config.granularidad, config.hastaPeriodo, config.peerGroup.join(",")]);
+
+  // Fallback adicional: si searchParams cambia (via back/forward del
+  // browser), tambien restauramos si tenemos scroll pendiente.
+  useEffect(() => {
+    if (scrollToRestore.current !== null) {
+      const y = scrollToRestore.current;
+      scrollToRestore.current = null;
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    }
+  }, [searchParams]);
 
   return (
     <div className="space-y-5 max-w-[1400px] mx-auto px-2">
