@@ -15,8 +15,14 @@
 
 -- =========================================================================
 -- VIEW extendida: detecta 2 tipos de candidatos
+--
+-- Postgres NO permite CREATE OR REPLACE VIEW cuando cambian las columnas
+-- (agregamos tipo_candidato en el medio). Hay que DROP + CREATE. CASCADE
+-- por si algo depende (nada deberia — es admin panel read-only).
 -- =========================================================================
-CREATE OR REPLACE VIEW dw.v_entidad_rename_candidates AS
+DROP VIEW IF EXISTS dw.v_entidad_rename_candidates CASCADE;
+
+CREATE VIEW dw.v_entidad_rename_candidates AS
 WITH rangos AS (
     SELECT em.id,
            em.nomb_correg_canonico,
@@ -115,12 +121,11 @@ COMMENT ON VIEW dw.v_entidad_rename_candidates IS
     'tipo_candidato=duplicado: rangos solapados pero uno termino antes (mismo entity registrado 2 veces).';
 
 -- =========================================================================
--- MERGE: Alfin Banco (actual) + Banco Azteca (historico)
+-- MERGE: Alfin Banco (canonico actual) + Banco Azteca (historico)
 --
--- Banco Azteca opero en Peru desde 2007 y fue absorbido/renombrado a
--- Alfin Banco en 2023. En la maestra estan como 2 canonicos separados
--- pero ambos aparecen con data desde 200801 — es duplicacion, no rename
--- puro. Fusionamos manteniendo Alfin como actual.
+-- Banco Azteca opero en Peru desde 2007 y fue renombrado a Alfin Banco
+-- en 2023. En la maestra estan como 2 canonicos separados pero son la
+-- misma entidad real. Fusionamos manteniendo 'Alfin Banco' como actual.
 -- =========================================================================
 SELECT * FROM dw.merge_entidad_maestra(
     _canonico_actual := 'Alfin Banco',

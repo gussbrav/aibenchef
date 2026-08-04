@@ -87,5 +87,15 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD wget -q -O /dev/null http://localhost:3000/api/health || exit 1
 
-# Entrypoint inline: migrator + Next.js start
-CMD ["sh", "-c", "node /app/apps/web/scripts/migrate.js && cd /app/apps/web && exec node_modules/.bin/next start -H 0.0.0.0 -p 3000"]
+# Entrypoint inline: migrator + Next.js start.
+#
+# NOTA: usa '||' (no '&&') a proposito. Si el migrator falla, se imprime
+# el error en stderr y Next.js arranca IGUAL. Con '&&' un migrator roto
+# mataba el contenedor -> EasyPanel hacia rollback silencioso al ultimo
+# contenedor sano -> el deploy 'exitoso' seguia sirviendo codigo viejo.
+#
+# Fail-forward con visibility es mejor que rollback invisible: la app
+# arranca, /api/health?deep=1 muestra 'migrations' con la version aplicada,
+# y el operador puede ver el gap y arreglar la migration rota sin
+# perder el rebuild.
+CMD ["sh", "-c", "node /app/apps/web/scripts/migrate.js || echo '[BOOT] MIGRATOR FAILED — check /api/health?deep=1' >&2; cd /app/apps/web && exec node_modules/.bin/next start -H 0.0.0.0 -p 3000"]
