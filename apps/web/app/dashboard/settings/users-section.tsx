@@ -160,7 +160,7 @@ export function UsersSection({ currentUserId }: { currentUserId: string }) {
         <div className="bg-sky-50 border border-sky-200 rounded p-3 mt-3 text-xs text-sky-900">
           <strong>Como invitar:</strong> usa la pestaña <em>Invitaciones</em> arriba —
           se manda un email con un link de signup pre-aprobado. Despues, desde aqui
-          podes editar nombre, rol, status o emitir un link de reset de contraseña.
+          puedes editar nombre, rol, status o emitir un link de reset de contraseña.
         </div>
       </div>
 

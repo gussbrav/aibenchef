@@ -80,7 +80,7 @@ const KEY_GROUPS: KeyGroup[] = [
     titulo: "Email SMTP",
     icon: Server,
     descripcion:
-      "Envio nativo (Gmail, Zoho, Outlook o relay corporativo). Recomendado si ya tenes una casilla funcional. Tiene prioridad sobre Resend.",
+      "Envio nativo (Gmail, Zoho, Outlook o relay corporativo). Recomendado si ya tienes una casilla funcional. Tiene prioridad sobre Resend.",
     enabledKey: "smtp_enabled",
     keys: [
       "smtp_enabled",

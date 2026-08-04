@@ -235,7 +235,7 @@ export function renderPasswordResetEmail(args: {
     timeStyle: "short",
   });
   const subject = `Restablece tu contrasena de ${args.appName}`;
-  const text = `Hola ${args.userName},\n\nRecibiste este email porque solicitaste restablecer tu contrasena de ${args.appName}.\n\nHace click en el siguiente link para elegir una nueva (expira ${fmtTime}):\n${args.resetUrl}\n\nSi no fuiste vos, podes ignorar este email — nadie sabra que llego.\n`;
+  const text = `Hola ${args.userName},\n\nRecibiste este email porque solicitaste restablecer tu contrasena de ${args.appName}.\n\nHaz click en el siguiente link para elegir una nueva (expira ${fmtTime}):\n${args.resetUrl}\n\nSi no fuiste tu, puedes ignorar este email — nadie sabra que llego.\n`;
   const html = `
 <!DOCTYPE html>
 <html>
@@ -259,7 +259,7 @@ export function renderPasswordResetEmail(args: {
         Restablecer contrasena
       </a>
       <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;line-height:1.5">
-        Si no fuiste vos, podes ignorar este email — tu cuenta sigue como esta. Nadie sabra que llego.
+        Si no fuiste tu, puedes ignorar este email — tu cuenta sigue como esta. Nadie sabra que llego.
       </p>
     </div>
     <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">
@@ -288,7 +288,7 @@ export function renderInvitationEmail(args: {
     day: "numeric",
   });
   const subject = `Te invitaron a ${args.appName}`;
-  const text = `Hola,\n\n${args.inviterName} te invito a unirte a ${args.appName} como ${args.role}.\n\nAceptar invitacion (expira ${fmtDate}):\n${args.inviteUrl}\n\nSi no esperabas este email, podes ignorarlo.\n`;
+  const text = `Hola,\n\n${args.inviterName} te invito a unirte a ${args.appName} como ${args.role}.\n\nAceptar invitacion (expira ${fmtDate}):\n${args.inviteUrl}\n\nSi no esperabas este email, puedes ignorarlo.\n`;
   const html = `
 <!DOCTYPE html>
 <html>
@@ -313,7 +313,7 @@ export function renderInvitationEmail(args: {
         Aceptar invitacion
       </a>
       <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;line-height:1.5">
-        Si no esperabas este email, podes ignorarlo. Nadie sabra que llego.
+        Si no esperabas este email, puedes ignorarlo. Nadie sabra que llego.
       </p>
     </div>
     <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">

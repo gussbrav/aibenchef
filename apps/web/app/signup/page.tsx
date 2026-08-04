@@ -51,7 +51,7 @@ export default function SignupPage() {
         <p className="text-sm text-slate-600 text-center mt-6">
           ¿Ya tienes cuenta?{" "}
           <Link href="/login" className="text-brand-600 hover:underline font-medium">
-            Entra acá
+            Entra aquí
           </Link>
         </p>
       </Container>

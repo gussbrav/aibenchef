@@ -2,7 +2,7 @@
  * POST /api/v1/admin/refresh-mvs
  *
  * Refresca las materialized views del informe (mora, cobertura CAR).
- * Util cuando entra data nueva de SBS y queres ver los cambios reflejados
+ * Util cuando entra data nueva de SBS y quieres ver los cambios reflejados
  * sin esperar al cron post-ingest mensual. Tambien util para "destrabar"
  * accordions que dan timeout porque la MV esta vacia o stale.
  *

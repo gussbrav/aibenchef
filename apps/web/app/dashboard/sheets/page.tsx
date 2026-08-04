@@ -70,7 +70,7 @@ export default async function SheetsPage() {
           <Card variant="elevated" className="p-12 text-center">
             <TableProperties className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-600 mb-4">
-              Aún no tenés sheets. Creá una nueva para empezar a editar celdas.
+              Aún no tienes sheets. Crea una nueva para empezar a editar celdas.
             </p>
             <NewSheetButton variant="cta" />
           </Card>

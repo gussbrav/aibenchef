@@ -194,7 +194,7 @@ function NuevaEntidadModal({ onClose }: { onClose: () => void }) {
               </p>
               <p className="mt-1">
                 Si es una <strong>conversión</strong> de otra existente
-                (ej. Financiera → Banco), marcá el toggle &quot;Reemplaza a&quot; y elegí
+                (ej. Financiera → Banco), marca el toggle &quot;Reemplaza a&quot; y elige
                 la vieja — se marca con fecha de baja automáticamente.
               </p>
             </div>

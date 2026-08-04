@@ -28,7 +28,7 @@ export default async function NotebooksPage() {
         iconBg="from-amber-500 to-orange-600"
         title="Notebooks"
         tagline="Construí reportes vivos que se ven como un documento pero funcionan como una herramienta — texto explicativo, consultas y visualizaciones en una sola hoja compartible"
-        description="Ideal para análisis recurrentes (informes mensuales, presentaciones a clientes, deep-dives) que querés re-correr con un solo click cuando entran datos nuevos."
+        description="Ideal para análisis recurrentes (informes mensuales, presentaciones a clientes, deep-dives) que quieres re-correr con un solo click cuando entran datos nuevos."
         stats={
           notebooks.length > 0
             ? [

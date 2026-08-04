@@ -115,7 +115,7 @@ export default function PrivacidadPage() {
 
           <Section title="7. Tus derechos">
             <p>
-              Conforme a la Ley 29733 tenes derecho a acceso, rectificacion,
+              Conforme a la Ley 29733 tienes derecho a acceso, rectificacion,
               cancelacion, oposicion, informacion y revocacion del
               consentimiento sobre tus datos. Ejercelos escribiendo a{" "}
               <a href="mailto:privacidad@aibenchef.com" className="text-brand-600 hover:underline">
@@ -125,7 +125,7 @@ export default function PrivacidadPage() {
               maximo de 20 dias habiles.
             </p>
             <p>
-              Si consideras que vulneramos tus derechos podes presentar reclamo
+              Si consideras que vulneramos tus derechos puedes presentar reclamo
               ante la Autoridad Nacional de Proteccion de Datos Personales
               (ANPD - MINJUS).
             </p>

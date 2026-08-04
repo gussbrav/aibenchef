@@ -113,16 +113,16 @@ export function ManualInformeClient() {
         {/* Paso 1 — Abrir el informe */}
         <StepSection number={1} icon={Building2} title="Abrí tu informe">
           <p>
-            Al entrar a la plataforma, andá al menú <strong>Benchmark</strong>. Aterrizás directo en el informe
+            Al entrar a la plataforma, ve al menú <strong>Benchmark</strong>. Aterrizas directo en el informe
             de tu entidad — configurado con tu peer group, colores y período más reciente.
           </p>
           <ol className="manual-numbered">
             <li>Click en <strong>Benchmark</strong> en la barra superior.</li>
-            <li>Verificá arriba: nombre de tu entidad + período del cierre.</li>
+            <li>Verifica arriba: nombre de tu entidad + período del cierre.</li>
             <li>Los 5 chips de colores son tu grupo comparable — la 1ra suele ser la tuya.</li>
           </ol>
           <Tip>
-            Si querés que tu cliente aparezca por defecto sin tipear la URL, configuralo en
+            Si quieres que tu cliente aparezca por defecto sin tipear la URL, configuralo en
             <em> Configuración → Mi perfil → Cliente por defecto.</em>
           </Tip>
         </StepSection>
@@ -131,11 +131,11 @@ export function ManualInformeClient() {
         <StepSection number={2} icon={Search} title="Leé el Cuadro Resumen">
           <p>
             Es la primera tabla del informe. Muestra los KPIs clave (cartera, mora, ROE, ROA, utilidad)
-            <strong> lado a lado por entidad</strong>. Es la foto general — en 30 segundos ya sabés cómo estás.
+            <strong> lado a lado por entidad</strong>. Es la foto general — en 30 segundos ya sabes cómo estás.
           </p>
           <ol className="manual-numbered">
-            <li><strong>Tu columna</strong> es la primera después del label. Miralá contra las otras 4.</li>
-            <li>Buscá diferencias grandes — si tu mora es 6% y las demás 4%, ahí hay tema.</li>
+            <li><strong>Tu columna</strong> es la primera después del label. Mírala contra las otras 4.</li>
+            <li>Busca diferencias grandes — si tu mora es 6% y las demás 4%, ahí hay tema.</li>
             <li>Si algún número aparece como <span className="manual-mono">"—"</span>, es que la SBS aún no publicó ese dato del mes.</li>
           </ol>
           <Tip>
@@ -152,7 +152,7 @@ export function ManualInformeClient() {
           </p>
           <ol className="manual-numbered">
             <li><strong>Derecha</strong> del gráfico = mejora de eficiencia (bajaste costos).</li>
-            <li><strong>Arriba</strong> del gráfico = mejora de rentabilidad (cobrás más por lo que prestás).</li>
+            <li><strong>Arriba</strong> del gráfico = mejora de rentabilidad (cobras más por lo que prestas).</li>
             <li>La <strong>esquina superior derecha</strong> es la posición ideal: ambos motores mejorando.</li>
             <li>El <strong>tamaño</strong> de la burbuja es tu Margen Neto actual — más grande = más rentable.</li>
           </ol>
@@ -170,13 +170,13 @@ export function ManualInformeClient() {
             con el tono de las clasificadoras de riesgo peruanas (Moody's, Apoyo, Equilibrium).
           </p>
           <ol className="manual-numbered">
-            <li>Buscá el panel — está debajo de cada gráfico principal.</li>
+            <li>Busca el panel — está debajo de cada gráfico principal.</li>
             <li>Click en <strong>"Generar análisis con IA"</strong>. En 3-5 segundos aparecen los bullets.</li>
             <li>Cada bullet cierra con <strong>Implica</strong>, <strong>Acción</strong>, <strong>Riesgo</strong> u <strong>Oportunidad</strong>.</li>
           </ol>
           <Warning>
             El análisis es de apoyo. No reemplaza tu criterio ni constituye recomendación de inversión.
-            Siempre verificá las cifras contra la fuente SBS original.
+            Siempre verifica las cifras contra la fuente SBS original.
           </Warning>
         </StepSection>
 
@@ -187,13 +187,13 @@ export function ManualInformeClient() {
             completo, con portada corporativa, encabezado y pie profesional, y todas las secciones cargadas.
           </p>
           <ol className="manual-numbered">
-            <li>Click en <strong>Descargar PDF</strong>. Esperá 5-10 segundos (el sistema abre todas las secciones y las carga).</li>
-            <li>Se abre el diálogo del navegador. Elegí <strong>"Guardar como PDF"</strong>.</li>
-            <li>Verificá que esté en <strong>Horizontal</strong> y con <strong>"Gráficos de fondo"</strong> activado.</li>
-            <li>Click <strong>Guardar</strong>. Elegí la carpeta.</li>
+            <li>Click en <strong>Descargar PDF</strong>. Espera 5-10 segundos (el sistema abre todas las secciones y las carga).</li>
+            <li>Se abre el diálogo del navegador. Elige <strong>"Guardar como PDF"</strong>.</li>
+            <li>Verifica que esté en <strong>Horizontal</strong> y con <strong>"Gráficos de fondo"</strong> activado.</li>
+            <li>Click <strong>Guardar</strong>. Elige la carpeta.</li>
           </ol>
           <Tip>
-            En "Más ajustes" del diálogo, <strong>desactivá "Encabezados y pies de página"</strong>. Si no,
+            En "Más ajustes" del diálogo, <strong>desactiva "Encabezados y pies de página"</strong>. Si no,
             Chrome pone su propio encabezado feo encima del nuestro premium.
           </Tip>
         </StepSection>
@@ -213,12 +213,12 @@ export function ManualInformeClient() {
           </FaqItem>
 
           <FaqItem q="¿Puedo cambiar mi peer group?">
-            Sí. En los selectores arriba del Cuadro Resumen, click <em>Editar</em> en Peer Group. Podés
+            Sí. En los selectores arriba del Cuadro Resumen, click <em>Editar</em> en Peer Group. Puedes
             comparar contra las entidades que quieras, siempre 5 en total.
           </FaqItem>
 
           <FaqItem q="Olvidé mi contraseña, ¿qué hago?">
-            En la pantalla de login, click <em>"¿La olvidaste?"</em>. Ingresás tu email y recibís un link
+            En la pantalla de login, click <em>"¿La olvidaste?"</em>. Ingresas tu email y recibes un link
             para elegir una nueva. El link expira en 1 hora.
           </FaqItem>
         </section>
@@ -246,7 +246,7 @@ export function ManualInformeClient() {
             <dd>Basis points. 100 bps = 1%. Se usan para variaciones finas.</dd>
 
             <dt>Cobertura CAR</dt>
-            <dd>Cuánto colchón (provisiones) tenés contra los créditos malos. &gt;100% = deseable.</dd>
+            <dd>Cuánto colchón (provisiones) tienes contra los créditos malos. &gt;100% = deseable.</dd>
           </dl>
         </section>
 
@@ -254,8 +254,8 @@ export function ManualInformeClient() {
         <section className="manual-cierre">
           <div className="manual-cierre-rule" />
           <p className="manual-cierre-text">
-            <strong>Listo.</strong> Con esto ya podés abrir el Benchmark, interpretarlo y presentarlo.
-            Si tenés dudas, contactá al administrador de tu cuenta.
+            <strong>Listo.</strong> Con esto ya puedes abrir el Benchmark, interpretarlo y presentarlo.
+            Si tienes dudas, contacta al administrador de tu cuenta.
           </p>
           <div className="manual-sign">
             <div>Manual del usuario · Informe Benchmark</div>

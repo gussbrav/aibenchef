@@ -2,7 +2,7 @@
  * Healthcheck profundo: corre los queries reales de cada modulo para
  * identificar cual esta roto. Solo admin.
  *
- * Util cuando un endpoint devuelve 500 generico y queres saber CUAL
+ * Util cuando un endpoint devuelve 500 generico y quieres saber CUAL
  * subsistema esta fallando (DB, schema, query especifico).
  */
 

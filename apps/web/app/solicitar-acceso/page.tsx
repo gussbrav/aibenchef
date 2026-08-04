@@ -8,7 +8,7 @@ import { RequestAccessForm } from "./request-access-form";
 export const metadata: Metadata = {
   title: "Solicitar acceso",
   description:
-    "Aibenchef es beta privado. Solicitá una invitación contandonos brevemente quién sos y para qué lo querés usar.",
+    "Aibenchef es beta privado. Solicita una invitacion contandonos brevemente quien eres y para que lo quieres usar.",
 };
 
 export default function SolicitarAccesoPage() {
@@ -25,11 +25,11 @@ export default function SolicitarAccesoPage() {
 
         <div className="space-y-2 mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
-            Solicitá acceso al beta
+            Solicita acceso al beta
           </h1>
           <p className="text-slate-600 max-w-xl mx-auto">
             Aibenchef está en beta privado para entidades del sistema financiero peruano.
-            Contanos quién sos en 30 segundos y te respondemos en 24–48h hábiles.
+            Cuéntanos quién eres en 30 segundos y te respondemos en 24–48h hábiles.
           </p>
         </div>
 
@@ -38,9 +38,9 @@ export default function SolicitarAccesoPage() {
         </Card>
 
         <p className="text-sm text-slate-600 text-center mt-6">
-          ¿Ya tenés cuenta?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Link href="/login" className="text-brand-600 hover:underline font-medium">
-            Entrá acá
+            Entra aquí
           </Link>
         </p>
       </Container>

@@ -55,8 +55,8 @@ export function SignupForm() {
         </div>
         <h2 className="text-lg font-semibold text-slate-900">Registro por invitacion</h2>
         <p className="text-sm text-slate-600 leading-relaxed">
-          Aibenchef es <strong>beta privado</strong>. Si ya tenes un link de invitacion,
-          abrilo desde tu correo. Si todavia no, podes solicitar acceso y te respondemos
+          Aibenchef es <strong>beta privado</strong>. Si ya tienes un link de invitacion,
+          abrelo desde tu correo. Si todavia no, puedes solicitar acceso y te respondemos
           en 24–48h.
         </p>
         <Link
@@ -68,7 +68,7 @@ export function SignupForm() {
         </Link>
         <div className="pt-1">
           <Link href="/login" className="text-brand-600 hover:underline font-medium text-sm">
-            ¿Ya tenes cuenta? Entra
+            ¿Ya tienes cuenta? Entra
           </Link>
         </div>
       </div>
@@ -97,7 +97,7 @@ export function SignupForm() {
         </p>
         <div className="pt-2">
           <Link href="/login" className="text-brand-600 hover:underline font-medium text-sm">
-            ¿Ya tenes cuenta? Entra
+            ¿Ya tienes cuenta? Entra
           </Link>
         </div>
       </div>
@@ -238,7 +238,7 @@ export function SignupForm() {
 function traducirError(msg: string): string {
   const m = msg.toLowerCase();
   if (m.includes("already exists") || m.includes("user_already_exists"))
-    return "Ya existe una cuenta con ese email. Entra acá en su lugar.";
+    return "Ya existe una cuenta con ese email. Entra aquí en su lugar.";
   if (m.includes("password") && m.includes("short"))
     return "La contraseña es demasiado corta (mínimo 8 caracteres).";
   if (m.includes("invalid") && m.includes("email")) return "El email no es válido.";

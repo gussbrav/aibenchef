@@ -98,7 +98,7 @@ export function PageHero({
   );
 }
 
-/** Card de "qué podés hacer aquí" para empty states. */
+/** Card de "qué puedes hacer aquí" para empty states. */
 export function FeatureTile({
   icon: Icon,
   title,

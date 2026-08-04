@@ -163,7 +163,7 @@ export async function updateUserRole(
 ): Promise<User> {
   await requireAdmin(actorId);
   if (actorId === targetId) {
-    throw new ValidationError("No podes cambiar tu propio rol", {});
+    throw new ValidationError("No puedes cambiar tu propio rol", {});
   }
   // Si demotamos el ultimo admin, prevenirlo
   if (role !== "admin") {
@@ -172,7 +172,7 @@ export async function updateUserRole(
     );
     if (Number(countRows[0]?.n ?? 0) === 0) {
       throw new ValidationError(
-        "No podes demotar al ultimo administrador del sistema",
+        "No puedes demotar al ultimo administrador del sistema",
         {},
       );
     }
@@ -199,7 +199,7 @@ export async function updateUserStatus(
 ): Promise<User> {
   await requireAdmin(actorId);
   if (actorId === targetId) {
-    throw new ValidationError("No podes cambiar tu propio status", {});
+    throw new ValidationError("No puedes cambiar tu propio status", {});
   }
   await db.execute(
     sql`UPDATE auth.users SET status = ${status}, updated_at = now() WHERE id = ${targetId}`,
@@ -247,7 +247,7 @@ export async function adminUpdateUserName(
 export async function deleteUser(actorId: string, targetId: string): Promise<void> {
   await requireAdmin(actorId);
   if (actorId === targetId) {
-    throw new ValidationError("No podes borrar tu propia cuenta desde aqui", {});
+    throw new ValidationError("No puedes borrar tu propia cuenta desde aqui", {});
   }
   // No borrar al ultimo admin
   const target = await getUser(targetId);
@@ -256,7 +256,7 @@ export async function deleteUser(actorId: string, targetId: string): Promise<voi
       sql`SELECT COUNT(*)::int AS n FROM auth.users WHERE role = 'admin' AND id <> ${targetId}`,
     );
     if (Number(countRows[0]?.n ?? 0) === 0) {
-      throw new ValidationError("No podes borrar al ultimo administrador", {});
+      throw new ValidationError("No puedes borrar al ultimo administrador", {});
     }
   }
   await db.execute(sql`DELETE FROM auth.users WHERE id = ${targetId}`);
