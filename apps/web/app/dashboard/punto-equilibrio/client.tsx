@@ -195,9 +195,12 @@ export function PuntoEquilibrioClient({
 
   return (
     <div className="space-y-5 max-w-[1400px] mx-auto px-2">
-      {/* Header con branding del cliente + tooltip 'que es el PE' inline */}
+      {/* Header con branding del cliente + tooltip 'que es el PE' inline.
+          overflow-visible (no hidden) para que el popover del InfoTooltip
+          pueda escapar del hero — el gradient vive en el propio header
+          asi que rounded-xl sigue funcionando sin clip. */}
       <header
-        className="rounded-xl text-white p-6 relative overflow-hidden"
+        className="rounded-xl text-white p-6 relative"
         style={{
           background: `linear-gradient(135deg, ${cliente.brand.primary} 0%, ${cliente.brand.acento} 100%)`,
         }}
@@ -1819,7 +1822,7 @@ function InfoTooltip({ content }: { content: React.ReactNode }) {
       {open && (
         <div
           role="tooltip"
-          className="absolute z-40 top-full left-1/2 -translate-x-1/2 mt-2 w-80 bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs text-slate-700 leading-relaxed"
+          className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 w-80 bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs text-slate-700 leading-relaxed"
         >
           {/* Arrow */}
           <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white border-l border-t border-slate-200" />
