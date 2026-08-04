@@ -25,11 +25,13 @@ async function requireSession() {
   return session;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return handleRoute(async () => {
     const session = await requireSession();
     await requireAdmin(session.user.id);
-    const rows = await listInvitations();
+    const url = new URL(req.url);
+    const includeArchived = url.searchParams.get("includeArchived") === "true";
+    const rows = await listInvitations({ includeArchived });
     return { rows, count: rows.length };
   });
 }

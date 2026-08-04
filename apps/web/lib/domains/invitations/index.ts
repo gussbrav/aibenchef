@@ -34,10 +34,12 @@ export type Invitation = {
   email: string;
   role: InvitationRole;
   invitedBy: string;
+  invitedByName?: string | null;
   expiresAt: string;
   acceptedAt: string | null;
   acceptedBy: string | null;
   revokedAt: string | null;
+  archivedAt: string | null;
   notas: string | null;
   createdAt: string;
   url: string; // construida al vuelo
@@ -59,10 +61,12 @@ function mapRow(r: Record<string, unknown>): Invitation {
     email: String(r.email),
     role: r.role as InvitationRole,
     invitedBy: String(r.invited_by),
+    invitedByName: (r.invited_by_name as string | null) ?? null,
     expiresAt: toIso(r.expires_at),
     acceptedAt: r.accepted_at ? toIso(r.accepted_at) : null,
     acceptedBy: (r.accepted_by as string | null) ?? null,
     revokedAt: r.revoked_at ? toIso(r.revoked_at) : null,
+    archivedAt: r.archived_at ? toIso(r.archived_at) : null,
     notas: (r.notas as string | null) ?? null,
     createdAt: toIso(r.created_at),
     url: `${appUrl()}/signup?token=${token}`,
@@ -73,17 +77,69 @@ function generateToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-export async function listInvitations(): Promise<Invitation[]> {
+export async function listInvitations(opts?: {
+  includeArchived?: boolean;
+}): Promise<Invitation[]> {
+  const includeArchived = opts?.includeArchived ?? false;
   const rows = await db.execute<Record<string, unknown>>(
     sql`
-      SELECT id, token, email, role, invited_by, expires_at, accepted_at,
-             accepted_by, revoked_at, notas, created_at
-      FROM app.invitations
-      ORDER BY created_at DESC
+      SELECT i.id, i.token, i.email, i.role, i.invited_by,
+             u.name AS invited_by_name,
+             i.expires_at, i.accepted_at, i.accepted_by,
+             i.revoked_at, i.archived_at, i.notas, i.created_at
+      FROM app.invitations i
+      LEFT JOIN auth.users u ON u.id = i.invited_by
+      WHERE ${includeArchived ? sql`TRUE` : sql`i.archived_at IS NULL`}
+      ORDER BY i.created_at DESC
       LIMIT 200
     `,
   );
   return rows.map(mapRow);
+}
+
+/**
+ * Archiva una invitacion — la oculta del listado default pero la preserva
+ * en la tabla para auditoria. Solo aplica a invitaciones ya cerradas
+ * (aceptadas, revocadas o expiradas). Las PENDIENTES no se pueden
+ * archivar — hay que revocarlas primero.
+ */
+export async function archiveInvitation(actorId: string, id: string): Promise<void> {
+  await requireAdmin(actorId);
+  const rows = await db.execute<{ id: string }>(
+    sql`
+      UPDATE app.invitations
+      SET archived_at = now()
+      WHERE id = ${id}
+        AND archived_at IS NULL
+        AND (
+          accepted_at IS NOT NULL
+          OR revoked_at IS NOT NULL
+          OR expires_at <= now()
+        )
+      RETURNING id
+    `,
+  );
+  if (rows.length === 0) {
+    throw new NotFoundError(
+      "Invitacion no encontrada, aun esta pendiente o ya archivada",
+      {},
+    );
+  }
+}
+
+export async function unarchiveInvitation(actorId: string, id: string): Promise<void> {
+  await requireAdmin(actorId);
+  const rows = await db.execute<{ id: string }>(
+    sql`
+      UPDATE app.invitations
+      SET archived_at = NULL
+      WHERE id = ${id} AND archived_at IS NOT NULL
+      RETURNING id
+    `,
+  );
+  if (rows.length === 0) {
+    throw new NotFoundError("Invitacion no encontrada o no archivada", {});
+  }
 }
 
 export async function createInvitation(
