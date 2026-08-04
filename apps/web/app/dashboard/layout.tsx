@@ -82,11 +82,10 @@ export default async function DashboardLayout({
                     label: "Análisis dinámico",
                     description: "Compará entidades, períodos y métricas con tablas pivote sin escribir SQL",
                   },
-                  {
-                    href: "/dashboard/aiben",
-                    label: "Aiben ✨ IA",
-                    description: "Asistente IA: preguntale en español y responde con datos reales y gráficos",
-                  },
+                  // Aiben ✨ IA: oculto temporalmente. La feature funciona pero
+                  // esta pendiente estabilizar la calidad de las respuestas y
+                  // definir el scope final antes de re-habilitarlo. Volver a
+                  // agregar aca cuando este listo para usuarios finales.
                 ]}
               />
 
