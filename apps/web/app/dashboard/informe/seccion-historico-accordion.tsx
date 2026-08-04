@@ -20,6 +20,7 @@ import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 import type { HistoricoEntidadSerie } from "@/lib/domains/informe/types";
+import { trackPrintFetch } from "@/lib/print-orchestrator";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
 import { ReportInsights } from "./report-insights";
 import type { InsightSeccion } from "@/lib/domains/insights";
@@ -53,6 +54,7 @@ export function SeccionHistoricoAccordion({
   insightsSeccion,
   clienteSlug,
   entidadPropia,
+  printMode = false,
 }: {
   metric: AccordionMetric;
   titulo: string;
@@ -80,6 +82,12 @@ export function SeccionHistoricoAccordion({
   insightsSeccion?: InsightSeccion;
   clienteSlug?: string;
   entidadPropia?: string;
+  /**
+   * Si es true, el accordion se abre automaticamente y dispara fetch.
+   * Se activa cuando el usuario clickea 'Descargar PDF' — asi todos los
+   * accordions se llenan antes de imprimir sin que el usuario los abra a mano.
+   */
+  printMode?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [state, setState] = useState<FetchState>({ status: "idle" });
@@ -192,6 +200,34 @@ export function SeccionHistoricoAccordion({
       void fetchData();
     }
   }, [open, state.status, fetchData]);
+
+  // Modo print: auto-abre + auto-fetch + registra el promise para que el
+  // orquestador espere antes de disparar window.print().
+  useEffect(() => {
+    if (!printMode) return;
+    if (!open) setOpen(true);
+    if (state.status === "idle" || state.status === "error") {
+      const p = fetchData();
+      trackPrintFetch(p);
+    } else if (state.status === "loading") {
+      // Ya esta cargando — igual esperamos su settle. Usamos un poll simple
+      // para no acoplar refs entre componentes.
+      const p = new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (state.status !== "loading") {
+            clearInterval(check);
+            resolve();
+          }
+        }, 200);
+        setTimeout(() => {
+          clearInterval(check);
+          resolve();
+        }, 12000);
+      });
+      trackPrintFetch(p);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printMode]);
 
   // Aplica overrides EN VIVO sobre las series cacheadas. Sin esto, los
   // graficos del accordion conservan los colores del fetch original aunque

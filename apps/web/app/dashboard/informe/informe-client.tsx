@@ -42,6 +42,7 @@ import type {
 } from "@/lib/domains/informe";
 import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
+import { waitForPrintFetches } from "@/lib/print-orchestrator";
 import {
   PrintCover,
   PrintFooter,
@@ -258,6 +259,14 @@ export function InformeClient({
     comentarios,
   } = data;
   const [exportando, setExportando] = useState(false);
+  /**
+   * Modo print: cuando true, los accordions se auto-abren y fetchan sus
+   * datos. Se activa antes de disparar window.print() para que el PDF
+   * contenga todas las secciones sin que el usuario tenga que abrirlas.
+   */
+  const [printMode, setPrintMode] = useState(false);
+  /** Progreso visible en el boton mientras esperamos que carguen los accordions. */
+  const [printProgress, setPrintProgress] = useState<string | null>(null);
 
   // ============================================================================
   // colorOverrides como CLIENT STATE (single source of truth)
@@ -355,17 +364,49 @@ export function InformeClient({
     [serverCompetidores, colorOverrides],
   );
 
-  // Export a PDF: usa el print dialog del navegador (mejor renderer que
-  // cualquier lib client-side, ademas permite al usuario elegir "Guardar
-  // como PDF" o mandar a impresora fisica). El CSS @media print oculta
-  // toolbars/botones para que el PDF salga limpio.
-  const onExport = () => {
+  // Export a PDF completo:
+  //   1. Activa printMode -> todos los accordions se auto-abren + fetchan.
+  //   2. Espera a que TODOS los fetches se resuelvan (o timeout 10s).
+  //   3. Dispara window.print() del navegador — usuario elige 'Guardar
+  //      como PDF' en el dialogo.
+  //   4. Al cerrarse el dialogo, resetea printMode.
+  //
+  // Sin printMode, el PDF quedaria incompleto porque los accordions cerrados
+  // no estan en el DOM. Ahora garantizamos captura total con un solo click.
+  const onExport = async () => {
+    if (exportando) return;
     setExportando(true);
-    // Timeout minimo para dar feedback visual antes del bloqueo del print.
+    setPrintProgress("Abriendo todas las secciones…");
+    setPrintMode(true);
+
+    // Doble rAF: da tiempo a React de renderizar los accordions abiertos
+    // y a sus useEffects de disparar los fetches + registrarlos.
+    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(r));
+
+    setPrintProgress("Cargando datos…");
+    const { total, timedOut } = await waitForPrintFetches(10000);
+    if (timedOut) {
+      // eslint-disable-next-line no-console
+      console.warn(`[print] timeout esperando ${total} fetches; imprimo con lo que hay`);
+    }
+
+    // Un tick mas para que las series recien llegadas se pinten (recharts
+    // hace animacion inicial pero setAnimationActive={false} en nuestros
+    // charts, asi que un rAF alcanza).
+    setPrintProgress("Renderizando graficos…");
+    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => setTimeout(r, 300));
+
+    setPrintProgress(null);
+    window.print();
+
+    // Chrome no expone evento post-print confiable; usamos un timeout
+    // generoso para asumir que el dialogo se cerro.
     setTimeout(() => {
-      window.print();
+      setPrintMode(false);
       setExportando(false);
-    }, 150);
+    }, 800);
   };
 
   // El label que matchea con competidores[i].labelCorto del cliente propio
@@ -435,13 +476,15 @@ export function InformeClient({
           <div className="flex flex-col gap-2 flex-shrink-0 no-print">
             <button
               type="button"
-              onClick={onExport}
+              onClick={() => void onExport()}
               disabled={exportando}
-              title="Abre el dialogo de impresion del navegador — elegi 'Guardar como PDF' en Destino"
+              title="Prepara el PDF completo (abre todas las secciones y espera a que carguen antes de imprimir)"
               className="h-9 px-4 bg-white text-slate-900 hover:bg-slate-100 text-sm font-medium rounded transition-colors inline-flex items-center gap-2 disabled:opacity-60"
             >
               <FileText className="w-4 h-4" />
-              {exportando ? "Preparando..." : "Descargar PDF"}
+              {exportando
+                ? (printProgress ?? "Preparando…")
+                : "Descargar PDF"}
             </button>
           </div>
         </div>
@@ -530,6 +573,7 @@ export function InformeClient({
           }
           clienteSlug={cliente.slug}
           entidadPropia={cliente.entidadPropia}
+          printMode={printMode}
         />
       </div>
 
@@ -1422,6 +1466,7 @@ function SectionsAccordion({
   labelCortoToNombCorreg,
   clienteSlug,
   entidadPropia,
+  printMode = false,
 }: {
   periodo: number;
   peerGroup: string[];
@@ -1435,6 +1480,8 @@ function SectionsAccordion({
   /** Contexto para insights AI en secciones habilitadas via insightsSeccion. */
   clienteSlug: string;
   entidadPropia: string;
+  /** Cuando true, todos los accordions se auto-abren y fetchan (para PDF export). */
+  printMode?: boolean;
 }) {
   return (
     <>
@@ -1452,6 +1499,7 @@ function SectionsAccordion({
           insightsSeccion={s.insightsSeccion}
           clienteSlug={clienteSlug}
           entidadPropia={entidadPropia}
+          printMode={printMode}
         />
       ))}
     </>
