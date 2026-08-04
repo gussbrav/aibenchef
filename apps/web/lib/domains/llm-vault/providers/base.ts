@@ -2,9 +2,9 @@
  * Interface + errores compartidos por todos los InsightsProvider.
  */
 
-import type { InsightsProvider, GenerateResult } from "../types";
+import type { InsightsProvider, GenerateResult, GenerateOptions } from "../types";
 
-export type { InsightsProvider, GenerateResult };
+export type { InsightsProvider, GenerateResult, GenerateOptions };
 
 export class LlmProviderError extends Error {
   constructor(

@@ -68,7 +68,9 @@ export async function POST(req: NextRequest) {
           throw new RateLimitError(err.message, err.details ?? {});
         }
         if (err.code === "no_provider") {
-          throw new ConflictError(err.message, { hint: "config en /admin/llm-settings" });
+          throw new ConflictError(err.message, {
+            hint: "Habilita un proveedor en /dashboard/settings > Proveedores AI",
+          });
         }
         // parse_error, llm_error, unsupported_seccion -> propagar como conflict
         throw new ConflictError(err.message, err.details ?? {});
