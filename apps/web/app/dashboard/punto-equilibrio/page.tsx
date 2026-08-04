@@ -9,8 +9,10 @@ import {
   pickColorEstable,
 } from "@/lib/domains/informe/queries";
 import {
-  getPuntoEquilibrioComparativo,
-  getPuntoEquilibrioHistoricoAnual,
+  getPuntoEquilibrioHistorico,
+  getPuntoEquilibrioSeries,
+  listEntidadesConDataPE,
+  type Granularidad,
 } from "@/lib/domains/punto-equilibrio";
 import { getUser } from "@/lib/domains/users";
 import { PuntoEquilibrioClient } from "./client";
@@ -25,8 +27,11 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<{
   cliente?: string;
+  entidad?: string;
   periodo?: string;
   desde?: string;
+  granularidad?: string;
+  peers?: string;
 }>;
 
 const BCP_DEFAULT = { slug: "bcp", entidadPropia: "Banco de Crédito del Perú" } as const;
@@ -38,7 +43,7 @@ export default async function PuntoEquilibrioPage({
 }) {
   const params = await searchParams;
 
-  // Resolver cliente: URL > user default > BCP
+  // Resolver cliente por defecto (para el header + peer group)
   let userDefaultCliente: string | null = null;
   if (!params.cliente) {
     try {
@@ -48,56 +53,81 @@ export default async function PuntoEquilibrioPage({
         userDefaultCliente = user.defaultClienteSlug;
       }
     } catch {
-      /* fallback silencioso */
+      /* fallback */
     }
   }
   const clienteSlug = params.cliente ?? userDefaultCliente ?? BCP_DEFAULT.slug;
-
   const cliente = await getClienteBySlug(clienteSlug);
 
-  const periodo = params.periodo
+  // Entidad a analizar: por default la del cliente, pero URL puede override
+  const entidad = params.entidad ?? cliente.entidadPropia;
+
+  // Periodo hasta: default ultimo publicado
+  const hastaPeriodo = params.periodo
     ? Number.parseInt(params.periodo, 10)
     : (await getUltimoPeriodoPublicable()) ?? 202412;
 
+  // Rango desde: default 5 años atras
+  const anioActual = Math.floor(hastaPeriodo / 100);
   const desdeAnio = params.desde
     ? Number.parseInt(params.desde, 10)
-    : 2021;
+    : Math.max(2009, anioActual - 5);
 
-  // Peer group para el comparativo
-  const peerNames = await getDefaultPeerGroup(cliente.slug);
+  const granularidad = (params.granularidad ?? "anual") as Granularidad;
 
-  // Data en paralelo: histórico de la entidad propia + comparativo peers
-  const [historico, competidoresCon] = await Promise.all([
-    getPuntoEquilibrioHistoricoAnual({
-      entidad: cliente.entidadPropia,
-      periodoActual: periodo,
+  // Peer group: default = peer del cliente (top 5 SBS). URL puede override
+  // Por default para comparativo usamos SOLO 2 entidades (entidad propia + 1)
+  // para que el line chart sea legible. El usuario puede agregar mas.
+  const peerNames = params.peers
+    ? params.peers.split(",").map((s) => s.trim()).filter(Boolean)
+    : await getDefaultPeerGroup(cliente.slug);
+  // Si no vino peers, tomar solo 2 primeras (entidad propia + siguiente)
+  const peerGroup = params.peers ? peerNames : peerNames.slice(0, 2);
+
+  // Data inicial en paralelo
+  const [historico, entidadesDisponibles, competidoresCon] = await Promise.all([
+    getPuntoEquilibrioHistorico({
+      entidad,
       desdeAnio,
+      hastaPeriodo,
+      granularidad,
     }),
+    listEntidadesConDataPE(),
     (async () => {
-      // Armar competidores con colores estables (mismo criterio que informe)
       const usados = new Set<string>();
-      const conColores = peerNames.map((nombCorreg) => ({
-        nombCorreg,
-        color: pickColorEstable(nombCorreg, usados),
-        esPropio: nombCorreg === cliente.entidadPropia,
-      }));
-      for (const c of conColores) usados.add(c.color);
-      return conColores;
+      return peerGroup.map((nombCorreg) => {
+        const color = pickColorEstable(nombCorreg, usados);
+        usados.add(color);
+        return {
+          nombCorreg,
+          color,
+          esPropio: nombCorreg === entidad,
+        };
+      });
     })(),
   ]);
 
-  const comparativo = await getPuntoEquilibrioComparativo({
+  const series = await getPuntoEquilibrioSeries({
     entidades: competidoresCon,
-    periodo,
+    desdeAnio,
+    hastaPeriodo,
+    granularidad,
   });
 
   return (
     <PuntoEquilibrioClient
       cliente={cliente}
-      periodo={{ codigo: periodo, label: formatPeriodo(periodo) }}
+      entidadActual={entidad}
+      periodo={{ codigo: hastaPeriodo, label: formatPeriodo(hastaPeriodo) }}
       historico={historico}
-      comparativo={comparativo}
-      desdeAnio={desdeAnio}
+      series={series}
+      entidadesDisponibles={entidadesDisponibles}
+      config={{
+        desdeAnio,
+        hastaPeriodo,
+        granularidad,
+        peerGroup: peerGroup,
+      }}
     />
   );
 }

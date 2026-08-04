@@ -1,15 +1,9 @@
 /**
  * Queries del modulo Punto de Equilibrio.
  *
- * Consume marts.v_punto_equilibrio_ancho (V034) que ya tiene los 10 KPIs
- * pre-computados por (periodo, nomb_correg, moneda). Sin recompute.
- *
- * Dos vistas principales:
- *  1. getPuntoEquilibrioHistoricoAnual(entidad, hastaPeriodo) — cierres
- *     Diciembre desde 2021 + mes actual + mismo mes ano previo. Formato
- *     tipo cuadro de gerencia (screenshot que compartio el usuario).
- *  2. getPuntoEquilibrioComparativo(entidades[], periodo) — mismo periodo
- *     para N entidades side-by-side.
+ * Consume marts.v_punto_equilibrio_ancho (V034). Los valores del view estan
+ * en formato DECIMAL (0.0963 = 9.63%), no porcentaje — la UI multiplica x100
+ * al mostrar via fmtPct().
  */
 
 import "server-only";
@@ -17,6 +11,8 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
+
+export type Granularidad = "anual" | "semestral" | "trimestral" | "mensual";
 
 export type PuntoEquilibrioRow = {
   /** YYYYMM. */
@@ -38,6 +34,22 @@ export type PuntoEquilibrioComparativoRow = {
   esPropio: boolean;
 } & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel">;
 
+/**
+ * Serie temporal de una entidad — para el line chart comparativo.
+ */
+export type PuntoEquilibrioSerie = {
+  entidad: string;
+  color: string;
+  esPropio: boolean;
+  puntos: Array<{
+    periodo: number;
+    periodoLabel: string;
+    pctPuntoEq: number | null;
+    pctMargenNeto: number | null;
+    pctRendimiento: number | null;
+  }>;
+};
+
 const MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 function formatPeriodo(periodo: number): string {
@@ -47,41 +59,66 @@ function formatPeriodo(periodo: number): string {
 }
 
 /**
- * Historico anual del PE para UNA entidad. Devuelve:
- *   - Cierres de Diciembre desde `desdeAnio` hasta el ultimo Dic completo
- *   - Mismo mes del año previo al periodoActual (para comparacion YoY)
- *   - periodoActual (ej. Jun-26)
- *
- * Todos ordenados cronologicamente ASC. Los meses que no existen en el
- * view aparecen como fila con todos los pct en null (no se filtran para
- * que la UI muestre "—" y sea claro que falta data).
+ * Devuelve la lista de meses que corresponden a la granularidad elegida
+ * en un año dado.
+ *   anual      -> [12]
+ *   semestral  -> [6, 12]
+ *   trimestral -> [3, 6, 9, 12]
+ *   mensual    -> [1..12]
  */
-export async function getPuntoEquilibrioHistoricoAnual(opts: {
+function mesesDeGranularidad(g: Granularidad): number[] {
+  switch (g) {
+    case "anual": return [12];
+    case "semestral": return [6, 12];
+    case "trimestral": return [3, 6, 9, 12];
+    case "mensual": return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  }
+}
+
+/**
+ * Genera los periodos objetivo entre [desdeAnio, hastaPeriodo] segun
+ * granularidad. Siempre incluye el hastaPeriodo (aunque no coincida con la
+ * granularidad) para que el usuario vea siempre el "actual".
+ */
+function generarPeriodos(
+  desdeAnio: number,
+  hastaPeriodo: number,
+  granularidad: Granularidad,
+): number[] {
+  const hastaAnio = Math.floor(hastaPeriodo / 100);
+  const hastaMes = hastaPeriodo % 100;
+  const meses = mesesDeGranularidad(granularidad);
+  const set = new Set<number>();
+
+  for (let a = desdeAnio; a <= hastaAnio; a++) {
+    for (const m of meses) {
+      const p = a * 100 + m;
+      if (p <= hastaPeriodo) set.add(p);
+    }
+  }
+  // Siempre asegurar el actual (aunque no coincida con la granularidad)
+  set.add(hastaPeriodo);
+  // Para granularidad != mensual, agregar tambien el mismo mes del año previo
+  // asi el usuario ve la comparacion YoY estilo 'Jun-25 vs Jun-26'
+  if (granularidad !== "mensual" && hastaMes !== 12) {
+    set.add((hastaAnio - 1) * 100 + hastaMes);
+  }
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+/**
+ * Historico del PE para UNA entidad en un rango dado + granularidad.
+ */
+export async function getPuntoEquilibrioHistorico(opts: {
   entidad: string;
-  periodoActual: number;
-  desdeAnio?: number;
+  desdeAnio: number;
+  hastaPeriodo: number;
+  granularidad: Granularidad;
   moneda?: "MN" | "ME" | "TOTAL";
 }): Promise<PuntoEquilibrioRow[]> {
   const moneda = opts.moneda ?? "TOTAL";
-  const desdeAnio = opts.desdeAnio ?? 2021;
-  const anioActual = Math.floor(opts.periodoActual / 100);
-  const mesActual = opts.periodoActual % 100;
-
-  // Construir la lista de periodos objetivo:
-  //   - Diciembre de cada año desde desdeAnio hasta anioActual-1
-  //   - Mismo mes del año previo (ej. Jun-25 si actual es Jun-26)
-  //   - Periodo actual (Jun-26)
-  // Si el actual ES Diciembre, no duplicamos.
-  const periodosObjetivo = new Set<number>();
-  for (let a = desdeAnio; a < anioActual; a++) {
-    periodosObjetivo.add(a * 100 + 12);
-  }
-  if (mesActual !== 12) {
-    periodosObjetivo.add((anioActual - 1) * 100 + mesActual);
-  }
-  periodosObjetivo.add(opts.periodoActual);
-
-  const periodos = Array.from(periodosObjetivo).sort((a, b) => a - b);
+  const periodos = generarPeriodos(opts.desdeAnio, opts.hastaPeriodo, opts.granularidad);
+  if (periodos.length === 0) return [];
   const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
 
   const rows = await db.execute<{
@@ -103,13 +140,11 @@ export async function getPuntoEquilibrioHistoricoAnual(opts: {
     ORDER BY periodo ASC
   `);
 
-  const rowsByPeriodo = new Map<number, (typeof rows)[number]>();
-  for (const r of rows) rowsByPeriodo.set(Number(r.periodo), r);
+  const byPeriodo = new Map<number, (typeof rows)[number]>();
+  for (const r of rows) byPeriodo.set(Number(r.periodo), r);
 
-  // Devolver TODOS los periodos objetivo — los que no existen quedan
-  // como fila con nulls (UI muestra "—" para reflejar dato faltante).
   return periodos.map((p) => {
-    const r = rowsByPeriodo.get(p);
+    const r = byPeriodo.get(p);
     return {
       periodo: p,
       periodoLabel: formatPeriodo(p),
@@ -125,8 +160,7 @@ export async function getPuntoEquilibrioHistoricoAnual(opts: {
 }
 
 /**
- * Comparativo del PE al mismo periodo para N entidades. Formato ideal
- * para ver 'quien esta mejor parado' hoy — misma fecha, N columnas.
+ * Comparativo tabla al mismo periodo para N entidades.
  */
 export async function getPuntoEquilibrioComparativo(opts: {
   entidades: Array<{ nombCorreg: string; color: string; esPropio: boolean }>;
@@ -161,7 +195,6 @@ export async function getPuntoEquilibrioComparativo(opts: {
   const byEntidad = new Map<string, (typeof rows)[number]>();
   for (const r of rows) byEntidad.set(String(r.nomb_correg), r);
 
-  // Preservar el orden pasado por el caller (mismo orden que peer group)
   return opts.entidades.map((e) => {
     const r = byEntidad.get(e.nombCorreg);
     return {
@@ -177,4 +210,95 @@ export async function getPuntoEquilibrioComparativo(opts: {
       pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
     };
   });
+}
+
+/**
+ * Series temporales por entidad — para el line chart comparativo que
+ * muestra evolucion del PE (o margen o rendimiento) en el tiempo lado
+ * a lado.
+ */
+export async function getPuntoEquilibrioSeries(opts: {
+  entidades: Array<{ nombCorreg: string; color: string; esPropio: boolean }>;
+  desdeAnio: number;
+  hastaPeriodo: number;
+  granularidad: Granularidad;
+  moneda?: "MN" | "ME" | "TOTAL";
+}): Promise<PuntoEquilibrioSerie[]> {
+  const moneda = opts.moneda ?? "TOTAL";
+  if (opts.entidades.length === 0) return [];
+  const periodos = generarPeriodos(opts.desdeAnio, opts.hastaPeriodo, opts.granularidad);
+  if (periodos.length === 0) return [];
+
+  const entidadesClause = sql.join(
+    opts.entidades.map((e) => sql`${e.nombCorreg}`),
+    sql`, `,
+  );
+  const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
+
+  const rows = await db.execute<{
+    nomb_correg: string;
+    periodo: number;
+    pct_punto_eq: number | null;
+    pct_margen_neto: number | null;
+    pct_rendimiento: number | null;
+  }>(sql`
+    SELECT nomb_correg, periodo, pct_punto_eq, pct_margen_neto, pct_rendimiento
+    FROM marts.v_punto_equilibrio_ancho
+    WHERE nomb_correg IN (${entidadesClause})
+      AND moneda = ${moneda}
+      AND periodo IN (${periodosClause})
+    ORDER BY nomb_correg, periodo ASC
+  `);
+
+  const byEntidad = new Map<string, Map<number, (typeof rows)[number]>>();
+  for (const r of rows) {
+    const k = String(r.nomb_correg);
+    if (!byEntidad.has(k)) byEntidad.set(k, new Map());
+    byEntidad.get(k)!.set(Number(r.periodo), r);
+  }
+
+  return opts.entidades.map((e) => {
+    const entMap = byEntidad.get(e.nombCorreg) ?? new Map();
+    return {
+      entidad: e.nombCorreg,
+      color: e.color,
+      esPropio: e.esPropio,
+      puntos: periodos.map((p) => {
+        const r = entMap.get(p);
+        return {
+          periodo: p,
+          periodoLabel: formatPeriodo(p),
+          pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
+          pctMargenNeto: r?.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
+          pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
+        };
+      }),
+    };
+  });
+}
+
+/**
+ * Lista de todas las entidades con data de PE — para el selector.
+ */
+export async function listEntidadesConDataPE(): Promise<
+  Array<{ nombCorreg: string; primerPeriodo: number; ultimoPeriodo: number }>
+> {
+  const rows = await db.execute<{
+    nomb_correg: string;
+    primer_periodo: number;
+    ultimo_periodo: number;
+  }>(sql`
+    SELECT nomb_correg,
+           MIN(periodo) AS primer_periodo,
+           MAX(periodo) AS ultimo_periodo
+    FROM marts.v_punto_equilibrio_ancho
+    WHERE moneda = 'TOTAL'
+    GROUP BY nomb_correg
+    ORDER BY nomb_correg
+  `);
+  return rows.map((r) => ({
+    nombCorreg: String(r.nomb_correg),
+    primerPeriodo: Number(r.primer_periodo),
+    ultimoPeriodo: Number(r.ultimo_periodo),
+  }));
 }
