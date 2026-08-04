@@ -260,7 +260,15 @@ export function PuntoEquilibrioClient({
         <HistoricoTable data={historico} entidad={entidadActual} />
       )}
       {tab === "comparativo" && (
-        <ComparativoView series={series} />
+        <ComparativoView
+          series={series}
+          entidadActual={entidadActual}
+          onAddEntidadAlComparativo={() => {
+            if (!draft.peerGroup.includes(draft.entidad)) {
+              setDraft((d) => ({ ...d, peerGroup: [...d.peerGroup, d.entidad] }));
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -999,8 +1007,17 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
   pctRendimiento: true,
 };
 
-function ComparativoView({ series }: { series: PuntoEquilibrioSerie[] }) {
+function ComparativoView({
+  series,
+  entidadActual,
+  onAddEntidadAlComparativo,
+}: {
+  series: PuntoEquilibrioSerie[];
+  entidadActual: string;
+  onAddEntidadAlComparativo: () => void;
+}) {
   const [metrica, setMetrica] = useState<MetricaKey>("pctPuntoEq");
+  const entidadIncluida = series.some((s) => s.esPropio);
 
   if (series.length === 0) {
     return (
@@ -1021,8 +1038,31 @@ function ComparativoView({ series }: { series: PuntoEquilibrioSerie[] }) {
       {/* Selector de metrica (afecta ranking + line chart principal) */}
       <MetricaSelector metrica={metrica} onChange={setMetrica} />
 
+      {/* Banner CTA si la entidad principal NO esta en el comparativo */}
+      {!entidadIncluida && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <Info className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              Tu entidad <span className="font-mono">{entidadActual}</span> no está en el comparativo
+            </p>
+            <p className="text-xs text-amber-800 mt-1">
+              Los rankings y análisis abajo muestran solo las {series.length} entidades del peer group.
+              Agrega tu entidad principal para verte dentro del ranking y su delta vs promedio.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onAddEntidadAlComparativo}
+            className="flex-shrink-0 h-9 px-4 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-md shadow-sm whitespace-nowrap"
+          >
+            Agregar {entidadActual.length > 20 ? "al comparativo" : `"${entidadActual}"`}
+          </button>
+        </div>
+      )}
+
       {/* CAPA 1: Executive Summary */}
-      <ExecutiveSummary series={series} metrica={metrica} />
+      <ExecutiveSummary series={series} metrica={metrica} entidadActual={entidadActual} />
 
       {/* CAPA 2: Ranking horizontal con quartiles */}
       <RankingChart series={series} metrica={metrica} />
@@ -1164,9 +1204,11 @@ function computeStats(
 function ExecutiveSummary({
   series,
   metrica,
+  entidadActual,
 }: {
   series: PuntoEquilibrioSerie[];
   metrica: MetricaKey;
+  entidadActual: string;
 }) {
   const stats = useMemo(() => computeStats(series, metrica), [series, metrica]);
   const higherIsBetter = METRICA_HIGHER_IS_BETTER[metrica];
@@ -1205,7 +1247,7 @@ function ExecutiveSummary({
         />
         {stats.propia && stats.propia.value != null && stats.propia.rank != null ? (
           <SummaryTile
-            label={`Tu posición`}
+            label={`Tu posición · ${entidadActual}`}
             value={`#${stats.propia.rank} de ${series.length}`}
             sub={
               stats.propia.deltaVsAvg != null
@@ -1215,7 +1257,16 @@ function ExecutiveSummary({
             accent={propiaMejor ? "emerald" : "rose"}
           />
         ) : (
-          <SummaryTile label="Tu entidad" value="—" sub="No incluida" accent="slate" />
+          /* Cuando la entidad principal NO esta en el peer group, en vez
+           * de un tile confuso 'No incluida', mostramos el SPREAD como
+           * cuarta metrica util (rango max-min). El banner arriba ya
+           * explica el caso y ofrece el CTA para agregarla. */
+          <SummaryTile
+            label="Spread del grupo"
+            value={stats.max != null && stats.min != null ? fmtPct(stats.max - stats.min) : "—"}
+            sub={`Diferencia mejor vs peor performer`}
+            accent="slate"
+          />
         )}
       </div>
     </div>
