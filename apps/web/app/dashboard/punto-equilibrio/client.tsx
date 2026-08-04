@@ -68,6 +68,21 @@ const GRANULARIDADES: Array<{ value: Granularidad; label: string; hint: string }
 
 const ANIO_MIN = 2009; // Data SBS disponible desde 2009
 
+/**
+ * DraftState — todos los filtros que el usuario puede editar. Se guarda
+ * localmente y solo se aplica (dispara SSR + URL update) cuando el usuario
+ * hace click en 'Aplicar filtros'. Patron enterprise clasico —
+ * Salesforce/Tableau/PowerBI — para no gastar queries innecesarias
+ * cuando el usuario esta configurando varios filtros a la vez.
+ */
+type DraftState = {
+  entidad: string;
+  desdeAnio: number;
+  granularidad: Granularidad;
+  hastaPeriodo: number;
+  peerGroup: string[];
+};
+
 export function PuntoEquilibrioClient({
   cliente,
   entidadActual,
@@ -81,27 +96,78 @@ export function PuntoEquilibrioClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Preservacion manual del scroll. router.replace con scroll:false no
-  // es suficiente en Next.js App Router cuando el server component se
-  // re-fetcha — el arbol DOM puede reemplazarse y el browser resetear.
-  // Estrategia:
-  //   1. Antes de navegar guardamos window.scrollY en un ref.
-  //   2. useLayoutEffect al cambiar la data (props) restaura scroll ANTES
-  //      del paint, sin flicker.
+  // Estado APLICADO (viene del SSR — refleja los URL params actuales)
+  const applied: DraftState = useMemo(
+    () => ({
+      entidad: entidadActual,
+      desdeAnio: config.desdeAnio,
+      granularidad: config.granularidad,
+      hastaPeriodo: config.hastaPeriodo,
+      peerGroup: config.peerGroup,
+    }),
+    [entidadActual, config.desdeAnio, config.granularidad, config.hastaPeriodo, config.peerGroup],
+  );
+
+  // Estado DRAFT — el usuario edita libremente sin disparar re-fetch.
+  // Se re-sincroniza con applied cuando el SSR responde (o cuando el user
+  // navega con back/forward y cambian los searchParams).
+  const [draft, setDraft] = useState<DraftState>(applied);
+
+  useEffect(() => {
+    setDraft(applied);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applied.entidad, applied.desdeAnio, applied.granularidad, applied.hastaPeriodo, applied.peerGroup.join(",")]);
+
+  // Contador de cambios pendientes vs applied.
+  const changeCount = useMemo(() => {
+    let n = 0;
+    if (draft.entidad !== applied.entidad) n++;
+    if (draft.desdeAnio !== applied.desdeAnio) n++;
+    if (draft.granularidad !== applied.granularidad) n++;
+    if (draft.hastaPeriodo !== applied.hastaPeriodo) n++;
+    if (draft.peerGroup.join(",") !== applied.peerGroup.join(",")) n++;
+    return n;
+  }, [draft, applied]);
+
+  // Preservacion de scroll cuando aplicamos filtros.
   const scrollToRestore = useRef<number | null>(null);
 
-  const updateUrl = (updates: Record<string, string | undefined>) => {
+  const applyFilters = () => {
+    if (changeCount === 0) return;
     scrollToRestore.current = window.scrollY;
     const params = new URLSearchParams(searchParams.toString());
-    for (const [k, v] of Object.entries(updates)) {
-      if (v == null || v === "") params.delete(k);
-      else params.set(k, v);
+    params.set("entidad", draft.entidad);
+    params.set("desde", String(draft.desdeAnio));
+    params.set("granularidad", draft.granularidad);
+    params.set("periodo", String(draft.hastaPeriodo));
+    if (draft.peerGroup.length > 0) {
+      params.set("peers", draft.peerGroup.join(","));
+    } else {
+      params.delete("peers");
     }
     router.replace(
       `/dashboard/punto-equilibrio?${params.toString()}` as never,
       { scroll: false },
     );
   };
+
+  const resetFilters = () => {
+    setDraft(applied);
+  };
+
+  // Enter para aplicar (excepto si el foco esta en un input de texto
+  // que ya lo usa para submit — evitamos conflicto).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && changeCount > 0) {
+        e.preventDefault();
+        applyFilters();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changeCount, draft]);
 
   // Se dispara cada vez que la data cambia (post-SSR fetch). Si hay un
   // scroll pendiente de restaurar, lo aplicamos ANTES del paint via
@@ -164,14 +230,12 @@ export function PuntoEquilibrioClient({
 
       {/* SELECTORES */}
       <SelectoresBar
-        entidadActual={entidadActual}
         entidadesDisponibles={entidadesDisponibles}
-        config={config}
-        onChangeEntidad={(v) => updateUrl({ entidad: v })}
-        onChangeDesde={(v) => updateUrl({ desde: String(v) })}
-        onChangeGranularidad={(v) => updateUrl({ granularidad: v })}
-        onChangePeers={(v) => updateUrl({ peers: v.join(",") })}
-        onChangePeriodo={(v) => updateUrl({ periodo: String(v) })}
+        draft={draft}
+        setDraft={setDraft}
+        changeCount={changeCount}
+        onApply={applyFilters}
+        onReset={resetFilters}
       />
 
       {/* Tabs */}
@@ -203,29 +267,28 @@ export function PuntoEquilibrioClient({
 }
 
 /**
- * Barra de selectores — persiste en URL para compartir análisis.
+ * Barra de selectores con draft state. Los cambios editan `draft`; el
+ * usuario clickea 'Aplicar filtros' para disparar el fetch. Cuando hay
+ * cambios pendientes, la barra tiene un highlight ambar visible y
+ * aparecen los botones Aplicar / Descartar.
  */
 function SelectoresBar({
-  entidadActual,
   entidadesDisponibles,
-  config,
-  onChangeEntidad,
-  onChangeDesde,
-  onChangeGranularidad,
-  onChangePeers,
-  onChangePeriodo,
+  draft,
+  setDraft,
+  changeCount,
+  onApply,
+  onReset,
 }: {
-  entidadActual: string;
   entidadesDisponibles: EntidadDisponible[];
-  config: Config;
-  onChangeEntidad: (v: string) => void;
-  onChangeDesde: (v: number) => void;
-  onChangeGranularidad: (v: Granularidad) => void;
-  onChangePeers: (v: string[]) => void;
-  onChangePeriodo: (v: number) => void;
+  draft: DraftState;
+  setDraft: (fn: (prev: DraftState) => DraftState) => void;
+  changeCount: number;
+  onApply: () => void;
+  onReset: () => void;
 }) {
-  // Años disponibles: desde 2009 (o el min del sistema) hasta año actual
-  const anioActual = Math.floor(config.hastaPeriodo / 100);
+  // Años disponibles: desde 2009 hasta año actual del draft
+  const anioActual = Math.floor(draft.hastaPeriodo / 100);
   const aniosDisponibles = useMemo(() => {
     const r: number[] = [];
     for (let a = ANIO_MIN; a <= anioActual; a++) r.push(a);
@@ -233,16 +296,22 @@ function SelectoresBar({
   }, [anioActual]);
 
   const [peerModalOpen, setPeerModalOpen] = useState(false);
+  const dirty = changeCount > 0;
 
   return (
-    <section className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+    <section
+      className={cn(
+        "bg-white border rounded-lg p-4 shadow-sm transition-colors",
+        dirty ? "border-amber-400 ring-2 ring-amber-100" : "border-slate-200",
+      )}
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Entidad — combobox con search */}
         <EntityCombobox
           label="Entidad"
-          value={entidadActual}
+          value={draft.entidad}
           options={entidadesDisponibles}
-          onChange={onChangeEntidad}
+          onChange={(v) => setDraft((d) => ({ ...d, entidad: v }))}
         />
 
         {/* Desde año */}
@@ -252,8 +321,11 @@ function SelectoresBar({
             Desde año
           </label>
           <select
-            value={config.desdeAnio}
-            onChange={(e) => onChangeDesde(Number.parseInt(e.target.value, 10))}
+            value={draft.desdeAnio}
+            onChange={(e) => {
+              const v = Number.parseInt(e.target.value, 10);
+              setDraft((d) => ({ ...d, desdeAnio: v }));
+            }}
             className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
           >
             {aniosDisponibles.map((a) => (
@@ -269,8 +341,11 @@ function SelectoresBar({
             Granularidad
           </label>
           <select
-            value={config.granularidad}
-            onChange={(e) => onChangeGranularidad(e.target.value as Granularidad)}
+            value={draft.granularidad}
+            onChange={(e) => {
+              const v = e.target.value as Granularidad;
+              setDraft((d) => ({ ...d, granularidad: v }));
+            }}
             className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
           >
             {GRANULARIDADES.map((g) => (
@@ -289,13 +364,15 @@ function SelectoresBar({
           </label>
           <input
             type="number"
-            value={config.hastaPeriodo}
+            value={draft.hastaPeriodo}
             min={200901}
             max={210012}
             step={1}
             onChange={(e) => {
               const n = Number.parseInt(e.target.value, 10);
-              if (n >= 200901 && n <= 210012) onChangePeriodo(n);
+              if (n >= 200901 && n <= 210012) {
+                setDraft((d) => ({ ...d, hastaPeriodo: n }));
+              }
             }}
             className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
           />
@@ -308,15 +385,15 @@ function SelectoresBar({
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-2">
               <Users className="w-3 h-3" />
-              Comparar contra ({config.peerGroup.length} entidades)
+              Comparar contra ({draft.peerGroup.length} entidades)
             </p>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {config.peerGroup.length === 0 ? (
+              {draft.peerGroup.length === 0 ? (
                 <span className="text-xs text-slate-500 italic">
                   Sin entidades seleccionadas — click en &quot;Editar comparación&quot; para agregar.
                 </span>
               ) : (
-                config.peerGroup.map((p) => (
+                draft.peerGroup.map((p) => (
                   <span
                     key={p}
                     className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded"
@@ -324,7 +401,12 @@ function SelectoresBar({
                     {p}
                     <button
                       type="button"
-                      onClick={() => onChangePeers(config.peerGroup.filter((x) => x !== p))}
+                      onClick={() =>
+                        setDraft((d) => ({
+                          ...d,
+                          peerGroup: d.peerGroup.filter((x) => x !== p),
+                        }))
+                      }
                       className="text-slate-400 hover:text-rose-600"
                       title="Quitar"
                     >
@@ -338,9 +420,68 @@ function SelectoresBar({
           <button
             type="button"
             onClick={() => setPeerModalOpen(true)}
-            className="h-8 px-3 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md shadow-sm"
+            className="h-8 px-3 text-xs font-medium bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-md shadow-sm"
           >
             Editar comparación
+          </button>
+        </div>
+      </div>
+
+      {/* Barra de accion: Aplicar / Descartar. Aparece solo si hay cambios. */}
+      <div
+        className={cn(
+          "mt-4 pt-3 border-t transition-colors flex items-center justify-between gap-3 flex-wrap",
+          dirty ? "border-amber-200" : "border-slate-100",
+        )}
+      >
+        <div className="flex items-center gap-2 text-xs">
+          {dirty ? (
+            <>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold border border-amber-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                {changeCount} {changeCount === 1 ? "cambio pendiente" : "cambios pendientes"}
+              </span>
+              <span className="text-slate-400 hidden sm:inline">
+                Ctrl+Enter para aplicar
+              </span>
+            </>
+          ) : (
+            <span className="text-slate-400 italic">
+              Los filtros están sincronizados con la vista
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={!dirty}
+            className={cn(
+              "h-9 px-3 text-sm font-medium rounded-md transition-colors",
+              dirty
+                ? "text-slate-700 hover:bg-slate-100 border border-slate-300"
+                : "text-slate-400 border border-transparent cursor-not-allowed",
+            )}
+          >
+            Descartar
+          </button>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={!dirty}
+            className={cn(
+              "h-9 px-4 text-sm font-medium rounded-md shadow-sm inline-flex items-center gap-1.5 transition-colors",
+              dirty
+                ? "bg-brand-600 hover:bg-brand-700 text-white"
+                : "bg-slate-200 text-slate-500 cursor-not-allowed",
+            )}
+          >
+            Aplicar filtros
+            {dirty && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 text-[10px] font-bold bg-white/25 rounded">
+                {changeCount}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -348,9 +489,9 @@ function SelectoresBar({
       {peerModalOpen && (
         <PeerGroupModal
           disponibles={entidadesDisponibles}
-          seleccionados={config.peerGroup}
+          seleccionados={draft.peerGroup}
           onSave={(nuevos) => {
-            onChangePeers(nuevos);
+            setDraft((d) => ({ ...d, peerGroup: nuevos }));
             setPeerModalOpen(false);
           }}
           onClose={() => setPeerModalOpen(false)}
