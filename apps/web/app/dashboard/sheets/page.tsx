@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { TableProperties, FileSpreadsheet, Calculator, Download } from "lucide-react";
 
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/domains/users";
 import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listSheets } from "@/lib/domains/sheets";
 
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function SheetsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
+  if (!(await isAdmin(session.user.id))) redirect("/dashboard");
   const sheets = await listSheets(session.user.id);
 
   return (

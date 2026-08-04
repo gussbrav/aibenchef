@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { NotebookText, FileText, Database, Share2 } from "lucide-react";
 
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/domains/users";
 import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listNotebooks } from "@/lib/domains/notebooks";
 
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function NotebooksPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
+  if (!(await isAdmin(session.user.id))) redirect("/dashboard");
   const notebooks = await listNotebooks(session.user.id);
 
   return (

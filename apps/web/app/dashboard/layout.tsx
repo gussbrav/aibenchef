@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/domains/users";
 import { Container, ConfirmModalProvider } from "@/components/ui";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { DashboardUserMenu } from "./user-menu";
@@ -20,6 +21,16 @@ export default async function DashboardLayout({
   if (!session) {
     redirect("/login");
   }
+
+  // Gate de menu por rol. Los usuarios no-admin ven solo lo que pueden
+  // consumir (Resumen, Benchmark, Estados Financieros, Analisis). Los
+  // menus Datos (herramientas power-user: SQL/notebooks/sheets/catalog)
+  // y Operaciones (data pipeline + backoffice) quedan ocultos.
+  //
+  // IMPORTANTE: esto es solo UX. Las paginas admin de cada URL tienen su
+  // propio gate isAdmin() + redirect (defensa en profundidad). Modificar
+  // el bundle client-side no burla el gate de la pagina.
+  const admin = await isAdmin(session.user.id).catch(() => false);
 
   // NOTA: el gate por status='suspended' se movio del layout a /api/me y a
   // los endpoints sensibles. El layout no debe hacer queries adicionales
@@ -79,45 +90,49 @@ export default async function DashboardLayout({
                 ]}
               />
 
-              <NavDropdown
-                label="Datos"
-                items={[
-                  {
-                    href: "/dashboard/notebooks",
-                    label: "Notebooks",
-                    description: "Reportes interactivos: texto + consultas + visualizaciones en una hoja compartible",
-                  },
-                  {
-                    href: "/dashboard/sheets",
-                    label: "Sheets",
-                    description: "Hojas de cálculo editables con fórmulas, gráficos y datos ad-hoc. Export al formato XLSX.",
-                  },
-                  {
-                    href: "/dashboard/sql",
-                    label: "SQL Workbench",
-                    description: "Consulta directa a la base de datos SBS con SQL completo (avanzado)",
-                  },
-                  {
-                    href: "/dashboard/catalog",
-                    label: "Catálogo de datos",
-                    description: "Explorá todas las tablas, vistas y modelos disponibles del data warehouse",
-                  },
-                ]}
-              />
+              {admin && (
+                <NavDropdown
+                  label="Datos"
+                  items={[
+                    {
+                      href: "/dashboard/notebooks",
+                      label: "Notebooks",
+                      description: "Reportes interactivos: texto + consultas + visualizaciones en una hoja compartible",
+                    },
+                    {
+                      href: "/dashboard/sheets",
+                      label: "Sheets",
+                      description: "Hojas de cálculo editables con fórmulas, gráficos y datos ad-hoc. Export al formato XLSX.",
+                    },
+                    {
+                      href: "/dashboard/sql",
+                      label: "SQL Workbench",
+                      description: "Consulta directa a la base de datos SBS con SQL completo (avanzado)",
+                    },
+                    {
+                      href: "/dashboard/catalog",
+                      label: "Catálogo de datos",
+                      description: "Explorá todas las tablas, vistas y modelos disponibles del data warehouse",
+                    },
+                  ]}
+                />
+              )}
 
-              <NavDropdown
-                label="Admin"
-                items={[
-                  { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
-                  { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad ingesta SBS" },
-                  { href: "/dashboard/admin/data-quality", label: "Data Quality", description: "Completeness, freshness, cargas sospechosas" },
-                  { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados SBS" },
-                  { href: "/dashboard/admin/renombres", label: "Maestra", description: "Renombres y entidades" },
-                  { href: "/dashboard/admin/eeff-inspector", label: "EEFF Inspector", description: "Validar extracción cuenta-por-cuenta" },
-                  { href: "/dashboard/admin/inspector-topicos", label: "Inspector Tópicos", description: "Vista raw oficinas/personal/clientes/etc." },
-                  { href: "/dashboard/admin/cabecera-aligner", label: "Aligner", description: "Alinear cabeceras dw" },
-                ]}
-              />
+              {admin && (
+                <NavDropdown
+                  label="Operaciones"
+                  items={[
+                    { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
+                    { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad ingesta SBS" },
+                    { href: "/dashboard/admin/data-quality", label: "Data Quality", description: "Completeness, freshness, cargas sospechosas" },
+                    { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados SBS" },
+                    { href: "/dashboard/admin/renombres", label: "Maestra", description: "Renombres y entidades" },
+                    { href: "/dashboard/admin/eeff-inspector", label: "EEFF Inspector", description: "Validar extracción cuenta-por-cuenta" },
+                    { href: "/dashboard/admin/inspector-topicos", label: "Inspector Tópicos", description: "Vista raw oficinas/personal/clientes/etc." },
+                    { href: "/dashboard/admin/cabecera-aligner", label: "Aligner", description: "Alinear cabeceras dw" },
+                  ]}
+                />
+              )}
             </nav>
 
             <div className="flex items-center gap-2 flex-shrink-0">
