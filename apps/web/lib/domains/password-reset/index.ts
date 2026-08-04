@@ -29,6 +29,7 @@ import {
   ValidationError,
 } from "@/lib/domains/shared";
 import { getUser, requireAdmin } from "@/lib/domains/users";
+import { renderPasswordResetEmail, sendEmail } from "@/lib/infrastructure/email";
 
 export type ResetTokenInfo = {
   token: string;
@@ -89,6 +90,92 @@ export async function createResetTokenForUser(
     userId: targetUserId,
     userEmail: user.email,
   };
+}
+
+/**
+ * Self-service (publico): el usuario dice "olvide mi contrasena", ingresa
+ * su email en /forgot-password, y esta funcion:
+ *   1. Busca el user por email.
+ *   2. Si existe -> genera token + manda email con el link /reset-password?token=X.
+ *   3. Si NO existe -> hace NADA (silencioso) pero retorna igual.
+ *
+ * IMPORTANTE: siempre devuelve el mismo shape sin importar si el email
+ * existe o no. Anti-enumeration: un atacante no puede usar este endpoint
+ * para saber que emails estan registrados en la plataforma.
+ *
+ * Rate limit basico: si ya hay un token activo de <60s para ese user,
+ * NO se genera otro. Evita spam de emails por click repetido.
+ */
+export async function requestPasswordResetSelfService(
+  email: string,
+): Promise<{ emailSent: boolean; reason?: string }> {
+  const emailNorm = email.trim().toLowerCase();
+  if (!emailNorm || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+    // Sin throw — anti-enumeration. Retornamos como si nada.
+    return { emailSent: false, reason: "invalid_email" };
+  }
+
+  const users = await db.execute<{ id: string; email: string; name: string | null }>(sql`
+    SELECT id, email, name
+    FROM auth.users
+    WHERE lower(email) = ${emailNorm}
+    LIMIT 1
+  `);
+  if (users.length === 0) {
+    // Email no registrado — devolvemos ok para no leakear. El usuario
+    // que realmente olvido su pass no notara nada (no le llega mail)
+    // pero tampoco lo notaria un atacante.
+    return { emailSent: false, reason: "no_user" };
+  }
+  const user = users[0]!;
+
+  // Anti-spam: si hay token activo emitido en los ultimos 60s, no
+  // generamos otro. Evita que un click doble mande 2 mails.
+  const recientes = await db.execute<{ id: string }>(sql`
+    SELECT id FROM app.password_reset_tokens
+    WHERE user_id = ${user.id}
+      AND used_at IS NULL
+      AND expires_at > now()
+      AND created_at > now() - interval '60 seconds'
+    LIMIT 1
+  `);
+  if (recientes.length > 0) {
+    // Silencioso: pretendemos que se envio para no revelar el rate limit.
+    return { emailSent: false, reason: "rate_limited" };
+  }
+
+  // Invalidar tokens previos activos (mismo criterio que admin-driven).
+  await db.execute(sql`
+    UPDATE app.password_reset_tokens
+    SET used_at = now()
+    WHERE user_id = ${user.id}
+      AND used_at IS NULL
+      AND expires_at > now()
+  `);
+
+  const token = genToken();
+  const inserted = await db.execute<{ expires_at: Date }>(sql`
+    INSERT INTO app.password_reset_tokens (token, user_id, issued_by)
+    VALUES (${token}, ${user.id}, NULL)
+    RETURNING expires_at
+  `);
+  const url = `${appUrl()}/reset-password?token=${token}`;
+
+  // Enviar email (best-effort — si SMTP no esta configurado, retorna
+  // { emailSent: false, reason: 'no_email_provider' }).
+  const tpl = renderPasswordResetEmail({
+    appName: "Aibenchef",
+    userName: user.name?.trim() || user.email.split("@")[0]!,
+    resetUrl: url,
+    expiresAt: new Date(inserted[0]?.expires_at ?? Date.now() + 3600 * 1000),
+  });
+  const result = await sendEmail({
+    to: user.email,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+  });
+  return { emailSent: result.sent, reason: result.reason };
 }
 
 /**

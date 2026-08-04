@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button, Input } from "@/components/ui";
@@ -53,9 +54,17 @@ export function LoginForm() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-          Contraseña
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+            Contraseña
+          </label>
+          <Link
+            href={"/forgot-password" as never}
+            className="text-xs text-brand-600 hover:text-brand-700 hover:underline font-medium"
+          >
+            ¿La olvidaste?
+          </Link>
+        </div>
         <Input
           id="password"
           name="password"

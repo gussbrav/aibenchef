@@ -221,6 +221,58 @@ export async function testEmailConfig(toAddress: string): Promise<SendEmailResul
 }
 
 /**
+ * Plantilla para reset de contrasena self-service. Se usa cuando el user
+ * pide 'olvide mi contrasena' desde /forgot-password.
+ */
+export function renderPasswordResetEmail(args: {
+  appName: string;
+  userName: string;
+  resetUrl: string;
+  expiresAt: Date;
+}): { subject: string; html: string; text: string } {
+  const fmtTime = args.expiresAt.toLocaleString("es-PE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const subject = `Restablece tu contrasena de ${args.appName}`;
+  const text = `Hola ${args.userName},\n\nRecibiste este email porque solicitaste restablecer tu contrasena de ${args.appName}.\n\nHace click en el siguiente link para elegir una nueva (expira ${fmtTime}):\n${args.resetUrl}\n\nSi no fuiste vos, podes ignorar este email — nadie sabra que llego.\n`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:24px;background:#f8fafc;font-family:-apple-system,Segoe UI,sans-serif;color:#0f172a">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+    <div style="padding:24px 28px;border-bottom:1px solid #e2e8f0">
+      <div style="display:inline-block;width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:8px;color:#fff;font-weight:700;text-align:center;line-height:32px;font-size:14px;margin-right:8px;vertical-align:middle">A</div>
+      <span style="font-weight:700;font-size:16px;vertical-align:middle">${args.appName}</span>
+    </div>
+    <div style="padding:32px 28px">
+      <h1 style="margin:0 0 12px;font-size:22px;font-weight:700">Restablece tu contrasena</h1>
+      <p style="margin:0 0 16px;color:#475569;line-height:1.5">
+        Hola <strong>${args.userName}</strong>, recibimos una solicitud para restablecer tu contrasena.
+      </p>
+      <p style="margin:0 0 24px;color:#475569;line-height:1.5">
+        Clickea el boton para elegir una nueva. El link expira el <strong>${fmtTime}</strong>.
+      </p>
+      <a href="${args.resetUrl}"
+         style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">
+        Restablecer contrasena
+      </a>
+      <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;line-height:1.5">
+        Si no fuiste vos, podes ignorar este email — tu cuenta sigue como esta. Nadie sabra que llego.
+      </p>
+    </div>
+    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8">
+      Si el boton no funciona, copia este link:<br>
+      <a href="${args.resetUrl}" style="color:#2563eb;word-break:break-all">${args.resetUrl}</a>
+    </div>
+  </div>
+</body>
+</html>`;
+  return { subject, html, text };
+}
+
+/**
  * Plantilla HTML minima — sin librerias, inline styles compatibles con email.
  */
 export function renderInvitationEmail(args: {
