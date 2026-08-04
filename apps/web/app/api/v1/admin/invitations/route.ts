@@ -17,6 +17,8 @@ const createBody = z.object({
   email: z.string().email().max(200),
   role: z.enum(["admin", "usuario"]).default("usuario"),
   notas: z.string().max(500).nullable().optional(),
+  /** Cliente que se pre-carga en el perfil al aceptar la invitacion. */
+  defaultClienteSlug: z.string().min(1).max(80).nullable().optional(),
 });
 
 async function requireSession() {
@@ -57,7 +59,10 @@ export async function POST(req: NextRequest) {
       action: "invitation_created",
       severity: "info",
       resource: `invitation:${parsed.data.email}`,
-      metadata: { role: parsed.data.role },
+      metadata: {
+        role: parsed.data.role,
+        defaultClienteSlug: parsed.data.defaultClienteSlug ?? null,
+      },
     });
 
     return invitation;

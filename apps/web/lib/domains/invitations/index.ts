@@ -41,6 +41,8 @@ export type Invitation = {
   revokedAt: string | null;
   archivedAt: string | null;
   notas: string | null;
+  /** Cliente que se copiara al perfil del invitado al aceptar. Opcional. */
+  defaultClienteSlug: string | null;
   createdAt: string;
   url: string; // construida al vuelo
 };
@@ -68,6 +70,7 @@ function mapRow(r: Record<string, unknown>): Invitation {
     revokedAt: r.revoked_at ? toIso(r.revoked_at) : null,
     archivedAt: r.archived_at ? toIso(r.archived_at) : null,
     notas: (r.notas as string | null) ?? null,
+    defaultClienteSlug: (r.default_cliente_slug as string | null) ?? null,
     createdAt: toIso(r.created_at),
     url: `${appUrl()}/signup?token=${token}`,
   };
@@ -86,7 +89,8 @@ export async function listInvitations(opts?: {
       SELECT i.id, i.token, i.email, i.role, i.invited_by,
              u.name AS invited_by_name,
              i.expires_at, i.accepted_at, i.accepted_by,
-             i.revoked_at, i.archived_at, i.notas, i.created_at
+             i.revoked_at, i.archived_at, i.notas,
+             i.default_cliente_slug, i.created_at
       FROM app.invitations i
       LEFT JOIN auth.users u ON u.id = i.invited_by
       WHERE ${includeArchived ? sql`TRUE` : sql`i.archived_at IS NULL`}
@@ -144,7 +148,13 @@ export async function unarchiveInvitation(actorId: string, id: string): Promise<
 
 export async function createInvitation(
   actorId: string,
-  data: { email: string; role: InvitationRole; notas?: string | null },
+  data: {
+    email: string;
+    role: InvitationRole;
+    notas?: string | null;
+    /** Se copiara a auth.users.default_cliente_slug al aceptar. Opcional. */
+    defaultClienteSlug?: string | null;
+  },
 ): Promise<{ invitation: Invitation; emailSent: boolean; emailReason?: string }> {
   await requireAdmin(actorId);
   const email = data.email.trim().toLowerCase();
@@ -158,6 +168,20 @@ export async function createInvitation(
   );
   if (existing.length > 0) {
     throw new ConflictError(`Ya existe un usuario con el email ${email}`, {});
+  }
+
+  // Validar cliente default (si vino) — mismo criterio que updateMyProfile.
+  // No queremos guardar slugs invalidos que despues rompan el landing.
+  if (data.defaultClienteSlug) {
+    const clienteExists = await db.execute<{ slug: string }>(
+      sql`SELECT slug FROM config.cliente WHERE slug = ${data.defaultClienteSlug} AND activo LIMIT 1`,
+    );
+    if (clienteExists.length === 0) {
+      throw new ValidationError(
+        `Cliente '${data.defaultClienteSlug}' no existe o esta inactivo`,
+        { slug: data.defaultClienteSlug },
+      );
+    }
   }
 
   // Si ya hay invitacion pendiente no expirada, revocarla antes
@@ -174,10 +198,15 @@ export async function createInvitation(
   const token = generateToken();
   const rows = await db.execute<Record<string, unknown>>(
     sql`
-      INSERT INTO app.invitations (token, email, role, invited_by, notas)
-      VALUES (${token}, ${email}, ${data.role}, ${actorId}, ${data.notas ?? null})
+      INSERT INTO app.invitations (
+        token, email, role, invited_by, notas, default_cliente_slug
+      )
+      VALUES (
+        ${token}, ${email}, ${data.role}, ${actorId},
+        ${data.notas ?? null}, ${data.defaultClienteSlug ?? null}
+      )
       RETURNING id, token, email, role, invited_by, expires_at, accepted_at,
-                accepted_by, revoked_at, notas, created_at
+                accepted_by, revoked_at, notas, default_cliente_slug, created_at
     `,
   );
   const invitation = mapRow(rows[0]!);
@@ -226,7 +255,7 @@ export async function resendInvitationEmail(
   const rows = await db.execute<Record<string, unknown>>(
     sql`
       SELECT id, token, email, role, invited_by, expires_at, accepted_at,
-             accepted_by, revoked_at, notas, created_at
+             accepted_by, revoked_at, notas, default_cliente_slug, created_at
       FROM app.invitations
       WHERE id = ${id}
         AND accepted_at IS NULL
@@ -273,7 +302,7 @@ export async function findPendingInvitationByEmail(
   const rows = await db.execute<Record<string, unknown>>(
     sql`
       SELECT id, token, email, role, invited_by, expires_at, accepted_at,
-             accepted_by, revoked_at, notas, created_at
+             accepted_by, revoked_at, notas, default_cliente_slug, created_at
       FROM app.invitations
       WHERE lower(email) = ${email.toLowerCase()}
         AND accepted_at IS NULL
@@ -341,15 +370,19 @@ export async function previewInvitation(token: string): Promise<{
 export async function acceptInvitation(
   token: string,
   userId: string,
-): Promise<{ role: InvitationRole }> {
-  // Validar token + obtener data
+): Promise<{ role: InvitationRole; defaultClienteSlug: string | null }> {
+  // Validar token + obtener data (incluye default_cliente_slug para copiar
+  // al perfil del usuario). El slug se validaba al CREAR la invitacion —
+  // si acaso el cliente se desactivo entre invitar y aceptar, hacemos un
+  // re-check antes de asignar.
   const invRows = await db.execute<{
     id: string;
     email: string;
     role: InvitationRole;
+    default_cliente_slug: string | null;
   }>(
     sql`
-      SELECT id, email, role
+      SELECT id, email, role, default_cliente_slug
       FROM app.invitations
       WHERE token = ${token}
         AND accepted_at IS NULL
@@ -380,13 +413,27 @@ export async function acceptInvitation(
     );
   }
 
-  // Actualizar role del usuario + marcar invitacion aceptada (en una transaccion)
+  // Re-check del cliente por si se desactivo entre invitar y aceptar.
+  // Si ya no es valido, NO fallamos la aceptacion — solo obviamos el
+  // default (queda null y el usuario puede configurarlo despues).
+  let clienteFinal: string | null = null;
+  if (inv.default_cliente_slug) {
+    const clienteRows = await db.execute<{ slug: string }>(
+      sql`SELECT slug FROM config.cliente WHERE slug = ${inv.default_cliente_slug} AND activo LIMIT 1`,
+    );
+    if (clienteRows.length > 0) {
+      clienteFinal = inv.default_cliente_slug;
+    }
+  }
+
+  // Actualizar role + default_cliente_slug del usuario + marcar aceptada
   await db.execute(
     sql`
       UPDATE auth.users
-      SET role = ${inv.role}, updated_at = now(), invited_by = (
-        SELECT invited_by FROM app.invitations WHERE id = ${inv.id}
-      )
+      SET role = ${inv.role},
+          default_cliente_slug = COALESCE(${clienteFinal}::text, default_cliente_slug),
+          updated_at = now(),
+          invited_by = (SELECT invited_by FROM app.invitations WHERE id = ${inv.id})
       WHERE id = ${userId}
     `,
   );
@@ -398,5 +445,5 @@ export async function acceptInvitation(
     `,
   );
 
-  return { role: inv.role };
+  return { role: inv.role, defaultClienteSlug: clienteFinal };
 }

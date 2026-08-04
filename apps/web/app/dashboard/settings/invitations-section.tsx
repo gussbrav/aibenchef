@@ -5,6 +5,7 @@ import {
   Archive,
   ArchiveRestore,
   AlertCircle,
+  Building2,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -40,9 +41,12 @@ type Invitation = {
   revokedAt: string | null;
   archivedAt: string | null;
   notas: string | null;
+  defaultClienteSlug: string | null;
   createdAt: string;
   url: string;
 };
+
+type ClienteOpcion = { slug: string; nombre: string; nombreCorto: string };
 
 type EstadoHistorial = "aceptada" | "revocada" | "expirada";
 
@@ -91,12 +95,27 @@ export function InvitationsSection() {
   const [emailNuevo, setEmailNuevo] = useState("");
   const [roleNuevo, setRoleNuevo] = useState<"admin" | "usuario">("usuario");
   const [notas, setNotas] = useState("");
+  const [defaultClienteSlug, setDefaultClienteSlug] = useState<string>("");
+  const [clientes, setClientes] = useState<ClienteOpcion[]>([]);
   const [savingInvite, setSavingInvite] = useState(false);
   const [resultadoInvite, setResultadoInvite] = useState<
     | { invitation: Invitation; emailSent: boolean; emailReason?: string }
     | null
   >(null);
   const [copiadoUrl, setCopiadoUrl] = useState<string | null>(null);
+
+  // Cargar lista de clientes activos para el dropdown (una vez).
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/v1/clientes");
+        const json = await r.json();
+        if (json.data?.rows) setClientes(json.data.rows as ClienteOpcion[]);
+      } catch {
+        /* ignore — el select queda vacio y el usuario invita sin cliente */
+      }
+    })();
+  }, []);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -132,6 +151,7 @@ export function InvitationsSection() {
           email: emailNuevo.trim().toLowerCase(),
           role: roleNuevo,
           notas: notas.trim() || null,
+          defaultClienteSlug: defaultClienteSlug || null,
         }),
       });
       const json = await r.json();
@@ -141,6 +161,7 @@ export function InvitationsSection() {
         setResultadoInvite(json.data);
         setEmailNuevo("");
         setNotas("");
+        setDefaultClienteSlug("");
         cargar();
       }
     } catch (e) {
@@ -264,6 +285,35 @@ export function InvitationsSection() {
             </div>
           </div>
           <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-slate-400" />
+              Cliente por defecto
+              <span className="text-slate-400 font-normal">(opcional)</span>
+            </label>
+            <select
+              value={defaultClienteSlug}
+              onChange={(e) => setDefaultClienteSlug(e.target.value)}
+              className="w-full h-10 px-3 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white transition-colors"
+            >
+              <option value="">— Sin preferencia — el invitado la elige despues —</option>
+              {clientes.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+            {defaultClienteSlug && (
+              <p className="text-[11px] text-slate-500 mt-1 ml-0.5">
+                Cuando acepte la invitacion, aterrizara directo en el Benchmark de{" "}
+                <span className="font-semibold text-slate-700">
+                  {clientes.find((c) => c.slug === defaultClienteSlug)?.nombre ?? defaultClienteSlug}
+                </span>
+                . Puede cambiarlo desde Mi perfil.
+              </p>
+            )}
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Notas <span className="text-slate-400 font-normal">(opcional, solo visible para admins)</span>
             </label>
@@ -330,6 +380,16 @@ export function InvitationsSection() {
                         ? "Email enviado. Deberia llegar en ~1 minuto."
                         : `Email no enviado (${resultadoInvite.emailReason ?? "sin proveedor configurado"}). Copia el link manualmente:`}
                     </p>
+                    {resultadoInvite.invitation.defaultClienteSlug && (
+                      <p className="text-xs text-emerald-700 mt-1 inline-flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        Al aceptar, aterrizara en{" "}
+                        <span className="font-semibold">
+                          {clientes.find((c) => c.slug === resultadoInvite.invitation.defaultClienteSlug)?.nombre
+                            ?? resultadoInvite.invitation.defaultClienteSlug}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
