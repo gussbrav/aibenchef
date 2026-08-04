@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Building2, Check, Loader2, Mail, Save, User as UserIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+import { PasswordInput } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 
 type Me = {
@@ -325,29 +326,28 @@ function PasswordForm() {
         Al cambiarla, se cerraran tus otras sesiones activas por seguridad.
       </p>
       <div className="space-y-2">
-        <input
-          type="password"
+        <PasswordInput
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           placeholder="Contrasena actual"
           autoComplete="current-password"
-          className="w-full h-9 px-3 text-sm rounded border border-slate-300 focus:border-brand-500 outline-none"
+          className="h-9"
         />
-        <input
-          type="password"
+        <PasswordInput
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           placeholder="Nueva contrasena (min 8 caracteres)"
           autoComplete="new-password"
-          className="w-full h-9 px-3 text-sm rounded border border-slate-300 focus:border-brand-500 outline-none"
+          minLength={8}
+          className="h-9"
         />
-        <input
-          type="password"
+        <PasswordInput
           value={newPassword2}
           onChange={(e) => setNewPassword2(e.target.value)}
           placeholder="Confirmar nueva contrasena"
           autoComplete="new-password"
-          className="w-full h-9 px-3 text-sm rounded border border-slate-300 focus:border-brand-500 outline-none"
+          minLength={8}
+          className="h-9"
         />
       </div>
       <div className="flex justify-end mt-3">

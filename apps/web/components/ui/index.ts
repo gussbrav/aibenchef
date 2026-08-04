@@ -1,5 +1,6 @@
 export * from "./button";
 export * from "./input";
+export * from "./password-input";
 export * from "./Container";
 export * from "./section";
 export * from "./card";

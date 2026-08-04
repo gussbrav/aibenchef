@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, Lock } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+
+import { PasswordInput } from "@/components/ui";
 
 export function ResetPasswordForm({ token }: { token: string }) {
   const router = useRouter();
@@ -112,38 +114,30 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <label className="block text-xs font-semibold text-slate-700 mb-1">
           Nueva contraseña
         </label>
-        <div className="relative">
-          <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimo 8 caracteres"
-            className="w-full h-10 pl-9 pr-3 text-sm rounded border border-slate-300 focus:border-brand-500 outline-none"
-            autoFocus
-            required
-            minLength={8}
-            maxLength={256}
-          />
-        </div>
+        <PasswordInput
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Minimo 8 caracteres"
+          autoFocus
+          required
+          minLength={8}
+          maxLength={256}
+          autoComplete="new-password"
+        />
       </div>
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1">
           Confirmar contraseña
         </label>
-        <div className="relative">
-          <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Repite la contraseña"
-            className="w-full h-10 pl-9 pr-3 text-sm rounded border border-slate-300 focus:border-brand-500 outline-none"
-            required
-            minLength={8}
-            maxLength={256}
-          />
-        </div>
+        <PasswordInput
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="Repite la contraseña"
+          required
+          minLength={8}
+          maxLength={256}
+          autoComplete="new-password"
+        />
       </div>
       {error && (
         <div className="p-2 bg-rose-50 border border-rose-200 rounded text-xs text-rose-700">

@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, ArrowRight, Lock, Loader2, Sparkles } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, PasswordInput } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 
 type InvitationPreview = {
@@ -201,10 +201,9 @@ export function SignupForm() {
         <label htmlFor="password" className="block text-sm font-medium text-slate-700">
           Contraseña
         </label>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           minLength={8}

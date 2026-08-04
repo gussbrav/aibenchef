@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, PasswordInput } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
 
 export function LoginForm() {
@@ -65,10 +65,9 @@ export function LoginForm() {
             ¿La olvidaste?
           </Link>
         </div>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           minLength={8}
