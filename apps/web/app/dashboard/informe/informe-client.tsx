@@ -196,6 +196,8 @@ type BubbleChartPayload = {
   x: number;
   y: number;
   z: number;
+  /** Lado del label calculado para evitar overlap con burbujas vecinas. */
+  labelSide: "top" | "bottom";
 };
 
 // ============================================================================
@@ -848,7 +850,7 @@ function SeccionMargenNetoBubble({
     );
   }
 
-  const scatterData = data.map((d) => {
+  const scatterDataRaw = data.map((d) => {
     const comp = competidores.find((c) => c.labelCorto === d.competidor);
     return {
       x: d.puntoEq,
@@ -861,10 +863,31 @@ function SeccionMargenNetoBubble({
     };
   });
 
-  const xMin = Math.min(...scatterData.map((d) => d.x)) - 0.5;
-  const xMax = Math.max(...scatterData.map((d) => d.x)) + 0.5;
-  const yMin = Math.min(...scatterData.map((d) => d.y)) - 0.5;
-  const yMax = Math.max(...scatterData.map((d) => d.y)) + 0.5;
+  const xMin = Math.min(...scatterDataRaw.map((d) => d.x)) - 0.5;
+  const xMax = Math.max(...scatterDataRaw.map((d) => d.x)) + 0.5;
+  const yMin = Math.min(...scatterDataRaw.map((d) => d.y)) - 0.5;
+  const yMax = Math.max(...scatterDataRaw.map((d) => d.y)) + 0.5;
+
+  // Anti-overlap de labels: si una burbuja tiene VECINOS con X cercano y
+  // Y MAYOR (arriba en el chart), su label default 'top' se solaparia con
+  // la burbuja de arriba -> lo movemos a 'bottom'. Umbral: 20% del rango X
+  // (aprox 1 diametro de burbuja de tamaño medio en la mayoria de charts).
+  const xRange = xMax - xMin;
+  const yRange = yMax - yMin;
+  const xThreshold = xRange * 0.2;
+  const yThreshold = yRange * 0.25;
+  const scatterData: (typeof scatterDataRaw[number] & { labelSide: "top" | "bottom" })[] =
+    scatterDataRaw.map((d) => {
+      const tieneVecinoArriba = scatterDataRaw.some((other) => {
+        if (other === d) return false;
+        return (
+          Math.abs(other.x - d.x) < xThreshold &&
+          other.y > d.y &&
+          other.y - d.y < yThreshold
+        );
+      });
+      return { ...d, labelSide: tieneVecinoArriba ? "bottom" : "top" };
+    });
 
   return (
     <section>
@@ -947,9 +970,25 @@ function SeccionMargenNetoBubble({
                     // Convertir a radio: r = sqrt(area/PI).
                     const area = typeof size === "number" && size > 0 ? size : 600;
                     const r = Math.sqrt(area / Math.PI);
+                    // Placement del label: 'top' pone arriba (default),
+                    // 'bottom' abajo — computado en scatterData para evitar
+                    // solapes con burbujas vecinas. Offset dinamico por radio
+                    // + margen fijo (8px) para respirar de la burbuja.
+                    const labelOffset = r + 10;
+                    const labelY =
+                      payload.labelSide === "bottom"
+                        ? cy + labelOffset + 4 // +4 para compensar baseline del text
+                        : cy - labelOffset;
+                    const labelText = payload.label;
+                    // Ancho estimado del pill: 5.5px por char + padding.
+                    // Aproximado — SVG no mide sin render. Suficiente para
+                    // pill que contenga el texto en el 99% de casos.
+                    const pillW = labelText.length * 5.5 + 12;
+                    const pillH = 16;
+                    const pillY = labelY - pillH + 4;
                     return (
                       <g>
-                        {/* halo sutil */}
+                        {/* halo sutil detras de la burbuja */}
                         <circle
                           cx={cx}
                           cy={cy}
@@ -967,21 +1006,30 @@ function SeccionMargenNetoBubble({
                           strokeWidth={2}
                           style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.18))" }}
                         />
-                        {/* label dentro/encima de la burbuja */}
+                        {/* Pill blanco de fondo detras del label — asegura
+                            legibilidad total incluso si el label queda sobre
+                            otra burbuja o linea del grid. */}
+                        <rect
+                          x={cx - pillW / 2}
+                          y={pillY}
+                          width={pillW}
+                          height={pillH}
+                          rx={pillH / 2}
+                          ry={pillH / 2}
+                          fill="#ffffff"
+                          fillOpacity={0.92}
+                          stroke={payload.color}
+                          strokeWidth={1}
+                          strokeOpacity={0.35}
+                        />
                         <text
                           x={cx}
-                          y={cy - r - 6}
+                          y={labelY}
                           textAnchor="middle"
                           className="text-[10px] font-semibold"
                           fill="#0f172a"
-                          style={{
-                            paintOrder: "stroke",
-                            stroke: "#ffffff",
-                            strokeWidth: 3,
-                            strokeLinejoin: "round",
-                          }}
                         >
-                          {payload.label}
+                          {labelText}
                         </text>
                       </g>
                     );
