@@ -28,10 +28,12 @@ ARG DATABASE_URL=""
 ARG BETTER_AUTH_SECRET=""
 ARG BETTER_AUTH_URL=""
 ARG NEXT_PUBLIC_APP_URL=""
+ARG GIT_SHA=""
 ENV DATABASE_URL=$DATABASE_URL
 ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
 ENV BETTER_AUTH_URL=$BETTER_AUTH_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV GIT_SHA=$GIT_SHA
 
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
@@ -51,10 +53,12 @@ RUN pnpm exec tsc scripts/migrate.ts \
 
 
 FROM node:22-alpine AS runtime
+ARG GIT_SHA=""
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV MIGRATIONS_DIR=/app/migrations
+ENV GIT_SHA=$GIT_SHA
 
 RUN apk add --no-cache wget && \
     addgroup --system --gid 1001 nodejs && \

@@ -1,0 +1,49 @@
+# Impide que el build context de Docker traiga basura local que corrompe
+# el build (COPY . . sin ignore copia .next viejo, node_modules viejo, .git,
+# tests, etc). Sin este archivo, cambios en cualquier archivo local (aunque
+# no toque codigo) invalidan cache de layers Docker en forma impredecible.
+
+# Node
+node_modules
+**/node_modules
+
+# Next.js build output (queremos que se genere DENTRO del contenedor)
+**/.next
+**/out
+
+# Git y CI
+.git
+.github
+.gitignore
+
+# Editors / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.swp
+
+# Docs / claude / logs
+.claude
+docs
+*.md
+!apps/web/README.md
+
+# Tests coverage
+coverage
+**/coverage
+*.log
+
+# Env locales — nunca embeber en la imagen
+.env
+.env.local
+.env.*.local
+
+# Docker meta
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Locks alternativos (usamos pnpm-lock)
+package-lock.json
+yarn.lock
