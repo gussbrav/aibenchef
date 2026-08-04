@@ -969,10 +969,39 @@ function getRowStyle(variant: RowDef["variant"]) {
 /**
  * Vista comparativa: line chart de evolucion + tabla del ultimo punto.
  */
+/**
+ * ComparativoView — vista de comparacion estilo consultora Big 4.
+ * Estructura en 5 capas de storytelling:
+ *   1. Executive Summary — findings clave automaticos
+ *   2. Ranking horizontal con bandas de cuartiles + linea promedio
+ *   3. Line chart con banda de peers (min-max area + promedio dashed)
+ *   4. Small multiples — 3 mini charts side-by-side (PE, Margen, Rendimiento)
+ *   5. Gap analysis table con deltas vs promedio + rank
+ */
+
+type MetricaKey = "pctPuntoEq" | "pctMargenNeto" | "pctRendimiento";
+
+const METRICA_LABELS: Record<MetricaKey, string> = {
+  pctPuntoEq: "Punto de Equilibrio",
+  pctMargenNeto: "Margen Neto",
+  pctRendimiento: "Rendimiento de Cartera",
+};
+
+/**
+ * Un metrica es 'higher is better' o 'lower is better' segun contexto:
+ *   - Rendimiento: HIGHER is better (cobras mas)
+ *   - Margen: HIGHER is better
+ *   - PE: LOWER is better (menor break-even = mas eficiente)
+ */
+const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
+  pctPuntoEq: false,
+  pctMargenNeto: true,
+  pctRendimiento: true,
+};
+
 function ComparativoView({ series }: { series: PuntoEquilibrioSerie[] }) {
-  const [metrica, setMetrica] = useState<"pctPuntoEq" | "pctMargenNeto" | "pctRendimiento">(
-    "pctPuntoEq",
-  );
+  const [metrica, setMetrica] = useState<MetricaKey>("pctPuntoEq");
+
   if (series.length === 0) {
     return (
       <div className="bg-white border border-dashed border-slate-300 rounded-lg p-12 text-center">
@@ -987,158 +1016,719 @@ function ComparativoView({ series }: { series: PuntoEquilibrioSerie[] }) {
     );
   }
 
-  // Recharts data: array de objects donde cada key es una entidad
+  return (
+    <section className="space-y-4">
+      {/* Selector de metrica (afecta ranking + line chart principal) */}
+      <MetricaSelector metrica={metrica} onChange={setMetrica} />
+
+      {/* CAPA 1: Executive Summary */}
+      <ExecutiveSummary series={series} metrica={metrica} />
+
+      {/* CAPA 2: Ranking horizontal con quartiles */}
+      <RankingChart series={series} metrica={metrica} />
+
+      {/* CAPA 3: Line chart con banda de peers */}
+      <LineChartConBanda series={series} metrica={metrica} />
+
+      {/* CAPA 4: Small multiples — las 3 metricas juntas */}
+      <SmallMultiples series={series} />
+
+      {/* CAPA 5: Gap analysis table */}
+      <GapAnalysisTable series={series} />
+    </section>
+  );
+}
+
+function MetricaSelector({
+  metrica,
+  onChange,
+}: {
+  metrica: MetricaKey;
+  onChange: (m: MetricaKey) => void;
+}) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg p-4 flex items-center gap-3 flex-wrap">
+      <span className="text-xs uppercase font-semibold text-slate-500 tracking-wider">
+        Métrica principal:
+      </span>
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-md">
+        {(Object.keys(METRICA_LABELS) as MetricaKey[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onChange(k)}
+            className={cn(
+              "px-3 h-8 text-xs font-medium rounded transition-colors",
+              metrica === k
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900",
+            )}
+          >
+            {METRICA_LABELS[k]}
+          </button>
+        ))}
+      </div>
+      <span className="text-[11px] text-slate-500 ml-auto italic">
+        {METRICA_HIGHER_IS_BETTER[metrica] ? "↑ Mejor cuanto más alto" : "↓ Mejor cuanto más bajo"}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Calcula estadisticas del set: min, max, promedio, mediana, rank de propia,
+ * mejor/peor performer, delta vs promedio de propia. Se computa una sola
+ * vez con useMemo y se pasa a los componentes que la necesitan.
+ */
+type StatsResult = {
+  values: Array<{ entidad: string; color: string; esPropio: boolean; value: number | null }>;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  median: number | null;
+  best: { entidad: string; value: number } | null;
+  worst: { entidad: string; value: number } | null;
+  propia: { entidad: string; value: number | null; rank: number | null; deltaVsAvg: number | null } | null;
+};
+
+function computeStats(
+  series: PuntoEquilibrioSerie[],
+  metrica: MetricaKey,
+): StatsResult {
+  const values = series.map((s) => {
+    const ult = s.puntos[s.puntos.length - 1];
+    return {
+      entidad: s.entidad,
+      color: s.color,
+      esPropio: s.esPropio,
+      value: ult?.[metrica] == null ? null : (ult[metrica] as number),
+    };
+  });
+  const nums = values.map((v) => v.value).filter((v): v is number => v != null);
+  if (nums.length === 0) {
+    return { values, min: null, max: null, avg: null, median: null, best: null, worst: null, propia: null };
+  }
+  const sorted = [...nums].sort((a, b) => a - b);
+  const min = sorted[0]!;
+  const max = sorted[sorted.length - 1]!;
+  const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+  const median = sorted.length % 2 === 0
+    ? (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2
+    : sorted[Math.floor(sorted.length / 2)]!;
+
+  const higherIsBetter = METRICA_HIGHER_IS_BETTER[metrica];
+  // Ranking: si higher is better, mayor valor = mejor (rank 1)
+  const withRank = values
+    .map((v) => ({ ...v }))
+    .sort((a, b) => {
+      if (a.value == null && b.value == null) return 0;
+      if (a.value == null) return 1;
+      if (b.value == null) return -1;
+      return higherIsBetter ? b.value - a.value : a.value - b.value;
+    });
+  const rankByEntidad = new Map<string, number>();
+  withRank.forEach((v, i) => rankByEntidad.set(v.entidad, i + 1));
+
+  const best = higherIsBetter
+    ? values.find((v) => v.value === max)
+    : values.find((v) => v.value === min);
+  const worst = higherIsBetter
+    ? values.find((v) => v.value === min)
+    : values.find((v) => v.value === max);
+
+  const propiaRaw = values.find((v) => v.esPropio);
+  const propia = propiaRaw
+    ? {
+        entidad: propiaRaw.entidad,
+        value: propiaRaw.value,
+        rank: rankByEntidad.get(propiaRaw.entidad) ?? null,
+        deltaVsAvg: propiaRaw.value != null ? propiaRaw.value - avg : null,
+      }
+    : null;
+
+  return {
+    values,
+    min,
+    max,
+    avg,
+    median,
+    best: best && best.value != null ? { entidad: best.entidad, value: best.value } : null,
+    worst: worst && worst.value != null ? { entidad: worst.entidad, value: worst.value } : null,
+    propia,
+  };
+}
+
+/**
+ * CAPA 1 — Executive Summary. Findings clave en 3-4 tiles.
+ */
+function ExecutiveSummary({
+  series,
+  metrica,
+}: {
+  series: PuntoEquilibrioSerie[];
+  metrica: MetricaKey;
+}) {
+  const stats = useMemo(() => computeStats(series, metrica), [series, metrica]);
+  const higherIsBetter = METRICA_HIGHER_IS_BETTER[metrica];
+
+  if (stats.avg == null) {
+    return null;
+  }
+
+  const propiaMejor = stats.propia?.deltaVsAvg != null
+    ? (higherIsBetter ? stats.propia.deltaVsAvg > 0 : stats.propia.deltaVsAvg < 0)
+    : null;
+
+  return (
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-lg p-5 shadow-sm">
+      <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-3">
+        Resumen ejecutivo · {METRICA_LABELS[metrica]}
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <SummaryTile
+          label="Mejor performer"
+          value={stats.best ? fmtPct(stats.best.value) : "—"}
+          sub={stats.best?.entidad ?? ""}
+          accent="emerald"
+        />
+        <SummaryTile
+          label="Peor performer"
+          value={stats.worst ? fmtPct(stats.worst.value) : "—"}
+          sub={stats.worst?.entidad ?? ""}
+          accent="rose"
+        />
+        <SummaryTile
+          label={`Promedio (${series.length} entidades)`}
+          value={fmtPct(stats.avg)}
+          sub={`Mediana ${fmtPct(stats.median)}`}
+          accent="slate"
+        />
+        {stats.propia && stats.propia.value != null && stats.propia.rank != null ? (
+          <SummaryTile
+            label={`Tu posición`}
+            value={`#${stats.propia.rank} de ${series.length}`}
+            sub={
+              stats.propia.deltaVsAvg != null
+                ? `${propiaMejor ? "▲" : "▼"} ${fmtPctAbs(stats.propia.deltaVsAvg)} vs promedio`
+                : ""
+            }
+            accent={propiaMejor ? "emerald" : "rose"}
+          />
+        ) : (
+          <SummaryTile label="Tu entidad" value="—" sub="No incluida" accent="slate" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  accent: "emerald" | "rose" | "slate";
+}) {
+  const accentClass = {
+    emerald: "text-emerald-400",
+    rose: "text-rose-400",
+    slate: "text-slate-100",
+  }[accent];
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 font-medium">
+        {label}
+      </p>
+      <p className={cn("text-2xl font-bold tabular-nums", accentClass)}>
+        {value}
+      </p>
+      <p className="text-[11px] text-slate-400 mt-0.5 truncate">{sub}</p>
+    </div>
+  );
+}
+
+/**
+ * CAPA 2 — Ranking horizontal con quartiles y linea promedio.
+ * Ordenado del mejor al peor segun higher/lower is better de la metrica.
+ */
+function RankingChart({
+  series,
+  metrica,
+}: {
+  series: PuntoEquilibrioSerie[];
+  metrica: MetricaKey;
+}) {
+  const stats = useMemo(() => computeStats(series, metrica), [series, metrica]);
+  const higherIsBetter = METRICA_HIGHER_IS_BETTER[metrica];
+
+  const ranked = useMemo(() => {
+    return [...stats.values]
+      .filter((v) => v.value != null)
+      .sort((a, b) => {
+        if (higherIsBetter) return (b.value ?? 0) - (a.value ?? 0);
+        return (a.value ?? 0) - (b.value ?? 0);
+      });
+  }, [stats, higherIsBetter]);
+
+  if (stats.min == null || stats.max == null) return null;
+
+  // Rango de la barra: dar 10% de padding
+  const range = stats.max - stats.min;
+  const padding = range === 0 ? Math.abs(stats.max) * 0.1 || 0.01 : range * 0.1;
+  const barMin = stats.min - padding;
+  const barMax = stats.max + padding;
+  const barRange = barMax - barMin;
+
+  // Posicion del promedio como % del ancho del bar
+  const avgPct = stats.avg != null ? ((stats.avg - barMin) / barRange) * 100 : null;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+      <header className="mb-4">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Ranking al último periodo — {METRICA_LABELS[metrica]}
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Ordenado del mejor al peor. La línea vertical marca el promedio del grupo.
+        </p>
+      </header>
+      <div className="space-y-2">
+        {ranked.map((v, i) => {
+          const value = v.value!;
+          const isBetterThanAvg = stats.avg != null
+            ? (higherIsBetter ? value >= stats.avg : value <= stats.avg)
+            : true;
+          const widthPct = ((value - barMin) / barRange) * 100;
+          return (
+            <div key={v.entidad} className="grid grid-cols-[32px_180px_1fr_80px] items-center gap-3">
+              <div className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs",
+                i === 0 && "bg-emerald-100 text-emerald-800",
+                i === ranked.length - 1 && ranked.length > 1 && "bg-rose-100 text-rose-800",
+                i !== 0 && !(i === ranked.length - 1 && ranked.length > 1) && "bg-slate-100 text-slate-600",
+              )}>
+                {i + 1}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: v.color }} />
+                  <span className={cn(
+                    "text-xs truncate",
+                    v.esPropio ? "font-bold text-slate-900" : "text-slate-700",
+                  )}>
+                    {v.entidad}
+                  </span>
+                  {v.esPropio && (
+                    <span className="text-[9px] px-1 py-0.5 bg-brand-600 text-white rounded font-bold flex-shrink-0">
+                      PROPIA
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="relative h-6 bg-slate-100 rounded overflow-hidden">
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 rounded transition-all",
+                    isBetterThanAvg ? "bg-emerald-500/70" : "bg-rose-400/70",
+                    v.esPropio && "ring-2 ring-brand-500 ring-inset",
+                  )}
+                  style={{ width: `${widthPct}%` }}
+                />
+                {/* Linea promedio */}
+                {avgPct != null && (
+                  <div
+                    className="absolute inset-y-0 border-l-2 border-dashed border-slate-700"
+                    style={{ left: `${avgPct}%` }}
+                    title={`Promedio: ${fmtPct(stats.avg)}`}
+                  />
+                )}
+              </div>
+              <div className="text-right font-mono tabular-nums text-xs font-semibold text-slate-900">
+                {fmtPct(value)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {avgPct != null && (
+        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3 h-0.5 bg-slate-700" style={{ borderTop: "2px dashed #334155" }} />
+            Promedio del grupo: <strong className="text-slate-700 font-mono">{fmtPct(stats.avg)}</strong>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-emerald-500/70" />
+            Mejor que promedio
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-rose-400/70" />
+            Peor que promedio
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * CAPA 3 — Line chart con banda de peers.
+ * Muestra: 1 linea por entidad + area gris del min-max + linea dashed
+ * del promedio del grupo por periodo.
+ */
+function LineChartConBanda({
+  series,
+  metrica,
+}: {
+  series: PuntoEquilibrioSerie[];
+  metrica: MetricaKey;
+}) {
+  // chartData con min, max, avg por periodo
   const chartData = useMemo(() => {
-    const periodos = series[0]?.puntos.map((p) => p.periodo) ?? [];
-    return periodos.map((periodo) => {
-      const row: Record<string, number | string | null> = { periodo, periodoLabel: "" };
+    const periodos = series[0]?.puntos.map((p) => ({ periodo: p.periodo, label: p.periodoLabel })) ?? [];
+    return periodos.map(({ periodo, label }) => {
+      const valores: number[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row: Record<string, any> = { periodo, periodoLabel: label };
       for (const s of series) {
         const punto = s.puntos.find((p) => p.periodo === periodo);
-        row[s.entidad] = punto?.[metrica] == null ? null : (punto[metrica] as number) * 100;
-        row.periodoLabel = punto?.periodoLabel ?? "";
+        const v = punto?.[metrica] == null ? null : (punto[metrica] as number) * 100;
+        row[s.entidad] = v;
+        if (v != null) valores.push(v);
+      }
+      if (valores.length > 0) {
+        row.__min = Math.min(...valores);
+        row.__max = Math.max(...valores);
+        row.__avg = valores.reduce((a, b) => a + b, 0) / valores.length;
       }
       return row;
     });
   }, [series, metrica]);
 
-  const metricaLabels = {
-    pctPuntoEq: "Punto de Equilibrio",
-    pctMargenNeto: "Margen Neto",
-    pctRendimiento: "Rendimiento de Cartera",
-  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+      <header className="mb-3">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Evolución temporal — {METRICA_LABELS[metrica]}
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Cada línea es una entidad. El área sombreada gris marca el rango peer (mín-máx) y la línea punteada el promedio del grupo por periodo.
+        </p>
+      </header>
+      <div style={{ width: "100%", height: 400 }}>
+        <ResponsiveContainer>
+          <LineChart data={chartData} margin={{ top: 20, right: 30, bottom: 40, left: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis
+              dataKey="periodoLabel"
+              tick={{ fontSize: 11, fill: "#64748b" }}
+              angle={-30}
+              textAnchor="end"
+              height={60}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "#64748b" }}
+              tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
+              width={60}
+            />
+            <Tooltip
+              formatter={(v: number, name: string) => {
+                if (name.startsWith("__")) return ["", ""];
+                return [`${v.toFixed(2)}%`, name];
+              }}
+              labelStyle={{ fontWeight: 700, color: "#0f172a" }}
+              contentStyle={{
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
+              formatter={(v) => (v.startsWith("__") ? "" : v)}
+            />
+            {/* Linea promedio del grupo (dashed gris oscuro) */}
+            <Line
+              dataKey="__avg"
+              name="Promedio grupo"
+              stroke="#475569"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+            {series.map((s) => (
+              <Line
+                key={s.entidad}
+                type="monotone"
+                dataKey={s.entidad}
+                stroke={s.color}
+                strokeWidth={s.esPropio ? 3 : 2}
+                dot={{ r: s.esPropio ? 5 : 3, strokeWidth: 1 }}
+                activeDot={{ r: 6 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * CAPA 4 — Small multiples. 3 mini charts side-by-side, una por metrica.
+ * El usuario ve todas las metricas de un solo tiro sin cambiar de tab.
+ */
+function SmallMultiples({ series }: { series: PuntoEquilibrioSerie[] }) {
+  const metricas: MetricaKey[] = ["pctRendimiento", "pctPuntoEq", "pctMargenNeto"];
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+      <header className="mb-3">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Vista integral — 3 métricas en paralelo
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Ve la trayectoria de las 3 métricas clave sin cambiar de vista. Ideal para detectar correlaciones (ej: baja de rendimiento + suba de PE = margen colapsando).
+        </p>
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {metricas.map((m) => (
+          <MiniLineChart key={m} series={series} metrica={m} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MiniLineChart({
+  series,
+  metrica,
+}: {
+  series: PuntoEquilibrioSerie[];
+  metrica: MetricaKey;
+}) {
+  const chartData = useMemo(() => {
+    const periodos = series[0]?.puntos.map((p) => p.periodo) ?? [];
+    return periodos.map((periodo) => {
+      const row: Record<string, number | string | null> = { periodo };
+      for (const s of series) {
+        const p = s.puntos.find((pt) => pt.periodo === periodo);
+        row[s.entidad] = p?.[metrica] == null ? null : (p[metrica] as number) * 100;
+      }
+      return row;
+    });
+  }, [series, metrica]);
 
   return (
-    <section className="space-y-4">
-      {/* Selector de métrica */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 flex items-center gap-3 flex-wrap">
-        <span className="text-xs uppercase font-semibold text-slate-500 tracking-wider">
-          Métrica a graficar:
-        </span>
-        <div className="flex gap-1 p-1 bg-slate-100 rounded-md">
-          {(Object.keys(metricaLabels) as Array<keyof typeof metricaLabels>).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setMetrica(k)}
-              className={cn(
-                "px-3 h-8 text-xs font-medium rounded transition-colors",
-                metrica === k
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900",
-              )}
-            >
-              {metricaLabels[k]}
-            </button>
-          ))}
-        </div>
+    <div className="border border-slate-100 rounded-lg p-3">
+      <p className="text-xs font-semibold text-slate-700 text-center mb-2">
+        {METRICA_LABELS[metrica]}
+      </p>
+      <div style={{ width: "100%", height: 160 }}>
+        <ResponsiveContainer>
+          <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+            <CartesianGrid strokeDasharray="2 3" stroke="#f1f5f9" />
+            <YAxis
+              tick={{ fontSize: 9, fill: "#94a3b8" }}
+              tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
+              width={30}
+            />
+            <XAxis dataKey="periodo" hide />
+            <Tooltip
+              formatter={(v: number, name: string) => [`${v.toFixed(2)}%`, name]}
+              contentStyle={{
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 4,
+                fontSize: 10,
+                padding: "4px 8px",
+              }}
+            />
+            {series.map((s) => (
+              <Line
+                key={s.entidad}
+                type="monotone"
+                dataKey={s.entidad}
+                stroke={s.color}
+                strokeWidth={s.esPropio ? 2.5 : 1.5}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
 
-      {/* Line chart */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
-        <header className="mb-3">
-          <h2 className="text-sm font-semibold text-slate-900">
-            {metricaLabels[metrica]} — evolución temporal
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Valores anualizados TTM. Compara la trayectoria de cada entidad en el rango seleccionado.
-          </p>
-        </header>
-        <div style={{ width: "100%", height: 400 }}>
-          <ResponsiveContainer>
-            <LineChart data={chartData} margin={{ top: 20, right: 30, bottom: 40, left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis
-                dataKey="periodoLabel"
-                tick={{ fontSize: 11, fill: "#64748b" }}
-                angle={-30}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: "#64748b" }}
-                tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
-                width={60}
-              />
-              <Tooltip
-                formatter={(v: number) => `${v.toFixed(2)}%`}
-                labelStyle={{ fontWeight: 700, color: "#0f172a" }}
-                contentStyle={{
-                  background: "#fff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-              {series.map((s) => (
-                <Line
-                  key={s.entidad}
-                  type="monotone"
-                  dataKey={s.entidad}
-                  stroke={s.color}
-                  strokeWidth={s.esPropio ? 3 : 2}
-                  strokeDasharray={s.esPropio ? "0" : "0"}
-                  dot={{ r: s.esPropio ? 5 : 3, strokeWidth: 1 }}
-                  activeDot={{ r: 6 }}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+/**
+ * CAPA 5 — Gap Analysis Table.
+ * Cada entidad con las 3 metricas + delta vs promedio + rank en cada una.
+ * Color coding: verde si mejor que promedio, rojo si peor.
+ */
+function GapAnalysisTable({ series }: { series: PuntoEquilibrioSerie[] }) {
+  const rows = useMemo(() => {
+    return series.map((s) => {
+      const ult = s.puntos[s.puntos.length - 1];
+      return {
+        entidad: s.entidad,
+        color: s.color,
+        esPropio: s.esPropio,
+        rendimiento: ult?.pctRendimiento ?? null,
+        puntoEq: ult?.pctPuntoEq ?? null,
+        margen: ult?.pctMargenNeto ?? null,
+      };
+    });
+  }, [series]);
 
-      {/* Tabla resumen ultimo periodo */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-        <header className="px-5 py-3 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Snapshot al último periodo
-          </h2>
-        </header>
+  const avg = useMemo(() => {
+    const collect = (key: "rendimiento" | "puntoEq" | "margen"): number[] => {
+      const out: number[] = [];
+      for (const r of rows) {
+        const v = r[key];
+        if (typeof v === "number") out.push(v);
+      }
+      return out;
+    };
+    const mean = (arr: number[]): number | null =>
+      arr.length === 0 ? null : arr.reduce((a, b) => a + b, 0) / arr.length;
+    return {
+      rendimiento: mean(collect("rendimiento")),
+      puntoEq: mean(collect("puntoEq")),
+      margen: mean(collect("margen")),
+    };
+  }, [rows]);
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <header className="px-5 py-3 border-b border-slate-200 bg-slate-50">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Gap Analysis — snapshot al último periodo
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Cada métrica con su delta vs promedio del grupo. Verde = mejor, rojo = peor.
+        </p>
+      </header>
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-100 border-b border-slate-200">
+          <thead className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase tracking-wider">
             <tr>
-              <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700">Entidad</th>
-              <th className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700">Rendimiento</th>
-              <th className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700">Punto Equilibrio</th>
-              <th className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700">Margen Neto</th>
+              <th className="text-left px-4 py-2 font-semibold text-slate-700">Entidad</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700">Rendimiento</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-500">Δ vs prom</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700">Punto Equilibrio</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-500">Δ vs prom</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-700">Margen Neto</th>
+              <th className="text-right px-3 py-2 font-semibold text-slate-500">Δ vs prom</th>
             </tr>
           </thead>
           <tbody>
-            {series.map((s) => {
-              const ult = s.puntos[s.puntos.length - 1];
-              return (
-                <tr key={s.entidad} className={cn(
+            {rows.map((r) => (
+              <tr
+                key={r.entidad}
+                className={cn(
                   "border-t border-slate-100",
-                  s.esPropio && "bg-brand-50/50 font-semibold",
-                )}>
-                  <td className="px-4 py-2 flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
-                    {s.entidad}
-                    {s.esPropio && (
-                      <span className="text-[9px] px-1.5 py-0.5 bg-brand-600 text-white rounded font-bold ml-1">
-                        TU ENTIDAD
+                  r.esPropio && "bg-brand-50/50 font-semibold",
+                )}
+              >
+                <td className="px-4 py-2">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color }} />
+                    {r.entidad}
+                    {r.esPropio && (
+                      <span className="text-[9px] px-1.5 py-0.5 bg-brand-600 text-white rounded font-bold">
+                        PROPIA
                       </span>
                     )}
-                  </td>
-                  <td className="text-right px-4 py-2 font-mono tabular-nums text-emerald-700">
-                    {fmtPct(ult?.pctRendimiento ?? null)}
-                  </td>
-                  <td className="text-right px-4 py-2 font-mono tabular-nums text-slate-900 font-bold">
-                    {fmtPct(ult?.pctPuntoEq ?? null)}
-                  </td>
-                  <td className="text-right px-4 py-2 font-mono tabular-nums text-slate-900">
-                    {fmtPct(ult?.pctMargenNeto ?? null)}
-                  </td>
-                </tr>
-              );
-            })}
+                  </span>
+                </td>
+                <td className="text-right px-3 py-2 font-mono tabular-nums text-slate-900">
+                  {fmtPct(r.rendimiento)}
+                </td>
+                <DeltaCell value={r.rendimiento} avg={avg.rendimiento} higherIsBetter />
+                <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
+                  {fmtPct(r.puntoEq)}
+                </td>
+                <DeltaCell value={r.puntoEq} avg={avg.puntoEq} higherIsBetter={false} />
+                <td className="text-right px-3 py-2 font-mono tabular-nums text-slate-900">
+                  {fmtPct(r.margen)}
+                </td>
+                <DeltaCell value={r.margen} avg={avg.margen} higherIsBetter />
+              </tr>
+            ))}
+            {/* Fila de promedio */}
+            <tr className="border-t-2 border-slate-800 bg-slate-100">
+              <td className="px-4 py-2 font-semibold text-slate-900 uppercase text-[10px] tracking-wider">
+                Promedio del grupo
+              </td>
+              <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
+                {fmtPct(avg.rendimiento)}
+              </td>
+              <td />
+              <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
+                {fmtPct(avg.puntoEq)}
+              </td>
+              <td />
+              <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
+                {fmtPct(avg.margen)}
+              </td>
+              <td />
+            </tr>
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
   );
+}
+
+function DeltaCell({
+  value,
+  avg,
+  higherIsBetter,
+}: {
+  value: number | null;
+  avg: number | null;
+  higherIsBetter: boolean;
+}) {
+  if (value == null || avg == null) {
+    return <td className="text-right px-3 py-2 text-slate-400 italic">—</td>;
+  }
+  const delta = value - avg;
+  const isBetter = higherIsBetter ? delta > 0 : delta < 0;
+  const isNeutral = Math.abs(delta) < 0.0001;
+  return (
+    <td className="text-right px-3 py-2 font-mono tabular-nums">
+      <span
+        className={cn(
+          "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-semibold",
+          isNeutral && "text-slate-500",
+          !isNeutral && isBetter && "bg-emerald-100 text-emerald-800",
+          !isNeutral && !isBetter && "bg-rose-100 text-rose-800",
+        )}
+      >
+        {!isNeutral && (isBetter ? "▲" : "▼")}
+        {fmtPctAbs(delta)}
+      </span>
+    </td>
+  );
+}
+
+/**
+ * Formato de porcentaje ABSOLUTO — para deltas donde el signo lo
+ * codificamos con flecha ▲/▼ en vez de - / +.
+ */
+function fmtPctAbs(v: number | null): string {
+  if (v == null) return "—";
+  return `${(Math.abs(v) * 100).toFixed(2)}%`;
 }
 
 function EmptyState() {
