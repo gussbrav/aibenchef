@@ -61,7 +61,10 @@ export async function GET(req: NextRequest) {
       return { insight: null };
     }
 
-    // Nunca devolver contexto_json al cliente (puede tener data sensible)
+    // Nunca devolver contexto_json ni model/costo al cliente:
+    // - contexto_json puede tener data sensible.
+    // - model expone el LLM que usamos (opsec: no revelar stack).
+    // - costUsd es info interna del operador, no del usuario del informe.
     if (insight) {
       return {
         insight: {
@@ -70,9 +73,7 @@ export async function GET(req: NextRequest) {
           seccion: insight.seccion,
           bullets: insight.overrideBullets ?? insight.bullets,
           isOverride: Boolean(insight.overrideBullets),
-          model: insight.model,
           generatedAt: insight.generatedAt,
-          costUsd: insight.costUsd,
         },
       };
     }

@@ -20,9 +20,7 @@ type Insight = {
   id: string;
   bullets: string[];
   isOverride: boolean;
-  model: string;
   generatedAt: string;
-  costUsd: number;
 };
 
 type State =
@@ -188,7 +186,7 @@ export function ReportInsights({
           </ul>
           <footer className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
             <span>
-              {state.insight.isOverride ? "Editado por admin" : `Modelo: ${state.insight.model}`}
+              {state.insight.isOverride ? "Editado por admin" : "Analisis generado por IA"}
             </span>
             <span>{new Date(state.insight.generatedAt).toLocaleDateString("es-PE")}</span>
           </footer>
