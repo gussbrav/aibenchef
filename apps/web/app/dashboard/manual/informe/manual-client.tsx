@@ -111,7 +111,7 @@ export function ManualInformeClient() {
         </section>
 
         {/* Paso 1 — Abrir el informe */}
-        <StepSection number={1} icon={Building2} title="Abrí tu informe">
+        <StepSection number={1} icon={Building2} title="Abre tu informe">
           <p>
             Al entrar a la plataforma, ve al menú <strong>Benchmark</strong>. Aterrizas directo en el informe
             de tu entidad — configurado con tu peer group, colores y período más reciente.
@@ -128,7 +128,7 @@ export function ManualInformeClient() {
         </StepSection>
 
         {/* Paso 2 — Leer el resumen */}
-        <StepSection number={2} icon={Search} title="Leé el Cuadro Resumen">
+        <StepSection number={2} icon={Search} title="Lee el Cuadro Resumen">
           <p>
             Es la primera tabla del informe. Muestra los KPIs clave (cartera, mora, ROE, ROA, utilidad)
             <strong> lado a lado por entidad</strong>. Es la foto general — en 30 segundos ya sabes cómo estás.
@@ -145,7 +145,7 @@ export function ManualInformeClient() {
         </StepSection>
 
         {/* Paso 3 — Ver bubble chart */}
-        <StepSection number={3} icon={BarChart3} title="Interpretá el mapa competitivo">
+        <StepSection number={3} icon={BarChart3} title="Interpreta el mapa competitivo">
           <p>
             Debajo del resumen está el gráfico de burbujas de Margen Neto. Es el análisis más rico del
             informe — te dice de un vistazo <em>quién va ganando la carrera</em>.
@@ -163,7 +163,7 @@ export function ManualInformeClient() {
         </StepSection>
 
         {/* Paso 4 — Insights IA */}
-        <StepSection number={4} icon={Sparkles} title="Pedile análisis al experto (IA)">
+        <StepSection number={4} icon={Sparkles} title="Pide análisis al experto (IA)">
           <p>
             En varias secciones vas a ver un panel <strong>"Análisis del experto"</strong>. Es un análisis
             ejecutivo generado por inteligencia artificial usando los datos exactos que ves en pantalla,
@@ -181,7 +181,7 @@ export function ManualInformeClient() {
         </StepSection>
 
         {/* Paso 5 — Descargar PDF */}
-        <StepSection number={5} icon={FileText} title="Descargá el PDF para tu directorio">
+        <StepSection number={5} icon={FileText} title="Descarga el PDF para tu directorio">
           <p>
             El botón <strong>"Descargar PDF"</strong> arriba a la derecha genera un informe ejecutivo
             completo, con portada corporativa, encabezado y pie profesional, y todas las secciones cargadas.

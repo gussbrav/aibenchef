@@ -57,7 +57,7 @@ export default async function SheetsPage() {
             <FeatureTile
               icon={Calculator}
               title="Cálculos rápidos"
-              description="Pegás datos del informe, hacés operaciones manuales, mezclás con texto. Ideal para casos donde SQL es overkill."
+              description="Pegas datos del informe, haces operaciones manuales, mezclas con texto. Ideal para casos donde SQL es overkill."
               color="text-blue-600"
             />
             <FeatureTile
