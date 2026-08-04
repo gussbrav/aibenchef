@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 import { Link2, Link2Off, Info } from "lucide-react";
 import { tipoEntidadLabel } from "@/app/dashboard/_lib/format";
+import { NuevaEntidadButton } from "./nueva-entidad-button";
 
 export const metadata: Metadata = {
   title: "Maestra de Entidades",
@@ -83,13 +84,16 @@ export default async function MaestraPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-2">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Maestra de Entidades Financieras</h1>
-        <p className="text-sm text-slate-600 mt-1 max-w-3xl">
-          Fuente única de verdad de todas las entidades reguladas. Cada fila aquí es UNA entidad conceptual
-          (independiente del nombre que haya tenido). Los nombres históricos, aliases, razones sociales y
-          variantes en mayúsculas son entradas relacionadas que apuntan a la misma fila.
-        </p>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Maestra de Entidades Financieras</h1>
+          <p className="text-sm text-slate-600 mt-1 max-w-3xl">
+            Fuente única de verdad de todas las entidades reguladas. Cada fila aquí es UNA entidad conceptual
+            (independiente del nombre que haya tenido). Los nombres históricos, aliases, razones sociales y
+            variantes en mayúsculas son entradas relacionadas que apuntan a la misma fila.
+          </p>
+        </div>
+        <NuevaEntidadButton />
       </header>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
@@ -209,41 +213,29 @@ export default async function MaestraPage() {
 
       <section className="bg-slate-50 border border-slate-200 rounded-lg p-5 mt-8">
         <h2 className="text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">
-          Cómo agregar/modificar nombres (por ahora via SQL)
+          Otras operaciones avanzadas
         </h2>
         <p className="text-xs text-slate-600 mb-3">
-          Agregar un alias nuevo (ej. typo común que aparece en algún reporte):
+          El botón <strong>&quot;Nueva entidad canónica&quot;</strong> arriba cubre el caso más común (registrar una entidad nueva
+          detectada por el pipeline, con o sin reemplazo). Para operaciones menos frecuentes — agregar un alias/typo a
+          una entidad existente, o registrar un renombre puro con vigencia — se usa SQL directo:
         </p>
         <pre className="bg-slate-900 text-emerald-300 text-xs p-4 rounded overflow-x-auto">
-{`-- Encontrar la entidad
-SELECT id FROM dw.entidad_maestra WHERE nomb_correg_canonico = 'Mibanco';
--- = 42
-
--- Agregar variante
+{`-- Agregar variante (typo, alias, mayúsculas) a entidad existente
 INSERT INTO dw.entidad_nombre (entidad_id, nombre, tipo, consolidar, fuente)
-VALUES (42, 'MI BANCO', 'typo', TRUE, 'manual 2026-05');`}
-        </pre>
-        <p className="text-xs text-slate-600 mt-4 mb-2">
-          Registrar un renombre futuro (ej. una entidad cambia de nombre el mes que viene):
-        </p>
-        <pre className="bg-slate-900 text-emerald-300 text-xs p-4 rounded overflow-x-auto">
-{`-- 1. Actualizar el canonico en la maestra
-UPDATE dw.entidad_maestra
-SET nomb_correg_canonico = 'Nuevo Nombre', updated_at = now()
-WHERE id = 42;
+VALUES (42, 'MI BANCO', 'typo', TRUE, 'manual 2026-08');
 
--- 2. Marcar el anterior como histórico con vigencia
-UPDATE dw.entidad_nombre
-SET tipo = 'historico', vigente_hasta = '2026-08-31'
-WHERE entidad_id = 42 AND tipo = 'canonico' AND nombre = 'Nombre Anterior';
-
--- 3. Agregar el nuevo como canónico vigente
+-- Renombre puro con vigencia (ej. cambio de marca sin conversión regulatoria)
+UPDATE dw.entidad_maestra SET nomb_correg_canonico = 'Nuevo Nombre' WHERE id = 42;
+UPDATE dw.entidad_nombre SET tipo = 'historico', vigente_hasta = '2026-08-31'
+  WHERE entidad_id = 42 AND tipo = 'canonico' AND nombre = 'Nombre Anterior';
 INSERT INTO dw.entidad_nombre (entidad_id, nombre, tipo, vigente_desde, consolidar, fuente)
-VALUES (42, 'Nuevo Nombre', 'canonico', '2026-09-01', TRUE, 'SBS Resolución N°...');`}
+VALUES (42, 'Nuevo Nombre', 'canonico', '2026-09-01', TRUE, 'SBS Res. N°...');`}
         </pre>
         <p className="text-xs text-slate-500 mt-3">
-          <Link href={"/dashboard/sql" as const} className="text-brand-600 hover:underline">Abrir SQL Workbench →</Link>
-          {" "} ·{" "} Próximamente: formulario CRUD desde esta página.
+          <Link href={"/dashboard/sql" as const} className="text-brand-600 hover:underline">
+            Abrir SQL Workbench →
+          </Link>
         </p>
       </section>
     </div>
