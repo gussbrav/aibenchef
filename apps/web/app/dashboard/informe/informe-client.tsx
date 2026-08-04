@@ -13,7 +13,8 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { FileText, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
+import Link from "next/link";
+import { FileText, HelpCircle, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
 import { ColorPickerPopover } from "./color-picker-popover";
 import {
   ResponsiveContainer,
@@ -486,6 +487,14 @@ export function InformeClient({
                 ? (printProgress ?? "Preparando…")
                 : "Descargar PDF"}
             </button>
+            <Link
+              href={"/dashboard/manual/informe" as never}
+              className="h-8 px-3 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded transition-colors inline-flex items-center gap-1.5 justify-center border border-white/20"
+              title="Manual del usuario — 5 minutos"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Cómo usar el Benchmark
+            </Link>
           </div>
         </div>
       </header>
