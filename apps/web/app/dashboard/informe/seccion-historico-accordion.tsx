@@ -88,50 +88,91 @@ export function SeccionHistoricoAccordion({
 
   const fetchData = useCallback(async () => {
     setState({ status: "loading" });
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
-    try {
-      const params = new URLSearchParams({
-        metric,
-        periodo: String(periodo),
-        peerGroup: peerGroup.join(","),
-        consolidar: String(consolidar),
-      });
-      // Propagar colorOverrides desde la URL actual al endpoint, para que
-      // los colores del accordion historico matcheen con los del SSR.
-      const currentColorOverrides = new URLSearchParams(window.location.search).get("colorOverrides");
-      if (currentColorOverrides) params.set("colorOverrides", currentColorOverrides);
-      const url = `/api/v1/informe/historico?${params}`;
-      const r = await fetch(url, { signal: controller.signal });
-      const json = await r.json().catch(() => ({ error: { message: `HTTP ${r.status}` } }));
-      if (!r.ok || json.error) {
-        const msg = json.error?.message ?? `HTTP ${r.status}`;
+
+    // Retry con backoff exponencial para errores TRANSITORIOS (network,
+    // timeout, 5xx). No re-intenta 4xx ni errores de validacion — esos
+    // no se van a arreglar solos. Total intentos: 3 (inicial + 2 retries).
+    const RETRIES = 2;
+    const BACKOFF_MS = [500, 1500]; // delay antes del intento N+1
+
+    const params = new URLSearchParams({
+      metric,
+      periodo: String(periodo),
+      peerGroup: peerGroup.join(","),
+      consolidar: String(consolidar),
+    });
+    const currentColorOverrides = new URLSearchParams(window.location.search).get("colorOverrides");
+    if (currentColorOverrides) params.set("colorOverrides", currentColorOverrides);
+    const url = `/api/v1/informe/historico?${params}`;
+
+    for (let intento = 0; intento <= RETRIES; intento++) {
+      const esUltimo = intento === RETRIES;
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
+      try {
+        const r = await fetch(url, { signal: controller.signal });
+        const json = await r.json().catch(() => ({ error: { message: `HTTP ${r.status}` } }));
+
+        // Error del servidor (5xx) o de red -> intentar de nuevo si quedan retries
+        const esTransitorio = r.status >= 500 && r.status < 600;
+        if (!r.ok && esTransitorio && !esUltimo) {
+          // eslint-disable-next-line no-console
+          console.warn(`[historico ${metric}] intento ${intento + 1} fallo (HTTP ${r.status}), reintentando...`);
+          await new Promise((res) => setTimeout(res, BACKOFF_MS[intento] ?? 1500));
+          continue;
+        }
+
+        if (!r.ok || json.error) {
+          const msg = json.error?.message ?? `HTTP ${r.status}`;
+          setState({ status: "error", message: msg });
+          // eslint-disable-next-line no-console
+          console.error(`[historico ${metric}] error final:`, msg, "URL:", url);
+          return;
+        }
+
+        const series = (json.data?.series ?? []) as HistoricoEntidadSerie[];
+        if (series.length === 0) {
+          // 0 series puede ser transitorio (query lenta que devolvio vacio o
+          // MV no refrescada). Reintentar si quedan intentos.
+          if (!esUltimo) {
+            // eslint-disable-next-line no-console
+            console.warn(`[historico ${metric}] intento ${intento + 1} devolvio 0 series, reintentando...`);
+            await new Promise((res) => setTimeout(res, BACKOFF_MS[intento] ?? 1500));
+            continue;
+          }
+          setState({
+            status: "error",
+            message: "Sin datos disponibles para este peer group. Verifica que las entidades reporten esta metrica.",
+          });
+          return;
+        }
+        setState({ status: "ok", series });
+        return;
+      } catch (e) {
+        const isAbort = (e as { name?: string })?.name === "AbortError";
+        const isNetwork =
+          e instanceof TypeError && /fetch|network/i.test(e.message);
+        // Errores transitorios: timeout o network -> retry
+        if ((isAbort || isNetwork) && !esUltimo) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[historico ${metric}] intento ${intento + 1} ${isAbort ? "timeout" : "network"}, reintentando...`,
+          );
+          await new Promise((res) => setTimeout(res, BACKOFF_MS[intento] ?? 1500));
+          continue;
+        }
+        const msg = isAbort
+          ? "La consulta tardo demasiado (>15s en cada intento). Verifica tu conexion o intenta de nuevo en unos segundos."
+          : e instanceof Error
+            ? e.message
+            : String(e);
         setState({ status: "error", message: msg });
         // eslint-disable-next-line no-console
-        console.error(`[historico ${metric}] error:`, msg, "URL:", url);
+        console.error(`[historico ${metric}] exception final:`, e);
         return;
+      } finally {
+        window.clearTimeout(timeoutId);
       }
-      const series = (json.data?.series ?? []) as HistoricoEntidadSerie[];
-      if (series.length === 0) {
-        setState({
-          status: "error",
-          message: "El endpoint devolvió 0 series. Posible problema de datos para este peer group.",
-        });
-        return;
-      }
-      setState({ status: "ok", series });
-    } catch (e) {
-      const isAbort = (e as { name?: string })?.name === "AbortError";
-      const msg = isAbort
-        ? "Timeout 15s. Si esta seccion usa mora/cobertura CAR, requiere migracion V128 aplicada. Pedi al equipo aplicar el deploy mas reciente."
-        : e instanceof Error
-          ? e.message
-          : String(e);
-      setState({ status: "error", message: msg });
-      // eslint-disable-next-line no-console
-      console.error(`[historico ${metric}] exception:`, e);
-    } finally {
-      window.clearTimeout(timeoutId);
     }
   }, [metric, periodo, peerGroup, consolidar]);
 
@@ -172,11 +213,26 @@ export function SeccionHistoricoAccordion({
 
   const toggle = () => setOpen((v) => !v);
 
+  // Prefetch on hover: cuando el usuario pasa el mouse por el header,
+  // arrancamos el fetch antes de que clickee. Cuando abre el accordion
+  // (typicamente 200-400ms despues), la data ya esta en el server-cache
+  // (o mejor: ya en state.status='ok'). Percepcion: apertura instantanea.
+  //
+  // Solo dispara si state esta idle — evita re-fetch si ya cargo o esta
+  // en error. El fetch usa el mismo endpoint con retry ya integrado.
+  const prefetch = useCallback(() => {
+    if (state.status === "idle") {
+      void fetchData();
+    }
+  }, [state.status, fetchData]);
+
   return (
     <section className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
       <button
         type="button"
         onClick={toggle}
+        onMouseEnter={prefetch}
+        onFocus={prefetch}
         className={cn(
           "w-full px-5 py-4 flex items-center justify-between gap-4 text-left transition-colors",
           "bg-gradient-to-r from-brand-900 to-brand-700 text-white hover:from-brand-800 hover:to-brand-600",
