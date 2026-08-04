@@ -789,7 +789,7 @@ function HistoricoTable({
             Cuadro histórico — {entidad}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Valores anualizados TTM. Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> para
+            Valores anualizados (últimos 12 meses móviles). Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> para
             reordenar filas o columnas. El orden se guarda en tu navegador.
           </p>
         </div>

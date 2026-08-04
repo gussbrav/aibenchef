@@ -65,7 +65,7 @@ export default async function DashboardLayout({
                   {
                     href: "/dashboard/eeff/acumulado",
                     label: "ER Anualizado",
-                    description: "Tendencia del Estado de Resultados anualizado (TTM, trailing 12 meses)",
+                    description: "Tendencia del Estado de Resultados anualizado (últimos 12 meses móviles)",
                   },
                 ]}
               />

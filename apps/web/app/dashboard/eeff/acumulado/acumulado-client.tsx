@@ -136,7 +136,7 @@ export function AcumuladoClient() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <FileBarChart2 className="w-6 h-6 text-brand-600" />
-              Estado de Resultados Anualizado (TTM)
+              Estado de Resultados Anualizado (últimos 12 meses)
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
               Tendencia year-to-date comparada con el mismo periodo del año anterior — entiendé en

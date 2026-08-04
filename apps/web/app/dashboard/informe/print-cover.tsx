@@ -242,7 +242,7 @@ export function PrintFooter({
           posteriores del regulador.
         </li>
         <li>
-          Indicadores anualizados (TTM) se calculan sobre trailing 12 meses. Ratios de rentabilidad
+          Indicadores anualizados se calculan sobre los últimos 12 meses móviles. Ratios de rentabilidad
           (ROE, ROA) usan promedios de saldos de 12 meses en el denominador.
         </li>
         <li>
