@@ -477,6 +477,23 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
                : sql.raw(`dw.nombre_vigente_en_periodo(label, ${periodo})`)} AS canon
       FROM unnest(${entidadesArr}) AS t(label)
     ),
+    -- PERF: expandir los canonicos del peer group a la lista completa de
+    -- aliases raw (nombres con los que aparecen en las MVs). Filtrar cada
+    -- CTE por esta lista corta reduce el scan de ~120 entidades a ~10-50
+    -- pre-agregacion. Solo aplica cuando consolidar=true (99% de casos);
+    -- consolidar=false pasa lista canon directa (raw_to_vigente reverso
+    -- ya se filtra en el post-JOIN).
+    raw_names AS (
+      ${consolidar
+        ? sql.raw(`
+          SELECT DISTINCT en.nombre AS name
+          FROM input i
+          JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = i.canon
+          JOIN dw.entidad_nombre en  ON en.entidad_id = em.id
+          WHERE en.consolidar = TRUE
+        `)
+        : sql.raw(`SELECT canon AS name FROM input WHERE canon IS NOT NULL`)}
+    ),
     bg_actual AS (
       -- Cartera BRUTA = Vigentes (A4.1) + Refinanciados (A4.2) + Atrasados (A4.3).
       -- consolidar=true  -> agrupa al canonico actual.
@@ -488,6 +505,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
              SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
       WHERE periodo = ${periodo} AND moneda = 'TOTAL'
+        AND nomb_correg IN (SELECT name FROM raw_names)
       GROUP BY 1
     ),
     bg_prev AS (
@@ -498,6 +516,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
              SUM(cta_c) AS patrimonio, SUM(cta_a) AS activos
       FROM marts.v_eeff_balance_ancho
       WHERE periodo = ${prevAnual} AND moneda = 'TOTAL'
+        AND nomb_correg IN (SELECT name FROM raw_names)
       GROUP BY 1
     ),
     er_anual AS (
@@ -511,14 +530,21 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
              SUM(COALESCE(cta_6, 0) - COALESCE(cta_7, 0)) AS inof_neto_anual
       FROM marts.mv_eeff_resultados_ancho
       WHERE periodo = ${periodo} AND moneda = 'TOTAL'
+        AND nomb_correg IN (SELECT name FROM raw_names)
       GROUP BY 1
     ),
+    -- PERF: las 11 vistas de abajo tienen nomb_correg YA canonizado (para
+    -- consolidar=true) o vigente en periodo (para consolidar=false). En
+    -- ambos casos, filtrar por 'canon' de input reduce el scan de N vistas
+    -- × ~120 entidades → N vistas × ~10 entidades. Ganancia esperada
+    -- proporcional al numero de peers pero >0 siempre.
     oficinas AS (
       SELECT nomb_correg, n_oficinas
       FROM ${consolidar
         ? sql.raw("marts.v_oficinas_por_entidad_canonico")
         : sql.raw("marts.v_oficinas_por_entidad_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     clientes AS (
       SELECT nomb_correg, n_clientes
@@ -526,6 +552,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_clientes_por_entidad_canonico")
         : sql.raw("marts.v_clientes_por_entidad_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     personal AS (
       SELECT nomb_correg, n_personal, n_empleados
@@ -533,6 +560,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_personal_por_entidad_canonico")
         : sql.raw("marts.v_personal_por_entidad_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     smf_coloc AS (
       SELECT nomb_correg, pct_participacion_smf
@@ -540,6 +568,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_participacion_smf_colocaciones")
         : sql.raw("marts.v_participacion_smf_coloc_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     smf_dep AS (
       SELECT nomb_correg, pct_participacion_smf
@@ -547,6 +576,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_participacion_smf_depositos")
         : sql.raw("marts.v_participacion_smf_dep_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     sf_coloc AS (
       SELECT nomb_correg, pct_participacion_sf
@@ -554,6 +584,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_participacion_sf_colocaciones")
         : sql.raw("marts.v_participacion_sf_coloc_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     sf_dep AS (
       SELECT nomb_correg, pct_participacion_sf
@@ -561,6 +592,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_participacion_sf_depositos")
         : sql.raw("marts.v_participacion_sf_dep_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     mype AS (
       SELECT nomb_correg, pct_cartera_mype
@@ -568,6 +600,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("dw.entidad_microfinanciera_periodo")
         : sql.raw("marts.v_microfinancieras_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     mora AS (
       SELECT nomb_correg, pct_mora_global, pct_mora_global_vc
@@ -575,6 +608,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_mora_global_por_entidad")
         : sql.raw("marts.v_mora_global_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     cob AS (
       SELECT nomb_correg, pct_cobertura_car
@@ -582,6 +616,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_cobertura_car_por_entidad")
         : sql.raw("marts.v_cobertura_car_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     kpis AS (
       SELECT nomb_correg, utilidad_ttm, patrimonio_prom_12m, activos_prom_12m,
@@ -592,6 +627,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         ? sql.raw("marts.v_kpis_anuales_entidad")
         : sql.raw("marts.v_kpis_anuales_historica")}
       WHERE periodo = ${periodo}
+        AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     )
     SELECT
       input.label                                      AS nomb_correg,
@@ -1104,17 +1140,41 @@ export async function getInformeData(opts: {
   colorsOverride?: Map<string, string> | null;
   consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
 }): Promise<InformeData> {
-  let cliente = await getClienteBySlug(opts.clienteSlug);
+  // PERF: Fase 1 — 3 queries INDEPENDIENTES en paralelo (antes eran seriales).
+  //   getClienteBySlug: siempre.
+  //   getNombreLargoEntidad: solo si viene override de entidad propia.
+  //   getTop2PorGrupoByCartera: solo si NO viene peerGroupOverride.
+  // Ganancia esperada: ~500-800ms (antes cada await era ~200-300ms secuencial).
+  const needsNombreLargo =
+    !!opts.entidadPropiaOverride && opts.entidadPropiaOverride !== undefined;
+  const needsTopPorGrupo =
+    !opts.peerGroupOverride || opts.peerGroupOverride.length === 0;
+  const [clienteBase, nombreLargoOverride, peerListDefault] = await Promise.all([
+    getClienteBySlug(opts.clienteSlug),
+    needsNombreLargo
+      ? getNombreLargoEntidad(opts.entidadPropiaOverride!)
+      : Promise.resolve(null as string | null),
+    needsTopPorGrupo
+      ? getTop2PorGrupoByCartera(opts.periodo)
+      : Promise.resolve(null as string[] | null),
+  ]);
+
+  let cliente = clienteBase;
 
   // Override de entidad propia + nombre largo del header.
   // Asi "Resaltar: Mibanco" hace que el titulo principal diga el nombre
-  // legal de Mibanco en vez del cliente original.
-  if (opts.entidadPropiaOverride && opts.entidadPropiaOverride !== cliente.entidadPropia) {
-    const nombreLargo = await getNombreLargoEntidad(opts.entidadPropiaOverride);
+  // legal de Mibanco en vez del cliente original. Solo aplica el override
+  // si la entidad propia realmente cambio (evita reescribir cliente cuando
+  // el override es el mismo que el default del cliente).
+  if (
+    opts.entidadPropiaOverride &&
+    opts.entidadPropiaOverride !== cliente.entidadPropia &&
+    nombreLargoOverride
+  ) {
     cliente = {
       ...cliente,
       entidadPropia: opts.entidadPropiaOverride,
-      nombre: nombreLargo,
+      nombre: nombreLargoOverride,
       nombreCorto: opts.entidadPropiaOverride,
     };
   }
@@ -1132,16 +1192,12 @@ export async function getInformeData(opts: {
 
   // Resolver peer group default:
   //   1. Si el usuario paso ?peerGroup=... en la URL, respetamos esa lista.
-  //   2. Si no, computamos dinamicamente las top 2 entidades con mayor
-  //      cartera bruta del periodo, para cada uno de los 5 grupos SBS
-  //      (Bancos, Financieras, CMAC, CRAC, Empresas de Creditos).
+  //   2. Si no, usamos el resultado de getTop2PorGrupoByCartera prefetched
+  //      arriba en paralelo (top 2 con mayor cartera por grupo SBS).
   //      Esto da 10 competidores representativos del sistema completo y
   //      garantiza que el benchmark "out-of-the-box" sea comparable contra
   //      el lider de cada grupo, no contra una lista estatica desactualizada.
-  let peerList = opts.peerGroupOverride;
-  if (!peerList || peerList.length === 0) {
-    peerList = await getTop2PorGrupoByCartera(opts.periodo);
-  }
+  let peerList = opts.peerGroupOverride ?? peerListDefault ?? undefined;
 
   // REGLA DE ORO del default del peer group:
   //   1. Exactamente 5 entidades — top 1 de cada tipo regulatorio SBS.
