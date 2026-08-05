@@ -20,8 +20,14 @@
 -- FUNCION: dw.merge_entidad_maestra
 -- Fusiona 2 canonicos en 1. Mueve todos los aliases del historico al
 -- actual, marca al historico con fecha_baja + activa=FALSE. Idempotente.
+--
+-- DROP + CREATE (no CREATE OR REPLACE) porque si la signature cambio,
+-- CREATE OR REPLACE FUNCTION falla con 'cannot change return type'.
+-- Tag $fn$ (no $$) por si el parser de postgres.js tiene bug con $$.
 -- =========================================================================
-CREATE OR REPLACE FUNCTION dw.merge_entidad_maestra(
+DROP FUNCTION IF EXISTS dw.merge_entidad_maestra(TEXT, TEXT, DATE) CASCADE;
+
+CREATE FUNCTION dw.merge_entidad_maestra(
     _canonico_actual TEXT,
     _canonico_historico TEXT,
     _fecha_rename DATE
@@ -31,7 +37,7 @@ CREATE OR REPLACE FUNCTION dw.merge_entidad_maestra(
     nombres_reasignados INT,
     nombres_borrados INT,
     status TEXT
-) AS $$
+) AS $fn$
 DECLARE
     v_id_actual     BIGINT;
     v_id_historico  BIGINT;
@@ -116,7 +122,7 @@ BEGIN
                         'ok: ' || v_reasignados || ' nombres reasignados, ' ||
                         v_borrados || ' duplicados borrados';
 END;
-$$ LANGUAGE plpgsql;
+$fn$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION dw.merge_entidad_maestra IS
     'Fusiona 2 canonicos de dw.entidad_maestra en 1. Mueve aliases + marca ' ||
@@ -127,8 +133,12 @@ COMMENT ON FUNCTION dw.merge_entidad_maestra IS
 -- Detecta pares de canonicos que probablemente son renames del mismo
 -- entity real (mismo tipo regulatorio + rangos no solapados + tokens
 -- compartidos no genericos). Alimenta el panel admin.
+--
+-- DROP + CREATE para permitir que V150 la re-cree con columnas distintas.
 -- =========================================================================
-CREATE OR REPLACE VIEW dw.v_entidad_rename_candidates AS
+DROP VIEW IF EXISTS dw.v_entidad_rename_candidates CASCADE;
+
+CREATE VIEW dw.v_entidad_rename_candidates AS
 WITH rangos AS (
     SELECT em.id,
            em.nomb_correg_canonico,
