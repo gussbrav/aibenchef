@@ -417,7 +417,7 @@ export function InformeClient({
   const periodoLabel = `${periodo.label} vs ${periodoComparativo.label}`;
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-2">
+    <div className="space-y-8 max-w-7xl mx-auto px-2 animate-premium-in">
       {/* ============ PORTADA PDF (solo visible al imprimir) ============ */}
       <PrintCover
         clienteNombre={cliente.nombre}

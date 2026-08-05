@@ -8,6 +8,7 @@ import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { DashboardUserMenu } from "./user-menu";
 import { NavLink } from "./nav-link";
 import { NavDropdown } from "./nav-dropdown";
+import { TopProgressBar } from "./top-progress-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,8 @@ export default async function DashboardLayout({
   return (
     <ConfirmModalProvider>
     <div className="min-h-screen bg-slate-50">
+      {/* Signature progress bar — se anima en cada navegacion interna */}
+      <TopProgressBar />
       <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 border-b border-slate-200">
         <Container size="full">
           <div className="flex h-14 items-center justify-between gap-4">
