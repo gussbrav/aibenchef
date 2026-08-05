@@ -10,6 +10,7 @@
  */
 
 import { headers } from "next/headers";
+import { revalidateTag } from "next/cache";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/infrastructure/db";
@@ -30,6 +31,15 @@ export async function POST() {
       success: boolean;
       error: string | null;
     }>(sql`SELECT mv_name, refreshed_at, success, error FROM marts.refresh_mvs_informe()`);
+
+    // Invalidar caches del informe — el data en las MVs cambio, los tags
+    // 'informe' y 'periodos' apuntan a getInformeDataCached() +
+    // cachedListPeriodos() + cachedListEntidades() en page.tsx del informe.
+    // Sin esto, el usuario veria data vieja hasta expirar el revalidate.
+    revalidateTag("informe");
+    revalidateTag("periodos");
+    revalidateTag("entidades");
+
     return {
       results: rows.map((r) => ({
         mv: String(r.mv_name),
@@ -37,6 +47,7 @@ export async function POST() {
         success: Boolean(r.success),
         error: r.error,
       })),
+      cachesInvalidated: ["informe", "periodos", "entidades"],
     };
   });
 }

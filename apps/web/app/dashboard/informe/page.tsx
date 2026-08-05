@@ -49,6 +49,70 @@ function cachedCompletenessStatus(periodo: number) {
   )();
 }
 
+// =========================================================================
+// CACHE AGRESIVO DEL RESULTADO COMPLETO — patron Vercel/Linear/GitHub.
+//
+// El bottleneck real es getInformeData (getCuadroResumenRaw + 3× PE + ...
+// = ~5s incluso con las optimizaciones). El data cambia solo cuando corre
+// la ingesta SBS (~3x/dia) o el peer group override cambia (URL).
+//
+// Cachear el resultado completo por (clienteSlug, periodo, peerGroup,
+// entidadPropia, tema, orden, consolidar) hace que:
+//   - Primera visita a una vista: paga los ~5s.
+//   - Cualquier visita subsecuente dentro de 30min: <100ms (cache hit).
+//   - Distintos usuarios que ven el mismo informe: comparten cache.
+//
+// El colorsOverride NO va en la key porque afecta solo la paleta visual
+// de los competidores — se aplica post-cache mutando data.competidores.
+// Asi 1 usuario que cambia colores no invalida el cache del resto.
+//
+// Tags de invalidacion:
+//   - "informe": nuclear reset (usar al refrescar TODAS las MVs)
+//   - "informe:${periodo}": invalidar solo un periodo (nueva ingesta)
+//   - "informe:${clienteSlug}": invalidar solo un cliente (config edit)
+// =========================================================================
+
+type CacheableInformeOpts = {
+  clienteSlug: string;
+  periodo: number;
+  peerGroupOverride?: string[];
+  entidadPropiaOverride?: string;
+  temaOverride?: string;
+  ordenOverride?: string[];
+  consolidar: boolean;
+  colorsOverride: Map<string, string> | null;
+};
+
+async function getInformeDataCached(opts: CacheableInformeOpts) {
+  // Key estable — colorsOverride va SERIALIZADO en la key porque el color
+  // se propaga desde data.competidores a historicoEntidad.color, series de
+  // charts, etc. Aplicar el override post-cache dejaria inconsistencia
+  // visual. Trade-off: usuario que customiza colores genera entrada de
+  // cache propia. Es raro (feature de admin) y las entradas son pequeñas.
+  const key = JSON.stringify({
+    c: opts.clienteSlug,
+    p: opts.periodo,
+    pg: opts.peerGroupOverride ?? null,
+    e: opts.entidadPropiaOverride ?? null,
+    t: opts.temaOverride ?? null,
+    o: opts.ordenOverride ?? null,
+    cs: opts.consolidar,
+    co: opts.colorsOverride ? [...opts.colorsOverride.entries()].sort() : null,
+  });
+  return unstable_cache(
+    () => getInformeData(opts),
+    ["informe:data", key],
+    {
+      revalidate: 1800,
+      tags: [
+        "informe",
+        `informe:periodo:${opts.periodo}`,
+        `informe:cliente:${opts.clienteSlug}`,
+      ],
+    },
+  )();
+}
+
 export const metadata: Metadata = {
   title: "Benchmark Ejecutivo",
 };
@@ -137,21 +201,20 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   // Soportamos `colorOverrides` como alias retrocompat (era el nombre original).
   const colorsOverride = parseColorsOverride(params.colors ?? params.colorOverrides);
 
-  // 4 queries en paralelo — el completenessStatus es la mas rapida (<10ms,
-  // agregacion sobre raw.archivos_descargados con indice (periodo, topico,
-  // status)) y NO extiende el wall-clock del render porque Promise.all
-  // corre todas simultaneas. Impacto en TTFB: 0ms adicional.
+  // 4 queries en paralelo — todas cacheadas (getInformeData con revalidate
+  // 30min, auxiliares con 10-30min). En cache hit: ~100ms total. Cache miss:
+  // paga getInformeData completo (~5s) pero solo el primer request.
   const [data, periodosDisponibles, entidadesDisponibles, completenessStatus] =
     await Promise.all([
-      getInformeData({
+      getInformeDataCached({
         clienteSlug,
         periodo,
         peerGroupOverride: peerGroup,
         entidadPropiaOverride,
         temaOverride: params.tema,
         ordenOverride: orden,
-        colorsOverride,
         consolidar,
+        colorsOverride,
       }),
       cachedListPeriodos(),
       cachedListEntidades(),
