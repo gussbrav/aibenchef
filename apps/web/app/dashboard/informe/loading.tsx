@@ -20,7 +20,10 @@ import { LoadingHint } from "./loading-hint";
  */
 export default function InformeLoading() {
   return (
-    <div className="max-w-[1400px] mx-auto space-y-5 px-2">
+    // IMPORTANTE: max-w-7xl (=1280px) DEBE matchear al InformeClient real
+    // (line 420: 'max-w-7xl mx-auto'). Si difieren, hay salto lateral
+    // cuando el contenido reemplaza al skeleton. space-y-8 tambien matchea.
+    <div className="max-w-7xl mx-auto space-y-8 px-2">
       {/* ============ HERO — contenido real + shimmer solo en data ============ */}
       <header className="rounded-xl text-white p-8 relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 shadow-lg">
         {/* Textura decorativa sutil (radial glow) para dar profundidad premium */}
@@ -79,24 +82,30 @@ export default function InformeLoading() {
         </div>
       </header>
 
-      {/* ============ SELECTORES — labels reales + controls shimmer ============ */}
-      <div className="bg-white border border-slate-200 rounded-lg p-3 flex items-center gap-6 flex-wrap shadow-sm">
-        {[
-          { label: "PERIODO", w: 160 },
-          { label: "RESALTAR", w: 200 },
-          { label: "COMPARAR CON", w: 220 },
-          { label: "RENOMBRES", w: 140 },
-        ].map((s) => (
-          <div key={s.label} className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-              {s.label}
-            </span>
-            <div
-              className="h-9 shimmer rounded border border-slate-200"
-              style={{ width: `${s.w}px` }}
-            />
-          </div>
-        ))}
+      {/* ============ SELECTORES — labels reales + controls shimmer ============
+          Layout MATCHEA selectores-toolbar.tsx:104 (bg-white border rounded-lg
+          shadow-sm px-4 py-3 flex flex-col gap-3 + inner flex items-center
+          gap-4 flex-wrap). Sin match habia layout shift cuando el contenido
+          real reemplaza al skeleton. */}
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-4 py-3 flex flex-col gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          {[
+            { label: "PERIODO", w: 160 },
+            { label: "RESALTAR", w: 200 },
+            { label: "COMPARAR CON", w: 220 },
+            { label: "RENOMBRES", w: 140 },
+          ].map((s) => (
+            <div key={s.label} className="flex items-center gap-2">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                {s.label}
+              </span>
+              <div
+                className="h-9 shimmer rounded border border-slate-200"
+                style={{ width: `${s.w}px` }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ============ CUADRO RESUMEN — titulo real + tabla shimmer ============ */}

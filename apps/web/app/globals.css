@@ -644,20 +644,21 @@ body {
 
 /* =========================================================================
  * Fade-in premium para crossfade skeleton -> contenido real.
+ *
+ * IMPORTANTE: solo opacity, SIN transform. Antes usabamos translateY(4px)
+ * que causaba "salto" perceptible cuando el contenido reemplaza al
+ * skeleton (skeleton en Y=0, contenido aparece en Y=4px y anima a 0).
+ * Fade puro elimina el flicker completamente.
+ *
  * Se aplica al root del componente que reemplaza al loading.tsx
- * (ej. InformeClient). Fade sutil + slide up de 4px para que el contenido
- * "aterrice" en lugar de aparecer bruscamente.
+ * (ej. InformeClient).
  * ========================================================================= */
 @keyframes premium-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .animate-premium-in {
-  animation: premium-fade-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: premium-fade-in 240ms ease-out both;
+  /* Fuerza GPU compositing — evita repaint durante la animacion */
+  will-change: opacity;
 }

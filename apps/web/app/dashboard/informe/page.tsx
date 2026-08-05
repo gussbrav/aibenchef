@@ -29,6 +29,26 @@ const cachedListEntidades = unstable_cache(
   { revalidate: 600, tags: ["entidades"] },
 );
 
+// Ultimo periodo publicable — cambia cuando termina la ingesta SBS
+// (mensual). Cache 30 min. La ingesta corre 3x/dia y raramente cambia
+// el 'ultimo publicable' — usualmente se activa 1-2 dias por mes.
+const cachedUltimoPeriodo = unstable_cache(
+  () => getUltimoPeriodoPublicable(),
+  ["informe:ultimo-periodo-publicable"],
+  { revalidate: 1800, tags: ["periodos"] },
+);
+
+// Completeness status por periodo — cambia con cada corrida de ingesta
+// (3x/dia). Cache 30 min es seguro porque el usuario no espera cambios
+// intra-hora. Key incluye periodo para no cache-stampede entre valores.
+function cachedCompletenessStatus(periodo: number) {
+  return unstable_cache(
+    () => getPeriodoCompletenessStatus(periodo),
+    ["informe:completeness", String(periodo)],
+    { revalidate: 1800, tags: ["periodos", `completeness:${periodo}`] },
+  )();
+}
+
 export const metadata: Metadata = {
   title: "Benchmark Ejecutivo",
 };
@@ -100,7 +120,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   if (params.periodo) {
     periodo = Number.parseInt(params.periodo, 10);
   } else {
-    periodo = (await getUltimoPeriodoPublicable()) ?? 202004;
+    periodo = (await cachedUltimoPeriodo()) ?? 202004;
   }
 
   const peerGroup = params.peerGroup
@@ -135,7 +155,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       }),
       cachedListPeriodos(),
       cachedListEntidades(),
-      getPeriodoCompletenessStatus(periodo),
+      cachedCompletenessStatus(periodo),
     ]);
 
   return (
