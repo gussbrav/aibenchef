@@ -117,8 +117,7 @@ ORDER BY
     tipo, nombre_a;
 
 COMMENT ON VIEW dw.v_entidad_rename_candidates IS
-    'Detecta candidatos a fusion. tipo_candidato=secuencial: rangos NO se solapan (rename historico). ' ||
-    'tipo_candidato=duplicado: rangos solapados pero uno termino antes (mismo entity registrado 2 veces).';
+    'Detecta candidatos a fusion. tipo_candidato=secuencial: rangos NO se solapan (rename historico). tipo_candidato=duplicado: rangos solapados pero uno termino antes (mismo entity registrado 2 veces).';
 
 -- =========================================================================
 -- MERGE: Alfin Banco (canonico actual) + Banco Azteca (historico)

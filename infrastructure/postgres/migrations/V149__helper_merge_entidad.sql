@@ -124,9 +124,8 @@ BEGIN
 END;
 $fn$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION dw.merge_entidad_maestra IS
-    'Fusiona 2 canonicos de dw.entidad_maestra en 1. Mueve aliases + marca ' ||
-    'historico como inactivo con fecha_baja. Idempotente y auditado.';
+COMMENT ON FUNCTION dw.merge_entidad_maestra(TEXT, TEXT, DATE) IS
+    'Fusiona 2 canonicos de dw.entidad_maestra en 1. Mueve aliases + marca historico como inactivo con fecha_baja. Idempotente y auditado.';
 
 -- =========================================================================
 -- VIEW: dw.v_entidad_rename_candidates
@@ -205,5 +204,4 @@ ORDER BY
     tipo, nombre_a;
 
 COMMENT ON VIEW dw.v_entidad_rename_candidates IS
-    'Pares de canonicos que probablemente son renames de la misma entidad real. ' ||
-    'Confianza alta = gap <=3 meses. Requiere validacion humana antes de fusionar.';
+    'Pares de canonicos que probablemente son renames de la misma entidad real. Confianza alta = gap <=3 meses. Requiere validacion humana antes de fusionar.';
