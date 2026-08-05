@@ -588,3 +588,56 @@ body {
    * fuera de la primera pagina. En la practica el break-after de la portada
    * hace que el contenido empiece en la pagina 2 donde ya se muestran. */
 }
+
+/* =========================================================================
+ * Shimmer sweep — skeleton loading clase mundial.
+ *
+ * Reemplaza a Tailwind 'animate-pulse' (fade opacity plano) con un gradient
+ * que barre horizontalmente la superficie del skeleton, como Linear / Notion
+ * / GitHub. Mucho mas premium visualmente.
+ *
+ * Uso: <div className="shimmer" /> — el elemento debe tener su bg de base.
+ * ========================================================================= */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(226 232 240); /* slate-200 base */
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.65) 50%,
+    transparent 100%
+  );
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
+
+/* Variante para skeletons sobre background oscuro (hero azul). */
+.shimmer-on-dark {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+.shimmer-on-dark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 100%
+  );
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
