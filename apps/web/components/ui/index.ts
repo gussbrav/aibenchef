@@ -7,3 +7,4 @@ export * from "./card";
 export * from "./badge";
 export * from "./page-hero";
 export * from "./confirm-modal";
+export * from "./renombres-toggle";

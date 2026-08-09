@@ -32,6 +32,9 @@ type SearchParams = Promise<{
   desde?: string;
   granularidad?: string;
   peers?: string;
+  /** false = solo ventana legal del canonico (no incluye aliases historicos).
+   *  true (default) = fusiona con renombres historicos (evolucion completa). */
+  consolidar?: string;
 }>;
 
 const BCP_DEFAULT = { slug: "bcp", entidadPropia: "Banco de Crédito del Perú" } as const;
@@ -75,6 +78,10 @@ export default async function PuntoEquilibrioPage({
 
   const granularidad = (params.granularidad ?? "anual") as Granularidad;
 
+  // consolidar: default true (PE es analisis historico — necesita evolucion
+  // completa por default). Solo se desactiva si viene "?consolidar=false".
+  const consolidar = params.consolidar !== "false";
+
   // Peer group: default = peer del cliente (top 5 SBS). URL puede override
   // Por default para comparativo usamos SOLO 2 entidades (entidad propia + 1)
   // para que el line chart sea legible. El usuario puede agregar mas.
@@ -91,6 +98,7 @@ export default async function PuntoEquilibrioPage({
       desdeAnio,
       hastaPeriodo,
       granularidad,
+      consolidar,
     }),
     listEntidadesConDataPE(),
     (async () => {
@@ -112,6 +120,7 @@ export default async function PuntoEquilibrioPage({
     desdeAnio,
     hastaPeriodo,
     granularidad,
+    consolidar,
   });
 
   return (
@@ -127,6 +136,7 @@ export default async function PuntoEquilibrioPage({
         hastaPeriodo,
         granularidad,
         peerGroup: peerGroup,
+        consolidar,
       }}
     />
   );

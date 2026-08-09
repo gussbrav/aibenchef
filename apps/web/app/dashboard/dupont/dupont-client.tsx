@@ -27,12 +27,13 @@ import {
   LabelList,
 } from "recharts";
 import {
-  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical, Search, Check, ChevronDown, Link2, Link2Off,
+  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical, Search, Check, ChevronDown,
 } from "lucide-react";
 
 import type { DupontData, DupontRow, DupontInsights } from "@/lib/domains/dupont";
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
+import { RenombresToggle } from "@/components/ui";
 
 // COOKIE para persistir filtros aplicados. Sobrevive cambio de tab
 // (Punto Equilibrio → DuPont) porque el Link del nav no preserva query
@@ -636,28 +637,11 @@ function SelectoresBar({
         </div>
       </div>
 
-      {/* Toggle: fusionar renombres historicos — mismo estilo visual que
-          Benchmark (selectores-toolbar.tsx del /informe) para consistencia
-          UX cross-vista.
-          OFF (default): cada canonico solo su ventana legal real.
-          ON: incluye aliases historicos consolidados. */}
-      <button
-        type="button"
-        onClick={() => setDraftConsolidar(!draftConsolidar)}
-        className={`h-8 px-3 text-xs rounded inline-flex items-center gap-1.5 transition-colors self-start ${
-          draftConsolidar
-            ? "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
-            : "bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200"
-        }`}
-        title={
-          draftConsolidar
-            ? "Renombres UNIDOS: los aliases históricos se consolidan bajo el canónico actual (ej. 'Banco Compartamos' incluye su etapa como Financiera 2008-2023). Click para separarlos."
-            : "Renombres SEPARADOS: cada entidad muestra solo su ventana legal (ej. 'Banco Compartamos' desde 2023). Click para consolidar la historia completa."
-        }
-      >
-        {draftConsolidar ? <Link2 className="w-3.5 h-3.5" /> : <Link2Off className="w-3.5 h-3.5" />}
-        {draftConsolidar ? "Renombres unidos" : "Renombres separados"}
-      </button>
+      {/* Toggle unificado <RenombresToggle> — mismo componente que Benchmark
+          y Punto Equilibrio para consistencia UX cross-vista. */}
+      <div className="self-start">
+        <RenombresToggle value={draftConsolidar} onChange={setDraftConsolidar} />
+      </div>
 
       {/* Barra de accion apply/reset — TODO cambio (entidades, periodos, orden,
           colores, consolidar) se acumula en draft y se persiste con 'Aplicar
@@ -1023,81 +1007,44 @@ function SeccionDupont({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-0">
-        {/* Sidebar de narrativa — 3 estados visuales:
-              loading = shimmer + spinner + "generando"
-              ok (IA) = badge purple con ícono Wand2 (highlight que fue IA)
-              fallback = badge slate normal (narrativa deterministica) */}
-        <aside className="p-5 bg-slate-50 border-r border-slate-200 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-xs uppercase tracking-wider font-semibold text-slate-500">
-              Lectura
-            </h3>
-            {narrativaIA.status === "loading" && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                Generando…
-              </span>
-            )}
-            {usarIA && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">
-                <Wand2 className="w-2.5 h-2.5" />
-                IA
-              </span>
-            )}
-          </div>
-          {narrativaIA.status === "loading" ? (
-            <div className="space-y-2">
-              {[80, 90, 70].map((w) => (
-                <div
-                  key={w}
-                  className="h-3 rounded bg-slate-200 animate-pulse"
-                  style={{ width: `${w}%` }}
-                />
-              ))}
-            </div>
-          ) : (
-            narrativa.map((n, i) => (
-              <div key={i} className="text-xs text-slate-700 leading-relaxed">
-                <div className="flex items-baseline gap-1.5">
-                  <span
-                    className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      usarIA
-                        ? "bg-violet-100 text-violet-700"
-                        : "bg-brand-100 text-brand-700"
-                    }`}
-                  >
-                    {i + 1}
-                  </span>
-                  <span>{n}</span>
-                </div>
-              </div>
-            ))
-          )}
-        </aside>
+      {/* Layout NUEVO — recomendacion UX (Bloomberg/FT/Vercel Analytics):
+          la narrativa va ARRIBA como banner colapsable (details/summary),
+          no como sidebar. Sin sidebar, el chart usa 100% del ancho de la
+          seccion → barras mas gruesas, labels sin colision, con espacio
+          para 4-6 entidades sin comprimir.
 
-        {/* Charts a la derecha — principal arriba, subs abajo en grid */}
-        <div className="p-5 space-y-4">
-          <IndicadorChart
-            def={indicadorPrincipal}
-            data={data}
-            rowsIndex={rowsIndex}
-            highlight
-          />
-          {subIndicadores.length > 0 && (
-            <div
-              className={`grid gap-3 ${
-                subIndicadores.length <= 2
-                  ? "grid-cols-1 md:grid-cols-2"
-                  : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-              }`}
-            >
-              {subIndicadores.map((s, i) => (
-                <IndicadorChart key={i} def={s} data={data} rowsIndex={rowsIndex} />
-              ))}
-            </div>
-          )}
-        </div>
+          El estado open/collapsed persiste en localStorage — cada user
+          decide si quiere ver la narrativa siempre o solo cuando la
+          pide. */}
+      <NarrativaBanner
+        narrativa={narrativa}
+        status={narrativaIA.status}
+        usarIA={usarIA}
+      />
+
+      {/* Charts FULL WIDTH — principal arriba, subs abajo en grid mas denso */}
+      <div className="p-5 space-y-4">
+        <IndicadorChart
+          def={indicadorPrincipal}
+          data={data}
+          rowsIndex={rowsIndex}
+          highlight
+        />
+        {subIndicadores.length > 0 && (
+          <div
+            className={`grid gap-3 ${
+              subIndicadores.length <= 2
+                ? "grid-cols-1 md:grid-cols-2"
+                : subIndicadores.length <= 3
+                  ? "grid-cols-1 md:grid-cols-3"
+                  : "grid-cols-1 md:grid-cols-2 lg:grid-cols-4"
+            }`}
+          >
+            {subIndicadores.map((s, i) => (
+              <IndicadorChart key={i} def={s} data={data} rowsIndex={rowsIndex} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Footer sutil */}
@@ -1105,6 +1052,113 @@ function SeccionDupont({
         Activo Promedio 12M · Fuente SBS · Valores anualizados TTM
       </div>
     </section>
+  );
+}
+
+// ============================================================================
+// NarrativaBanner — narrativa AI o determinista como banner horizontal
+// colapsable arriba del chart (recomendacion UX del agente experto).
+// Reemplaza el sidebar vertical de 320px que le quitaba ancho al chart.
+//
+// Ganancia medible: chart pasa de ~1050px a ~1500px utiles en pantalla
+// 1600px. Barras van de 40px → 55px con 4 entidades (35 → 50 con 6).
+//
+// Estado open/collapsed persiste en localStorage para respetar la
+// preferencia del user cross-session.
+// ============================================================================
+
+const LS_KEY_NARRATIVA_OPEN = "aibenchef.dupont.narrativa.open.v1";
+
+function NarrativaBanner({
+  narrativa,
+  status,
+  usarIA,
+}: {
+  narrativa: string[];
+  status: "loading" | "ok" | "fallback";
+  usarIA: boolean;
+}) {
+  // Estado open persistente. Default true (mostrar la primera vez).
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const raw = localStorage.getItem(LS_KEY_NARRATIVA_OPEN);
+    return raw === null ? true : raw === "true";
+  });
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(LS_KEY_NARRATIVA_OPEN, String(next));
+    }
+  };
+
+  return (
+    <div className="border-b border-slate-200 bg-slate-50/60">
+      <button
+        type="button"
+        onClick={toggle}
+        className="w-full flex items-center gap-2 px-5 py-2.5 hover:bg-slate-100/50 transition-colors text-left"
+        aria-expanded={open}
+      >
+        <ChevronDown
+          className={`w-4 h-4 text-slate-500 transition-transform ${open ? "" : "-rotate-90"}`}
+        />
+        <span className="text-xs uppercase tracking-wider font-semibold text-slate-600">
+          Lectura
+        </span>
+        {status === "loading" && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-600">
+            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+            Generando…
+          </span>
+        )}
+        {usarIA && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">
+            <Wand2 className="w-2.5 h-2.5" />
+            IA
+          </span>
+        )}
+        {!open && (
+          <span className="text-[10px] text-slate-400 ml-auto italic">
+            {narrativa.length} bullets — click para expandir
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="px-5 pb-4">
+          {status === "loading" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[80, 90, 70, 85].map((w, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="h-3 rounded bg-slate-200 animate-pulse" style={{ width: `${w}%` }} />
+                  <div className="h-3 rounded bg-slate-200 animate-pulse" style={{ width: `${w - 15}%` }} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
+              {narrativa.map((n, i) => (
+                <div key={i} className="text-xs text-slate-700 leading-relaxed">
+                  <div className="flex items-baseline gap-1.5">
+                    <span
+                      className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        usarIA
+                          ? "bg-violet-100 text-violet-700"
+                          : "bg-brand-100 text-brand-700"
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <span>{n}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1180,7 +1234,7 @@ function IndicadorChart({
               width={40}
             />
             <Tooltip
-              cursor={{ fill: "rgba(15, 23, 42, 0.04)" }}
+              cursor={{ fill: "rgba(15, 23, 42, 0.08)" }}
               contentStyle={{
                 fontSize: 11,
                 borderRadius: 6,
@@ -1197,18 +1251,23 @@ function IndicadorChart({
                 radius={[3, 3, 0, 0]}
                 maxBarSize={highlight ? 46 : 34}
               >
-                {/* Labels en TODOS los charts (no solo el highlight). Font
-                    mas chica en subcharts para no saturar con 5+ entidades. */}
-                <LabelList
-                  dataKey={ent.nombCorreg}
-                  position="top"
-                  formatter={(v: unknown) => fmtValue(Number(v))}
-                  style={{
-                    fontSize: highlight ? 10 : 9,
-                    fill: "#334155",
-                    fontWeight: highlight ? 600 : 500,
-                  }}
-                />
+                {/* Labels SOLO en chart principal (highlight). Best practice
+                    Bloomberg/FT/Vercel: subcharts pequeños confian en Tooltip
+                    hover — meter labels en 180px con 4-6 entidades colisiona
+                    matematicamente. Formato compacto (1 decimal, sin %) para
+                    ganar espacio horizontal en el chart principal. */}
+                {highlight && (
+                  <LabelList
+                    dataKey={ent.nombCorreg}
+                    position="top"
+                    formatter={(v: unknown) => {
+                      const n = Number(v);
+                      if (Number.isNaN(n)) return "";
+                      return n.toFixed(1);
+                    }}
+                    style={{ fontSize: 10, fill: "#334155", fontWeight: 600 }}
+                  />
+                )}
               </Bar>
             ))}
           </BarChart>

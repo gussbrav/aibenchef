@@ -26,6 +26,7 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils/cn";
+import { RenombresToggle } from "@/components/ui";
 import type { Cliente } from "@/lib/domains/informe/types";
 import type {
   Granularidad,
@@ -45,6 +46,7 @@ type Config = {
   hastaPeriodo: number;
   granularidad: Granularidad;
   peerGroup: string[];
+  consolidar: boolean;
 };
 
 type Props = {
@@ -81,6 +83,7 @@ type DraftState = {
   granularidad: Granularidad;
   hastaPeriodo: number;
   peerGroup: string[];
+  consolidar: boolean;
 };
 
 export function PuntoEquilibrioClient({
@@ -104,8 +107,9 @@ export function PuntoEquilibrioClient({
       granularidad: config.granularidad,
       hastaPeriodo: config.hastaPeriodo,
       peerGroup: config.peerGroup,
+      consolidar: config.consolidar,
     }),
-    [entidadActual, config.desdeAnio, config.granularidad, config.hastaPeriodo, config.peerGroup],
+    [entidadActual, config.desdeAnio, config.granularidad, config.hastaPeriodo, config.peerGroup, config.consolidar],
   );
 
   // Estado DRAFT — el usuario edita libremente sin disparar re-fetch.
@@ -116,7 +120,7 @@ export function PuntoEquilibrioClient({
   useEffect(() => {
     setDraft(applied);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applied.entidad, applied.desdeAnio, applied.granularidad, applied.hastaPeriodo, applied.peerGroup.join(",")]);
+  }, [applied.entidad, applied.desdeAnio, applied.granularidad, applied.hastaPeriodo, applied.peerGroup.join(","), applied.consolidar]);
 
   // Contador de cambios pendientes vs applied.
   const changeCount = useMemo(() => {
@@ -126,6 +130,7 @@ export function PuntoEquilibrioClient({
     if (draft.granularidad !== applied.granularidad) n++;
     if (draft.hastaPeriodo !== applied.hastaPeriodo) n++;
     if (draft.peerGroup.join(",") !== applied.peerGroup.join(",")) n++;
+    if (draft.consolidar !== applied.consolidar) n++;
     return n;
   }, [draft, applied]);
 
@@ -145,6 +150,9 @@ export function PuntoEquilibrioClient({
     } else {
       params.delete("peers");
     }
+    // consolidar solo va en URL cuando es false (default true — URL limpia)
+    if (draft.consolidar) params.delete("consolidar");
+    else params.set("consolidar", "false");
     router.replace(
       `/dashboard/punto-equilibrio?${params.toString()}` as never,
       { scroll: false },
@@ -393,6 +401,16 @@ function SelectoresBar({
             className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
           />
         </div>
+      </div>
+
+      {/* Toggle 'Renombres unidos/separados' — mismo componente que
+          Benchmark y DuPont para consistencia UX cross-vista.
+          En PE default es TRUE (analisis historico necesita continuidad). */}
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <RenombresToggle
+          value={draft.consolidar}
+          onChange={(next) => setDraft((d) => ({ ...d, consolidar: next }))}
+        />
       </div>
 
       {/* Barra de accion: Aplicar / Descartar. Aparece solo si hay cambios. */}

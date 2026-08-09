@@ -123,16 +123,21 @@ export async function getPuntoEquilibrioHistorico(opts: {
   hastaPeriodo: number;
   granularidad: Granularidad;
   moneda?: "MN" | "ME" | "TOTAL";
+  /** true (default): consolida aliases historicos bajo el canonico actual
+   *  (ej. Banco Compartamos incluye su etapa como Financiera). false: solo
+   *  la ventana legal actual del canonico. */
+  consolidar?: boolean;
 }): Promise<PuntoEquilibrioRow[]> {
   const moneda = opts.moneda ?? "TOTAL";
+  const consolidar = opts.consolidar !== false;
   const periodos = generarPeriodos(opts.desdeAnio, opts.hastaPeriodo, opts.granularidad);
   if (periodos.length === 0) return [];
   const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
 
-  // Resolver todos los aliases del canonico. Si la entidad no esta en la
-  // maestra (fallback), buscamos por su nombre tal cual. Con DISTINCT ON
-  // por periodo tomamos el primer nombre en caso de que un periodo tenga
-  // multiple registros (transiciones de nombre).
+  // Resolver aliases del canonico. Con consolidar=true (default): expandir
+  // a TODOS los alias historicos (evolucion completa). Con consolidar=false:
+  // SOLO el nombre canonico exacto (ventana legal actual) — el user quiere
+  // ver la entidad como identidad legal, no como historia operativa.
   const rows = await db.execute<{
     periodo: number;
     pct_rendimiento: number | null;
@@ -144,13 +149,17 @@ export async function getPuntoEquilibrioHistorico(opts: {
     pct_margen_neto: number | null;
   }>(sql`
     WITH aliases AS (
-      SELECT LOWER(TRIM(en.nombre)) AS nombre_lower
-      FROM dw.entidad_maestra em
-      JOIN dw.entidad_nombre en ON en.entidad_id = em.id
-      WHERE em.nomb_correg_canonico = ${opts.entidad}
-        AND en.consolidar = TRUE
-      UNION
-      SELECT LOWER(TRIM(${opts.entidad}::text))
+      ${consolidar
+        ? sql`
+            SELECT LOWER(TRIM(en.nombre)) AS nombre_lower
+            FROM dw.entidad_maestra em
+            JOIN dw.entidad_nombre en ON en.entidad_id = em.id
+            WHERE em.nomb_correg_canonico = ${opts.entidad}
+              AND en.consolidar = TRUE
+            UNION
+            SELECT LOWER(TRIM(${opts.entidad}::text))
+          `
+        : sql`SELECT LOWER(TRIM(${opts.entidad}::text)) AS nombre_lower`}
     )
     SELECT DISTINCT ON (v.periodo)
            v.periodo, v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
@@ -189,17 +198,18 @@ export async function getPuntoEquilibrioComparativo(opts: {
   entidades: Array<{ nombCorreg: string; color: string; esPropio: boolean }>;
   periodo: number;
   moneda?: "MN" | "ME" | "TOTAL";
+  consolidar?: boolean;
 }): Promise<PuntoEquilibrioComparativoRow[]> {
   const moneda = opts.moneda ?? "TOTAL";
+  const consolidar = opts.consolidar !== false;
   if (opts.entidades.length === 0) return [];
   const entidadesClause = sql.join(
     opts.entidades.map((e) => sql`${e.nombCorreg}`),
     sql`, `,
   );
 
-  // Query con canonizacion: por cada entidad canonica, buscar todos sus
-  // aliases y traer el registro del periodo. Devuelve una fila por entidad
-  // canonica con la data fusionada.
+  // Con consolidar=true: expande cada canonico a sus aliases historicos.
+  // Con consolidar=false: solo el nombre canonico exacto (ventana legal).
   const rows = await db.execute<{
     canonico: string;
     pct_rendimiento: number | null;
@@ -214,14 +224,20 @@ export async function getPuntoEquilibrioComparativo(opts: {
       SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
     ),
     aliases AS (
-      SELECT es.canonico, LOWER(TRIM(en.nombre)) AS nombre_lower
-      FROM entidades_solicitadas es
-      JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = es.canonico
-      JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
-      UNION
-      -- fallback: si la entidad no esta en la maestra, buscar por nombre directo
-      SELECT es.canonico, LOWER(TRIM(es.canonico))
-      FROM entidades_solicitadas es
+      ${consolidar
+        ? sql`
+            SELECT es.canonico, LOWER(TRIM(en.nombre)) AS nombre_lower
+            FROM entidades_solicitadas es
+            JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = es.canonico
+            JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
+            UNION
+            SELECT es.canonico, LOWER(TRIM(es.canonico))
+            FROM entidades_solicitadas es
+          `
+        : sql`
+            SELECT es.canonico, LOWER(TRIM(es.canonico)) AS nombre_lower
+            FROM entidades_solicitadas es
+          `}
     )
     SELECT DISTINCT ON (a.canonico)
            a.canonico, v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
@@ -265,8 +281,10 @@ export async function getPuntoEquilibrioSeries(opts: {
   hastaPeriodo: number;
   granularidad: Granularidad;
   moneda?: "MN" | "ME" | "TOTAL";
+  consolidar?: boolean;
 }): Promise<PuntoEquilibrioSerie[]> {
   const moneda = opts.moneda ?? "TOTAL";
+  const consolidar = opts.consolidar !== false;
   if (opts.entidades.length === 0) return [];
   const periodos = generarPeriodos(opts.desdeAnio, opts.hastaPeriodo, opts.granularidad);
   if (periodos.length === 0) return [];
@@ -277,9 +295,8 @@ export async function getPuntoEquilibrioSeries(opts: {
   );
   const periodosClause = sql.join(periodos.map((p) => sql`${p}`), sql`, `);
 
-  // Canonizacion via UNION de aliases + fallback al nombre directo.
-  // DISTINCT ON (canonico, periodo) para colapsar duplicados de transicion
-  // de nombre (ej. 2 filas para el mismo mes cuando cambio de nombre).
+  // Con consolidar=true: expande aliases historicos (evolucion completa).
+  // Con consolidar=false: solo el nombre canonico exacto (ventana legal).
   const rows = await db.execute<{
     canonico: string;
     periodo: number;
@@ -291,13 +308,20 @@ export async function getPuntoEquilibrioSeries(opts: {
       SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
     ),
     aliases AS (
-      SELECT es.canonico, LOWER(TRIM(en.nombre)) AS nombre_lower
-      FROM entidades_solicitadas es
-      JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = es.canonico
-      JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
-      UNION
-      SELECT es.canonico, LOWER(TRIM(es.canonico))
-      FROM entidades_solicitadas es
+      ${consolidar
+        ? sql`
+            SELECT es.canonico, LOWER(TRIM(en.nombre)) AS nombre_lower
+            FROM entidades_solicitadas es
+            JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = es.canonico
+            JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
+            UNION
+            SELECT es.canonico, LOWER(TRIM(es.canonico))
+            FROM entidades_solicitadas es
+          `
+        : sql`
+            SELECT es.canonico, LOWER(TRIM(es.canonico)) AS nombre_lower
+            FROM entidades_solicitadas es
+          `}
     )
     SELECT DISTINCT ON (a.canonico, v.periodo)
            a.canonico, v.periodo, v.pct_punto_eq, v.pct_margen_neto, v.pct_rendimiento
