@@ -58,33 +58,44 @@ const cachedUltimoPeriodo = unstable_cache(
 // V152 merge) daban 2 chips con la misma data. Ahora ambos resuelven al
 // mismo canonico y solo 1 chip aparece en el chart.
 //
-// Cacheado 30min con tag 'entidades' — invalidado cuando cambia la maestra.
-const cachedNormalizarCanonicos = unstable_cache(
-  async (labels: string[]): Promise<string[]> => {
-    if (labels.length === 0) return [];
+// NOTA: NO cacheamos con unstable_cache porque necesita clave dinamica
+// (depende del array de labels). Es una query barata (1 fn call por
+// entidad × ~5 entidades) — impacto TTFB despreciable.
+async function normalizarCanonicos(labels: string[]): Promise<string[]> {
+  if (labels.length === 0) return [];
+  try {
+    // Patron drizzle para pasar string[] a Postgres unnest:
+    // ARRAY[<val1>, <val2>, ...]::text[]. El unnest inline no acepta
+    // ${labels}::text[] directamente porque Drizzle no serializa arrays.
+    const labelsArr = sql`ARRAY[${sql.join(
+      labels.map((l) => sql`${l}`),
+      sql`, `,
+    )}]::text[]`;
     const rows = await db.execute<{ input_label: string; canonico: string | null }>(sql`
-      SELECT DISTINCT ON (canonico)
-             label AS input_label,
+      SELECT label AS input_label,
              dw.resolver_nomb_correg_canonico(label) AS canonico
-      FROM unnest(${labels}::text[]) WITH ORDINALITY AS t(label, ord)
-      ORDER BY canonico, ord
+      FROM unnest(${labelsArr}) AS t(label)
     `);
-    // Mantener el orden original de labels — deduplicar preservando
-    // primer aparicion.
+    // Dedupear preservando orden original (primer aparicion gana).
+    const canonByLabel = new Map<string, string>();
+    for (const r of rows) {
+      canonByLabel.set(String(r.input_label), r.canonico ?? String(r.input_label));
+    }
     const seen = new Set<string>();
     const out: string[] = [];
     for (const label of labels) {
-      const row = rows.find((r) => r.input_label === label);
-      const canon = row?.canonico ?? label; // fallback al label si no resuelve
+      const canon = canonByLabel.get(label) ?? label;
       if (seen.has(canon)) continue;
       seen.add(canon);
       out.push(canon);
     }
     return out;
-  },
-  ["dupont:normalizar-canonicos"],
-  { revalidate: 1800, tags: ["entidades"] },
-);
+  } catch {
+    // Fallback: si la query falla, devolver labels tal cual (dedupear
+    // en memoria por si acaso). Prevenir crash del page.
+    return [...new Set(labels)];
+  }
+}
 
 // Cache aggressive del resultado completo — clave incluye TODOS los params
 // que afectan output (entidades + periodos + colors sorted). Cambios generan
@@ -181,7 +192,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
 
   // Normalizar a canonicos actuales + dedupear. Fix del bug donde 2 labels
   // que resuelven al mismo canonico daban 2 chips duplicados.
-  const entidadesParam = await cachedNormalizarCanonicos(entidadesRaw);
+  const entidadesParam = await normalizarCanonicos(entidadesRaw);
 
   // Resolver periodos: URL > cookie > default sistema
   const periodosParam = params.periodos

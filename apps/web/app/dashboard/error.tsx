@@ -30,10 +30,10 @@ export default function DashboardError({
           <AlertCircle className="w-6 h-6 text-rose-600 flex-shrink-0 mt-0.5" />
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
-              Algo salio mal
+              Algo salió mal
             </h2>
             <p className="text-sm text-slate-600 mt-1">
-              No pudimos cargar esta seccion. Pode reintentar o volver al inicio.
+              No pudimos cargar esta sección. Puedes reintentar o volver al inicio.
             </p>
           </div>
         </div>
