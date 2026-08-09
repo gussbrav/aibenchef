@@ -61,14 +61,14 @@ export function periodoLabel(periodo: number): string {
   return `${meses[mes - 1] ?? "?"} ${anio}`;
 }
 
-function periodoMismoMesAnioPrev(periodo: number): number {
+export function periodoMismoMesAnioPrev(periodo: number): number {
   const anio = Math.floor(periodo / 100);
   const mes = periodo % 100;
   return (anio - 1) * 100 + mes;
 }
 
 /** Diciembre del año anterior al periodo. Para Abr 2020 → Dic 2019. */
-function periodoDicAnioPrev(periodo: number): number {
+export function periodoDicAnioPrev(periodo: number): number {
   const anio = Math.floor(periodo / 100);
   return (anio - 1) * 100 + 12;
 }

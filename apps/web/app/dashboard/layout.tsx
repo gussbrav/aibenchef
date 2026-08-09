@@ -56,6 +56,7 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard" label="Resumen" exact />
               <NavLink href="/dashboard/informe" label="Benchmark" />
               <NavLink href="/dashboard/punto-equilibrio" label="Punto Equilibrio" />
+              <NavLink href="/dashboard/dupont" label="DuPont" />
 
               <NavDropdown
                 label="Estados Financieros"
