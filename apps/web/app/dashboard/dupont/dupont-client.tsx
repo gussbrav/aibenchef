@@ -53,6 +53,16 @@ function fmtPeriodoLabel(codigo: number): string {
   return `${meses[mes - 1] ?? "?"}-${String(anio).slice(-2)}`;
 }
 
+// Meses entre dos periodos YYYYMM. Usado para detectar entidades con
+// data obsoleta (>3 meses de gap = probable rename historico).
+function gapEnMeses(desde: number, hasta: number): number {
+  const aDesde = Math.floor(desde / 100);
+  const mDesde = desde % 100;
+  const aHasta = Math.floor(hasta / 100);
+  const mHasta = hasta % 100;
+  return (aHasta - aDesde) * 12 + (mHasta - mDesde);
+}
+
 // ============================================================================
 // Componente raiz
 // ============================================================================
@@ -76,9 +86,9 @@ export function DupontClient({
   // Draft state — cambios no aplicados aún
   const initialEntidades = data.entidades.map((e) => e.nombCorreg);
   const initialPeriodos = data.periodos.map((p) => p.codigo);
-  // Map<nombCorreg, hex> con los colores override vivos (client-side).
-  // Los cambios de color se aplican INMEDIATAMENTE al render (setState)
-  // ademas de persistir en URL para que sobrevivan la navegacion.
+  // Map<nombCorreg, hex> con los colores server-side (ya con overrides del
+  // URL aplicados por el backend). Sirve de baseline para (a) inicializar
+  // liveColors y (b) el boton 'Reset' del picker vuelve a este color.
   const initialColors = useMemo(() => {
     const m = new Map<string, string>();
     for (const e of data.entidades) m.set(e.nombCorreg, e.color);
@@ -87,6 +97,13 @@ export function DupontClient({
   const [draftEntidades, setDraftEntidades] = useState<string[]>(initialEntidades);
   const [draftPeriodos, setDraftPeriodos] = useState<number[]>(initialPeriodos);
   const [liveColors, setLiveColors] = useState<Map<string, string>>(initialColors);
+
+  // Sincronizar liveColors cuando data cambia por navegacion server-side
+  // (ej. despues de applyFilters con nuevo peer group). Sin esto, chips
+  // nuevos aparecen sin color en el picker hasta el proximo cambio.
+  useEffect(() => {
+    setLiveColors(initialColors);
+  }, [initialColors]);
 
   const dirty = useMemo(() => {
     if (draftEntidades.length !== initialEntidades.length) return true;
@@ -117,38 +134,49 @@ export function DupontClient({
   }, [initialEntidades, initialPeriodos]);
 
   // Setear color de una entidad: (a) update local instant + (b) push URL
-  // con ?colors=... para que persista. hex=null resetea al color del server.
+  // con ?colors=... para persistencia.
+  //
+  // Estrategia: SIEMPRE persistimos TODOS los colores actuales en URL
+  // (sin filtrar por 'coincide con default'). Simple, robusto, sin bugs
+  // de comparacion contra initialColors que puede ya venir con overrides
+  // aplicados del server.
+  //
+  // hex=null (boton Reset) => vuelve al color server-default para esa
+  // entidad y remueve el override de la URL.
+  //
+  // Usamos setLiveColors(prev => ...) para no capturar stale state
+  // cuando el user hace multiples cambios rapidos.
   const setColorForEntity = useCallback(
     (nombCorreg: string, hex: string | null) => {
       setLiveColors((prev) => {
         const next = new Map(prev);
-        if (hex) next.set(nombCorreg, hex);
-        else {
+        if (hex) {
+          next.set(nombCorreg, hex);
+        } else {
           const server = initialColors.get(nombCorreg);
           if (server) next.set(nombCorreg, server);
           else next.delete(nombCorreg);
         }
-        return next;
-      });
-      // Persistir en URL — solo los overrides que difieren del server-default
-      const params = new URLSearchParams(searchParams.toString());
-      const overrides: string[] = [];
-      const target = new Map(liveColors);
-      if (hex) target.set(nombCorreg, hex);
-      else target.delete(nombCorreg);
-      for (const [n, c] of target.entries()) {
-        const serverColor = initialColors.get(n);
-        if (serverColor && c.toLowerCase() !== serverColor.toLowerCase()) {
+
+        // Persist inmediato — usamos 'next' fresh (no el stale liveColors
+        // del outer closure).
+        const params = new URLSearchParams(searchParams.toString());
+        const overrides: string[] = [];
+        for (const [n, c] of next.entries()) {
           overrides.push(`${n}:${c.replace(/^#/, "")}`);
         }
-      }
-      if (overrides.length > 0) params.set("colors", overrides.join(","));
-      else params.delete("colors");
-      startTransition(() => {
-        router.replace(`${pathname}?${params.toString()}` as never, { scroll: false });
+        if (overrides.length > 0) params.set("colors", overrides.join(","));
+        else params.delete("colors");
+
+        startTransition(() => {
+          router.replace(`${pathname}?${params.toString()}` as never, {
+            scroll: false,
+          });
+        });
+        return next;
       });
     },
-    [initialColors, liveColors, pathname, router, searchParams],
+    [initialColors, pathname, router, searchParams],
   );
 
   // Data con colores en vivo aplicados (para que los charts reaccionen sin
@@ -356,6 +384,15 @@ function SelectoresBar({
 }) {
   const [entidadModalOpen, setEntidadModalOpen] = useState(false);
 
+  // Ultimo periodo con data en el sistema (mayor ultimoPeriodo de todas las
+  // entidades). Sirve de referencia para el flag 'obsoleto' — entidades con
+  // gap >3 meses vs este maximo probablemente sufrieron rename historico.
+  const maxDisponiblePeriodo = useMemo(() => {
+    let max = 0;
+    for (const e of entidadesDisponibles) if (e.ultimoPeriodo > max) max = e.ultimoPeriodo;
+    return max;
+  }, [entidadesDisponibles]);
+
   const removeEntidad = (n: string) => {
     setDraftEntidades(draftEntidades.filter((x) => x !== n));
   };
@@ -387,15 +424,23 @@ function SelectoresBar({
             Entidades ({draftEntidades.length})
           </label>
           <div className="flex flex-wrap gap-1.5 items-center">
-            {draftEntidades.map((n) => (
-              <EntidadChipConColor
-                key={n}
-                nombCorreg={n}
-                color={colorByEnt.get(n) ?? "#64748b"}
-                onColorChange={(hex) => onColorChange(n, hex)}
-                onRemove={() => removeEntidad(n)}
-              />
-            ))}
+            {draftEntidades.map((n) => {
+              const info = entidadesDisponibles.find((e) => e.nombCorreg === n);
+              const gap = info
+                ? gapEnMeses(info.ultimoPeriodo, maxDisponiblePeriodo)
+                : 0;
+              return (
+                <EntidadChipConColor
+                  key={n}
+                  nombCorreg={n}
+                  color={colorByEnt.get(n) ?? "#64748b"}
+                  ultimoPeriodo={info?.ultimoPeriodo}
+                  obsoleto={gap > 3}
+                  onColorChange={(hex) => onColorChange(n, hex)}
+                  onRemove={() => removeEntidad(n)}
+                />
+              );
+            })}
             <button
               type="button"
               onClick={() => setEntidadModalOpen(true)}
@@ -507,11 +552,15 @@ function SelectoresBar({
 function EntidadChipConColor({
   nombCorreg,
   color,
+  ultimoPeriodo,
+  obsoleto = false,
   onColorChange,
   onRemove,
 }: {
   nombCorreg: string;
   color: string;
+  ultimoPeriodo?: number;
+  obsoleto?: boolean;
   onColorChange: (hex: string | null) => void;
   onRemove: () => void;
 }) {
@@ -519,7 +568,13 @@ function EntidadChipConColor({
   const dotRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <span className="inline-flex items-center gap-1 pl-1 pr-1 py-1 text-xs rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+    <span
+      className={`inline-flex items-center gap-1 pl-1 pr-1 py-1 text-xs rounded-full border ${
+        obsoleto
+          ? "bg-amber-50 border-amber-200 text-amber-900"
+          : "bg-slate-100 border-slate-200 text-slate-700"
+      }`}
+    >
       <button
         ref={dotRef}
         type="button"
@@ -532,6 +587,14 @@ function EntidadChipConColor({
         <Paintbrush className="w-2 h-2 text-white/0 group-hover:text-white/90 absolute inset-0 m-auto" />
       </button>
       <span className="px-1">{nombCorreg}</span>
+      {obsoleto && ultimoPeriodo && (
+        <span
+          className="text-[9px] px-1 py-0.5 rounded bg-amber-200 text-amber-900 font-semibold cursor-help"
+          title={`Sin data desde ${fmtPeriodoLabel(ultimoPeriodo)}. Esta entidad probablemente cambió de nombre (rename histórico). Verifica si existe un canónico más reciente para ver la data completa.`}
+        >
+          ⚠ {fmtPeriodoLabel(ultimoPeriodo)}
+        </span>
+      )}
       <button
         type="button"
         onClick={onRemove}
@@ -579,6 +642,17 @@ function EntidadPicker({
     return disponibles.filter((e) => e.nombCorreg.toLowerCase().includes(qLower));
   }, [q, disponibles]);
 
+  // Ultimo periodo REAL disponible en el dataset (max de todos los
+  // ultimoPeriodo). Si una entidad tiene ultimo < ese max por >6 meses,
+  // probablemente sufrio un rename y su historia continua bajo otro
+  // canonico. Mostramos badge de warning para prevenir seleccion "ciega"
+  // que devuelva datos sin cobertura al periodo actual del analisis.
+  const maxPeriodoDisponible = useMemo(() => {
+    let max = 0;
+    for (const e of disponibles) if (e.ultimoPeriodo > max) max = e.ultimoPeriodo;
+    return max;
+  }, [disponibles]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
@@ -605,6 +679,13 @@ function EntidadPicker({
         <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
           {filtradas.map((e) => {
             const sel = seleccionadas.includes(e.nombCorreg);
+            // Gap en meses entre ultimo periodo disponible del sistema y el
+            // ultimo periodo de esta entidad. Si >3 meses, la entidad ya
+            // no reporta y probablemente sufrio un rename historico.
+            const gapMeses = maxPeriodoDisponible && e.ultimoPeriodo
+              ? gapEnMeses(e.ultimoPeriodo, maxPeriodoDisponible)
+              : 0;
+            const obsoleto = gapMeses > 3;
             return (
               <button
                 key={e.nombCorreg}
@@ -621,8 +702,20 @@ function EntidadPicker({
                 >
                   {sel && <span className="text-[10px]">✓</span>}
                 </div>
-                <span className="flex-1 text-left">{e.nombCorreg}</span>
-                <span className="text-[10px] text-slate-400">{e.tipoEntidad}</span>
+                <span className="flex-1 text-left flex items-center gap-2">
+                  {e.nombCorreg}
+                  {obsoleto && (
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-800"
+                      title={`Sin data desde ${fmtPeriodoLabel(e.ultimoPeriodo)}. Puede haber cambiado de nombre — revisa entidades similares o activa 'consolidar' para ver la historia unificada.`}
+                    >
+                      ⚠ sin data reciente
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] text-slate-400 tabular-nums">
+                  {e.tipoEntidad} · {fmtPeriodoLabel(e.ultimoPeriodo)}
+                </span>
               </button>
             );
           })}
