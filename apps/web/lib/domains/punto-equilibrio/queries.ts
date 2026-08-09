@@ -26,6 +26,11 @@ export type PuntoEquilibrioRow = {
   pctGastosOp: number | null;
   pctMargenNeto: number | null;
   pctPuntoEq: number | null;
+  // Sub-componentes de Gastos Operacionales (para expandir en la tabla).
+  // Ya existen pre-calculados en marts.v_punto_equilibrio_ancho.
+  pctPersonal?: number | null;
+  pctGenerales?: number | null;
+  pctDepreciacion?: number | null;
 };
 
 export type PuntoEquilibrioComparativoRow = {
@@ -147,6 +152,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
     pct_otros: number | null;
     pct_punto_eq: number | null;
     pct_margen_neto: number | null;
+    pct_gastos_personal: number | null;
+    pct_gastos_generales: number | null;
+    pct_deprec: number | null;
   }>(sql`
     WITH aliases AS (
       ${consolidar
@@ -163,7 +171,8 @@ export async function getPuntoEquilibrioHistorico(opts: {
     )
     SELECT DISTINCT ON (v.periodo)
            v.periodo, v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
-           v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto
+           v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto,
+           v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec
     FROM marts.v_punto_equilibrio_ancho v
     WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
       AND v.moneda = ${moneda}
@@ -186,6 +195,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
       pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
       pctMargenNeto: r?.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
       pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
+      pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
+      pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
+      pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
     };
   });
 }

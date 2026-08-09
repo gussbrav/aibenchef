@@ -9,10 +9,10 @@
  * URL sincronizada — selectores modifican la URL para poder compartir.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  BarChart3, Calendar, GripVertical, Info, Layers, RotateCcw, TrendingUp, Users, X,
+  BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, RotateCcw, TrendingUp, Users, X,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -607,6 +607,8 @@ type RowDef = {
   label: string;
   field: keyof PuntoEquilibrioRow;
   variant: "sum" | "sub" | "bold" | "highlight";
+  /** Sub-filas que se muestran al expandir esta fila (patron Excel agrupar). */
+  subrows?: Array<{ key: string; label: string; field: keyof PuntoEquilibrioRow }>;
 };
 
 const DEFAULT_ROW_ORDER: RowDef[] = [
@@ -614,10 +616,41 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
   { key: "otros", label: "Otros Ingresos (Egresos)", field: "pctOtros", variant: "sum" },
   { key: "costoFondeo", label: "Gasto Financiero", field: "pctCostoFondeo", variant: "sub" },
   { key: "provisiones", label: "Costo de Provisión", field: "pctProvisiones", variant: "sub" },
-  { key: "gastosOp", label: "Gastos Operacionales", field: "pctGastosOp", variant: "sub" },
+  {
+    key: "gastosOp",
+    label: "Gastos Operacionales",
+    field: "pctGastosOp",
+    variant: "sub",
+    // Sub-desglose de gastos operacionales — ya vienen pre-calculados en
+    // marts.v_punto_equilibrio_ancho (pe_gastos_personal, pe_gastos_generales,
+    // pe_deprec_amortiz). Corresponden a las cuentas SBS:
+    //   Personal = cta_10.1
+    //   Generales = cta_10.3 (Servicios Terceros) + cta_10.4 (Impuestos y Contrib)
+    //   Depreciación y Amortización = cta_12.7 + cta_12.8
+    subrows: [
+      { key: "personal", label: "Personal", field: "pctPersonal" },
+      { key: "generales", label: "Servicios + Impuestos", field: "pctGenerales" },
+      { key: "deprec", label: "Depreciación + Amortización", field: "pctDepreciacion" },
+    ],
+  },
   { key: "margenNeto", label: "Margen antes de Impuestos", field: "pctMargenNeto", variant: "bold" },
   { key: "puntoEq", label: "Punto de Equilibrio", field: "pctPuntoEq", variant: "highlight" },
 ];
+
+const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
+
+/**
+ * Punto de Equilibrio: por convencion financiera es el UMBRAL positivo
+ * de rendimiento requerido para cubrir todos los costos, no un deficit.
+ * En la vista mostramos el valor absoluto (positivo) aunque en la
+ * data raw viene con signo negativo (suma de gastos negativos).
+ * Consultado con analista financiero senior (Juan Jose).
+ */
+function displayValueForField(field: keyof PuntoEquilibrioRow, v: number | null): number | null {
+  if (v == null) return null;
+  if (field === "pctPuntoEq") return Math.abs(v);
+  return v;
+}
 
 const LS_ROW_ORDER = "pe-row-order-v1";
 const LS_COL_ORDER = "pe-col-order-v1";
@@ -639,6 +672,36 @@ function HistoricoTable({
     DEFAULT_ROW_ORDER.map((r) => r.key),
   );
   const [colOrder, setColOrder] = useState<number[] | null>(null);
+
+  // Estado de expand/collapse por fila padre. Persiste en localStorage.
+  // Default vacio (todo colapsado) — user opt-in del detalle.
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_EXPANDED_ROWS);
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        if (Array.isArray(arr)) setExpandedRows(new Set(arr));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleExpanded = (key: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(LS_EXPANDED_ROWS, JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   // Hidratar desde localStorage
   useEffect(() => {
@@ -831,9 +894,11 @@ function HistoricoTable({
               const isDropTarget = dropTarget?.type === "row" && dropTarget.id === row.key;
               const isDragging = draggedRow === row.key;
               const rowStyle = getRowStyle(row.variant);
+              const hasSubrows = !!row.subrows && row.subrows.length > 0;
+              const isExpanded = hasSubrows && expandedRows.has(row.key);
               return (
+                <Fragment key={row.key}>
                 <tr
-                  key={row.key}
                   draggable
                   onDragStart={(e) => {
                     setDraggedRow(row.key);
@@ -878,6 +943,23 @@ function HistoricoTable({
                   >
                     <div className="flex items-center gap-2">
                       <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
+                      {hasSubrows ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(row.key)}
+                          className="w-4 h-4 flex items-center justify-center rounded hover:bg-slate-200 flex-shrink-0"
+                          aria-label={isExpanded ? "Colapsar detalle" : "Expandir detalle"}
+                          title={isExpanded ? "Colapsar detalle" : "Ver detalle"}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-3 h-3 text-slate-600" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3 text-slate-600" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="w-4 h-4 flex-shrink-0" />
+                      )}
                       {rowStyle.prefix && (
                         <span className="text-slate-400 font-mono">{rowStyle.prefix}</span>
                       )}
@@ -886,7 +968,8 @@ function HistoricoTable({
                   </td>
                   {effectiveCols.map((periodo) => {
                     const d = dataByPeriodo.get(periodo);
-                    const v = d ? (d[row.field] as number | null) : null;
+                    const raw = d ? (d[row.field] as number | null) : null;
+                    const v = displayValueForField(row.field, raw);
                     return (
                       <td
                         key={periodo}
@@ -903,6 +986,39 @@ function HistoricoTable({
                     );
                   })}
                 </tr>
+                {isExpanded && row.subrows?.map((sub) => (
+                  <tr
+                    key={`${row.key}__${sub.key}`}
+                    className="border-t border-slate-100 bg-slate-50/50"
+                  >
+                    <td className="px-4 sticky left-0 z-10 bg-slate-50/70">
+                      <div className="flex items-center gap-2 pl-6 text-[13px] text-slate-600">
+                        <span className="w-3 h-3 flex-shrink-0" />
+                        <span className="text-slate-400">↳</span>
+                        <span className="italic">{sub.label}</span>
+                      </div>
+                    </td>
+                    {effectiveCols.map((periodo) => {
+                      const d = dataByPeriodo.get(periodo);
+                      const raw = d ? (d[sub.field] as number | null | undefined) : null;
+                      const v = raw == null ? null : displayValueForField(sub.field, raw);
+                      return (
+                        <td
+                          key={periodo}
+                          className={cn(
+                            "text-right px-3 font-mono tabular-nums whitespace-nowrap text-[13px]",
+                            v != null && v < 0 && "text-rose-600",
+                            v != null && v >= 0 && "text-slate-600",
+                            v == null && "text-slate-300 italic",
+                          )}
+                        >
+                          {fmtPct(v)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                </Fragment>
               );
             })}
           </tbody>
