@@ -27,7 +27,7 @@ import {
   LabelList,
 } from "recharts";
 import {
-  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical, Search, Check, ChevronDown,
+  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical, Search, Check, ChevronDown, Link2, Link2Off,
 } from "lucide-react";
 
 import type { DupontData, DupontRow, DupontInsights } from "@/lib/domains/dupont";
@@ -322,7 +322,7 @@ export function DupontClient({
   const narrativaIA = useNarrativaIA(data, initialInsights, initialInsightsModel);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 px-2 animate-premium-in">
+    <div className="max-w-[1600px] mx-auto space-y-6 px-4 animate-premium-in">
       {/* ============ HEADER ============ */}
       <header className="rounded-xl text-white p-8 relative bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 shadow-lg">
         <div
@@ -636,28 +636,28 @@ function SelectoresBar({
         </div>
       </div>
 
-      {/* Toggle: fusionar renombres historicos.
-          OFF (default): cada canonico muestra solo su ventana legal real
-            (ej. Banco Compartamos: 2023+, no 2020).
-          ON: incluye aliases historicos consolidados (evolucion operativa
-            completa de la entidad — ej. Compartamos desde su etapa como
-            Financiera 2008-2023 + Banco 2023-hoy).
-          Draft state — se persiste con 'Aplicar filtros'. */}
-      <label
-        className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none group"
-        title="Cuando está OFF, cada entidad muestra solo la data reportada bajo su nombre canónico actual. Cuando está ON, se consolidan aliases históricos: por ejemplo 'Banco Compartamos' incluye también su etapa previa como 'Financiera Compartamos' (2008-2023)."
+      {/* Toggle: fusionar renombres historicos — mismo estilo visual que
+          Benchmark (selectores-toolbar.tsx del /informe) para consistencia
+          UX cross-vista.
+          OFF (default): cada canonico solo su ventana legal real.
+          ON: incluye aliases historicos consolidados. */}
+      <button
+        type="button"
+        onClick={() => setDraftConsolidar(!draftConsolidar)}
+        className={`h-8 px-3 text-xs rounded inline-flex items-center gap-1.5 transition-colors self-start ${
+          draftConsolidar
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
+            : "bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200"
+        }`}
+        title={
+          draftConsolidar
+            ? "Renombres UNIDOS: los aliases históricos se consolidan bajo el canónico actual (ej. 'Banco Compartamos' incluye su etapa como Financiera 2008-2023). Click para separarlos."
+            : "Renombres SEPARADOS: cada entidad muestra solo su ventana legal (ej. 'Banco Compartamos' desde 2023). Click para consolidar la historia completa."
+        }
       >
-        <input
-          type="checkbox"
-          checked={draftConsolidar}
-          onChange={(e) => setDraftConsolidar(e.target.checked)}
-          className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-        />
-        <span className="font-medium">🔗 Fusionar renombres históricos</span>
-        <span className="text-slate-400 text-[11px] italic">
-          (incluye aliases pre-conversión — ej. Banco Compartamos + Financiera Compartamos)
-        </span>
-      </label>
+        {draftConsolidar ? <Link2 className="w-3.5 h-3.5" /> : <Link2Off className="w-3.5 h-3.5" />}
+        {draftConsolidar ? "Renombres unidos" : "Renombres separados"}
+      </button>
 
       {/* Barra de accion apply/reset — TODO cambio (entidades, periodos, orden,
           colores, consolidar) se acumula en draft y se persiste con 'Aplicar
@@ -1023,7 +1023,7 @@ function SeccionDupont({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-0">
         {/* Sidebar de narrativa — 3 estados visuales:
               loading = shimmer + spinner + "generando"
               ok (IA) = badge purple con ícono Wand2 (highlight que fue IA)
@@ -1160,8 +1160,8 @@ function IndicadorChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
-            margin={{ top: 20, right: 8, left: 0, bottom: 4 }}
-            barCategoryGap="18%"
+            margin={{ top: 26, right: 12, left: 0, bottom: 4 }}
+            barCategoryGap="14%"
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis
@@ -1197,14 +1197,18 @@ function IndicadorChart({
                 radius={[3, 3, 0, 0]}
                 maxBarSize={highlight ? 46 : 34}
               >
-                {highlight && (
-                  <LabelList
-                    dataKey={ent.nombCorreg}
-                    position="top"
-                    formatter={(v: unknown) => fmtValue(Number(v))}
-                    style={{ fontSize: 10, fill: "#334155", fontWeight: 600 }}
-                  />
-                )}
+                {/* Labels en TODOS los charts (no solo el highlight). Font
+                    mas chica en subcharts para no saturar con 5+ entidades. */}
+                <LabelList
+                  dataKey={ent.nombCorreg}
+                  position="top"
+                  formatter={(v: unknown) => fmtValue(Number(v))}
+                  style={{
+                    fontSize: highlight ? 10 : 9,
+                    fill: "#334155",
+                    fontWeight: highlight ? 600 : 500,
+                  }}
+                />
               </Bar>
             ))}
           </BarChart>
