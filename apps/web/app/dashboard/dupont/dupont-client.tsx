@@ -54,6 +54,7 @@ type DupontFiltersSnapshot = {
   entidades: string[];      // orden importa (drag & drop)
   periodos: number[];
   colors: Array<[string, string]>; // Map serializado como array de [name, hex]
+  consolidar?: boolean;     // fusion de renombres historicos (opt-in)
 };
 
 // Helper para escribir cookie desde el client. Path=/ para que aplique
@@ -111,7 +112,7 @@ export function DupontClient({
   data,
   periodosDisponibles,
   entidadesDisponibles,
-  consolidar: _consolidar,
+  consolidar,
   initialInsights = null,
   initialInsightsModel = null,
 }: {
@@ -153,6 +154,7 @@ export function DupontClient({
   const [draftEntidades, setDraftEntidades] = useState<string[]>(initialEntidades);
   const [draftPeriodos, setDraftPeriodos] = useState<number[]>(initialPeriodos);
   const [draftColors, setDraftColors] = useState<Map<string, string>>(initialColors);
+  const [draftConsolidar, setDraftConsolidar] = useState<boolean>(consolidar);
 
   // Sync draft <- initial cuando data cambia por navegacion server-side
   // (post applyFilters). Sin esto, chips nuevos aparecerian sin color y
@@ -166,6 +168,9 @@ export function DupontClient({
   useEffect(() => {
     setDraftColors(initialColors);
   }, [initialColors]);
+  useEffect(() => {
+    setDraftConsolidar(consolidar);
+  }, [consolidar]);
 
   // NO hay useEffect de restore aca. La cookie ya viajo al server via
   // page.tsx en el SSR — si habia snapshot, el server ya renderizo con
@@ -187,10 +192,11 @@ export function DupontClient({
       const dv = draftColors.get(n);
       if (iv && dv && iv.toLowerCase() !== dv.toLowerCase()) return true;
     }
+    if (draftConsolidar !== consolidar) return true;
     return false;
   }, [
     draftEntidades, initialEntidades, draftPeriodos, initialPeriodos,
-    draftColors, initialColors,
+    draftColors, initialColors, draftConsolidar, consolidar,
   ]);
 
   // Aplicar filtros — 1 push a la URL con TODOS los cambios juntos +
@@ -199,6 +205,8 @@ export function DupontClient({
     const params = new URLSearchParams();
     params.set("entidades", draftEntidades.join(","));
     params.set("periodos", draftPeriodos.join(","));
+    // consolidar solo va en URL si es true (default es false — URL limpia).
+    if (draftConsolidar) params.set("consolidar", "true");
     // Colors: solo los que difieren del server-default (para URL limpia).
     // Si el user reseteó todos los colores, no aparece ?colors= en la URL.
     const overrides: Array<[string, string]> = [];
@@ -214,25 +222,25 @@ export function DupontClient({
     }
 
     // Persist snapshot en COOKIE (viaja al server, evita flash SSR).
-    // Sobrevive nav a otro tab del app + refresh + share entre tabs
-    // dentro del mismo browser.
     const snap: DupontFiltersSnapshot = {
       entidades: draftEntidades,
       periodos: draftPeriodos,
       colors: overrides,
+      consolidar: draftConsolidar,
     };
     writeCookie(COOKIE_KEY_DUPONT_FILTERS, JSON.stringify(snap), COOKIE_MAX_AGE_DAYS);
 
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}` as never, { scroll: false });
     });
-  }, [draftEntidades, draftPeriodos, draftColors, initialColors, pathname, router]);
+  }, [draftEntidades, draftPeriodos, draftColors, draftConsolidar, initialColors, pathname, router]);
 
   const resetFilters = useCallback(() => {
     setDraftEntidades(initialEntidades);
     setDraftPeriodos(initialPeriodos);
     setDraftColors(initialColors);
-  }, [initialEntidades, initialPeriodos, initialColors]);
+    setDraftConsolidar(consolidar);
+  }, [initialEntidades, initialPeriodos, initialColors, consolidar]);
 
   // Restablecer defaults del sistema: borrar cookie + navegar sin params.
   // El server volvera a usar getDefaultPeerGroup('bcp') y los colores
@@ -345,6 +353,8 @@ export function DupontClient({
         moveEntidad={moveEntidad}
         draftPeriodos={draftPeriodos}
         setDraftPeriodos={setDraftPeriodos}
+        draftConsolidar={draftConsolidar}
+        setDraftConsolidar={setDraftConsolidar}
         entidadesDisponibles={entidadesDisponibles}
         periodosDisponibles={periodosDisponibles}
         colorByEnt={colorByEnt}
@@ -463,6 +473,8 @@ function SelectoresBar({
   moveEntidad,
   draftPeriodos,
   setDraftPeriodos,
+  draftConsolidar,
+  setDraftConsolidar,
   entidadesDisponibles,
   periodosDisponibles,
   colorByEnt,
@@ -478,6 +490,8 @@ function SelectoresBar({
   moveEntidad: (from: string, to: string) => void;
   draftPeriodos: number[];
   setDraftPeriodos: (v: number[]) => void;
+  draftConsolidar: boolean;
+  setDraftConsolidar: (v: boolean) => void;
   entidadesDisponibles: EntidadDisponible[];
   periodosDisponibles: number[];
   colorByEnt: Map<string, string>;
@@ -622,10 +636,33 @@ function SelectoresBar({
         </div>
       </div>
 
+      {/* Toggle: fusionar renombres historicos.
+          OFF (default): cada canonico muestra solo su ventana legal real
+            (ej. Banco Compartamos: 2023+, no 2020).
+          ON: incluye aliases historicos consolidados (evolucion operativa
+            completa de la entidad — ej. Compartamos desde su etapa como
+            Financiera 2008-2023 + Banco 2023-hoy).
+          Draft state — se persiste con 'Aplicar filtros'. */}
+      <label
+        className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none group"
+        title="Cuando está OFF, cada entidad muestra solo la data reportada bajo su nombre canónico actual. Cuando está ON, se consolidan aliases históricos: por ejemplo 'Banco Compartamos' incluye también su etapa previa como 'Financiera Compartamos' (2008-2023)."
+      >
+        <input
+          type="checkbox"
+          checked={draftConsolidar}
+          onChange={(e) => setDraftConsolidar(e.target.checked)}
+          className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+        />
+        <span className="font-medium">🔗 Fusionar renombres históricos</span>
+        <span className="text-slate-400 text-[11px] italic">
+          (incluye aliases pre-conversión — ej. Banco Compartamos + Financiera Compartamos)
+        </span>
+      </label>
+
       {/* Barra de accion apply/reset — TODO cambio (entidades, periodos, orden,
-          colores) se acumula en draft y se persiste con 'Aplicar filtros'.
-          Los colores se ven en vivo (preview) para feedback inmediato pero
-          solo quedan guardados en URL/localStorage al aplicar. */}
+          colores, consolidar) se acumula en draft y se persiste con 'Aplicar
+          filtros'. Los colores se ven en vivo (preview) para feedback inmediato
+          pero solo quedan guardados en URL/cookie al aplicar. */}
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
         <span className="text-[11px] text-slate-500 italic">
           {dirty

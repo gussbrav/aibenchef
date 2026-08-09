@@ -35,6 +35,7 @@ type DupontFiltersSnapshot = {
   entidades?: string[];
   periodos?: number[];
   colors?: Array<[string, string]>;
+  consolidar?: boolean;
 };
 
 // Reuse cache wrappers (mismo patron que /informe — playbook cache-aggressive
@@ -213,7 +214,23 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
       ? cookieFilters.periodos
       : null;
 
-  const consolidar = params.consolidar !== "false";
+  // consolidar: INVERTIMOS el default estandar del proyecto. En /informe,
+  // consolidar=true por default (fusiona renombres historicos). En DuPont,
+  // consolidar=FALSE por default: cada canonico muestra solo su ventana
+  // legal real (Banco Compartamos: 2023+; Financiera Compartamos: 2008-
+  // 2023). Etiquetar data 2020 como 'Banco Compartamos' era enganoso —
+  // esa data pertenece a la Financiera pre-conversion.
+  //
+  // El usuario que quiere ver la evolucion operativa completa activa
+  // el toggle 'Fusionar renombres historicos' en el selector.
+  //
+  // Prioridad: URL > cookie > default (false).
+  const consolidar =
+    params.consolidar === "true"
+      ? true
+      : params.consolidar === "false"
+        ? false
+        : cookieFilters?.consolidar ?? false;
 
   // Resolver colors: URL > cookie
   let colorsOverride = parseColorsOverride(params.colors);
