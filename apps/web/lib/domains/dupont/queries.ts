@@ -114,13 +114,24 @@ async function getDupontRawForPeriodo(
         gastos_fin_pct: number | null;
       }>(sql`
         WITH
+        -- input: para cada label del user, resolver a su canonico actual.
+        -- COALESCE con label como fallback: si resolver_nomb_correg_canonico()
+        -- devuelve NULL (label no esta en la maestra), usamos el label directo.
+        -- Sin esto, un default incorrecto o typo del usuario dejaria la fila
+        -- vacia (todos los ratios NULL) con 0 feedback visible.
         input AS (
           SELECT label,
-                 ${consolidar
-                   ? sql.raw("dw.resolver_nomb_correg_canonico(label)")
-                   : sql.raw(`dw.nombre_vigente_en_periodo(label, ${periodo})`)} AS canon
+                 COALESCE(
+                   ${consolidar
+                     ? sql.raw("dw.resolver_nomb_correg_canonico(label)")
+                     : sql.raw(`dw.nombre_vigente_en_periodo(label, ${periodo})`)},
+                   label
+                 ) AS canon
           FROM unnest(${entidadesArr}) AS t(label)
         ),
+        -- raw_names: aliases raw para pre-filtrar MVs. UNION con canon directo
+        -- garantiza cobertura cuando el label no esta en entidad_maestra
+        -- (fallback path — mejor traer algo del label que 0 filas).
         raw_names AS (
           ${consolidar
             ? sql.raw(`
@@ -129,6 +140,10 @@ async function getDupontRawForPeriodo(
               JOIN dw.entidad_maestra em ON em.nomb_correg_canonico = i.canon
               JOIN dw.entidad_nombre en  ON en.entidad_id = em.id
               WHERE en.consolidar = TRUE
+              UNION
+              SELECT canon AS name FROM input WHERE canon IS NOT NULL
+              UNION
+              SELECT label AS name FROM input WHERE label IS NOT NULL
             `)
             : sql.raw(`SELECT canon AS name FROM input WHERE canon IS NOT NULL`)}
         ),

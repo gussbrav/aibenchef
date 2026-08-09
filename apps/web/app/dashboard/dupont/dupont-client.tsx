@@ -13,7 +13,7 @@
  * el usuario aplique via "Aplicar filtros" (evita re-fetches en cada tick).
  */
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   BarChart,
@@ -25,10 +25,11 @@ import {
   ResponsiveContainer,
   LabelList,
 } from "recharts";
-import { Sparkles, Users, Calendar, X, Plus, Loader2 } from "lucide-react";
+import { Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush } from "lucide-react";
 
 import type { DupontData, DupontRow } from "@/lib/domains/dupont";
 import type { EntidadDisponible } from "@/lib/domains/informe";
+import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
 
 // ============================================================================
 // Formatters
@@ -75,8 +76,17 @@ export function DupontClient({
   // Draft state — cambios no aplicados aún
   const initialEntidades = data.entidades.map((e) => e.nombCorreg);
   const initialPeriodos = data.periodos.map((p) => p.codigo);
+  // Map<nombCorreg, hex> con los colores override vivos (client-side).
+  // Los cambios de color se aplican INMEDIATAMENTE al render (setState)
+  // ademas de persistir en URL para que sobrevivan la navegacion.
+  const initialColors = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of data.entidades) m.set(e.nombCorreg, e.color);
+    return m;
+  }, [data.entidades]);
   const [draftEntidades, setDraftEntidades] = useState<string[]>(initialEntidades);
   const [draftPeriodos, setDraftPeriodos] = useState<number[]>(initialPeriodos);
+  const [liveColors, setLiveColors] = useState<Map<string, string>>(initialColors);
 
   const dirty = useMemo(() => {
     if (draftEntidades.length !== initialEntidades.length) return true;
@@ -90,6 +100,8 @@ export function DupontClient({
     return false;
   }, [draftEntidades, initialEntidades, draftPeriodos, initialPeriodos]);
 
+  // Al aplicar filtros persistimos entidades + periodos. Colores se persisten
+  // por separado (cambio de color debe ser instantaneo, no requiere apply).
   const applyFilters = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("entidades", draftEntidades.join(","));
@@ -104,6 +116,54 @@ export function DupontClient({
     setDraftPeriodos(initialPeriodos);
   }, [initialEntidades, initialPeriodos]);
 
+  // Setear color de una entidad: (a) update local instant + (b) push URL
+  // con ?colors=... para que persista. hex=null resetea al color del server.
+  const setColorForEntity = useCallback(
+    (nombCorreg: string, hex: string | null) => {
+      setLiveColors((prev) => {
+        const next = new Map(prev);
+        if (hex) next.set(nombCorreg, hex);
+        else {
+          const server = initialColors.get(nombCorreg);
+          if (server) next.set(nombCorreg, server);
+          else next.delete(nombCorreg);
+        }
+        return next;
+      });
+      // Persistir en URL — solo los overrides que difieren del server-default
+      const params = new URLSearchParams(searchParams.toString());
+      const overrides: string[] = [];
+      const target = new Map(liveColors);
+      if (hex) target.set(nombCorreg, hex);
+      else target.delete(nombCorreg);
+      for (const [n, c] of target.entries()) {
+        const serverColor = initialColors.get(n);
+        if (serverColor && c.toLowerCase() !== serverColor.toLowerCase()) {
+          overrides.push(`${n}:${c.replace(/^#/, "")}`);
+        }
+      }
+      if (overrides.length > 0) params.set("colors", overrides.join(","));
+      else params.delete("colors");
+      startTransition(() => {
+        router.replace(`${pathname}?${params.toString()}` as never, { scroll: false });
+      });
+    },
+    [initialColors, liveColors, pathname, router, searchParams],
+  );
+
+  // Data con colores en vivo aplicados (para que los charts reaccionen sin
+  // esperar la navegacion server-side)
+  const dataConColores = useMemo(
+    () => ({
+      ...data,
+      entidades: data.entidades.map((e) => ({
+        ...e,
+        color: liveColors.get(e.nombCorreg) ?? e.color,
+      })),
+    }),
+    [data, liveColors],
+  );
+
   // Indexar filas por (entidad, periodo) para lookup rapido en las secciones
   const rowsIndex = useMemo(() => {
     const m = new Map<string, DupontRow>();
@@ -112,6 +172,13 @@ export function DupontClient({
     }
     return m;
   }, [data.filas]);
+
+  // Mapa nombCorreg -> color EN VIVO para pasar al selector (chips coloreados)
+  const colorByEnt = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of dataConColores.entidades) m.set(e.nombCorreg, e.color);
+    return m;
+  }, [dataConColores.entidades]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 px-2 animate-premium-in">
@@ -146,6 +213,8 @@ export function DupontClient({
         setDraftPeriodos={setDraftPeriodos}
         entidadesDisponibles={entidadesDisponibles}
         periodosDisponibles={periodosDisponibles}
+        colorByEnt={colorByEnt}
+        onColorChange={setColorForEntity}
         dirty={dirty}
         isPending={isPending}
         onApply={applyFilters}
@@ -166,7 +235,7 @@ export function DupontClient({
           { label: "ROA (%)", getter: (r) => r.roaPct, formato: "pct" },
           { label: "Activos / Patrimonio", getter: (r) => r.apalancamiento, formato: "num" },
         ]}
-        data={data}
+        data={dataConColores}
         rowsIndex={rowsIndex}
       />
 
@@ -185,7 +254,7 @@ export function DupontClient({
           { label: "Otros Ingresos Netos (%)", getter: (r) => r.otrosIngPct, formato: "pct" },
           { label: "Impuestos (%)", getter: (r) => r.impuestosPct, formato: "pct" },
         ]}
-        data={data}
+        data={dataConColores}
         rowsIndex={rowsIndex}
       />
 
@@ -206,7 +275,7 @@ export function DupontClient({
           { label: "Gasto de Personal (%)", getter: (r) => r.personalPct, formato: "pct" },
           { label: "Gastos Generales (%)", getter: (r) => r.generalesPct, formato: "pct" },
         ]}
-        data={data}
+        data={dataConColores}
         rowsIndex={rowsIndex}
       />
 
@@ -225,7 +294,7 @@ export function DupontClient({
           { label: "Ingresos de Inversión (%)", getter: (r) => r.ingInversionPct, formato: "pct" },
           { label: "Gasto Financiero (%)", getter: (r) => r.gastosFinPct, formato: "pct" },
         ]}
-        data={data}
+        data={dataConColores}
         rowsIndex={rowsIndex}
       />
 
@@ -252,6 +321,8 @@ function SelectoresBar({
   setDraftPeriodos,
   entidadesDisponibles,
   periodosDisponibles,
+  colorByEnt,
+  onColorChange,
   dirty,
   isPending,
   onApply,
@@ -263,6 +334,8 @@ function SelectoresBar({
   setDraftPeriodos: (v: number[]) => void;
   entidadesDisponibles: EntidadDisponible[];
   periodosDisponibles: number[];
+  colorByEnt: Map<string, string>;
+  onColorChange: (nombCorreg: string, hex: string | null) => void;
   dirty: boolean;
   isPending: boolean;
   onApply: () => void;
@@ -302,20 +375,13 @@ function SelectoresBar({
           </label>
           <div className="flex flex-wrap gap-1.5 items-center">
             {draftEntidades.map((n) => (
-              <span
+              <EntidadChipConColor
                 key={n}
-                className="inline-flex items-center gap-1 pl-2 pr-1 py-1 text-xs rounded-full bg-slate-100 text-slate-700 border border-slate-200"
-              >
-                {n}
-                <button
-                  type="button"
-                  onClick={() => removeEntidad(n)}
-                  className="p-0.5 rounded hover:bg-rose-100 hover:text-rose-700"
-                  aria-label={`Quitar ${n}`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
+                nombCorreg={n}
+                color={colorByEnt.get(n) ?? "#64748b"}
+                onColorChange={(hex) => onColorChange(n, hex)}
+                onRemove={() => removeEntidad(n)}
+              />
             ))}
             <button
               type="button"
@@ -416,6 +482,65 @@ function SelectoresBar({
         />
       )}
     </div>
+  );
+}
+
+// ============================================================================
+// EntidadChipConColor — chip con dot clickeable (abre ColorPickerPopover)
+// + boton X para quitar. Reutiliza el ColorPickerPopover del /informe para
+// consistencia visual y de comportamiento cross-vista.
+// ============================================================================
+
+function EntidadChipConColor({
+  nombCorreg,
+  color,
+  onColorChange,
+  onRemove,
+}: {
+  nombCorreg: string;
+  color: string;
+  onColorChange: (hex: string | null) => void;
+  onRemove: () => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const dotRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <span className="inline-flex items-center gap-1 pl-1 pr-1 py-1 text-xs rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+      <button
+        ref={dotRef}
+        type="button"
+        onClick={() => setPickerOpen(true)}
+        className="w-4 h-4 rounded-full border border-white/60 shadow-sm hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-brand-400 relative group"
+        style={{ backgroundColor: color }}
+        aria-label={`Cambiar color de ${nombCorreg}`}
+        title="Click para cambiar color"
+      >
+        <Paintbrush className="w-2 h-2 text-white/0 group-hover:text-white/90 absolute inset-0 m-auto" />
+      </button>
+      <span className="px-1">{nombCorreg}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="p-0.5 rounded hover:bg-rose-100 hover:text-rose-700"
+        aria-label={`Quitar ${nombCorreg}`}
+      >
+        <X className="w-3 h-3" />
+      </button>
+      {pickerOpen && (
+        <ColorPickerPopover
+          nombCorreg={nombCorreg}
+          labelCorto={nombCorreg}
+          currentColor={color}
+          triggerRef={dotRef}
+          onColorChange={(hex) => {
+            onColorChange(hex);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </span>
   );
 }
 

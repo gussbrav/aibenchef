@@ -5,6 +5,7 @@ import {
   getUltimoPeriodoPublicable,
   listEntidadesDisponibles,
   listPeriodosDisponibles,
+  parseColorsOverride,
 } from "@/lib/domains/informe/queries";
 import { getAnalisisDupont, type DupontOpts } from "@/lib/domains/dupont";
 import { DupontClient } from "./dupont-client";
@@ -37,19 +38,23 @@ const cachedUltimoPeriodo = unstable_cache(
   { revalidate: 1800, tags: ["periodos"] },
 );
 
-// Cache aggressive del resultado completo — clave incluye los 2 params que
-// afectan output (entidades + periodos sorted). Cambios de peer o de
-// periodos generan una entrada de cache nueva; se sirven cacheadas por
-// 30min hasta invalidacion por refreshMvs (tag "dupont").
+// Cache aggressive del resultado completo — clave incluye TODOS los params
+// que afectan output (entidades + periodos + colors sorted). Cambios generan
+// entrada nueva; se sirven cacheadas por 30min hasta invalidacion por
+// refreshMvs (tag "dupont").
 async function getDupontCached(opts: {
   entidades: string[];
   periodos: number[];
   consolidar: boolean;
+  colorsOverride: Map<string, string> | null;
 }) {
   const key = JSON.stringify({
     e: [...opts.entidades].sort(),
     p: [...opts.periodos].sort(),
     c: opts.consolidar,
+    co: opts.colorsOverride
+      ? [...opts.colorsOverride.entries()].sort()
+      : null,
   });
   return unstable_cache(
     () => getAnalisisDupont(opts as DupontOpts),
@@ -65,15 +70,21 @@ type SearchParams = Promise<{
   entidades?: string;
   periodos?: string;
   consolidar?: string;
+  /** ?colors=CMAC%20Arequipa:0F2A5E,Mibanco:E91E63 (mismo formato /informe) */
+  colors?: string;
 }>;
 
-// Defaults sensatos: 4 entidades tipicas del sector microfinanciero peruano
-// para que la vista out-of-the-box muestre algo comparable (peer group SBS).
+// Defaults sensatos: 4 entidades tipicas del sector microfinanciero peruano.
+// IMPORTANTE: usar los nombres canonicos EXACTOS que estan en la maestra
+// (config.peer_group + dw.entidad_maestra). Nombres incorrectos hacen que
+// resolver_nomb_correg_canonico() devuelva NULL y las CTEs de la query
+// vengan vacias -> barras faltantes en el chart. Fuente: PEER_GROUP_FALLBACK
+// de informe/queries.ts.
 const DEFAULT_ENTIDADES = [
-  "Caja Arequipa",
-  "Caja Huancayo",
+  "CMAC Arequipa",
+  "CMAC Huancayo",
   "Mibanco",
-  "Compartamos Financiera",
+  "Financiera Compartamos",
 ];
 
 export default async function DupontPage({ searchParams }: { searchParams: SearchParams }) {
@@ -92,6 +103,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
     : null;
 
   const consolidar = params.consolidar !== "false";
+  const colorsOverride = parseColorsOverride(params.colors);
 
   // Resolver defaults de periodos si no vinieron en URL
   let periodos: number[];
@@ -107,7 +119,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
   // Fetch en paralelo — cachedListPeriodos y cachedListEntidades sirven
   // los selectores; getDupontCached calcula todos los ratios.
   const [data, periodosDisponibles, entidadesDisponibles] = await Promise.all([
-    getDupontCached({ entidades: entidadesParam, periodos, consolidar }),
+    getDupontCached({ entidades: entidadesParam, periodos, consolidar, colorsOverride }),
     cachedListPeriodos(),
     cachedListEntidades(),
   ]);
