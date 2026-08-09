@@ -25,18 +25,21 @@
  */
 
 import { headers } from "next/headers";
-import { createHash } from "node:crypto";
-import { sql } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/infrastructure/db";
 import {
   handleRoute,
   UnauthorizedError,
   ValidationError,
 } from "@/lib/domains/shared";
-import { getProviderForCliente, LlmProviderError } from "@/lib/domains/llm-vault";
+import { getProviderForCliente } from "@/lib/domains/llm-vault";
 import type { DupontData } from "@/lib/domains/dupont";
+import {
+  hashDupontInput,
+  getDupontInsightsFromCache,
+  saveDupontInsightsToCache,
+  DUPONT_PROMPT_VERSION,
+} from "@/lib/domains/dupont";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -72,41 +75,11 @@ function pruneMicrocache() {
   }
 }
 
-// Version del prompt del LLM. Bump esto cuando cambies SYSTEM_PROMPT
-// o el shape del user prompt. Todas las entradas del DB cache viejas
-// quedan huerfanas (nunca hit) y se regeneran con el prompt nuevo.
-// Historial:
-//   v1: prompt inicial punchy con jerga DuPont sin explicar
-//   v2-nyt: storytelling estilo NYT, sin siglas sin explicar, humano
-const PROMPT_VERSION = "v2-nyt";
-
-function hashInput(data: DupontData): string {
-  const h = createHash("sha256");
-  h.update(JSON.stringify({
-    v: PROMPT_VERSION,
-    ents: data.entidades.map((e) => e.nombCorreg),
-    pers: data.periodos.map((p) => p.codigo),
-    rows: data.filas.map((r) => ({
-      e: r.entidad,
-      p: r.periodo,
-      roe: r.roePct?.toFixed(2),
-      roa: r.roaPct?.toFixed(2),
-      apa: r.apalancamiento?.toFixed(2),
-      mon: r.margenOpPct?.toFixed(2),
-      oth: r.otrosIngPct?.toFixed(2),
-      imp: r.impuestosPct?.toFixed(2),
-      mfb: r.mfbPct?.toFixed(2),
-      isf: r.isfnPct?.toFixed(2),
-      per: r.personalPct?.toFixed(2),
-      gen: r.generalesPct?.toFixed(2),
-      pro: r.provisionesPct?.toFixed(2),
-      ica: r.ingCarteraPct?.toFixed(2),
-      iin: r.ingInversionPct?.toFixed(2),
-      gfi: r.gastosFinPct?.toFixed(2),
-    })),
-  }));
-  return h.digest("hex").slice(0, 32);
-}
+// hashDupontInput + DUPONT_PROMPT_VERSION vienen del service compartido
+// (insights-service.ts). Sirven de fuente unica de verdad entre este
+// endpoint y el server component /dashboard/dupont/page.tsx — asi los
+// hashes que calcula el SSR coinciden EXACTAMENTE con los que calcula
+// este endpoint (evita cache miss por drift de version).
 
 // Prompt system: define tono, formato de output y reglas estrictas.
 //
@@ -234,43 +207,9 @@ function parseInsights(text: string): Insights | null {
   }
 }
 
-// Check DB cache: si existe, incrementa hit_count y devuelve. Cross-user
-// cross-deploy cross-container — costos LLM se comparten entre todos.
-async function checkDbCache(key: string): Promise<InMemHit | null> {
-  try {
-    const rows = await db.execute<{ insights: Insights; model: string | null }>(
-      sql`SELECT insights, model FROM app.dupont_insights_cache WHERE input_hash = ${key} LIMIT 1`,
-    );
-    const row = rows[0];
-    if (!row) return null;
-    // Touch en background — no bloquea la respuesta
-    db.execute(sql`SELECT app.dupont_insights_touch(${key})`).catch(() => {});
-    return { at: Date.now(), insights: row.insights, model: row.model };
-  } catch {
-    return null;
-  }
-}
-
-async function saveDbCache(
-  key: string,
-  insights: Insights,
-  model: string,
-): Promise<void> {
-  try {
-    await db.execute(sql`
-      INSERT INTO app.dupont_insights_cache (input_hash, insights, model)
-      VALUES (${key}, ${JSON.stringify(insights)}::jsonb, ${model})
-      ON CONFLICT (input_hash) DO UPDATE
-        SET insights = EXCLUDED.insights,
-            model = EXCLUDED.model,
-            generated_at = now(),
-            hit_count = app.dupont_insights_cache.hit_count + 1,
-            last_hit_at = now()
-    `);
-  } catch {
-    /* silent fail — el cache es best-effort, no debe romper la request */
-  }
-}
+// checkDbCache y saveDbCache movidas a insights-service.ts como
+// getDupontInsightsFromCache y saveDupontInsightsToCache — fuente unica
+// de verdad compartida con page.tsx (SSR).
 
 export async function POST(req: Request) {
   return handleRoute(async () => {
@@ -282,7 +221,7 @@ export async function POST(req: Request) {
       throw new ValidationError("Body invalido: falta 'data' con entidades+filas", {});
     }
     const data = body.data;
-    const key = hashInput(data);
+    const key = hashDupontInput(data);
 
     // 1. Microcache in-memory (dedupea requests concurrentes al mismo hash
     //    dentro de 60s — evita race conditions cross-request).
@@ -312,9 +251,14 @@ export async function POST(req: Request) {
     }
 
     // 3. DB cache cross-user cross-deploy — la fuente de verdad.
-    const dbHit = await checkDbCache(key);
+    const dbHit = await getDupontInsightsFromCache(data);
     if (dbHit) {
-      MICROCACHE.set(key, dbHit);
+      const entry: InMemHit = {
+        at: Date.now(),
+        insights: dbHit.insights,
+        model: dbHit.model,
+      };
+      MICROCACHE.set(key, entry);
       pruneMicrocache();
       return {
         narrativa: dbHit.insights,
@@ -354,7 +298,7 @@ export async function POST(req: Request) {
       if (!insights) return null;
 
       // Persist en DB (fire-and-forget, no bloquea la respuesta al user)
-      saveDbCache(key, insights, provider.name).catch(() => {});
+      saveDupontInsightsToCache(data, insights, provider.name).catch(() => {});
 
       return { at: Date.now(), insights, model: provider.name };
     })();

@@ -10,7 +10,11 @@ import {
   listPeriodosDisponibles,
   parseColorsOverride,
 } from "@/lib/domains/informe/queries";
-import { getAnalisisDupont, type DupontOpts } from "@/lib/domains/dupont";
+import {
+  getAnalisisDupont,
+  getDupontInsightsFromCache,
+  type DupontOpts,
+} from "@/lib/domains/dupont";
 import { db } from "@/lib/infrastructure/db";
 import { DupontClient } from "./dupont-client";
 
@@ -98,9 +102,14 @@ async function normalizarCanonicos(labels: string[]): Promise<string[]> {
 }
 
 // Cache aggressive del resultado completo — clave incluye TODOS los params
-// que afectan output (entidades + periodos + colors sorted). Cambios generan
-// entrada nueva; se sirven cacheadas por 30min hasta invalidacion por
-// refreshMvs (tag "dupont").
+// que afectan output. Cambios generan entrada nueva; se sirven cacheadas
+// por 30min hasta invalidacion por refreshMvs (tag "dupont").
+//
+// IMPORTANTE: NO ordenamos entidades ni periodos en la key. El orden
+// del user (drag & drop) DEBE respetarse porque afecta el orden visual
+// de las columnas en los charts. Si sorteamos, "A,B,C" y "C,B,A"
+// compartirian cache pero renderizarian con orden diferente → bug.
+// Solo colors se sortea porque no afecta orden visual (es un mapa).
 async function getDupontCached(opts: {
   entidades: string[];
   periodos: number[];
@@ -108,8 +117,8 @@ async function getDupontCached(opts: {
   colorsOverride: Map<string, string> | null;
 }) {
   const key = JSON.stringify({
-    e: [...opts.entidades].sort(),
-    p: [...opts.periodos].sort(),
+    e: opts.entidades,
+    p: opts.periodos,
     c: opts.consolidar,
     co: opts.colorsOverride
       ? [...opts.colorsOverride.entries()].sort()
@@ -235,12 +244,23 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
     cachedListEntidades(),
   ]);
 
+  // SSR de insights IA: chequear cache DB. Si hit, pasa como prop al
+  // client → cero "Generando..." al montar (mismo patron que Benchmark).
+  // Si miss, prop null y el client dispara /api/v1/dupont/insights (que
+  // llama LLM + persiste en DB → siguiente user tendra cache hit desde SSR).
+  //
+  // Este chequeo NO llama al LLM ni bloquea el TTFB — solo hace 1 SELECT
+  // por hash en app.dupont_insights_cache (indexed PK, <5ms).
+  const cachedInsights = await getDupontInsightsFromCache(data);
+
   return (
     <DupontClient
       data={data}
       periodosDisponibles={periodosDisponibles}
       entidadesDisponibles={entidadesDisponibles}
       consolidar={consolidar}
+      initialInsights={cachedInsights?.insights ?? null}
+      initialInsightsModel={cachedInsights?.model ?? null}
     />
   );
 }

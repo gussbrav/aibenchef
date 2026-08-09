@@ -13,7 +13,8 @@
  * el usuario aplique via "Aplicar filtros" (evita re-fetches en cada tick).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   BarChart,
@@ -26,10 +27,10 @@ import {
   LabelList,
 } from "recharts";
 import {
-  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical,
+  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical, Search, Check, ChevronDown,
 } from "lucide-react";
 
-import type { DupontData, DupontRow } from "@/lib/domains/dupont";
+import type { DupontData, DupontRow, DupontInsights } from "@/lib/domains/dupont";
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
 
@@ -111,11 +112,18 @@ export function DupontClient({
   periodosDisponibles,
   entidadesDisponibles,
   consolidar: _consolidar,
+  initialInsights = null,
+  initialInsightsModel = null,
 }: {
   data: DupontData;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
   consolidar: boolean;
+  /** Insights pre-cargados desde el cache DB (server-side). Si vienen,
+   * el hook useNarrativaIA los usa como initial state y salta el fetch
+   * inicial — elimina el "Generando..." al cambiar de tab. */
+  initialInsights?: DupontInsights | null;
+  initialInsightsModel?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -300,9 +308,10 @@ export function DupontClient({
   }, [dataConColores.entidades]);
 
   // ============ NARRATIVA IA (Claude) ============
-  // 1 sola llamada a /api/v1/dupont/insights que devuelve los 4 arrays de
-  // bullets (roe, roa, mon, mfb). Loading state + fallback a determinista.
-  const narrativaIA = useNarrativaIA(data);
+  // Si initialInsights vino del server (cache DB hit), se usa directamente
+  // → cero "Generando..." al montar. Solo se dispara fetch si initial=null
+  // (cache miss) o si data cambia (nueva combinacion peer+periodos).
+  const narrativaIA = useNarrativaIA(data, initialInsights, initialInsightsModel);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 px-2 animate-premium-in">
@@ -1211,16 +1220,24 @@ type NarrativaState = {
   model: string | null;
 };
 
-function useNarrativaIA(data: DupontData): NarrativaState {
-  const [state, setState] = useState<NarrativaState>({
-    status: "loading",
-    data: null,
-    model: null,
-  });
+function useNarrativaIA(
+  data: DupontData,
+  initialInsights: DupontInsights | null,
+  initialModel: string | null,
+): NarrativaState {
+  // Si el server ya nos paso initialInsights (cache DB hit en SSR), el
+  // estado inicial es "ok" → cero flash de "Generando..." al montar.
+  // Si viene null (cache miss), estado inicial es "loading" y el useEffect
+  // dispara el fetch client-side.
+  const [state, setState] = useState<NarrativaState>(() =>
+    initialInsights
+      ? { status: "ok", data: initialInsights, model: initialModel }
+      : { status: "loading", data: null, model: null },
+  );
 
-  // Hash simple de la data para no re-fetchear si nada cambio.
-  // Basta con (entidades, periodos, valores del roePct) — si cambian
-  // otros ratios sin cambiar roe, es porque cambiaron periodos.
+  // Hash de la data para detectar cambios reales (nueva combinacion de
+  // entidades/periodos). Si el hash cambia respecto al initial, sabemos
+  // que el user modifico algo y hay que re-fetch.
   const dataKey = useMemo(() => {
     const ents = data.entidades.map((e) => e.nombCorreg).join("|");
     const pers = data.periodos.map((p) => p.codigo).join("|");
@@ -1230,7 +1247,24 @@ function useNarrativaIA(data: DupontData): NarrativaState {
     return `${ents}#${pers}#${vals}`;
   }, [data]);
 
+  // Guardamos el dataKey del initial para poder skipear el primer fetch
+  // si initialInsights vino poblado — no queremos regenerar lo que ya
+  // sabemos que esta en cache.
+  const initialKeyRef = useRef<string | null>(initialInsights ? dataKey : null);
+
   useEffect(() => {
+    // Skip: si el server nos dio initialInsights Y el data actual matchea
+    // el data del SSR, no re-fetch. La primera navegacion post-mount es
+    // instant con SSR data.
+    if (initialKeyRef.current === dataKey) {
+      // Ya lo tenemos del server, no hacer nada
+      return;
+    }
+    // A partir de aca, el user cambio la data (nuevo peer group / periodos)
+    // → fetch fresh. Limpiamos el initialKey para que futuros re-mounts
+    // con el mismo dataKey (mismo cambio) no salteen.
+    initialKeyRef.current = null;
+
     let cancelled = false;
     setState((s) => ({ ...s, status: "loading" }));
 
