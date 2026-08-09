@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 
 import {
+  getDefaultPeerGroup,
   getUltimoPeriodoPublicable,
   listEntidadesDisponibles,
   listPeriodosDisponibles,
@@ -74,13 +75,12 @@ type SearchParams = Promise<{
   colors?: string;
 }>;
 
-// Defaults sensatos: 4 entidades tipicas del sector microfinanciero peruano.
-// IMPORTANTE: usar los nombres canonicos EXACTOS que estan en la maestra
-// (config.peer_group + dw.entidad_maestra). Nombres incorrectos hacen que
-// resolver_nomb_correg_canonico() devuelva NULL y las CTEs de la query
-// vengan vacias -> barras faltantes en el chart. Fuente: PEER_GROUP_FALLBACK
-// de informe/queries.ts.
-const DEFAULT_ENTIDADES = [
+// Default peer group: reusa el mismo que /informe (getDefaultPeerGroup del
+// clienteSlug — configurable por cliente en config.peer_group). Fallback
+// hardcoded si la config no existe. Asi la vista arranca con exactamente
+// las mismas entidades que el Benchmark, garantizando consistencia UX.
+const CLIENTE_DEFAULT = "bcp";
+const PEER_HARDCODED_FALLBACK = [
   "CMAC Arequipa",
   "CMAC Huancayo",
   "Mibanco",
@@ -90,10 +90,15 @@ const DEFAULT_ENTIDADES = [
 export default async function DupontPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
 
-  // Parse params
-  const entidadesParam = params.entidades
-    ? params.entidades.split(",").map((s) => s.trim()).filter(Boolean)
-    : DEFAULT_ENTIDADES;
+  // Parse params — si no vino ?entidades=, usar el peer group configurado
+  // del cliente default (misma logica que /informe).
+  let entidadesParam: string[];
+  if (params.entidades) {
+    entidadesParam = params.entidades.split(",").map((s) => s.trim()).filter(Boolean);
+  } else {
+    const peerDefault = await getDefaultPeerGroup(CLIENTE_DEFAULT).catch(() => []);
+    entidadesParam = peerDefault.length > 0 ? peerDefault : PEER_HARDCODED_FALLBACK;
+  }
 
   const periodosParam = params.periodos
     ? params.periodos

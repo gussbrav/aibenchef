@@ -25,11 +25,25 @@ import {
   ResponsiveContainer,
   LabelList,
 } from "recharts";
-import { Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2 } from "lucide-react";
+import {
+  Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2, GripVertical,
+} from "lucide-react";
 
 import type { DupontData, DupontRow } from "@/lib/domains/dupont";
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
+
+// LocalStorage key para persistir filtros aplicados. Sobrevive cambio de
+// tab / navegacion (Punto Equilibrio → Benchmark → DuPont) que sin esto
+// pierde los ?entidades=, ?periodos=, ?colors= porque el Link del nav
+// no preserva query params.
+const LS_KEY_DUPONT_FILTERS = "aibenchef.dupont.filters.v1";
+
+type DupontFiltersSnapshot = {
+  entidades: string[];      // orden importa (drag & drop)
+  periodos: number[];
+  colors: Array<[string, string]>; // Map serializado como array de [name, hex]
+};
 
 // ============================================================================
 // Formatters
@@ -83,28 +97,76 @@ export function DupontClient({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  // Draft state — cambios no aplicados aún
-  const initialEntidades = data.entidades.map((e) => e.nombCorreg);
-  const initialPeriodos = data.periodos.map((p) => p.codigo);
-  // Map<nombCorreg, hex> con los colores server-side (ya con overrides del
-  // URL aplicados por el backend). Sirve de baseline para (a) inicializar
-  // liveColors y (b) el boton 'Reset' del picker vuelve a este color.
+  // Server state (initial) — lo que actualmente muestra la vista.
+  const initialEntidades = useMemo(
+    () => data.entidades.map((e) => e.nombCorreg),
+    [data.entidades],
+  );
+  const initialPeriodos = useMemo(
+    () => data.periodos.map((p) => p.codigo),
+    [data.periodos],
+  );
   const initialColors = useMemo(() => {
     const m = new Map<string, string>();
     for (const e of data.entidades) m.set(e.nombCorreg, e.color);
     return m;
   }, [data.entidades]);
+
+  // Draft state — TODOS los cambios (entidades, periodos, orden, colores)
+  // se acumulan aca hasta que el user presiona 'Aplicar filtros'.
+  // Colores son excepcion visual: se muestran EN VIVO en los charts
+  // (preview instantaneo del cambio) pero solo se persisten en URL/DB
+  // al aplicar filtros.
   const [draftEntidades, setDraftEntidades] = useState<string[]>(initialEntidades);
   const [draftPeriodos, setDraftPeriodos] = useState<number[]>(initialPeriodos);
-  const [liveColors, setLiveColors] = useState<Map<string, string>>(initialColors);
+  const [draftColors, setDraftColors] = useState<Map<string, string>>(initialColors);
 
-  // Sincronizar liveColors cuando data cambia por navegacion server-side
-  // (ej. despues de applyFilters con nuevo peer group). Sin esto, chips
-  // nuevos aparecen sin color en el picker hasta el proximo cambio.
+  // Sync draft <- initial cuando data cambia por navegacion server-side
+  // (post applyFilters). Sin esto, chips nuevos aparecerian sin color y
+  // el dirty check quedaria inconsistente.
   useEffect(() => {
-    setLiveColors(initialColors);
+    setDraftEntidades(initialEntidades);
+  }, [initialEntidades]);
+  useEffect(() => {
+    setDraftPeriodos(initialPeriodos);
+  }, [initialPeriodos]);
+  useEffect(() => {
+    setDraftColors(initialColors);
   }, [initialColors]);
 
+  // Auto-restore desde localStorage al montar si NO vinieron params en la
+  // URL. Sobrevive cambio de tab (nav a Punto Equilibrio y vuelta). Solo
+  // corre una vez — refs para el effect.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    // Solo restaurar si la URL esta vacia (default view)
+    if (searchParams.toString().length > 0) return;
+    try {
+      const raw = localStorage.getItem(LS_KEY_DUPONT_FILTERS);
+      if (!raw) return;
+      const snap = JSON.parse(raw) as DupontFiltersSnapshot;
+      if (!Array.isArray(snap.entidades) || snap.entidades.length === 0) return;
+      // Reconstruir URL desde el snapshot y navegar (dispara re-render server)
+      const params = new URLSearchParams();
+      params.set("entidades", snap.entidades.join(","));
+      if (snap.periodos?.length) params.set("periodos", snap.periodos.join(","));
+      if (snap.colors?.length) {
+        params.set(
+          "colors",
+          snap.colors.map(([n, hex]) => `${n}:${hex.replace(/^#/, "")}`).join(","),
+        );
+      }
+      startTransition(() => {
+        router.replace(`${pathname}?${params.toString()}` as never, { scroll: false });
+      });
+    } catch {
+      /* corrupt localStorage — ignore */
+    }
+  }, [pathname, router, searchParams]);
+
+  // Dirty check: hay cambios pendientes sin aplicar?
   const dirty = useMemo(() => {
     if (draftEntidades.length !== initialEntidades.length) return true;
     if (draftPeriodos.length !== initialPeriodos.length) return true;
@@ -114,83 +176,106 @@ export function DupontClient({
     for (let i = 0; i < draftPeriodos.length; i++) {
       if (draftPeriodos[i] !== initialPeriodos[i]) return true;
     }
+    // Colors dirty — solo entidades que estan en el draft
+    for (const n of draftEntidades) {
+      const iv = initialColors.get(n);
+      const dv = draftColors.get(n);
+      if (iv && dv && iv.toLowerCase() !== dv.toLowerCase()) return true;
+    }
     return false;
-  }, [draftEntidades, initialEntidades, draftPeriodos, initialPeriodos]);
+  }, [
+    draftEntidades, initialEntidades, draftPeriodos, initialPeriodos,
+    draftColors, initialColors,
+  ]);
 
-  // Al aplicar filtros persistimos entidades + periodos. Colores se persisten
-  // por separado (cambio de color debe ser instantaneo, no requiere apply).
+  // Aplicar filtros — 1 push a la URL con TODOS los cambios juntos +
+  // snapshot al localStorage para persistir entre navegaciones.
   const applyFilters = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams();
     params.set("entidades", draftEntidades.join(","));
     params.set("periodos", draftPeriodos.join(","));
+    // Colors: solo los que difieren del server-default (para URL limpia).
+    // Si el user reseteó todos los colores, no aparece ?colors= en la URL.
+    const overrides: Array<[string, string]> = [];
+    for (const n of draftEntidades) {
+      const dv = draftColors.get(n);
+      const iv = initialColors.get(n);
+      // Persistir siempre que haya color en el draft (mas robusto). El
+      // server aplica el override; si no override, usa la paleta estable.
+      if (dv) overrides.push([n, dv]);
+    }
+    if (overrides.length > 0) {
+      params.set("colors", overrides.map(([n, hex]) => `${n}:${hex.replace(/^#/, "")}`).join(","));
+    }
+
+    // Persist snapshot en localStorage (sobrevive nav a otro tab del app)
+    try {
+      const snap: DupontFiltersSnapshot = {
+        entidades: draftEntidades,
+        periodos: draftPeriodos,
+        colors: overrides,
+      };
+      localStorage.setItem(LS_KEY_DUPONT_FILTERS, JSON.stringify(snap));
+    } catch {
+      /* localStorage lleno o disabled — silent skip */
+    }
+
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}` as never, { scroll: false });
     });
-  }, [draftEntidades, draftPeriodos, pathname, router, searchParams]);
+  }, [draftEntidades, draftPeriodos, draftColors, initialColors, pathname, router]);
 
   const resetFilters = useCallback(() => {
     setDraftEntidades(initialEntidades);
     setDraftPeriodos(initialPeriodos);
-  }, [initialEntidades, initialPeriodos]);
+    setDraftColors(initialColors);
+  }, [initialEntidades, initialPeriodos, initialColors]);
 
-  // Setear color de una entidad: (a) update local instant + (b) push URL
-  // con ?colors=... para persistencia.
-  //
-  // Estrategia: SIEMPRE persistimos TODOS los colores actuales en URL
-  // (sin filtrar por 'coincide con default'). Simple, robusto, sin bugs
-  // de comparacion contra initialColors que puede ya venir con overrides
-  // aplicados del server.
-  //
-  // hex=null (boton Reset) => vuelve al color server-default para esa
-  // entidad y remueve el override de la URL.
-  //
-  // Usamos setLiveColors(prev => ...) para no capturar stale state
-  // cuando el user hace multiples cambios rapidos.
+  // Cambiar color de una entidad → solo update draft (no push URL).
+  // Se persiste con el proximo 'Aplicar filtros'.
   const setColorForEntity = useCallback(
     (nombCorreg: string, hex: string | null) => {
-      setLiveColors((prev) => {
+      setDraftColors((prev) => {
         const next = new Map(prev);
-        if (hex) {
-          next.set(nombCorreg, hex);
-        } else {
+        if (hex) next.set(nombCorreg, hex);
+        else {
           const server = initialColors.get(nombCorreg);
           if (server) next.set(nombCorreg, server);
           else next.delete(nombCorreg);
         }
-
-        // Persist inmediato — usamos 'next' fresh (no el stale liveColors
-        // del outer closure).
-        const params = new URLSearchParams(searchParams.toString());
-        const overrides: string[] = [];
-        for (const [n, c] of next.entries()) {
-          overrides.push(`${n}:${c.replace(/^#/, "")}`);
-        }
-        if (overrides.length > 0) params.set("colors", overrides.join(","));
-        else params.delete("colors");
-
-        startTransition(() => {
-          router.replace(`${pathname}?${params.toString()}` as never, {
-            scroll: false,
-          });
-        });
         return next;
       });
     },
-    [initialColors, pathname, router, searchParams],
+    [initialColors],
   );
 
-  // Data con colores en vivo aplicados (para que los charts reaccionen sin
-  // esperar la navegacion server-side)
-  const dataConColores = useMemo(
-    () => ({
-      ...data,
-      entidades: data.entidades.map((e) => ({
-        ...e,
-        color: liveColors.get(e.nombCorreg) ?? e.color,
-      })),
-    }),
-    [data, liveColors],
-  );
+  // Reordenar entidades via drag & drop. moveEntidad(from, to) reposiciona
+  // en el array y marca dirty. Se aplica visualmente en vivo en el picker
+  // y en los charts (via dataConColores).
+  const moveEntidad = useCallback((from: string, to: string) => {
+    setDraftEntidades((prev) => {
+      const fromIdx = prev.indexOf(from);
+      const toIdx = prev.indexOf(to);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return prev;
+      const next = [...prev];
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, from);
+      return next;
+    });
+  }, []);
+
+  // Data con orden + colores DEL DRAFT aplicados (preview en vivo antes
+  // de aplicar filtros). Cuando dirty=false, coincide con la data del
+  // server. Cuando dirty=true, muestra como se veria post-apply.
+  const dataConColores = useMemo(() => {
+    // Reordenar entidades segun draftEntidades
+    const entMap = new Map(data.entidades.map((e) => [e.nombCorreg, e]));
+    const entOrdered = draftEntidades
+      .map((n) => entMap.get(n))
+      .filter((e): e is (typeof data.entidades)[number] => !!e)
+      .map((e) => ({ ...e, color: draftColors.get(e.nombCorreg) ?? e.color }));
+    return { ...data, entidades: entOrdered };
+  }, [data, draftEntidades, draftColors]);
 
   // Indexar filas por (entidad, periodo) para lookup rapido en las secciones
   const rowsIndex = useMemo(() => {
@@ -242,6 +327,7 @@ export function DupontClient({
       <SelectoresBar
         draftEntidades={draftEntidades}
         setDraftEntidades={setDraftEntidades}
+        moveEntidad={moveEntidad}
         draftPeriodos={draftPeriodos}
         setDraftPeriodos={setDraftPeriodos}
         entidadesDisponibles={entidadesDisponibles}
@@ -358,6 +444,7 @@ export function DupontClient({
 function SelectoresBar({
   draftEntidades,
   setDraftEntidades,
+  moveEntidad,
   draftPeriodos,
   setDraftPeriodos,
   entidadesDisponibles,
@@ -371,6 +458,7 @@ function SelectoresBar({
 }: {
   draftEntidades: string[];
   setDraftEntidades: (v: string[]) => void;
+  moveEntidad: (from: string, to: string) => void;
   draftPeriodos: number[];
   setDraftPeriodos: (v: number[]) => void;
   entidadesDisponibles: EntidadDisponible[];
@@ -383,6 +471,8 @@ function SelectoresBar({
   onReset: () => void;
 }) {
   const [entidadModalOpen, setEntidadModalOpen] = useState(false);
+  const [draggedEnt, setDraggedEnt] = useState<string | null>(null);
+  const [dropTargetEnt, setDropTargetEnt] = useState<string | null>(null);
 
   // Ultimo periodo con data en el sistema (mayor ultimoPeriodo de todas las
   // entidades). Sirve de referencia para el flag 'obsoleto' — entidades con
@@ -438,6 +528,24 @@ function SelectoresBar({
                   obsoleto={gap > 3}
                   onColorChange={(hex) => onColorChange(n, hex)}
                   onRemove={() => removeEntidad(n)}
+                  draggable
+                  isDragging={draggedEnt === n}
+                  isDropTarget={dropTargetEnt === n && draggedEnt !== n}
+                  onDragStart={() => setDraggedEnt(n)}
+                  onDragEnd={() => {
+                    setDraggedEnt(null);
+                    setDropTargetEnt(null);
+                  }}
+                  onDragOver={() => {
+                    if (draggedEnt && draggedEnt !== n) setDropTargetEnt(n);
+                  }}
+                  onDragLeave={() => {
+                    if (dropTargetEnt === n) setDropTargetEnt(null);
+                  }}
+                  onDrop={() => {
+                    if (draggedEnt && draggedEnt !== n) moveEntidad(draggedEnt, n);
+                    setDropTargetEnt(null);
+                  }}
                 />
               );
             })}
@@ -496,11 +604,14 @@ function SelectoresBar({
         </div>
       </div>
 
-      {/* Barra de accion apply/reset */}
+      {/* Barra de accion apply/reset — TODO cambio (entidades, periodos, orden,
+          colores) se acumula en draft y se persiste con 'Aplicar filtros'.
+          Los colores se ven en vivo (preview) para feedback inmediato pero
+          solo quedan guardados en URL/localStorage al aplicar. */}
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
         <span className="text-[11px] text-slate-500 italic">
           {dirty
-            ? "Cambios pendientes — presiona Aplicar para actualizar la vista"
+            ? "Cambios pendientes (entidades / períodos / orden / colores) — presiona Aplicar para guardar"
             : "Los filtros están sincronizados con la vista"}
         </span>
         <div className="flex gap-2">
@@ -556,6 +667,14 @@ function EntidadChipConColor({
   obsoleto = false,
   onColorChange,
   onRemove,
+  draggable = false,
+  isDragging = false,
+  isDropTarget = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   nombCorreg: string;
   color: string;
@@ -563,18 +682,55 @@ function EntidadChipConColor({
   obsoleto?: boolean;
   onColorChange: (hex: string | null) => void;
   onRemove: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDragOver?: () => void;
+  onDragLeave?: () => void;
+  onDrop?: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const dotRef = useRef<HTMLButtonElement>(null);
 
   return (
     <span
-      className={`inline-flex items-center gap-1 pl-1 pr-1 py-1 text-xs rounded-full border ${
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!onDragStart) return;
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox necesita dataTransfer.setData para arrancar el drag
+        e.dataTransfer.setData("text/plain", nombCorreg);
+        onDragStart();
+      }}
+      onDragEnd={() => onDragEnd?.()}
+      onDragOver={(e) => {
+        if (!onDragOver) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onDragOver();
+      }}
+      onDragLeave={() => onDragLeave?.()}
+      onDrop={(e) => {
+        if (!onDrop) return;
+        e.preventDefault();
+        onDrop();
+      }}
+      className={`inline-flex items-center gap-1 pl-0.5 pr-1 py-1 text-xs rounded-full border transition-all ${
         obsoleto
           ? "bg-amber-50 border-amber-200 text-amber-900"
           : "bg-slate-100 border-slate-200 text-slate-700"
-      }`}
+      } ${draggable ? "cursor-move select-none" : ""} ${
+        isDragging ? "opacity-40" : ""
+      } ${isDropTarget ? "ring-2 ring-brand-400 ring-offset-1" : ""}`}
     >
+      {draggable && (
+        <GripVertical
+          className="w-3 h-3 text-slate-400 flex-shrink-0"
+          aria-hidden
+        />
+      )}
       <button
         ref={dotRef}
         type="button"
