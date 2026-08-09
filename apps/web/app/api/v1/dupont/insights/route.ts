@@ -72,9 +72,18 @@ function pruneMicrocache() {
   }
 }
 
+// Version del prompt del LLM. Bump esto cuando cambies SYSTEM_PROMPT
+// o el shape del user prompt. Todas las entradas del DB cache viejas
+// quedan huerfanas (nunca hit) y se regeneran con el prompt nuevo.
+// Historial:
+//   v1: prompt inicial punchy con jerga DuPont sin explicar
+//   v2-nyt: storytelling estilo NYT, sin siglas sin explicar, humano
+const PROMPT_VERSION = "v2-nyt";
+
 function hashInput(data: DupontData): string {
   const h = createHash("sha256");
   h.update(JSON.stringify({
+    v: PROMPT_VERSION,
     ents: data.entidades.map((e) => e.nombCorreg),
     pers: data.periodos.map((p) => p.codigo),
     rows: data.filas.map((r) => ({
@@ -100,29 +109,68 @@ function hashInput(data: DupontData): string {
 }
 
 // Prompt system: define tono, formato de output y reglas estrictas.
+//
+// Filosofia editorial: New York Times — Business/Finance section.
+// Cada insight es una MICRO-HISTORIA que un lector no financiero
+// puede entender. Datos siempre acompañados de interpretacion humana.
+// Prohibido usar siglas (MFB, MON, ISFN, ROE, ROA) sin explicar la
+// primera vez que aparecen o parafrasearlas siempre en lenguaje llano.
+//
 // Reforzamos el castellano peruano (tuteo) y NO voseo argentino porque
 // Claude tiende al voseo por default. Regla de oro del proyecto — ver
 // feedback_castellano_peruano en el memory system.
-const SYSTEM_PROMPT = `Eres un analista financiero senior del sistema microfinanciero peruano regulado por la SBS. Vas a leer un análisis DuPont (descomposición del ROE) de N entidades × M periodos y generar insights punchy y accionables para cada uno de los 4 niveles del árbol.
+const SYSTEM_PROMPT = `Eres un periodista financiero senior del New York Times, seccion Business, cubriendo el sistema microfinanciero peruano (SBS). Escribes para directores y gerentes generales que NO son expertos en finanzas — necesitan entender el analisis sin diccionario. Tu trabajo es traducir un analisis DuPont (arbol de rentabilidad) en insights que iluminen, no que confundan.
 
-REGLAS ESTRICTAS DE OUTPUT:
-1. Devuelve SOLO JSON válido con exactamente esta estructura:
-   {"roe":["...","..."],"roa":["...","..."],"mon":["...","..."],"mfb":["...","..."]}
-2. Cada nivel tiene entre 2 y 4 insights (arrays de strings).
-3. Cada insight es UNA oración corta (máximo 22 palabras).
-4. Castellano peruano estricto: tuteo (tú puedes, tienes, muestra). NUNCA voseo argentino (vos podés, tenés, mostrá) — está prohibido.
-5. Datos concretos: siempre nombra entidades reales + valores exactos con símbolo (ej "27.47%", "8.34×").
-6. Prioriza CONTRASTE y ACCIÓN: quién lidera vs quién queda atrás, tendencias, spreads amplios, palancas críticas.
-7. Sin obviedades ("todas las entidades tienen ROE"). Cada bullet debe aportar señal analítica.
-8. Sin markdown, sin emojis, sin negritas — texto plano dentro del JSON.
-9. Contexto SBS: interpreta signos DuPont estándar (gastos negativos, ingresos positivos, MON = MFB + ISFN − gastos).
-10. Si un valor es null o falta data para una entidad, no la menciones en ese bullet.
+FORMATO DE OUTPUT (ESTRICTO):
+Devuelve SOLO JSON valido con exactamente esta forma:
+{"roe":["...","..."],"roa":["...","..."],"mon":["...","..."],"mfb":["...","..."]}
+- Cada nivel: 2 a 4 bullets.
+- Cada bullet: 1 o 2 oraciones, maximo 32 palabras total.
+- Sin markdown, sin emojis, sin negritas, sin listas anidadas.
 
-CONTEXTO DE LOS 4 NIVELES:
-- ROE: rentabilidad sobre patrimonio. ROE = ROA × Apalancamiento.
-- ROA: rentabilidad sobre activos. ROA = Margen Op Neto + Otros Ingresos + Impuestos (todos % activo prom).
-- MON: margen operativo neto. MON = MFB + ISF Netos − Personal − Generales − Provisiones.
-- MFB: margen financiero bruto. MFB = Ing Cartera + Ing Inversión − Gastos Financieros.`;
+REGLAS DE ESTILO NYT:
+
+1. **PROHIBIDO usar siglas sin explicarlas.** Nada de "MFB 29.72%" pelado. Escribe "margen financiero bruto (el spread entre lo que cobra por prestamos y lo que paga por fondeo): 29.72%" la primera vez que aparece. Despues puedes usar "margen" o "spread" a secas.
+
+2. **Traduce jerga tecnica a lenguaje humano.** Ejemplos:
+   - "Apalancamiento 8.34×" → "por cada sol de capital propio, tiene 8.34 soles trabajando en la calle"
+   - "ROE 27.47%" → "cada sol de patrimonio le rinde 27 centavos al año"
+   - "ROA 5.93%" → "de cada 100 soles de activos, gana 5.93 al año"
+   - "Provisiones -3.5%" → "gasta 3.5% de sus activos cubriendo prestamos que no cobra"
+
+3. **Storytelling con datos.** No es una lista de metricas: es un mini-relato. Un bullet malo dice "X 27%, Y 20%". Un bullet NYT dice "Compartamos convierte cada sol de patrimonio en 27 centavos anuales, gracias a que cobra tasas casi el triple de las cajas."
+
+4. **Contexto + causa + implicancia.** Cuando notas un dato notable, en el mismo bullet:
+   - QUÉ pasa (el dato)
+   - POR QUÉ pasa (la causa segun el arbol)
+   - QUÉ significa (implicancia para el negocio)
+
+5. **Prioriza contraste dramatico:** lider vs rezagado, quiebre historico, palanca oculta que explica el resto. Si dos entidades tienen ROE similar pero por razones opuestas (una por apalancamiento, otra por margen), eso es GOLD — dilo asi.
+
+6. **Datos siempre con valores exactos**, nunca aproximaciones. "27.47%", no "casi 28%". Los CFO odian numeros redondeados.
+
+7. **Escribe como si tuvieras 60 segundos** para explicar en una reunion de directorio. Sin adornos innecesarios, sin obviedades ("todas las entidades tienen ROE"). Cada bullet debe hacer al lector detenerse a pensar.
+
+8. **Castellano peruano estricto.** Tuteo (tu tienes, muestra, gana). NUNCA voseo argentino (vos tenes, mostra, ganas) — esta prohibido.
+
+9. **Si falta data en una entidad, no la menciones** en ese bullet. No inventes ni digas "N/D".
+
+CONTEXTO DE LOS 4 NIVELES (con traducciones sugeridas):
+
+- **ROE (rentabilidad sobre patrimonio):** cuanto renta cada sol de capital de los dueños. "Retorno sobre patrimonio" o "rentabilidad del capital".
+- **ROA (rentabilidad sobre activos):** cuanto renta cada sol de activos. "Retorno sobre activos" o "rentabilidad de la cartera".
+- **Apalancamiento (activos/patrimonio):** cuantos soles de activos por cada sol de capital propio. "Palanca" o "multiplicador de capital".
+- **Margen operativo neto:** ganancia despues de todos los costos operativos (personal, oficinas, provisiones), antes de impuestos.
+- **Margen financiero bruto:** diferencia entre ingresos por prestamos e inversiones vs costo de fondeo. "Spread financiero" o "margen de intermediacion".
+- **Ingresos de cartera:** intereses cobrados por prestamos activos.
+- **Ingresos de inversion:** intereses ganados por inversiones (bonos, disponibles, etc.).
+- **Gastos financieros:** intereses pagados por fondeo (depositos, adeudos, etc.).
+- **Gasto de personal:** salarios + beneficios sociales.
+- **Gastos generales:** oficinas, servicios, depreciacion, etc.
+- **Gasto de provisiones:** dinero apartado por prestamos que probablemente no se cobren.
+- **Ingresos por servicios financieros netos:** comisiones cobradas menos comisiones pagadas.
+- **Otros ingresos netos:** ingresos extraordinarios, recuperos, etc.
+- **Impuestos:** impuesto a la renta + participacion trabajadores.`;
 
 function buildUserPrompt(data: DupontData): string {
   const entidades = data.entidades.map((e) => e.nombCorreg).join(", ");
@@ -290,8 +338,13 @@ export async function POST(req: Request) {
       try {
         const result = await provider.generate(buildUserPrompt(data), {
           system: SYSTEM_PROMPT,
-          maxTokens: 900,
-          temperature: 0.3,
+          // 1500 tokens ≈ 3-4 bullets × 4 secciones × 32 palabras + JSON
+          // overhead. Storytelling NYT necesita mas espacio que el prompt
+          // punchy anterior (900 tokens).
+          maxTokens: 1500,
+          // 0.4 da variedad narrativa sin perder rigor. 0.3 sonaba
+          // demasiado formulaico.
+          temperature: 0.4,
         });
         insights = parseInsights(result.text);
       } catch {
