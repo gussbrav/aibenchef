@@ -607,34 +607,84 @@ type RowDef = {
   label: string;
   field: keyof PuntoEquilibrioRow;
   variant: "sum" | "sub" | "bold" | "highlight";
+  /** Tooltip explicativo para la fila (mostrado con InfoTooltip). */
+  info?: string;
   /** Sub-filas que se muestran al expandir esta fila (patron Excel agrupar). */
   subrows?: Array<{ key: string; label: string; field: keyof PuntoEquilibrioRow }>;
 };
 
 const DEFAULT_ROW_ORDER: RowDef[] = [
-  { key: "rendimiento", label: "Rendimiento de cartera", field: "pctRendimiento", variant: "sum" },
-  { key: "otros", label: "Otros Ingresos (Egresos)", field: "pctOtros", variant: "sum" },
-  { key: "costoFondeo", label: "Gasto Financiero", field: "pctCostoFondeo", variant: "sub" },
-  { key: "provisiones", label: "Costo de Provisión", field: "pctProvisiones", variant: "sub" },
+  {
+    key: "rendimiento",
+    label: "Rendimiento de cartera",
+    field: "pctRendimiento",
+    variant: "sum",
+    info: "Ingresos por intereses de créditos directos (SBS cta 1.4) ÷ Cartera Promedio 12M × 100. Es el retorno bruto que la cartera genera antes de restar costos.",
+  },
+  {
+    key: "otros",
+    label: "Otros Ingresos (Egresos)",
+    field: "pctOtros",
+    variant: "sum",
+    info: "Ingresos netos por servicios financieros + ganancia por venta de cartera + otros ingresos/gastos. Fórmula SBS: (cta 6 − cta 7 + cta 8 + cta 13) ÷ Cartera Promedio 12M.",
+    subrows: [
+      { key: "isf", label: "Ingresos por Servicios Financieros (cta 6)", field: "pctISF" },
+      { key: "gsf", label: "Gastos por Servicios Financieros (cta 7)", field: "pctGSF" },
+      { key: "venta", label: "Ganancia por Venta de Cartera (cta 8)", field: "pctVentaCartera" },
+      { key: "otrosIG", label: "Otros Ingresos y Gastos (cta 13)", field: "pctOtrosIngGas" },
+    ],
+  },
+  {
+    key: "costoFondeo",
+    label: "Gasto Financiero",
+    field: "pctCostoFondeo",
+    variant: "sub",
+    info: "Intereses pagados por fuentes de fondeo (SBS cta 2). Incluye depósitos del público, adeudos, obligaciones en circulación, etc. Signo negativo — es un costo.",
+    subrows: [
+      { key: "publico", label: "Obligaciones con el Público (cta 2.1)", field: "pctGfPublico" },
+      { key: "sf", label: "Depósitos SF + Organismos (cta 2.2)", field: "pctGfSF" },
+      { key: "adeudos", label: "Adeudos y Obligaciones (cta 2.4)", field: "pctGfAdeudos" },
+      { key: "obligCirc", label: "Obligaciones en Circulación (cta 2.5+2.6)", field: "pctGfObligaciones" },
+      { key: "otrosFin", label: "Otros gastos financieros", field: "pctGfOtrosFin" },
+    ],
+  },
+  {
+    key: "provisiones",
+    label: "Costo de Provisión",
+    field: "pctProvisiones",
+    variant: "sub",
+    info: "Provisiones para incobrabilidad de créditos (cta 4.2) + provisiones para desvalorización de inversiones (cta 4.1). Signo negativo — es un costo.",
+    subrows: [
+      { key: "provCred", label: "Provisiones para Créditos (cta 4.2)", field: "pctProvCredito" },
+      { key: "provInv", label: "Provisiones para Inversiones (cta 4.1)", field: "pctProvInversion" },
+    ],
+  },
   {
     key: "gastosOp",
     label: "Gastos Operacionales",
     field: "pctGastosOp",
     variant: "sub",
-    // Sub-desglose de gastos operacionales — ya vienen pre-calculados en
-    // marts.v_punto_equilibrio_ancho (pe_gastos_personal, pe_gastos_generales,
-    // pe_deprec_amortiz). Corresponden a las cuentas SBS:
-    //   Personal = cta_10.1
-    //   Generales = cta_10.3 (Servicios Terceros) + cta_10.4 (Impuestos y Contrib)
-    //   Depreciación y Amortización = cta_12.7 + cta_12.8
+    info: "Personal (cta 10.1) + Servicios Terceros + Impuestos (cta 10.3+10.4) + Depreciación + Amortización (cta 12.7+12.8). Todos los costos operativos ÷ Cartera Promedio 12M.",
     subrows: [
-      { key: "personal", label: "Personal", field: "pctPersonal" },
-      { key: "generales", label: "Servicios + Impuestos", field: "pctGenerales" },
-      { key: "deprec", label: "Depreciación + Amortización", field: "pctDepreciacion" },
+      { key: "personal", label: "Personal (cta 10.1)", field: "pctPersonal" },
+      { key: "generales", label: "Servicios Terceros + Impuestos (cta 10.3+10.4)", field: "pctGenerales" },
+      { key: "deprec", label: "Depreciación + Amortización (cta 12.7+12.8)", field: "pctDepreciacion" },
     ],
   },
-  { key: "margenNeto", label: "Margen antes de Impuestos", field: "pctMargenNeto", variant: "bold" },
-  { key: "puntoEq", label: "Punto de Equilibrio", field: "pctPuntoEq", variant: "highlight" },
+  {
+    key: "margenNeto",
+    label: "Margen antes de Impuestos",
+    field: "pctMargenNeto",
+    variant: "bold",
+    info: "Suma algebraica de todos los componentes: Rendimiento + Otros − Gasto Financiero − Costo Provisión − Gastos Operacionales. Es lo que la entidad genera antes de pagar impuestos y participación de trabajadores.",
+  },
+  {
+    key: "puntoEq",
+    label: "Punto de Equilibrio",
+    field: "pctPuntoEq",
+    variant: "highlight",
+    info: "Rendimiento mínimo requerido sobre cartera para cubrir todos los costos netos de Otros Ingresos. Fórmula: −(Otros + Gasto Financiero + Costo Provisión + Gastos Operacionales). Si Rendimiento > PE, la entidad genera margen positivo.",
+  },
 ];
 
 const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
@@ -642,11 +692,13 @@ const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
 /**
  * Punto de Equilibrio — formula del analista financiero senior (Juan Jose):
  *
- *   PE = | Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales |
+ *   PE = − ( Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales )
  *
- * Es decir: el UMBRAL POSITIVO de rendimiento sobre cartera que la entidad
- * necesita para cubrir todos los costos (financieros + provisiones +
- * operacionales) neto de Otros Ingresos.
+ * Es decir: el UMBRAL de rendimiento sobre cartera que la entidad necesita
+ * para cubrir todos los costos (financieros + provisiones + operacionales)
+ * NETO de Otros Ingresos. Se usa signo NEGADO en vez de valor absoluto:
+ *   - Si costos > otros ingresos (comun) → PE > 0 (deficit a cubrir)
+ *   - Si otros ingresos > costos (raro) → PE < 0 (superavit natural)
  *
  * El backend calcula _punto_eq = costo_fondeo + provisiones + gastos_op
  * (SIN incluir Otros). Recomputamos en el frontend con la formula correcta
@@ -655,7 +707,7 @@ const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
  *
  * Verificacion contra tabla del analista (Al cierre 2021 CA):
  *   Rend=22.9, Otros=0.8, GF=-5.3, Prov=-0.9, GO=-10.8
- *   PE = |0.8 - 5.3 - 0.9 - 10.8| = |-16.2| = 16.2% ✓
+ *   PE = −(0.8 − 5.3 − 0.9 − 10.8) = −(−16.2) = +16.2% ✓
  *   Margen = 22.9 + 0.8 - 5.3 - 0.9 - 10.8 = 6.7% ✓ (backend ya lo calcula bien)
  */
 function computedPuntoEq(row: {
@@ -667,7 +719,7 @@ function computedPuntoEq(row: {
   const parts = [row.pctOtros, row.pctCostoFondeo, row.pctProvisiones, row.pctGastosOp];
   if (parts.some((p) => p == null)) return null;
   const sum = (parts as number[]).reduce((a, b) => a + b, 0);
-  return Math.abs(sum);
+  return -sum;
 }
 
 function displayValueForField(
@@ -991,6 +1043,15 @@ function HistoricoTable({
                         <span className="text-slate-400 font-mono">{rowStyle.prefix}</span>
                       )}
                       <span>{row.label}</span>
+                      {row.info && (
+                        <span
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-slate-400 hover:text-brand-600 hover:bg-brand-50 cursor-help flex-shrink-0"
+                          title={row.info}
+                          aria-label={`Info: ${row.info}`}
+                        >
+                          <Info className="w-3 h-3" />
+                        </span>
+                      )}
                     </div>
                   </td>
                   {effectiveCols.map((periodo) => {

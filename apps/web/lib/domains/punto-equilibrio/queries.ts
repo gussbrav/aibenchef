@@ -26,11 +26,27 @@ export type PuntoEquilibrioRow = {
   pctGastosOp: number | null;
   pctMargenNeto: number | null;
   pctPuntoEq: number | null;
-  // Sub-componentes de Gastos Operacionales (para expandir en la tabla).
-  // Ya existen pre-calculados en marts.v_punto_equilibrio_ancho.
+  // Sub-componentes de Gastos Operacionales (pre-calculados en la MV).
   pctPersonal?: number | null;
   pctGenerales?: number | null;
   pctDepreciacion?: number | null;
+  // Sub-componentes calculados via ratios sobre el total (evita gastar
+  // cartera_prom otra vez). Todos garantizados a cuadrar exacto con el
+  // total del componente padre.
+  // Otros Ingresos = ISF - GSF + VentaCartera + OtrosIngGas
+  pctISF?: number | null;
+  pctGSF?: number | null;
+  pctVentaCartera?: number | null;
+  pctOtrosIngGas?: number | null;
+  // Gasto Financiero = suma de todos (todos ≤ 0)
+  pctGfPublico?: number | null;
+  pctGfSF?: number | null;
+  pctGfAdeudos?: number | null;
+  pctGfObligaciones?: number | null;
+  pctGfOtrosFin?: number | null;
+  // Costo Provisión = Prov Créditos + Prov Inversiones
+  pctProvCredito?: number | null;
+  pctProvInversion?: number | null;
 };
 
 export type PuntoEquilibrioComparativoRow = {
@@ -150,6 +166,11 @@ export async function getPuntoEquilibrioHistorico(opts: {
   // a TODOS los alias historicos (evolucion completa). Con consolidar=false:
   // SOLO el nombre canonico exacto (ventana legal actual) — el user quiere
   // ver la entidad como identidad legal, no como historia operativa.
+  // Query principal: trae los KPIs pre-calculados de v_punto_equilibrio_ancho
+  // + agrega sub-componentes calculados via RATIOS sobre TTMs de subcuentas
+  // desde mv_eeff_resultados_ancho. Las ratios se multiplican por el total
+  // del padre en el frontend → garantia de cuadre exacto (SUMA subrows =
+  // total padre). Cero function calls costosas (todo se hace en SQL agregado).
   const rows = await db.execute<{
     periodo: number;
     pct_rendimiento: number | null;
@@ -162,6 +183,19 @@ export async function getPuntoEquilibrioHistorico(opts: {
     pct_gastos_personal: number | null;
     pct_gastos_generales: number | null;
     pct_deprec: number | null;
+    // Ratios de subcuentas (0-1) — se multiplican en el frontend por el
+    // pct total del padre para obtener el sub-pct exacto.
+    ratio_isf: number | null;
+    ratio_gsf: number | null;
+    ratio_venta_cartera: number | null;
+    ratio_otros_ing_gas: number | null;
+    ratio_gf_publico: number | null;
+    ratio_gf_sf: number | null;
+    ratio_gf_adeudos: number | null;
+    ratio_gf_obligaciones: number | null;
+    ratio_gf_otros: number | null;
+    ratio_prov_credito: number | null;
+    ratio_prov_inversion: number | null;
   }>(sql`
     WITH aliases AS (
       ${consolidar
@@ -175,12 +209,127 @@ export async function getPuntoEquilibrioHistorico(opts: {
             SELECT LOWER(TRIM(${opts.entidad}::text))
           `
         : sql`SELECT LOWER(TRIM(${opts.entidad}::text)) AS nombre_lower`}
+    ),
+    -- YTDs por periodo target — necesarios para calcular TTM inline
+    -- (TTM = ytd_cur + ytd_dic_prev - ytd_same_prev). Agregamos por
+    -- periodo sumando todos los aliases.
+    ytd_cur AS (
+      SELECT periodo,
+             SUM(COALESCE(cta_6, 0)) AS cta_6,
+             SUM(COALESCE(cta_7, 0)) AS cta_7,
+             SUM(COALESCE(cta_8, 0)) AS cta_8,
+             SUM(COALESCE(cta_13, 0)) AS cta_13,
+             SUM(COALESCE(cta_2, 0)) AS cta_2,
+             SUM(COALESCE(cta_2_1, 0)) AS cta_2_1,
+             SUM(COALESCE(cta_2_2, 0)) AS cta_2_2,
+             SUM(COALESCE(cta_2_4, 0)) AS cta_2_4,
+             SUM(COALESCE(cta_2_5, 0) + COALESCE(cta_2_6, 0)) AS cta_2_oblig,
+             SUM(COALESCE(cta_4, 0)) AS cta_4,
+             SUM(COALESCE(cta_4_1, 0)) AS cta_4_1,
+             SUM(COALESCE(cta_4_2, 0)) AS cta_4_2
+      FROM marts.mv_eeff_resultados_ancho
+      WHERE LOWER(TRIM(nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+        AND moneda = ${moneda}
+        AND periodo IN (${periodosClause})
+      GROUP BY periodo
+    ),
+    -- YTD Dic del año anterior a cada periodo target
+    ytd_dic AS (
+      SELECT tgt.periodo AS target_periodo,
+             SUM(COALESCE(r.cta_6, 0)) AS cta_6,
+             SUM(COALESCE(r.cta_7, 0)) AS cta_7,
+             SUM(COALESCE(r.cta_8, 0)) AS cta_8,
+             SUM(COALESCE(r.cta_13, 0)) AS cta_13,
+             SUM(COALESCE(r.cta_2, 0)) AS cta_2,
+             SUM(COALESCE(r.cta_2_1, 0)) AS cta_2_1,
+             SUM(COALESCE(r.cta_2_2, 0)) AS cta_2_2,
+             SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
+             SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
+             SUM(COALESCE(r.cta_4, 0)) AS cta_4,
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1,
+             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+      FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
+      LEFT JOIN marts.mv_eeff_resultados_ancho r
+        ON r.periodo = (tgt.periodo / 100 - 1) * 100 + 12
+       AND r.moneda = ${moneda}
+       AND LOWER(TRIM(r.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+      GROUP BY tgt.periodo
+    ),
+    -- YTD Mismo mes año anterior
+    ytd_same AS (
+      SELECT tgt.periodo AS target_periodo,
+             SUM(COALESCE(r.cta_6, 0)) AS cta_6,
+             SUM(COALESCE(r.cta_7, 0)) AS cta_7,
+             SUM(COALESCE(r.cta_8, 0)) AS cta_8,
+             SUM(COALESCE(r.cta_13, 0)) AS cta_13,
+             SUM(COALESCE(r.cta_2, 0)) AS cta_2,
+             SUM(COALESCE(r.cta_2_1, 0)) AS cta_2_1,
+             SUM(COALESCE(r.cta_2_2, 0)) AS cta_2_2,
+             SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
+             SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
+             SUM(COALESCE(r.cta_4, 0)) AS cta_4,
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1,
+             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+      FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
+      LEFT JOIN marts.mv_eeff_resultados_ancho r
+        ON r.periodo = tgt.periodo - 100
+       AND r.moneda = ${moneda}
+       AND LOWER(TRIM(r.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+      GROUP BY tgt.periodo
+    ),
+    -- TTM = ytd_cur + ytd_dic - ytd_same (para todas las cuentas)
+    ttm AS (
+      SELECT c.periodo,
+             (c.cta_6 + COALESCE(d.cta_6, 0) - COALESCE(s.cta_6, 0)) AS cta_6_ttm,
+             (c.cta_7 + COALESCE(d.cta_7, 0) - COALESCE(s.cta_7, 0)) AS cta_7_ttm,
+             (c.cta_8 + COALESCE(d.cta_8, 0) - COALESCE(s.cta_8, 0)) AS cta_8_ttm,
+             (c.cta_13 + COALESCE(d.cta_13, 0) - COALESCE(s.cta_13, 0)) AS cta_13_ttm,
+             (c.cta_2 + COALESCE(d.cta_2, 0) - COALESCE(s.cta_2, 0)) AS cta_2_ttm,
+             (c.cta_2_1 + COALESCE(d.cta_2_1, 0) - COALESCE(s.cta_2_1, 0)) AS cta_2_1_ttm,
+             (c.cta_2_2 + COALESCE(d.cta_2_2, 0) - COALESCE(s.cta_2_2, 0)) AS cta_2_2_ttm,
+             (c.cta_2_4 + COALESCE(d.cta_2_4, 0) - COALESCE(s.cta_2_4, 0)) AS cta_2_4_ttm,
+             (c.cta_2_oblig + COALESCE(d.cta_2_oblig, 0) - COALESCE(s.cta_2_oblig, 0)) AS cta_2_oblig_ttm,
+             (c.cta_4 + COALESCE(d.cta_4, 0) - COALESCE(s.cta_4, 0)) AS cta_4_ttm,
+             (c.cta_4_1 + COALESCE(d.cta_4_1, 0) - COALESCE(s.cta_4_1, 0)) AS cta_4_1_ttm,
+             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm
+      FROM ytd_cur c
+      LEFT JOIN ytd_dic d ON d.target_periodo = c.periodo
+      LEFT JOIN ytd_same s ON s.target_periodo = c.periodo
     )
     SELECT DISTINCT ON (v.periodo)
-           v.periodo, v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
+           v.periodo,
+           v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
            v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto,
-           v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec
+           v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec,
+           -- Ratios Otros Ingresos: componentes / suma_neta.
+           -- pctOtros = (cta_6 - cta_7 + cta_8 + cta_13) / cartera * 100
+           -- Cada componente / suma_neta * pctOtros = componente_real_en_pct.
+           -- Denominador: cta_6 - cta_7 + cta_8 + cta_13 (con signos).
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN t.cta_6_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm)
+           END AS ratio_isf,
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN -t.cta_7_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm)
+           END AS ratio_gsf,
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN t.cta_8_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm)
+           END AS ratio_venta_cartera,
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN t.cta_13_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm)
+           END AS ratio_otros_ing_gas,
+           -- Ratios Gasto Financiero: cada subcuenta / cta_2 total
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_1_ttm / t.cta_2_ttm END AS ratio_gf_publico,
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_2_ttm / t.cta_2_ttm END AS ratio_gf_sf,
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_4_ttm / t.cta_2_ttm END AS ratio_gf_adeudos,
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_oblig_ttm / t.cta_2_ttm END AS ratio_gf_obligaciones,
+           CASE WHEN t.cta_2_ttm > 0
+             THEN (t.cta_2_ttm - t.cta_2_1_ttm - t.cta_2_2_ttm - t.cta_2_4_ttm - t.cta_2_oblig_ttm) / t.cta_2_ttm
+           END AS ratio_gf_otros,
+           -- Ratios Costo Provision: sub / cta_4 total
+           CASE WHEN t.cta_4_ttm > 0 THEN t.cta_4_2_ttm / t.cta_4_ttm END AS ratio_prov_credito,
+           CASE WHEN t.cta_4_ttm > 0 THEN t.cta_4_1_ttm / t.cta_4_ttm END AS ratio_prov_inversion
     FROM marts.v_punto_equilibrio_ancho v
+    LEFT JOIN ttm t ON t.periodo = v.periodo
     WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
       AND v.moneda = ${moneda}
       AND v.periodo IN (${periodosClause})
@@ -192,19 +341,41 @@ export async function getPuntoEquilibrioHistorico(opts: {
 
   return periodos.map((p) => {
     const r = byPeriodo.get(p);
+    const pctOtros = r?.pct_otros == null ? null : Number(r.pct_otros);
+    const pctCostoFondeo = r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo);
+    const pctProvisiones = r?.pct_provisiones == null ? null : Number(r.pct_provisiones);
+    // Helper: ratio (0-1) × total = sub_pct exacto. Devuelve null si algo falta.
+    const mult = (
+      ratio: number | null | undefined,
+      total: number | null,
+    ): number | null =>
+      ratio == null || total == null ? null : Number(ratio) * total;
     return {
       periodo: p,
       periodoLabel: formatPeriodo(p),
       pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
-      pctOtros: r?.pct_otros == null ? null : Number(r.pct_otros),
-      pctCostoFondeo: r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo),
-      pctProvisiones: r?.pct_provisiones == null ? null : Number(r.pct_provisiones),
+      pctOtros,
+      pctCostoFondeo,
+      pctProvisiones,
       pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
       pctMargenNeto: r?.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
       pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
       pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
       pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
       pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
+      // Sub-componentes calculados como ratio × total. Garantiza cuadre
+      // exacto: SUMA(subs) = total del padre (matematicamente).
+      pctISF: mult(r?.ratio_isf, pctOtros),
+      pctGSF: mult(r?.ratio_gsf, pctOtros),
+      pctVentaCartera: mult(r?.ratio_venta_cartera, pctOtros),
+      pctOtrosIngGas: mult(r?.ratio_otros_ing_gas, pctOtros),
+      pctGfPublico: mult(r?.ratio_gf_publico, pctCostoFondeo),
+      pctGfSF: mult(r?.ratio_gf_sf, pctCostoFondeo),
+      pctGfAdeudos: mult(r?.ratio_gf_adeudos, pctCostoFondeo),
+      pctGfObligaciones: mult(r?.ratio_gf_obligaciones, pctCostoFondeo),
+      pctGfOtrosFin: mult(r?.ratio_gf_otros, pctCostoFondeo),
+      pctProvCredito: mult(r?.ratio_prov_credito, pctProvisiones),
+      pctProvInversion: mult(r?.ratio_prov_inversion, pctProvisiones),
     };
   });
 }
