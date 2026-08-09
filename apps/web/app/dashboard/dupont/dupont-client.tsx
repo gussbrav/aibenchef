@@ -33,17 +33,42 @@ import type { DupontData, DupontRow } from "@/lib/domains/dupont";
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
 
-// LocalStorage key para persistir filtros aplicados. Sobrevive cambio de
-// tab / navegacion (Punto Equilibrio → Benchmark → DuPont) que sin esto
-// pierde los ?entidades=, ?periodos=, ?colors= porque el Link del nav
-// no preserva query params.
-const LS_KEY_DUPONT_FILTERS = "aibenchef.dupont.filters.v1";
+// COOKIE para persistir filtros aplicados. Sobrevive cambio de tab
+// (Punto Equilibrio → DuPont) porque el Link del nav no preserva query
+// params.
+//
+// IMPORTANTE: se eligio COOKIE en lugar de localStorage a proposito.
+// La cookie viaja al server automaticamente, entonces page.tsx puede
+// leerla en el primer render SSR y devolver la vista con los filters
+// correctos DESDE EL PRIMER FRAME. Sin cookie (localStorage-only) el
+// server renderiza con defaults, el client hydrata igual, y solo tras
+// un useEffect + navegacion aparecen los custom colors → flash visible.
+//
+// Trade-off: cookie tiene limite de 4KB. Nuestro snapshot es ~1KB
+// (10 entidades × 30 chars + 6 periodos + 10 colors × 20 chars).
+const COOKIE_KEY_DUPONT_FILTERS = "dupont_filters_v1";
+const COOKIE_MAX_AGE_DAYS = 30;
 
 type DupontFiltersSnapshot = {
   entidades: string[];      // orden importa (drag & drop)
   periodos: number[];
   colors: Array<[string, string]>; // Map serializado como array de [name, hex]
 };
+
+// Helper para escribir cookie desde el client. Path=/ para que aplique
+// a toda la app. SameSite=Lax para compat con la mayoria de flujos.
+function writeCookie(name: string, value: string, maxAgeDays: number): void {
+  if (typeof document === "undefined") return;
+  const encoded = encodeURIComponent(value);
+  const maxAge = maxAgeDays * 24 * 60 * 60;
+  document.cookie = `${name}=${encoded}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
+}
+
+// Helper para borrar cookie (boton 'Restablecer defaults')
+function deleteCookie(name: string): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
 
 // ============================================================================
 // Formatters
@@ -134,37 +159,9 @@ export function DupontClient({
     setDraftColors(initialColors);
   }, [initialColors]);
 
-  // Auto-restore desde localStorage al montar si NO vinieron params en la
-  // URL. Sobrevive cambio de tab (nav a Punto Equilibrio y vuelta). Solo
-  // corre una vez — refs para el effect.
-  const restoredRef = useRef(false);
-  useEffect(() => {
-    if (restoredRef.current) return;
-    restoredRef.current = true;
-    // Solo restaurar si la URL esta vacia (default view)
-    if (searchParams.toString().length > 0) return;
-    try {
-      const raw = localStorage.getItem(LS_KEY_DUPONT_FILTERS);
-      if (!raw) return;
-      const snap = JSON.parse(raw) as DupontFiltersSnapshot;
-      if (!Array.isArray(snap.entidades) || snap.entidades.length === 0) return;
-      // Reconstruir URL desde el snapshot y navegar (dispara re-render server)
-      const params = new URLSearchParams();
-      params.set("entidades", snap.entidades.join(","));
-      if (snap.periodos?.length) params.set("periodos", snap.periodos.join(","));
-      if (snap.colors?.length) {
-        params.set(
-          "colors",
-          snap.colors.map(([n, hex]) => `${n}:${hex.replace(/^#/, "")}`).join(","),
-        );
-      }
-      startTransition(() => {
-        router.replace(`${pathname}?${params.toString()}` as never, { scroll: false });
-      });
-    } catch {
-      /* corrupt localStorage — ignore */
-    }
-  }, [pathname, router, searchParams]);
+  // NO hay useEffect de restore aca. La cookie ya viajo al server via
+  // page.tsx en el SSR — si habia snapshot, el server ya renderizo con
+  // los filters correctos. Cero flash SSR→hydration.
 
   // Dirty check: hay cambios pendientes sin aplicar?
   const dirty = useMemo(() => {
@@ -208,17 +205,15 @@ export function DupontClient({
       params.set("colors", overrides.map(([n, hex]) => `${n}:${hex.replace(/^#/, "")}`).join(","));
     }
 
-    // Persist snapshot en localStorage (sobrevive nav a otro tab del app)
-    try {
-      const snap: DupontFiltersSnapshot = {
-        entidades: draftEntidades,
-        periodos: draftPeriodos,
-        colors: overrides,
-      };
-      localStorage.setItem(LS_KEY_DUPONT_FILTERS, JSON.stringify(snap));
-    } catch {
-      /* localStorage lleno o disabled — silent skip */
-    }
+    // Persist snapshot en COOKIE (viaja al server, evita flash SSR).
+    // Sobrevive nav a otro tab del app + refresh + share entre tabs
+    // dentro del mismo browser.
+    const snap: DupontFiltersSnapshot = {
+      entidades: draftEntidades,
+      periodos: draftPeriodos,
+      colors: overrides,
+    };
+    writeCookie(COOKIE_KEY_DUPONT_FILTERS, JSON.stringify(snap), COOKIE_MAX_AGE_DAYS);
 
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}` as never, { scroll: false });
@@ -230,6 +225,17 @@ export function DupontClient({
     setDraftPeriodos(initialPeriodos);
     setDraftColors(initialColors);
   }, [initialEntidades, initialPeriodos, initialColors]);
+
+  // Restablecer defaults del sistema: borrar cookie + navegar sin params.
+  // El server volvera a usar getDefaultPeerGroup('bcp') y los colores
+  // estable del peer group base. Utile cuando el user quiere volver al
+  // 'estado limpio' despues de mucha experimentacion.
+  const restoreSystemDefaults = useCallback(() => {
+    deleteCookie(COOKIE_KEY_DUPONT_FILTERS);
+    startTransition(() => {
+      router.push(pathname as never, { scroll: false });
+    });
+  }, [pathname, router]);
 
   // Cambiar color de una entidad → solo update draft (no push URL).
   // Se persiste con el proximo 'Aplicar filtros'.
@@ -338,6 +344,7 @@ export function DupontClient({
         isPending={isPending}
         onApply={applyFilters}
         onReset={resetFilters}
+        onRestoreDefaults={restoreSystemDefaults}
       />
 
       {/* ============ SECCION 1 — ROE = ROA × Apalancamiento ============ */}
@@ -455,6 +462,7 @@ function SelectoresBar({
   isPending,
   onApply,
   onReset,
+  onRestoreDefaults,
 }: {
   draftEntidades: string[];
   setDraftEntidades: (v: string[]) => void;
@@ -469,6 +477,7 @@ function SelectoresBar({
   isPending: boolean;
   onApply: () => void;
   onReset: () => void;
+  onRestoreDefaults: () => void;
 }) {
   const [entidadModalOpen, setEntidadModalOpen] = useState(false);
   const [draggedEnt, setDraggedEnt] = useState<string | null>(null);
@@ -615,6 +624,15 @@ function SelectoresBar({
             : "Los filtros están sincronizados con la vista"}
         </span>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onRestoreDefaults}
+            disabled={isPending}
+            className="px-3 h-8 text-xs rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Volver al peer group y colores default del sistema (borra tu configuración guardada)"
+          >
+            Restablecer defaults
+          </button>
           <button
             type="button"
             onClick={onReset}

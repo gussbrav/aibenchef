@@ -26,8 +26,10 @@
 
 import { headers } from "next/headers";
 import { createHash } from "node:crypto";
+import { sql } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/infrastructure/db";
 import {
   handleRoute,
   UnauthorizedError,
@@ -46,24 +48,27 @@ type Insights = {
   mfb: string[];
 };
 
-// Cache in-memory por-contenedor. Perdemos el cache en cada deploy pero
-// evitamos gastar tokens si el usuario refresca la vista 3x en 5 min.
-type CacheEntry = { at: number; insights: Insights; model: string };
-const CACHE = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
-const CACHE_MAX = 200; // LRU cap
+// Cache CROSS-USER CROSS-DEPLOY en Postgres (app.dupont_insights_cache).
+// Reemplaza el cache in-memory previo. Beneficios:
+//   - Compartido entre todos los usuarios: los defaults (peer group estandar)
+//     se generan 1 vez para toda la organizacion.
+//   - Sobrevive deploys: al rebuild no se pierde nada.
+//   - Sobrevive escalamiento horizontal.
+//
+// Micro-cache in-memory de 60s para dedupear requests concurrentes al mismo
+// hash (evita race condition donde 2 users piden lo mismo simultaneamente
+// y ambos disparan Claude). El first-in gana, el resto espera al DB.
+type InMemHit = { at: number; insights: Insights; model: string | null };
+const INFLIGHT = new Map<string, Promise<InMemHit | null>>();
+const MICROCACHE = new Map<string, InMemHit>();
+const MICROCACHE_TTL_MS = 60 * 1000;
+const MICROCACHE_MAX = 50;
 
-function pruneCache() {
-  if (CACHE.size <= CACHE_MAX) return;
+function pruneMicrocache() {
+  if (MICROCACHE.size <= MICROCACHE_MAX) return;
   const now = Date.now();
-  for (const [k, v] of CACHE) {
-    if (now - v.at > CACHE_TTL_MS) CACHE.delete(k);
-  }
-  if (CACHE.size <= CACHE_MAX) return;
-  // Fallback: borrar el oldest hasta bajar de MAX
-  const sorted = [...CACHE.entries()].sort((a, b) => a[1].at - b[1].at);
-  for (const [k] of sorted.slice(0, CACHE.size - CACHE_MAX)) {
-    CACHE.delete(k);
+  for (const [k, v] of MICROCACHE) {
+    if (now - v.at > MICROCACHE_TTL_MS) MICROCACHE.delete(k);
   }
 }
 
@@ -181,6 +186,44 @@ function parseInsights(text: string): Insights | null {
   }
 }
 
+// Check DB cache: si existe, incrementa hit_count y devuelve. Cross-user
+// cross-deploy cross-container — costos LLM se comparten entre todos.
+async function checkDbCache(key: string): Promise<InMemHit | null> {
+  try {
+    const rows = await db.execute<{ insights: Insights; model: string | null }>(
+      sql`SELECT insights, model FROM app.dupont_insights_cache WHERE input_hash = ${key} LIMIT 1`,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    // Touch en background — no bloquea la respuesta
+    db.execute(sql`SELECT app.dupont_insights_touch(${key})`).catch(() => {});
+    return { at: Date.now(), insights: row.insights, model: row.model };
+  } catch {
+    return null;
+  }
+}
+
+async function saveDbCache(
+  key: string,
+  insights: Insights,
+  model: string,
+): Promise<void> {
+  try {
+    await db.execute(sql`
+      INSERT INTO app.dupont_insights_cache (input_hash, insights, model)
+      VALUES (${key}, ${JSON.stringify(insights)}::jsonb, ${model})
+      ON CONFLICT (input_hash) DO UPDATE
+        SET insights = EXCLUDED.insights,
+            model = EXCLUDED.model,
+            generated_at = now(),
+            hit_count = app.dupont_insights_cache.hit_count + 1,
+            last_hit_at = now()
+    `);
+  } catch {
+    /* silent fail — el cache es best-effort, no debe romper la request */
+  }
+}
+
 export async function POST(req: Request) {
   return handleRoute(async () => {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -191,49 +234,98 @@ export async function POST(req: Request) {
       throw new ValidationError("Body invalido: falta 'data' con entidades+filas", {});
     }
     const data = body.data;
-
-    // Cache hit
     const key = hashInput(data);
-    const cached = CACHE.get(key);
-    const now = Date.now();
-    if (cached && now - cached.at < CACHE_TTL_MS) {
-      return { narrativa: cached.insights, model: cached.model, cached: true };
-    }
 
-    // Fetch provider — clienteSlug=null (sin override multi-cliente)
-    let provider;
-    try {
-      provider = await getProviderForCliente(null);
-    } catch (e) {
-      // Sin provider configurado — cliente hace fallback a narrativa deterministica.
+    // 1. Microcache in-memory (dedupea requests concurrentes al mismo hash
+    //    dentro de 60s — evita race conditions cross-request).
+    const micro = MICROCACHE.get(key);
+    if (micro && Date.now() - micro.at < MICROCACHE_TTL_MS) {
       return {
-        narrativa: null,
-        model: null,
-        cached: false,
-        error: e instanceof LlmProviderError ? e.message : "no provider",
+        narrativa: micro.insights,
+        model: micro.model,
+        cached: true,
+        cacheLayer: "memory",
       };
     }
 
-    let insights: Insights | null = null;
+    // 2. Deduplication: si otra request esta generando el mismo hash,
+    //    esperarla en lugar de disparar Claude de nuevo.
+    const inflight = INFLIGHT.get(key);
+    if (inflight) {
+      const hit = await inflight;
+      if (hit) {
+        return {
+          narrativa: hit.insights,
+          model: hit.model,
+          cached: true,
+          cacheLayer: "inflight",
+        };
+      }
+    }
+
+    // 3. DB cache cross-user cross-deploy — la fuente de verdad.
+    const dbHit = await checkDbCache(key);
+    if (dbHit) {
+      MICROCACHE.set(key, dbHit);
+      pruneMicrocache();
+      return {
+        narrativa: dbHit.insights,
+        model: dbHit.model,
+        cached: true,
+        cacheLayer: "db",
+      };
+    }
+
+    // 4. Cache miss — llamar Claude. Registrar la promise en INFLIGHT para
+    //    que requests concurrentes al mismo hash esperen esta.
+    const promise = (async (): Promise<InMemHit | null> => {
+      let provider;
+      try {
+        provider = await getProviderForCliente(null);
+      } catch {
+        return null;
+      }
+
+      let insights: Insights | null = null;
+      try {
+        const result = await provider.generate(buildUserPrompt(data), {
+          system: SYSTEM_PROMPT,
+          maxTokens: 900,
+          temperature: 0.3,
+        });
+        insights = parseInsights(result.text);
+      } catch {
+        return null;
+      }
+
+      if (!insights) return null;
+
+      // Persist en DB (fire-and-forget, no bloquea la respuesta al user)
+      saveDbCache(key, insights, provider.name).catch(() => {});
+
+      return { at: Date.now(), insights, model: provider.name };
+    })();
+
+    INFLIGHT.set(key, promise);
+    let result: InMemHit | null = null;
     try {
-      const result = await provider.generate(buildUserPrompt(data), {
-        system: SYSTEM_PROMPT,
-        maxTokens: 900,
-        temperature: 0.3,
-      });
-      insights = parseInsights(result.text);
-    } catch {
-      // Silent fail — cliente cae a narrativa deterministica
-      return { narrativa: null, model: provider.name, cached: false };
+      result = await promise;
+    } finally {
+      INFLIGHT.delete(key);
     }
 
-    if (!insights) {
-      return { narrativa: null, model: provider.name, cached: false };
+    if (!result) {
+      // Sin provider o LLM fallo — cliente hace fallback a narrativa determ.
+      return { narrativa: null, model: null, cached: false };
     }
 
-    CACHE.set(key, { at: now, insights, model: provider.name });
-    pruneCache();
-
-    return { narrativa: insights, model: provider.name, cached: false };
+    MICROCACHE.set(key, result);
+    pruneMicrocache();
+    return {
+      narrativa: result.insights,
+      model: result.model,
+      cached: false,
+      cacheLayer: "llm",
+    };
   });
 }
