@@ -52,6 +52,13 @@ export type PuntoEquilibrioSerie = {
     pctPuntoEq: number | null;
     pctMargenNeto: number | null;
     pctRendimiento: number | null;
+    // Sub-componentes para recomputar PE en frontend con formula del
+    // analista: PE = |Otros + GF + Prov + GO|. El backend guarda un PE
+    // distinto (sin incluir Otros).
+    pctOtros: number | null;
+    pctCostoFondeo: number | null;
+    pctProvisiones: number | null;
+    pctGastosOp: number | null;
   }>;
 };
 
@@ -315,6 +322,10 @@ export async function getPuntoEquilibrioSeries(opts: {
     pct_punto_eq: number | null;
     pct_margen_neto: number | null;
     pct_rendimiento: number | null;
+    pct_otros: number | null;
+    pct_costo_fondeo: number | null;
+    pct_provisiones: number | null;
+    pct_gastos_op: number | null;
   }>(sql`
     WITH entidades_solicitadas AS (
       SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
@@ -336,7 +347,8 @@ export async function getPuntoEquilibrioSeries(opts: {
           `}
     )
     SELECT DISTINCT ON (a.canonico, v.periodo)
-           a.canonico, v.periodo, v.pct_punto_eq, v.pct_margen_neto, v.pct_rendimiento
+           a.canonico, v.periodo, v.pct_punto_eq, v.pct_margen_neto, v.pct_rendimiento,
+           v.pct_otros, v.pct_costo_fondeo, v.pct_provisiones, v.pct_gastos_op
     FROM aliases a
     JOIN marts.v_punto_equilibrio_ancho v
       ON LOWER(TRIM(v.nomb_correg)) = a.nombre_lower
@@ -366,6 +378,10 @@ export async function getPuntoEquilibrioSeries(opts: {
           pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
           pctMargenNeto: r?.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
           pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
+          pctOtros: r?.pct_otros == null ? null : Number(r.pct_otros),
+          pctCostoFondeo: r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo),
+          pctProvisiones: r?.pct_provisiones == null ? null : Number(r.pct_provisiones),
+          pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
         };
       }),
     };

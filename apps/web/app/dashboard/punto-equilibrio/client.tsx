@@ -640,15 +640,42 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
 const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
 
 /**
- * Punto de Equilibrio: por convencion financiera es el UMBRAL positivo
- * de rendimiento requerido para cubrir todos los costos, no un deficit.
- * En la vista mostramos el valor absoluto (positivo) aunque en la
- * data raw viene con signo negativo (suma de gastos negativos).
- * Consultado con analista financiero senior (Juan Jose).
+ * Punto de Equilibrio — formula del analista financiero senior (Juan Jose):
+ *
+ *   PE = | Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales |
+ *
+ * Es decir: el UMBRAL POSITIVO de rendimiento sobre cartera que la entidad
+ * necesita para cubrir todos los costos (financieros + provisiones +
+ * operacionales) neto de Otros Ingresos.
+ *
+ * El backend calcula _punto_eq = costo_fondeo + provisiones + gastos_op
+ * (SIN incluir Otros). Recomputamos en el frontend con la formula correcta
+ * usando los componentes que ya vienen en el row. No cambiamos backend para
+ * no romper /informe u otras vistas que consumen la MV.
+ *
+ * Verificacion contra tabla del analista (Al cierre 2021 CA):
+ *   Rend=22.9, Otros=0.8, GF=-5.3, Prov=-0.9, GO=-10.8
+ *   PE = |0.8 - 5.3 - 0.9 - 10.8| = |-16.2| = 16.2% ✓
+ *   Margen = 22.9 + 0.8 - 5.3 - 0.9 - 10.8 = 6.7% ✓ (backend ya lo calcula bien)
  */
-function displayValueForField(field: keyof PuntoEquilibrioRow, v: number | null): number | null {
-  if (v == null) return null;
-  if (field === "pctPuntoEq") return Math.abs(v);
+function computedPuntoEq(row: {
+  pctOtros: number | null;
+  pctCostoFondeo: number | null;
+  pctProvisiones: number | null;
+  pctGastosOp: number | null;
+}): number | null {
+  const parts = [row.pctOtros, row.pctCostoFondeo, row.pctProvisiones, row.pctGastosOp];
+  if (parts.some((p) => p == null)) return null;
+  const sum = (parts as number[]).reduce((a, b) => a + b, 0);
+  return Math.abs(sum);
+}
+
+function displayValueForField(
+  field: keyof PuntoEquilibrioRow,
+  v: number | null,
+  row?: PuntoEquilibrioRow,
+): number | null {
+  if (field === "pctPuntoEq" && row) return computedPuntoEq(row);
   return v;
 }
 
@@ -969,7 +996,7 @@ function HistoricoTable({
                   {effectiveCols.map((periodo) => {
                     const d = dataByPeriodo.get(periodo);
                     const raw = d ? (d[row.field] as number | null) : null;
-                    const v = displayValueForField(row.field, raw);
+                    const v = displayValueForField(row.field, raw, d);
                     return (
                       <td
                         key={periodo}
@@ -1001,7 +1028,7 @@ function HistoricoTable({
                     {effectiveCols.map((periodo) => {
                       const d = dataByPeriodo.get(periodo);
                       const raw = d ? (d[sub.field] as number | null | undefined) : null;
-                      const v = raw == null ? null : displayValueForField(sub.field, raw);
+                      const v = raw == null ? null : displayValueForField(sub.field, raw, d);
                       return (
                         <td
                           key={periodo}
@@ -1091,7 +1118,7 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
 };
 
 function ComparativoView({
-  series,
+  series: seriesRaw,
   entidadActual,
   draftPeerGroup,
   entidadesDisponibles,
@@ -1105,6 +1132,22 @@ function ComparativoView({
   onChangePeers: (nuevos: string[]) => void;
   onAddEntidadAlComparativo: () => void;
 }) {
+  // Recomputamos pctPuntoEq en cada punto con la formula del analista
+  // (Juan Jose): PE = |Otros + GF + Prov + GO|. Todos los children que
+  // consumen `series` (chart, ranking, tablas, ejecutivo) reciben ya el
+  // valor correcto — una sola fuente de verdad, no hay que tocar cada uno.
+  const series = useMemo(
+    () =>
+      seriesRaw.map((s) => ({
+        ...s,
+        puntos: s.puntos.map((p) => ({
+          ...p,
+          pctPuntoEq: computedPuntoEq(p),
+        })),
+      })),
+    [seriesRaw],
+  );
+
   const [metrica, setMetrica] = useState<MetricaKey>("pctPuntoEq");
   const [peerModalOpen, setPeerModalOpen] = useState(false);
   const entidadIncluida = series.some((s) => s.esPropio);
@@ -1740,12 +1783,16 @@ function GapAnalysisTable({ series }: { series: PuntoEquilibrioSerie[] }) {
   const rows = useMemo(() => {
     return series.map((s) => {
       const ult = s.puntos[s.puntos.length - 1];
+      // PE recomputado con formula del analista (Juan Jose):
+      // PE = |Otros + Gasto Financiero + Costo Prov + Gastos Op|.
+      // Coincide con el helper computedPuntoEq usado en la tabla historica.
+      const puntoEqRecalc = ult ? computedPuntoEq(ult) : null;
       return {
         entidad: s.entidad,
         color: s.color,
         esPropio: s.esPropio,
         rendimiento: ult?.pctRendimiento ?? null,
-        puntoEq: ult?.pctPuntoEq ?? null,
+        puntoEq: puntoEqRecalc,
         margen: ult?.pctMargenNeto ?? null,
       };
     });
