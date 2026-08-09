@@ -13,7 +13,7 @@
  * el usuario aplique via "Aplicar filtros" (evita re-fetches en cada tick).
  */
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   BarChart,
@@ -25,7 +25,7 @@ import {
   ResponsiveContainer,
   LabelList,
 } from "recharts";
-import { Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush } from "lucide-react";
+import { Sparkles, Users, Calendar, X, Plus, Loader2, Paintbrush, Wand2 } from "lucide-react";
 
 import type { DupontData, DupontRow } from "@/lib/domains/dupont";
 import type { EntidadDisponible } from "@/lib/domains/informe";
@@ -180,6 +180,11 @@ export function DupontClient({
     return m;
   }, [dataConColores.entidades]);
 
+  // ============ NARRATIVA IA (Claude) ============
+  // 1 sola llamada a /api/v1/dupont/insights que devuelve los 4 arrays de
+  // bullets (roe, roa, mon, mfb). Loading state + fallback a determinista.
+  const narrativaIA = useNarrativaIA(data);
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 px-2 animate-premium-in">
       {/* ============ HEADER ============ */}
@@ -224,6 +229,7 @@ export function DupontClient({
       {/* ============ SECCION 1 — ROE = ROA × Apalancamiento ============ */}
       <SeccionDupont
         numero={1}
+        seccionKey="roe"
         titulo="ROE = ROA × Apalancamiento"
         subtitulo="Rentabilidad sobre el patrimonio, descompuesta en eficiencia operativa y estructura de capital."
         indicadorPrincipal={{
@@ -237,11 +243,13 @@ export function DupontClient({
         ]}
         data={dataConColores}
         rowsIndex={rowsIndex}
+        narrativaIA={narrativaIA}
       />
 
       {/* ============ SECCION 2 — ROA descomposicion ============ */}
       <SeccionDupont
         numero={2}
+        seccionKey="roa"
         titulo="ROA = Margen Op. Neto + Otros Ingresos + Impuestos"
         subtitulo="Descomposición del retorno sobre activos por naturaleza del resultado."
         indicadorPrincipal={{
@@ -256,11 +264,13 @@ export function DupontClient({
         ]}
         data={dataConColores}
         rowsIndex={rowsIndex}
+        narrativaIA={narrativaIA}
       />
 
       {/* ============ SECCION 3 — Margen Op Neto descomposicion ============ */}
       <SeccionDupont
         numero={3}
+        seccionKey="mon"
         titulo="Margen Op. Neto = MFB + ISF Netos + Gastos"
         subtitulo="Estructura del margen operativo: qué ingresos y qué gastos lo forman."
         indicadorPrincipal={{
@@ -277,11 +287,13 @@ export function DupontClient({
         ]}
         data={dataConColores}
         rowsIndex={rowsIndex}
+        narrativaIA={narrativaIA}
       />
 
       {/* ============ SECCION 4 — Margen Financiero Bruto descomposicion ============ */}
       <SeccionDupont
         numero={4}
+        seccionKey="mfb"
         titulo="MFB = Ingresos Cartera + Inversión − Gastos Financieros"
         subtitulo="El margen financiero bruto viene del spread entre lo que renta la cartera y lo que cuesta el fondeo."
         indicadorPrincipal={{
@@ -296,6 +308,7 @@ export function DupontClient({
         ]}
         data={dataConColores}
         rowsIndex={rowsIndex}
+        narrativaIA={narrativaIA}
       />
 
       {/* Footer nota metodologica */}
@@ -645,23 +658,30 @@ type IndicadorDef = {
 
 function SeccionDupont({
   numero,
+  seccionKey,
   titulo,
   subtitulo,
   indicadorPrincipal,
   subIndicadores,
   data,
   rowsIndex,
+  narrativaIA,
 }: {
   numero: number;
+  seccionKey: "roe" | "roa" | "mon" | "mfb";
   titulo: string;
   subtitulo: string;
   indicadorPrincipal: IndicadorDef;
   subIndicadores: IndicadorDef[];
   data: DupontData;
   rowsIndex: Map<string, DupontRow>;
+  narrativaIA: NarrativaState;
 }) {
-  // Narrativa auto: analizar el ultimo periodo para el indicador principal
-  const narrativa = useMemo(
+  // Fallback deterministico — se usa si:
+  //   - la IA aun no cargo (status=loading)
+  //   - la IA fallo o no hay proveedor (status=error/no-provider)
+  //   - la IA devolvio un array vacio para esta seccion
+  const narrativaFallback = useMemo(
     () =>
       generarNarrativa(
         titulo,
@@ -672,6 +692,10 @@ function SeccionDupont({
       ),
     [titulo, indicadorPrincipal, subIndicadores, data, rowsIndex],
   );
+
+  const bulletsIA = narrativaIA.data?.[seccionKey] ?? [];
+  const usarIA = narrativaIA.status === "ok" && bulletsIA.length > 0;
+  const narrativa = usarIA ? bulletsIA : narrativaFallback;
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
@@ -687,21 +711,56 @@ function SeccionDupont({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-0">
-        {/* Sidebar de narrativa */}
+        {/* Sidebar de narrativa — 3 estados visuales:
+              loading = shimmer + spinner + "generando"
+              ok (IA) = badge purple con ícono Wand2 (highlight que fue IA)
+              fallback = badge slate normal (narrativa deterministica) */}
         <aside className="p-5 bg-slate-50 border-r border-slate-200 space-y-3">
-          <h3 className="text-xs uppercase tracking-wider font-semibold text-slate-500">
-            Lectura
-          </h3>
-          {narrativa.map((n, i) => (
-            <div key={i} className="text-xs text-slate-700 leading-relaxed">
-              <div className="flex items-baseline gap-1.5">
-                <span className="w-4 h-4 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {i + 1}
-                </span>
-                <span>{n}</span>
-              </div>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-xs uppercase tracking-wider font-semibold text-slate-500">
+              Lectura
+            </h3>
+            {narrativaIA.status === "loading" && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                Generando…
+              </span>
+            )}
+            {usarIA && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">
+                <Wand2 className="w-2.5 h-2.5" />
+                IA
+              </span>
+            )}
+          </div>
+          {narrativaIA.status === "loading" ? (
+            <div className="space-y-2">
+              {[80, 90, 70].map((w) => (
+                <div
+                  key={w}
+                  className="h-3 rounded bg-slate-200 animate-pulse"
+                  style={{ width: `${w}%` }}
+                />
+              ))}
             </div>
-          ))}
+          ) : (
+            narrativa.map((n, i) => (
+              <div key={i} className="text-xs text-slate-700 leading-relaxed">
+                <div className="flex items-baseline gap-1.5">
+                  <span
+                    className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      usarIA
+                        ? "bg-violet-100 text-violet-700"
+                        : "bg-brand-100 text-brand-700"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <span>{n}</span>
+                </div>
+              </div>
+            ))
+          )}
         </aside>
 
         {/* Charts a la derecha — principal arriba, subs abajo en grid */}
@@ -859,7 +918,88 @@ function IndicadorChart({
 }
 
 // ============================================================================
-// Narrativa auto-generada
+// Hook useNarrativaIA — 1 fetch al endpoint /api/v1/dupont/insights
+//
+// Estados:
+//   - loading: mientras Claude genera (2-8s primera vez, <200ms si cache)
+//   - ok: bullets IA disponibles para las 4 secciones
+//   - fallback: sin provider o error del LLM — cliente usa narrativa
+//     deterministica automaticamente
+//
+// Debounce natural: el fetch dispara solo cuando cambia el hash de la
+// data (entidades × periodos × valores redondeados a 2 decimales). Cambios
+// de color NO invalidan (el color no afecta el prompt).
+// ============================================================================
+
+type NarrativaBullets = {
+  roe: string[];
+  roa: string[];
+  mon: string[];
+  mfb: string[];
+};
+
+type NarrativaState = {
+  status: "loading" | "ok" | "fallback";
+  data: NarrativaBullets | null;
+  model: string | null;
+};
+
+function useNarrativaIA(data: DupontData): NarrativaState {
+  const [state, setState] = useState<NarrativaState>({
+    status: "loading",
+    data: null,
+    model: null,
+  });
+
+  // Hash simple de la data para no re-fetchear si nada cambio.
+  // Basta con (entidades, periodos, valores del roePct) — si cambian
+  // otros ratios sin cambiar roe, es porque cambiaron periodos.
+  const dataKey = useMemo(() => {
+    const ents = data.entidades.map((e) => e.nombCorreg).join("|");
+    const pers = data.periodos.map((p) => p.codigo).join("|");
+    const vals = data.filas
+      .map((r) => `${r.entidad}:${r.periodo}:${r.roePct?.toFixed(2) ?? "-"}`)
+      .join(",");
+    return `${ents}#${pers}#${vals}`;
+  }, [data]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setState((s) => ({ ...s, status: "loading" }));
+
+    (async () => {
+      try {
+        const r = await fetch("/api/v1/dupont/insights", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ data }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const json = await r.json();
+        const nar = json?.data?.narrativa as NarrativaBullets | null | undefined;
+        if (cancelled) return;
+        if (!nar) {
+          setState({ status: "fallback", data: null, model: json?.data?.model ?? null });
+        } else {
+          setState({ status: "ok", data: nar, model: json?.data?.model ?? null });
+        }
+      } catch {
+        if (cancelled) return;
+        setState({ status: "fallback", data: null, model: null });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey]);
+
+  return state;
+}
+
+// ============================================================================
+// Narrativa auto-generada (FALLBACK deterministico si la IA falla)
 // ============================================================================
 
 function generarNarrativa(
