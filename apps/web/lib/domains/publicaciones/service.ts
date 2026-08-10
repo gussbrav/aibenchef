@@ -393,33 +393,5 @@ function parseArticuloJson(text: string): {
   return null;
 }
 
-/** Metadata sobre los temas — para la UI (selector). */
-export const PUBLICACION_TEMAS_META: Record<
-  PublicacionTema,
-  { label: string; descripcion: string; hashtagsDefault: string[] }
-> = {
-  benchmarking_sectorial: {
-    label: "Benchmarking sectorial",
-    descripcion:
-      "Ranking del cierre entre entidades comparables: quien lidera y por que.",
-    hashtagsDefault: promptBenchmarkingSectorial.hashtagsDefault,
-  },
-  coyuntura_macro: {
-    label: "Coyuntura macro",
-    descripcion:
-      "Conecta la data del cierre con eventos macro (El Niño, tasas BCRP, elecciones).",
-    hashtagsDefault: promptCoyunturaMacro.hashtagsDefault,
-  },
-  dupont_rentabilidad: {
-    label: "DuPont / Rentabilidad",
-    descripcion:
-      "Descomposicion del ROE: quien gana por eficiencia vs quien gana por apalancamiento.",
-    hashtagsDefault: promptDupontRentabilidad.hashtagsDefault,
-  },
-  evolucion_pe_segmento: {
-    label: "Evolucion PE por segmento",
-    descripcion:
-      "Historia del Punto de Equilibrio en los ultimos cierres: quien mejoro y quien esta bajo presion.",
-    hashtagsDefault: promptEvolucionPeSegmento.hashtagsDefault,
-  },
-};
+// PUBLICACION_TEMAS_META vive en ./meta.ts para ser client-safe (no
+// arrastra "server-only" al bundle del client). Ver meta.ts.

@@ -1,0 +1,43 @@
+/**
+ * Meta de temas — client-safe (no importa nada server-only).
+ *
+ * Vive aparte del service.ts porque este ultimo tiene `import "server-only"`
+ * y no puede aparecer en el bundle del client. La UI (client component)
+ * importa desde este modulo para el selector de temas del wizard.
+ */
+
+import { promptBenchmarkingSectorial } from "./prompts/benchmarking-sectorial";
+import { promptCoyunturaMacro } from "./prompts/coyuntura-macro";
+import { promptDupontRentabilidad } from "./prompts/dupont-rentabilidad";
+import { promptEvolucionPeSegmento } from "./prompts/evolucion-pe-segmento";
+import type { PublicacionTema } from "./types";
+
+export const PUBLICACION_TEMAS_META: Record<
+  PublicacionTema,
+  { label: string; descripcion: string; hashtagsDefault: string[] }
+> = {
+  benchmarking_sectorial: {
+    label: "Benchmarking sectorial",
+    descripcion:
+      "Ranking del cierre entre entidades comparables: quien lidera y por que.",
+    hashtagsDefault: promptBenchmarkingSectorial.hashtagsDefault,
+  },
+  coyuntura_macro: {
+    label: "Coyuntura macro",
+    descripcion:
+      "Conecta la data del cierre con eventos macro (El Niño, tasas BCRP, elecciones).",
+    hashtagsDefault: promptCoyunturaMacro.hashtagsDefault,
+  },
+  dupont_rentabilidad: {
+    label: "DuPont / Rentabilidad",
+    descripcion:
+      "Descomposicion del ROE: quien gana por eficiencia vs quien gana por apalancamiento.",
+    hashtagsDefault: promptDupontRentabilidad.hashtagsDefault,
+  },
+  evolucion_pe_segmento: {
+    label: "Evolucion PE por segmento",
+    descripcion:
+      "Historia del Punto de Equilibrio en los ultimos cierres: quien mejoro y quien esta bajo presion.",
+    hashtagsDefault: promptEvolucionPeSegmento.hashtagsDefault,
+  },
+};

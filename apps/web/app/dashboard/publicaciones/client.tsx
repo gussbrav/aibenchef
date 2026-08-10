@@ -19,13 +19,16 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+// Imports client-safe: types puros (types.ts) + meta sin server-only (meta.ts).
+// NO importar desde el barrel "@/lib/domains/publicaciones" — arrastra
+// service.ts que tiene "server-only" y rompe el build.
 import type {
   Publicacion,
   PublicacionListItem,
   PublicacionStatus,
   PublicacionTema,
-} from "@/lib/domains/publicaciones";
-import { PUBLICACION_TEMAS_META } from "@/lib/domains/publicaciones";
+} from "@/lib/domains/publicaciones/types";
+import { PUBLICACION_TEMAS_META } from "@/lib/domains/publicaciones/meta";
 
 type EntidadDisponible = {
   nombCorreg: string;

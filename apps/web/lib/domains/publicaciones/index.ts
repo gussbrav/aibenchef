@@ -1,3 +1,7 @@
+// IMPORTANTE — este barrel re-exporta service.ts que tiene "server-only".
+// Los client components NO deben importar desde este barrel; deben usar
+// paths especificos client-safe: `./meta`, `./types`.
+// Server components y API routes pueden usar este barrel sin problema.
 export {
   generatePublicacion,
   listPublicaciones,
@@ -5,8 +9,8 @@ export {
   updatePublicacion,
   archivePublicacion,
   PublicacionesError,
-  PUBLICACION_TEMAS_META,
 } from "./service";
+export { PUBLICACION_TEMAS_META } from "./meta";
 export type {
   Publicacion,
   PublicacionListItem,
