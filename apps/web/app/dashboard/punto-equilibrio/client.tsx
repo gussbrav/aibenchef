@@ -62,6 +62,7 @@ type Props = {
 type Tab = "historico" | "comparativo";
 
 const GRANULARIDADES: Array<{ value: Granularidad; label: string; hint: string }> = [
+  { value: "cierre", label: "Cierre único", hint: "Solo el 'Hasta período'" },
   { value: "anual", label: "Anual", hint: "Solo Diciembres" },
   { value: "semestral", label: "Semestral", hint: "Junio + Diciembre" },
   { value: "trimestral", label: "Trimestral", hint: "Mar, Jun, Sep, Dic" },
@@ -338,11 +339,22 @@ function SelectoresBar({
           onChange={(v) => setDraft((d) => ({ ...d, entidad: v }))}
         />
 
-        {/* Desde año */}
+        {/* Desde año — deshabilitado en modo 'Cierre único' porque no aplica
+            (ese modo muestra solo el hasta-periodo). */}
         <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
+          <label
+            className={cn(
+              "text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1 mb-1",
+              draft.granularidad === "cierre" ? "text-slate-300" : "text-slate-500",
+            )}
+          >
             <Calendar className="w-3 h-3" />
             Desde año
+            {draft.granularidad === "cierre" && (
+              <span className="text-[9px] normal-case italic text-slate-400">
+                (no aplica en cierre único)
+              </span>
+            )}
           </label>
           <select
             value={draft.desdeAnio}
@@ -350,7 +362,8 @@ function SelectoresBar({
               const v = Number.parseInt(e.target.value, 10);
               setDraft((d) => ({ ...d, desdeAnio: v }));
             }}
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+            disabled={draft.granularidad === "cierre"}
+            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
           >
             {aniosDisponibles.map((a) => (
               <option key={a} value={a}>{a}</option>
@@ -1074,16 +1087,18 @@ function HistoricoTable({
                     );
                   })}
                 </tr>
-                {isExpanded && row.subrows?.map((sub) => (
+                {isExpanded && row.subrows?.map((sub, subIdx) => (
                   <tr
                     key={`${row.key}__${sub.key}`}
-                    className="border-t border-slate-100 bg-slate-50/50"
+                    className={cn(
+                      "bg-slate-50/40 hover:bg-slate-50/80 transition-colors",
+                      subIdx === 0 && "border-t border-dashed border-slate-200",
+                    )}
                   >
-                    <td className="px-4 sticky left-0 z-10 bg-slate-50/70">
-                      <div className="flex items-center gap-2 pl-6 text-[13px] text-slate-600">
-                        <span className="w-3 h-3 flex-shrink-0" />
-                        <span className="text-slate-400">↳</span>
-                        <span className="italic">{sub.label}</span>
+                    <td className="px-4 sticky left-0 z-10 bg-slate-50/60">
+                      <div className="flex items-center gap-2 pl-8 py-1 text-[11.5px] text-slate-500">
+                        <span className="text-slate-300 text-[10px]">└</span>
+                        <span>{sub.label}</span>
                       </div>
                     </td>
                     {effectiveCols.map((periodo) => {
@@ -1094,9 +1109,10 @@ function HistoricoTable({
                         <td
                           key={periodo}
                           className={cn(
-                            "text-right px-3 font-mono tabular-nums whitespace-nowrap text-[13px]",
-                            v != null && v < 0 && "text-rose-600",
-                            v != null && v >= 0 && "text-slate-600",
+                            "text-right px-3 py-1 font-mono tabular-nums whitespace-nowrap text-[11.5px]",
+                            v != null && v < 0 && "text-rose-500/80",
+                            v != null && v > 0 && "text-slate-500",
+                            v != null && v === 0 && "text-slate-300",
                             v == null && "text-slate-300 italic",
                           )}
                         >

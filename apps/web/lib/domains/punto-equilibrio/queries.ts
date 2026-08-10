@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
 
-export type Granularidad = "anual" | "semestral" | "trimestral" | "mensual";
+export type Granularidad = "cierre" | "anual" | "semestral" | "trimestral" | "mensual";
 
 export type PuntoEquilibrioRow = {
   /** YYYYMM. */
@@ -96,6 +96,7 @@ function formatPeriodo(periodo: number): string {
  */
 function mesesDeGranularidad(g: Granularidad): number[] {
   switch (g) {
+    case "cierre": return []; // no aplica — cierre se maneja aparte en generarPeriodos
     case "anual": return [12];
     case "semestral": return [6, 12];
     case "trimestral": return [3, 6, 9, 12];
@@ -113,6 +114,10 @@ function generarPeriodos(
   hastaPeriodo: number,
   granularidad: Granularidad,
 ): number[] {
+  // Modo 'cierre unico': solo devuelve el hastaPeriodo. Ignora desdeAnio.
+  // Usado para análisis puntual de un cierre (deshabilita 'Desde año' en UI).
+  if (granularidad === "cierre") return [hastaPeriodo];
+
   const hastaAnio = Math.floor(hastaPeriodo / 100);
   const hastaMes = hastaPeriodo % 100;
   const meses = mesesDeGranularidad(granularidad);
@@ -325,9 +330,26 @@ export async function getPuntoEquilibrioHistorico(opts: {
            CASE WHEN t.cta_2_ttm > 0
              THEN (t.cta_2_ttm - t.cta_2_1_ttm - t.cta_2_2_ttm - t.cta_2_4_ttm - t.cta_2_oblig_ttm) / t.cta_2_ttm
            END AS ratio_gf_otros,
-           -- Ratios Costo Provision: sub / cta_4 total
-           CASE WHEN t.cta_4_ttm > 0 THEN t.cta_4_2_ttm / t.cta_4_ttm END AS ratio_prov_credito,
-           CASE WHEN t.cta_4_ttm > 0 THEN t.cta_4_1_ttm / t.cta_4_ttm END AS ratio_prov_inversion
+           -- Ratios Costo Provision: sub / cta_4 total.
+           -- Muchas entidades (BCP, IMFs pequenas) reportan cta_4 TOTAL sin
+           -- desagregar en 4.1 / 4.2. En ese caso las sub-cuentas vienen
+           -- NULL → COALESCE=0 → ratio=0 → subs=0 en la UI (confuso).
+           -- Fallback: si el detalle no esta reportado, asumir 100% en
+           -- Provisiones para Creditos (4.2) que es lo estandar.
+           CASE
+             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+               THEN t.cta_4_2_ttm / t.cta_4_ttm
+             WHEN t.cta_4_ttm > 0
+               THEN 1.0
+             ELSE NULL
+           END AS ratio_prov_credito,
+           CASE
+             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+               THEN t.cta_4_1_ttm / t.cta_4_ttm
+             WHEN t.cta_4_ttm > 0
+               THEN 0.0
+             ELSE NULL
+           END AS ratio_prov_inversion
     FROM marts.v_punto_equilibrio_ancho v
     LEFT JOIN ttm t ON t.periodo = v.periodo
     WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
