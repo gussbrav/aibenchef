@@ -11,6 +11,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, RotateCcw, TrendingUp, Users, X,
 } from "lucide-react";
@@ -34,6 +35,13 @@ import type {
   PuntoEquilibrioSerie,
 } from "@/lib/domains/punto-equilibrio";
 import { EntityCombobox } from "./entity-combobox";
+
+// Reusamos el picker del /informe — lazy porque el popover solo se abre
+// on-demand (interaccion del user). Cero costo en el first paint.
+const ColorPickerPopover = dynamic(
+  () => import("../informe/color-picker-popover").then((m) => m.ColorPickerPopover),
+  { ssr: false },
+);
 
 type EntidadDisponible = {
   nombCorreg: string;
@@ -1240,6 +1248,7 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
 // ============================================================================
 
 const LS_COMP_ENTIDAD_ORDER = "pe-comparativo-entidad-order-v1";
+const LS_COMP_COLOR_OVERRIDES = "pe-comparativo-color-overrides-v1";
 
 function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) {
   // Expand/collapse por row (persistido en localStorage con la MISMA key
@@ -1254,6 +1263,12 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
   const [draggedEntidad, setDraggedEntidad] = useState<string | null>(null);
   const [dropTargetEntidad, setDropTargetEntidad] = useState<string | null>(null);
 
+  // Colores custom por entidad (persistido). Sobreescribe el color server-side.
+  // El picker es el mismo que usa /informe (paleta sugerida + hex custom).
+  const [colorOverrides, setColorOverrides] = useState<Record<string, string>>({});
+  const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
+  const colorTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_EXPANDED_ROWS);
@@ -1266,6 +1281,13 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
         const arr = JSON.parse(ordRaw) as string[];
         if (Array.isArray(arr) && arr.every((x) => typeof x === "string")) {
           setEntidadOrder(arr);
+        }
+      }
+      const colRaw = localStorage.getItem(LS_COMP_COLOR_OVERRIDES);
+      if (colRaw) {
+        const obj = JSON.parse(colRaw);
+        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+          setColorOverrides(obj as Record<string, string>);
         }
       }
     } catch {
@@ -1282,6 +1304,32 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
     }
   }, [entidadOrder]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_COMP_COLOR_OVERRIDES, JSON.stringify(colorOverrides));
+    } catch {
+      /* ignore */
+    }
+  }, [colorOverrides]);
+
+  const setEntidadColor = (entidad: string, hex: string | null) => {
+    setColorOverrides((prev) => {
+      const next = { ...prev };
+      if (hex === null) delete next[entidad];
+      else next[entidad] = hex;
+      return next;
+    });
+  };
+
+  const resetAllColors = () => {
+    setColorOverrides({});
+    try {
+      localStorage.removeItem(LS_COMP_COLOR_OVERRIDES);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const toggleExpanded = (key: string) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
@@ -1296,25 +1344,29 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
     });
   };
 
-  // Series efectivas: reordenadas según orden custom (si existe y es válido).
-  // Entidades nuevas (no presentes en el orden guardado) van al final,
-  // manteniendo su orden original relativo.
+  // Series efectivas: reordenadas según orden custom (si existe y es válido)
+  // + color override aplicado por entidad. Entidades nuevas (no presentes
+  // en el orden guardado) van al final, manteniendo su orden original.
   const effectiveSeries = useMemo(() => {
-    if (!entidadOrder) return series;
+    const applyColor = (s: PuntoEquilibrioSerie): PuntoEquilibrioSerie => {
+      const override = colorOverrides[s.entidad];
+      return override ? { ...s, color: override } : s;
+    };
+    if (!entidadOrder) return series.map(applyColor);
     const byNombre = new Map(series.map((s) => [s.entidad, s]));
     const ordered: PuntoEquilibrioSerie[] = [];
     for (const nombre of entidadOrder) {
       const s = byNombre.get(nombre);
       if (s) {
-        ordered.push(s);
+        ordered.push(applyColor(s));
         byNombre.delete(nombre);
       }
     }
     for (const s of series) {
-      if (byNombre.has(s.entidad)) ordered.push(s);
+      if (byNombre.has(s.entidad)) ordered.push(applyColor(s));
     }
     return ordered;
-  }, [series, entidadOrder]);
+  }, [series, entidadOrder, colorOverrides]);
 
   const moveEntidad = (from: string, to: string) => {
     if (from === to) return;
@@ -1367,21 +1419,34 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
             Cierre <strong>{periodoLabel}</strong> — valores anualizados
             (últimos 12 meses móviles), % sobre cartera promedio. Arrastra
             el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> del
-            encabezado para reordenar entidades. Click en el chevron para
-            ver el detalle por sub-cuenta SBS.
+            encabezado para reordenar. Click en el <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" /> para
+            personalizar color. Click en el chevron para ver el detalle SBS.
           </p>
         </div>
-        {isCustomOrder && (
-          <button
-            type="button"
-            onClick={resetEntidadOrder}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
-            title="Restablecer al orden original del peer group"
-          >
-            <RotateCcw className="w-3 h-3" />
-            Restablecer orden
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {Object.keys(colorOverrides).length > 0 && (
+            <button
+              type="button"
+              onClick={resetAllColors}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+              title="Restablecer todos los colores custom"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Restablecer colores
+            </button>
+          )}
+          {isCustomOrder && (
+            <button
+              type="button"
+              onClick={resetEntidadOrder}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+              title="Restablecer al orden original del peer group"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Restablecer orden
+            </button>
+          )}
+        </div>
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -1421,20 +1486,33 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
                       setDropTargetEntidad(null);
                     }}
                     className={cn(
-                      "text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
+                      "relative text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
                       s.esPropio && "bg-brand-700",
                       !s.esPropio && "hover:bg-slate-800",
                       isDragging && "opacity-40",
                       isDropTarget && "ring-2 ring-inset ring-brand-400 bg-brand-600",
                     )}
+                    style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar"
                   >
                     <div className="flex items-center justify-end gap-1.5">
                       <GripVertical className="w-3 h-3 text-white/40 group-hover:text-white/80" />
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
+                      <button
+                        ref={(el) => {
+                          colorTriggerRefs.current[s.entidad] = el;
+                        }}
+                        type="button"
+                        draggable={false}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setColorPickerFor((cur) => (cur === s.entidad ? null : s.entidad));
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onDragStart={(e) => e.preventDefault()}
+                        className="w-3 h-3 rounded-full flex-shrink-0 cursor-pointer transition-transform hover:scale-125 ring-1 ring-white/40 hover:ring-white"
                         style={{ backgroundColor: s.color }}
-                        aria-hidden
+                        aria-label={`Personalizar color de ${s.entidad}`}
+                        title="Click para personalizar color"
                       />
                       {s.entidad}
                     </div>
@@ -1576,6 +1654,25 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
           </tbody>
         </table>
       </div>
+      {colorPickerFor && (() => {
+        const s = effectiveSeries.find((x) => x.entidad === colorPickerFor);
+        if (!s) return null;
+        const triggerRef = {
+          get current() {
+            return colorTriggerRefs.current[colorPickerFor] ?? null;
+          },
+        } as React.RefObject<HTMLElement | null>;
+        return (
+          <ColorPickerPopover
+            nombCorreg={s.entidad}
+            labelCorto={s.entidad}
+            currentColor={s.color}
+            triggerRef={triggerRef}
+            onColorChange={(hex) => setEntidadColor(s.entidad, hex)}
+            onClose={() => setColorPickerFor(null)}
+          />
+        );
+      })()}
     </section>
   );
 }
