@@ -76,10 +76,10 @@ export type PuntoEquilibrioSerie = {
     pctPersonal?: number | null;
     pctGenerales?: number | null;
     pctDepreciacion?: number | null;
-    // Sub-componentes de Otros / GF / Provisiones (calculados via ratios).
-    // No los traemos en getPuntoEquilibrioSeries por perf — para verlos
-    // en el cuadro comparativo modo cierre unico, el usuario cambia al
-    // tab Historico (unica entidad, query completa con sub-fields).
+    // Sub-componentes de Otros / GF / Provisiones (ratios × total).
+    // Calculados en la misma query series via TTMs inline — asi el cuadro
+    // comparativo modo "cierre unico" muestra el detalle completo por
+    // entidad. Costo: N × (3 CTEs + join) — aceptable para <20 entidades.
     pctISF?: number | null;
     pctGSF?: number | null;
     pctVentaCartera?: number | null;
@@ -539,6 +539,20 @@ export async function getPuntoEquilibrioSeries(opts: {
     pct_gastos_personal: number | null;
     pct_gastos_generales: number | null;
     pct_deprec: number | null;
+    // Ratios de subcuentas calculadas via TTMs inline (mismo pattern que
+    // getPuntoEquilibrioHistorico). Se multiplican en el frontend × total
+    // del padre para obtener el sub_pct exacto (cuadre matematico).
+    ratio_isf: number | null;
+    ratio_gsf: number | null;
+    ratio_venta_cartera: number | null;
+    ratio_otros_ing_gas: number | null;
+    ratio_gf_publico: number | null;
+    ratio_gf_sf: number | null;
+    ratio_gf_adeudos: number | null;
+    ratio_gf_obligaciones: number | null;
+    ratio_gf_otros: number | null;
+    ratio_prov_credito: number | null;
+    ratio_prov_inversion: number | null;
   }>(sql`
     WITH entidades_solicitadas AS (
       SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
@@ -558,16 +572,125 @@ export async function getPuntoEquilibrioSeries(opts: {
             SELECT es.canonico, LOWER(TRIM(es.canonico)) AS nombre_lower
             FROM entidades_solicitadas es
           `}
+    ),
+    -- TTMs por (canonico, periodo) para calcular ratios de subcuentas.
+    -- YTD_cur: para cada (canonico, periodo target) del set, suma cta_X.
+    ytd_cur AS (
+      SELECT a.canonico, r.periodo,
+             SUM(COALESCE(r.cta_6, 0)) AS cta_6, SUM(COALESCE(r.cta_7, 0)) AS cta_7,
+             SUM(COALESCE(r.cta_8, 0)) AS cta_8, SUM(COALESCE(r.cta_13, 0)) AS cta_13,
+             SUM(COALESCE(r.cta_2, 0)) AS cta_2,
+             SUM(COALESCE(r.cta_2_1, 0)) AS cta_2_1, SUM(COALESCE(r.cta_2_2, 0)) AS cta_2_2,
+             SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
+             SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
+             SUM(COALESCE(r.cta_4, 0)) AS cta_4,
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+      FROM aliases a
+      JOIN marts.mv_eeff_resultados_ancho r
+        ON LOWER(TRIM(r.nomb_correg)) = a.nombre_lower
+       AND r.moneda = ${moneda}
+       AND r.periodo IN (${periodosClause})
+      GROUP BY a.canonico, r.periodo
+    ),
+    -- Target set (canonico, periodo) para dic_prev y same_prev
+    target AS (
+      SELECT DISTINCT a.canonico, p.periodo
+      FROM aliases a, (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) p
+    ),
+    ytd_dic AS (
+      SELECT tgt.canonico, tgt.periodo AS target_periodo,
+             SUM(COALESCE(r.cta_6, 0)) AS cta_6, SUM(COALESCE(r.cta_7, 0)) AS cta_7,
+             SUM(COALESCE(r.cta_8, 0)) AS cta_8, SUM(COALESCE(r.cta_13, 0)) AS cta_13,
+             SUM(COALESCE(r.cta_2, 0)) AS cta_2,
+             SUM(COALESCE(r.cta_2_1, 0)) AS cta_2_1, SUM(COALESCE(r.cta_2_2, 0)) AS cta_2_2,
+             SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
+             SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
+             SUM(COALESCE(r.cta_4, 0)) AS cta_4,
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+      FROM target tgt
+      LEFT JOIN aliases a ON a.canonico = tgt.canonico
+      LEFT JOIN marts.mv_eeff_resultados_ancho r
+        ON LOWER(TRIM(r.nomb_correg)) = a.nombre_lower
+       AND r.moneda = ${moneda}
+       AND r.periodo = (tgt.periodo / 100 - 1) * 100 + 12
+      GROUP BY tgt.canonico, tgt.periodo
+    ),
+    ytd_same AS (
+      SELECT tgt.canonico, tgt.periodo AS target_periodo,
+             SUM(COALESCE(r.cta_6, 0)) AS cta_6, SUM(COALESCE(r.cta_7, 0)) AS cta_7,
+             SUM(COALESCE(r.cta_8, 0)) AS cta_8, SUM(COALESCE(r.cta_13, 0)) AS cta_13,
+             SUM(COALESCE(r.cta_2, 0)) AS cta_2,
+             SUM(COALESCE(r.cta_2_1, 0)) AS cta_2_1, SUM(COALESCE(r.cta_2_2, 0)) AS cta_2_2,
+             SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
+             SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
+             SUM(COALESCE(r.cta_4, 0)) AS cta_4,
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+      FROM target tgt
+      LEFT JOIN aliases a ON a.canonico = tgt.canonico
+      LEFT JOIN marts.mv_eeff_resultados_ancho r
+        ON LOWER(TRIM(r.nomb_correg)) = a.nombre_lower
+       AND r.moneda = ${moneda}
+       AND r.periodo = tgt.periodo - 100
+      GROUP BY tgt.canonico, tgt.periodo
+    ),
+    ttm AS (
+      SELECT c.canonico, c.periodo,
+             (c.cta_6 + COALESCE(d.cta_6, 0) - COALESCE(s.cta_6, 0)) AS cta_6_ttm,
+             (c.cta_7 + COALESCE(d.cta_7, 0) - COALESCE(s.cta_7, 0)) AS cta_7_ttm,
+             (c.cta_8 + COALESCE(d.cta_8, 0) - COALESCE(s.cta_8, 0)) AS cta_8_ttm,
+             (c.cta_13 + COALESCE(d.cta_13, 0) - COALESCE(s.cta_13, 0)) AS cta_13_ttm,
+             (c.cta_2 + COALESCE(d.cta_2, 0) - COALESCE(s.cta_2, 0)) AS cta_2_ttm,
+             (c.cta_2_1 + COALESCE(d.cta_2_1, 0) - COALESCE(s.cta_2_1, 0)) AS cta_2_1_ttm,
+             (c.cta_2_2 + COALESCE(d.cta_2_2, 0) - COALESCE(s.cta_2_2, 0)) AS cta_2_2_ttm,
+             (c.cta_2_4 + COALESCE(d.cta_2_4, 0) - COALESCE(s.cta_2_4, 0)) AS cta_2_4_ttm,
+             (c.cta_2_oblig + COALESCE(d.cta_2_oblig, 0) - COALESCE(s.cta_2_oblig, 0)) AS cta_2_oblig_ttm,
+             (c.cta_4 + COALESCE(d.cta_4, 0) - COALESCE(s.cta_4, 0)) AS cta_4_ttm,
+             (c.cta_4_1 + COALESCE(d.cta_4_1, 0) - COALESCE(s.cta_4_1, 0)) AS cta_4_1_ttm,
+             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm
+      FROM ytd_cur c
+      LEFT JOIN ytd_dic d ON d.canonico = c.canonico AND d.target_periodo = c.periodo
+      LEFT JOIN ytd_same s ON s.canonico = c.canonico AND s.target_periodo = c.periodo
     )
     SELECT DISTINCT ON (a.canonico, v.periodo)
            a.canonico, v.periodo, v.pct_punto_eq, v.pct_margen_neto, v.pct_rendimiento,
            v.pct_otros, v.pct_costo_fondeo, v.pct_provisiones, v.pct_gastos_op,
-           v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec
+           v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec,
+           -- Ratios Otros Ingresos (denominador con signos: cta_6 - cta_7 + cta_8 + cta_13)
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN t.cta_6_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) END AS ratio_isf,
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN -t.cta_7_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) END AS ratio_gsf,
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN t.cta_8_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) END AS ratio_venta_cartera,
+           CASE WHEN (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) != 0
+             THEN t.cta_13_ttm / (t.cta_6_ttm - t.cta_7_ttm + t.cta_8_ttm + t.cta_13_ttm) END AS ratio_otros_ing_gas,
+           -- Ratios Gasto Financiero: cada subcuenta / cta_2 total
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_1_ttm / t.cta_2_ttm END AS ratio_gf_publico,
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_2_ttm / t.cta_2_ttm END AS ratio_gf_sf,
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_4_ttm / t.cta_2_ttm END AS ratio_gf_adeudos,
+           CASE WHEN t.cta_2_ttm > 0 THEN t.cta_2_oblig_ttm / t.cta_2_ttm END AS ratio_gf_obligaciones,
+           CASE WHEN t.cta_2_ttm > 0
+             THEN (t.cta_2_ttm - t.cta_2_1_ttm - t.cta_2_2_ttm - t.cta_2_4_ttm - t.cta_2_oblig_ttm) / t.cta_2_ttm
+           END AS ratio_gf_otros,
+           -- Ratios Costo Provision (con fallback si detalle no reportado)
+           CASE
+             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+               THEN t.cta_4_2_ttm / t.cta_4_ttm
+             WHEN t.cta_4_ttm > 0 THEN 1.0
+             ELSE NULL
+           END AS ratio_prov_credito,
+           CASE
+             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+               THEN t.cta_4_1_ttm / t.cta_4_ttm
+             WHEN t.cta_4_ttm > 0 THEN 0.0
+             ELSE NULL
+           END AS ratio_prov_inversion
     FROM aliases a
     JOIN marts.v_punto_equilibrio_ancho v
       ON LOWER(TRIM(v.nomb_correg)) = a.nombre_lower
      AND v.moneda = ${moneda}
      AND v.periodo IN (${periodosClause})
+    LEFT JOIN ttm t ON t.canonico = a.canonico AND t.periodo = v.periodo
     ORDER BY a.canonico, v.periodo ASC, v.nomb_correg
   `);
 
@@ -578,6 +701,14 @@ export async function getPuntoEquilibrioSeries(opts: {
     byEntidad.get(k)!.set(Number(r.periodo), r);
   }
 
+  // Helper: ratio (0-1) × total = sub_pct exacto. Devuelve null si algo falta.
+  // Garantiza cuadre matematico: SUMA(subs) = total del padre.
+  const mult = (
+    ratio: number | null | undefined,
+    total: number | null,
+  ): number | null =>
+    ratio == null || total == null ? null : Number(ratio) * total;
+
   return opts.entidades.map((e) => {
     const entMap = byEntidad.get(e.nombCorreg) ?? new Map();
     return {
@@ -586,19 +717,36 @@ export async function getPuntoEquilibrioSeries(opts: {
       esPropio: e.esPropio,
       puntos: periodos.map((p) => {
         const r = entMap.get(p);
+        const pctOtros = r?.pct_otros == null ? null : Number(r.pct_otros);
+        const pctCostoFondeo =
+          r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo);
+        const pctProvisiones =
+          r?.pct_provisiones == null ? null : Number(r.pct_provisiones);
         return {
           periodo: p,
           periodoLabel: formatPeriodo(p),
           pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
           pctMargenNeto: r?.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
           pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
-          pctOtros: r?.pct_otros == null ? null : Number(r.pct_otros),
-          pctCostoFondeo: r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo),
-          pctProvisiones: r?.pct_provisiones == null ? null : Number(r.pct_provisiones),
+          pctOtros,
+          pctCostoFondeo,
+          pctProvisiones,
           pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
           pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
           pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
           pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
+          // Sub-componentes calculados como ratio × total. Cuadre exacto.
+          pctISF: mult(r?.ratio_isf, pctOtros),
+          pctGSF: mult(r?.ratio_gsf, pctOtros),
+          pctVentaCartera: mult(r?.ratio_venta_cartera, pctOtros),
+          pctOtrosIngGas: mult(r?.ratio_otros_ing_gas, pctOtros),
+          pctGfPublico: mult(r?.ratio_gf_publico, pctCostoFondeo),
+          pctGfSF: mult(r?.ratio_gf_sf, pctCostoFondeo),
+          pctGfAdeudos: mult(r?.ratio_gf_adeudos, pctCostoFondeo),
+          pctGfObligaciones: mult(r?.ratio_gf_obligaciones, pctCostoFondeo),
+          pctGfOtrosFin: mult(r?.ratio_gf_otros, pctCostoFondeo),
+          pctProvCredito: mult(r?.ratio_prov_credito, pctProvisiones),
+          pctProvInversion: mult(r?.ratio_prov_inversion, pctProvisiones),
         };
       }),
     };
