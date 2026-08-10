@@ -43,6 +43,13 @@ const ColorPickerPopover = dynamic(
   { ssr: false },
 );
 
+// ReportInsights (bullets AI del "Analisis del experto") — reusamos el
+// mismo componente del /informe. Lazy porque hace fetch al montarse.
+const ReportInsights = dynamic(
+  () => import("../informe/report-insights").then((m) => m.ReportInsights),
+  { loading: () => null },
+);
+
 type EntidadDisponible = {
   nombCorreg: string;
   primerPeriodo: number;
@@ -299,7 +306,12 @@ export function PuntoEquilibrioClient({
             onChangePeers={(nuevos) => setDraft((d) => ({ ...d, peerGroup: nuevos }))}
             onOpenModal={() => setPeerModalCierreOpen(true)}
           />
-          <TablaComparativaCierre series={series} />
+          <TablaComparativaCierre
+            series={series}
+            clienteSlug={cliente.slug}
+            entidadPropia={entidadActual}
+            periodo={config.hastaPeriodo}
+          />
           {peerModalCierreOpen && (
             <PeerGroupModal
               disponibles={entidadesDisponibles}
@@ -1250,7 +1262,17 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
 const LS_COMP_ENTIDAD_ORDER = "pe-comparativo-entidad-order-v1";
 const LS_COMP_COLOR_OVERRIDES = "pe-comparativo-color-overrides-v1";
 
-function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) {
+function TablaComparativaCierre({
+  series,
+  clienteSlug,
+  entidadPropia,
+  periodo,
+}: {
+  series: PuntoEquilibrioSerie[];
+  clienteSlug: string;
+  entidadPropia: string;
+  periodo: number;
+}) {
   // Expand/collapse por row (persistido en localStorage con la MISMA key
   // que la tabla historica → si el user expande 'Gasto Financiero' en
   // Historico y luego cambia a modo cierre, se mantiene expandido).
@@ -1655,6 +1677,44 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
           </tbody>
         </table>
       </div>
+      {(() => {
+        // Contexto para el LLM: ultima observacion por entidad con todos los
+        // componentes del PE. Filtramos entidades sin data del cierre (sin
+        // puntos) para no ensuciar el prompt con "—".
+        const entidadesCtx = effectiveSeries
+          .map((s) => {
+            const ult = s.puntos[s.puntos.length - 1];
+            if (!ult) return null;
+            const pe = computedPuntoEq(ult);
+            const parts = [ult.pctRendimiento, ult.pctOtros, ult.pctCostoFondeo, ult.pctProvisiones, ult.pctGastosOp, ult.pctMargenNeto, pe];
+            if (parts.some((p) => p == null)) return null;
+            return {
+              entidad: s.entidad,
+              rendimiento: ult.pctRendimiento as number,
+              otros: ult.pctOtros as number,
+              gastoFinanciero: ult.pctCostoFondeo as number,
+              costoProvision: ult.pctProvisiones as number,
+              gastosOp: ult.pctGastosOp as number,
+              margenAntesImpuestos: ult.pctMargenNeto as number,
+              puntoEquilibrio: pe as number,
+            };
+          })
+          .filter((e): e is NonNullable<typeof e> => e !== null);
+        if (entidadesCtx.length === 0) return null;
+        const peerGroup = entidadesCtx.map((e) => e.entidad);
+        return (
+          <div className="px-4 py-4 border-t border-slate-200 bg-slate-50/50">
+            <ReportInsights
+              periodo={periodo}
+              seccion="punto_equilibrio"
+              clienteSlug={clienteSlug}
+              entidadPropia={entidadPropia}
+              peerGroup={peerGroup}
+              contexto={{ entidades: entidadesCtx }}
+            />
+          </div>
+        );
+      })()}
       {colorPickerFor && (() => {
         const s = effectiveSeries.find((x) => x.entidad === colorPickerFor);
         if (!s) return null;

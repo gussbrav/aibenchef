@@ -20,7 +20,9 @@ export type InsightSeccion =
   // V143 — framework clasificadoras
   | "solvencia"
   | "liquidez"
-  | "cobertura";
+  | "cobertura"
+  // Punto de Equilibrio comparativo por entidad (cuadro cierre unico)
+  | "punto_equilibrio";
 
 export const INSIGHT_SECCIONES: InsightSeccion[] = [
   "margen_neto",
@@ -36,6 +38,7 @@ export const INSIGHT_SECCIONES: InsightSeccion[] = [
   "solvencia",
   "liquidez",
   "cobertura",
+  "punto_equilibrio",
 ];
 
 export type ReportInsight = {

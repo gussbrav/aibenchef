@@ -26,6 +26,7 @@ import { promptMoraGlobal } from "./prompts/mora-global";
 import { promptSolvencia } from "./prompts/solvencia";
 import { promptLiquidez } from "./prompts/liquidez";
 import { promptCobertura } from "./prompts/cobertura";
+import { promptPuntoEquilibrio } from "./prompts/punto-equilibrio";
 import type { PromptTemplate } from "./prompts/base";
 import type {
   GenerateInsightInput,
@@ -42,6 +43,7 @@ const PROMPT_REGISTRY: Partial<Record<InsightSeccion, PromptTemplate>> = {
   solvencia: promptSolvencia,
   liquidez: promptLiquidez,
   cobertura: promptCobertura,
+  punto_equilibrio: promptPuntoEquilibrio,
 };
 
 /**
