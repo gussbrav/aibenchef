@@ -39,7 +39,7 @@ type PERow = {
 };
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v1",
+  version: "v2",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -104,21 +104,47 @@ Referencia del grupo:
 
 ## INSTRUCCIONES ESPECIFICAS DE ESTA SECCION (estilo del analisis):
 
-TONO Y VOZ — inspirado en observadores expertos del sector microfinanzas peruano tipo Jesus Ferreyra (LinkedIn: "Aprendiz de Microfinanzas"):
-- ARRANCA con la observacion mas llamativa del cierre — no con "El grupo comparativo muestra...". Ejemplo: "CMAC Cusco lidera el margen con 5.60% — 2.29 pp por encima de CMAC Arequipa."
-- Usa comparaciones DIRECTAS entre 2 entidades ("X vs Y", "muy por encima de Z", "muy lejos del alcance de W").
-- Reconoce el MERITO con adjetivos precisos ("meritorio", "modesto", "sobresaliente") cuando el numero lo justifica — nunca vacio.
-- Descompone la CAUSA: si el margen de X es alto, ¿es por rendimiento mayor o por gastos operacionales menores? Sacalo de la tabla.
-- Cierra los bullets prescriptivamente con **Implica:**, **Accion:**, **Riesgo:** u **Oportunidad:** (regla dura de la clasificadora — no negociable).
-- Usa emojis con proposito y moderacion (1 emoji por bullet MAX, solo si aporta): 🔥 logro notable, ⚠️ riesgo latente, 🎯 oportunidad clara, 📊 comparativo. NUNCA en el bullet de la entidad propia si el numero es negativo.
-- El ULTIMO bullet cierra con una PREGUNTA ABIERTA o PREDICCION cuantitativa que invite a la reflexion: "¿Puede X sostener este margen si sube 50 bps el fondeo?" o "Si el ritmo se mantiene, en 3 cierres CMAC Cusco superara a CMAC Maynas en margen".
+TONO Y VOZ — inspirado en los posts de Jesus Ferreyra (LinkedIn: "Aprendiz de Microfinanzas", Gerente Central de Negocios). Su estilo caracteristico:
+
+PATRONES DE APERTURA:
+- ARRANCA con la observacion mas llamativa del cierre — nunca con "El grupo comparativo muestra..." ni "En este cierre observamos...".
+- Ejemplos que si funcionan:
+  * "CMAC Cusco lidera el margen con 5.60% — 2.29 pp por encima de CMAC Arequipa."
+  * "Preparados para lo que se viene? CMAC Paita muestra un margen sano de 3.36% pero con GO al -17.44%..."
+  * "Los numeros de este cierre se ven super bien: CMAC Cusco con 4.53% de margen, CMAC Huancayo con 5.60%..."
+
+RECURSOS DE ESTILO (usar con moderacion, no todos en cada bullet):
+- **Adjetivos precisos** en vez de vacios: "meritorio" (crecimiento sostenido), "modesto" (aumento pequeño), "sobresaliente" (top del grupo), "buenisima" (metrica muy sana), "super bien" (evolucion positiva clara). NUNCA usar "excelente", "fuerte", "bueno" a secas.
+- **CAPS ocasionales para enfasis** en verbos o palabras clave: "estan EJECUTANDO planes de contingencia", "MUY LEJOS del alcance del grupo", "el motor ES el rendimiento". Max 1 por bullet.
+- **Comillas para marcar frases** con connotacion critica o coloquial: '"los numeros" del cierre', "confiando en que no pasara nada", "el famoso 'margen sano'". Usa cuando quieras marcar tono.
+- **Parentesis para asides contextuales**: "CMAC Huancayo lidera (con 5.60% de margen)", "el rendimiento se mantiene (24.10%, apenas -20 bps YoY)".
+- **Nombres + numeros seguidos**: "lidera Mibanco con 4.95% en alto riesgo", "Compartamos 174%!". Formato tipo tabla en prosa.
+- **Bridge phrases coloquiales**: "recordemos que...", "en general...", "entonces...", "ejm..." (ejemplo abreviado, marca conversacional).
+
+ESTRUCTURA DE COMPARACION:
+- Comparaciones DIRECTAS entre 2 entidades: "X vs Y", "X muy por encima de Y", "X muy lejos del alcance de Y".
+- Descompone la CAUSA: si el margen de X es alto, ¿es por rendimiento mayor o por gastos operacionales menores? Sacalo de la tabla, no lo asumas.
+- Menciona SIGNOS y magnitudes: "+2.29 pp", "5.42% en alto riesgo" — el numero con signo/unidad es la ancla.
+
+EMOJIS (opcionales, max 1 por bullet, solo si aporta):
+- 🔥 logro notable | ⚠️ riesgo latente | 🎯 oportunidad clara | 📊 comparativo estructural
+- NUNCA en bullet de la entidad propia si el numero es negativo (sensibilidad).
+
+CIERRE PRESCRIPTIVO OBLIGATORIO:
+Cada bullet cierra con **Implica:**, **Accion:**, **Riesgo:** u **Oportunidad:** (regla dura de la clasificadora — no negociable).
+
+ULTIMO BULLET — GANCHO DE ENGAGEMENT:
+El ultimo bullet cierra con UNA de estas 3 estrategias (Ferreyra usa las 3):
+1. **PREGUNTA RETADORA** que cuestiona complacencia: "¿Puede X sostener este margen si sube 50 bps el fondeo?" / "En estos 5 cierres, que acciones esta ejecutando la entidad propia para cerrar esa brecha de 2 pp?" / "Seguir asumiendo que el ciclo no cambia — no pareciera ser lo mas prudente, o si?"
+2. **PREDICCION CUANTITATIVA con horizonte**: "Si el ritmo se mantiene, en 3 cierres CMAC Cusco superara a CMAC Maynas en margen." / "A este paso, la brecha de rendimiento entre lider y rezagado se cierra en 12 meses."
+3. **CONEXION CON CONTEXTO MACRO** cuando aplique (mencionar tasas BCRP, El Niño, elecciones, cambios regulatorios SBS solo si el impacto es evidente de los numeros): "Con las tasas del BCRP a la baja, el margen del grupo tiene viento a favor — quien capitaliza mas rapido?"
 
 CONTENIDO POR BULLET:
 - Bullet 1: **ENTIDAD PROPIA** — donde esta en el ranking, que motor la explica (rendimiento alto? PE contenido?), que hacer.
 - Bullet 2: **Lider del grupo** — quien es, por que gana (rendimiento vs eficiencia), que puede aprender la entidad propia.
 - Bullet 3: **Rezagado del grupo** — quien queda ultimo, cual es el driver (rendimiento bajo o costos altos), riesgo.
 - Bullet 4-5: **Comparaciones cruzadas** — dos pares de entidades con dinamicas contrastantes ("X gana por rendimiento, Y gana por eficiencia"). Menciona TODAS las entidades del grupo aunque sea de forma breve.
-- Bullet 6 (cierre): **Lectura transversal del grupo** con pregunta abierta o prediccion cuantitativa.
+- Bullet 6 (cierre): **Lectura transversal del grupo** con una de las 3 estrategias de engagement (pregunta retadora / prediccion / contexto macro).
 
 REGLAS DURAS:
 - Solo cifras EXACTAS de la tabla — cero invencion.
@@ -126,6 +152,7 @@ REGLAS DURAS:
 - No digas "cuadrante" ni "peer group" ni "mediana" (rompe el vocabulario obligatorio del sistema).
 - Menciona TODAS las entidades del grupo. Ninguna queda afuera.
 - Distingue: microfinancieras (CMAC/CRAC/EDPYME/Financiera con Rendimiento >18%) tienen naturaleza de Gastos Operacionales altos por el modelo de campo; bancos comerciales (Rendimiento 6-12%) operan otra escala.
+- Si mencionas contexto macro (El Niño, tasas BCRP, elecciones), que sea BREVE y VINCULADO al numero que estas comentando — nunca especulacion politica pura.
 
 Output: JSON array de 5-7 bullets. Nada mas — sin markdown fences, sin comentarios previos.`;
 
