@@ -1420,7 +1420,8 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
             (últimos 12 meses móviles), % sobre cartera promedio. Arrastra
             el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> del
             encabezado para reordenar. Click en el <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" /> para
-            personalizar color. Click en el chevron para ver el detalle SBS.
+            personalizar el color. Click en la flecha <ChevronRight className="w-3 h-3 inline text-slate-400" /> para
+            desplegar el detalle por cuenta SBS.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -1450,9 +1451,9 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-900 text-white">
+          <thead className="bg-slate-100 border-b border-slate-200 text-slate-700">
             <tr>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-100 z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1487,16 +1488,16 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
                     }}
                     className={cn(
                       "relative text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
-                      s.esPropio && "bg-brand-700",
-                      !s.esPropio && "hover:bg-slate-800",
+                      s.esPropio && "bg-brand-50 text-brand-900",
+                      !s.esPropio && "hover:bg-slate-200",
                       isDragging && "opacity-40",
-                      isDropTarget && "ring-2 ring-inset ring-brand-400 bg-brand-600",
+                      isDropTarget && "ring-2 ring-inset ring-brand-500 bg-brand-100",
                     )}
                     style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar"
                   >
                     <div className="flex items-center justify-end gap-1.5">
-                      <GripVertical className="w-3 h-3 text-white/40 group-hover:text-white/80" />
+                      <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500" />
                       <button
                         ref={(el) => {
                           colorTriggerRefs.current[s.entidad] = el;
@@ -1509,7 +1510,7 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         onDragStart={(e) => e.preventDefault()}
-                        className="w-3 h-3 rounded-full flex-shrink-0 cursor-pointer transition-transform hover:scale-125 ring-1 ring-white/40 hover:ring-white"
+                        className="w-3 h-3 rounded-full flex-shrink-0 cursor-pointer transition-transform hover:scale-125 ring-1 ring-slate-300 hover:ring-slate-600"
                         style={{ backgroundColor: s.color }}
                         aria-label={`Personalizar color de ${s.entidad}`}
                         title="Click para personalizar color"
