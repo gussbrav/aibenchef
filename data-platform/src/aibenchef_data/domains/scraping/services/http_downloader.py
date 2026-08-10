@@ -203,7 +203,11 @@ class HttpxDownloader:
             header = b""
         if not _is_valid_office_file(header):
             tmp.unlink(missing_ok=True)
-            reason = "html_response_masquerading_as_xls" if _looks_like_html(header) else "unknown_format"
+            reason = (
+                "html_response_masquerading_as_xls"
+                if _looks_like_html(header)
+                else "unknown_format"
+            )
             log.info(
                 "download.not_published",
                 url=target.url,
