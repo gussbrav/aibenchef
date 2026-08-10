@@ -40,10 +40,7 @@ def _is_valid_office_file(header: bytes) -> bool:
     """True si el header matchea magic bytes de xls o xlsx."""
     if not header:
         return False
-    for magic in _XLS_MAGIC_BYTES + _XLSX_MAGIC_BYTES:
-        if header.startswith(magic):
-            return True
-    return False
+    return any(header.startswith(magic) for magic in _XLS_MAGIC_BYTES + _XLSX_MAGIC_BYTES)
 
 
 def _looks_like_html(header: bytes) -> bool:

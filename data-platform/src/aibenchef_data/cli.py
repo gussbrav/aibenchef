@@ -3771,10 +3771,10 @@ def sbs_recheck_stale_no_publicados(dry_run: bool, delete_local_files: bool) -> 
                 """
             )
             stale_rows = list(cur.fetchall())
-        except psycopg.errors.UndefinedTable:
+        except psycopg.errors.UndefinedTable as e:
             raise click.ClickException(
                 "admin.v_no_publicados_stale no existe. Aplica la migracion V157 primero."
-            )
+            ) from e
 
     if not stale_rows:
         click.echo("# Sin archivos stale — nada que hacer.")
