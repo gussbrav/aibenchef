@@ -15,7 +15,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FileText, HelpCircle, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
-import { ColorPickerPopover } from "./color-picker-popover";
+import dynamic from "next/dynamic";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -44,21 +44,45 @@ import type {
 import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
 import { waitForPrintFetches } from "@/lib/print-orchestrator";
-import {
-  PrintCover,
-  PrintFooter,
-  PrintRunningFooter,
-  PrintRunningHeader,
-  PrintWatermark,
-} from "./print-cover";
 import { SelectoresToolbar } from "./selectores-toolbar";
 import { SeccionHistoricoComparativo } from "./seccion-historico-comparativo";
-import {
-  SeccionHistoricoAccordion,
-  type AccordionMetric,
-} from "./seccion-historico-accordion";
-import { PeriodoCompletenessBadge } from "./periodo-completeness-badge";
-import { ReportInsights } from "./report-insights";
+// Solo el TYPE se importa eager (no arrastra runtime). El componente
+// SeccionHistoricoAccordion va en dynamic import abajo.
+import type { AccordionMetric } from "./seccion-historico-accordion";
+
+// ============================================================================
+// DYNAMIC IMPORTS — perf split del bundle client
+// ============================================================================
+// PrintCover stack (~272 loc): solo se ve al imprimir → ssr:false, lazy.
+// SeccionHistoricoAccordion (~477 loc + recharts BarChart via seccion-
+// historico-comparativo): below-the-fold, colapsado por default. El chunk
+// arrastra recharts a lazy. Placeholder skeleton mientras carga.
+// ColorPickerPopover, PeriodoCompletenessBadge, ReportInsights: interactivos
+// on-demand (popover, badge, panel AI) — no bloquean first paint.
+// ============================================================================
+const PrintCover = dynamic(() => import("./print-cover").then((m) => m.PrintCover), { ssr: false, loading: () => null });
+const PrintFooter = dynamic(() => import("./print-cover").then((m) => m.PrintFooter), { ssr: false, loading: () => null });
+const PrintRunningFooter = dynamic(() => import("./print-cover").then((m) => m.PrintRunningFooter), { ssr: false, loading: () => null });
+const PrintRunningHeader = dynamic(() => import("./print-cover").then((m) => m.PrintRunningHeader), { ssr: false, loading: () => null });
+const PrintWatermark = dynamic(() => import("./print-cover").then((m) => m.PrintWatermark), { ssr: false, loading: () => null });
+
+const SeccionHistoricoAccordion = dynamic(
+  () => import("./seccion-historico-accordion").then((m) => m.SeccionHistoricoAccordion),
+  { loading: () => <div className="h-14 bg-slate-100 rounded-lg animate-pulse" /> },
+);
+
+const ColorPickerPopover = dynamic(
+  () => import("./color-picker-popover").then((m) => m.ColorPickerPopover),
+  { ssr: false },
+);
+const PeriodoCompletenessBadge = dynamic(
+  () => import("./periodo-completeness-badge").then((m) => m.PeriodoCompletenessBadge),
+  { ssr: false, loading: () => null },
+);
+const ReportInsights = dynamic(
+  () => import("./report-insights").then((m) => m.ReportInsights),
+  { loading: () => null },
+);
 
 // ============================================================================
 // Helpers de formato y ranking

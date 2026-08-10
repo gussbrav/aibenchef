@@ -97,6 +97,7 @@ export function PuntoEquilibrioClient({
   config,
 }: Props) {
   const [tab, setTab] = useState<Tab>("historico");
+  const [peerModalCierreOpen, setPeerModalCierreOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -253,14 +254,22 @@ export function PuntoEquilibrioClient({
         onReset={resetFilters}
       />
 
-      {/* Tabs */}
+      {/* Tabs — el nombre del primer tab cambia segun granularidad:
+          - modo cierre: 'Cuadro por entidad' (tabla comparativa multi-entidad)
+          - modo historico: 'Historico de mi entidad' (tabla de 1 entidad × N periodos)
+          Esto porque en modo cierre la tabla historica quedaria con 1 sola
+          columna → poco util. En su lugar mostramos el cuadro comparativo. */}
       <div className="border-b border-slate-200">
         <div className="flex items-center gap-1">
           <TabButton
             active={tab === "historico"}
             onClick={() => setTab("historico")}
-            icon={TrendingUp}
-            label="Histórico de mi entidad"
+            icon={config.granularidad === "cierre" ? Users : TrendingUp}
+            label={
+              config.granularidad === "cierre"
+                ? `Cuadro por entidad (${config.peerGroup.length})`
+                : "Histórico de mi entidad"
+            }
           />
           <TabButton
             active={tab === "comparativo"}
@@ -271,7 +280,32 @@ export function PuntoEquilibrioClient({
         </div>
       </div>
 
-      {tab === "historico" && (
+      {tab === "historico" && config.granularidad === "cierre" && (
+        // Modo cierre: reemplazamos la tabla historica por el cuadro
+        // comparativo tabular (filas = componentes, cols = entidades).
+        // Selector de entidades inline (PeerGroupControl) para que el user
+        // pueda agregar/quitar sin ir al otro tab.
+        <div className="space-y-4">
+          <PeerGroupControl
+            peerGroup={draft.peerGroup}
+            onChangePeers={(nuevos) => setDraft((d) => ({ ...d, peerGroup: nuevos }))}
+            onOpenModal={() => setPeerModalCierreOpen(true)}
+          />
+          <TablaComparativaCierre series={series} />
+          {peerModalCierreOpen && (
+            <PeerGroupModal
+              disponibles={entidadesDisponibles}
+              seleccionados={draft.peerGroup}
+              onSave={(nuevos) => {
+                setDraft((d) => ({ ...d, peerGroup: nuevos }));
+                setPeerModalCierreOpen(false);
+              }}
+              onClose={() => setPeerModalCierreOpen(false)}
+            />
+          )}
+        </div>
+      )}
+      {tab === "historico" && config.granularidad !== "cierre" && (
         <HistoricoTable data={historico} entidad={entidadActual} />
       )}
       {tab === "comparativo" && (
@@ -1193,6 +1227,139 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
   pctMargenNeto: true,
   pctRendimiento: true,
 };
+
+// ============================================================================
+// TablaComparativaCierre — tabla estilo Excel del analista Juan Jose:
+// filas = componentes del PE, columnas = entidades del peer group.
+// Muestra el ULTIMO periodo de la serie (util en modo cierre unico
+// pero tambien en modo historico para comparar el cierre mas reciente).
+// ============================================================================
+
+function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) {
+  if (series.length === 0) return null;
+  // Ultimo periodo = el mas reciente en la serie de cualquiera (todos tienen
+  // los mismos periodos). Si series[0] esta vacio, no hay data.
+  const primerSerie = series[0]!;
+  const ultimoPunto = primerSerie.puntos[primerSerie.puntos.length - 1];
+  if (!ultimoPunto) return null;
+  const periodoLabel = ultimoPunto.periodoLabel;
+
+  // Componentes en orden Excel: Rendimiento, Otros, GF, Prov, GO, Margen, PE.
+  // Los signos y tooltips se manejan igual que en la tabla historica.
+  const componentes: Array<{
+    label: string;
+    field: "pctRendimiento" | "pctOtros" | "pctCostoFondeo" | "pctProvisiones" | "pctGastosOp" | "pctMargenNeto" | "pctPuntoEq";
+    variant: "sum" | "sub" | "bold" | "highlight";
+  }> = [
+    { label: "Rendimiento de cartera", field: "pctRendimiento", variant: "sum" },
+    { label: "Otros Ingresos (Egresos)", field: "pctOtros", variant: "sum" },
+    { label: "Gasto Financiero", field: "pctCostoFondeo", variant: "sub" },
+    { label: "Costo de Provisión", field: "pctProvisiones", variant: "sub" },
+    { label: "Gastos Operacionales", field: "pctGastosOp", variant: "sub" },
+    { label: "Margen antes de Impuestos", field: "pctMargenNeto", variant: "bold" },
+    { label: "Punto de Equilibrio", field: "pctPuntoEq", variant: "highlight" },
+  ];
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <header className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">
+            Cuadro comparativo por entidad
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Cierre <strong>{periodoLabel}</strong> — valores anualizados (últimos 12 meses móviles), % sobre cartera promedio.
+          </p>
+        </div>
+      </header>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-900 text-white">
+            <tr>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[220px]">
+                Componente
+              </th>
+              {series.map((s) => (
+                <th
+                  key={s.entidad}
+                  className={cn(
+                    "text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap",
+                    s.esPropio && "bg-brand-700",
+                  )}
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: s.color }}
+                      aria-hidden
+                    />
+                    {s.entidad}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {componentes.map((c, idx) => {
+              const isHighlight = c.variant === "highlight";
+              const isBold = c.variant === "bold";
+              const isSum = c.variant === "sum";
+              const isSub = c.variant === "sub";
+              return (
+                <tr
+                  key={c.field}
+                  className={cn(
+                    idx > 0 && "border-t border-slate-100",
+                    isBold && "border-t border-slate-200 bg-slate-50",
+                    isHighlight && "border-t-2 border-slate-800 bg-brand-50",
+                    !isBold && !isHighlight && "hover:bg-slate-50",
+                  )}
+                >
+                  <td
+                    className={cn(
+                      "px-4 py-2 sticky left-0 z-10",
+                      isBold && "bg-slate-50 font-bold text-slate-900",
+                      isHighlight && "bg-brand-50 font-bold text-slate-900",
+                      !isBold && !isHighlight && "bg-white",
+                      isSum && "text-slate-700",
+                      isSub && "text-slate-600 pl-6 text-[13px]",
+                    )}
+                  >
+                    {c.label}
+                  </td>
+                  {series.map((s) => {
+                    const ult = s.puntos[s.puntos.length - 1];
+                    const raw = ult ? (ult[c.field] as number | null) : null;
+                    // Para PE recomputamos con la formula del analista.
+                    const v = c.field === "pctPuntoEq" && ult
+                      ? computedPuntoEq(ult)
+                      : raw;
+                    return (
+                      <td
+                        key={s.entidad}
+                        className={cn(
+                          "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap",
+                          isBold && "font-bold text-slate-900 bg-slate-50",
+                          isHighlight && "font-bold text-slate-900 bg-brand-50",
+                          !isBold && !isHighlight && s.esPropio && "bg-brand-50/50",
+                          isSum && v != null && v >= 0 && "text-emerald-700",
+                          isSub && v != null && v < 0 && "text-rose-700",
+                          v == null && "text-slate-400 italic",
+                        )}
+                      >
+                        {fmtPct(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 function ComparativoView({
   series: seriesRaw,
