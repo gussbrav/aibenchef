@@ -65,9 +65,63 @@ docker exec "$CID" /app/.venv/bin/python scripts/dump_archivo_contenido.py --ski
 PREV_MONTH=$(date -u -d "$(date -u +%Y-%m-15) -1 month" +%Y%m)
 PREV_PREV_MONTH=$(date -u -d "$(date -u +%Y-%m-15) -2 month" +%Y%m)
 echo ""
-echo "[5/5] Quality-check periodos $PREV_PREV_MONTH y $PREV_MONTH..."
+echo "[5/6] Quality-check periodos $PREV_PREV_MONTH y $PREV_MONTH..."
 docker exec "$CID" aibenchef pipeline quality-check --periodo "$PREV_PREV_MONTH" --triggered-by "cron:daily" 2>&1 | tee -a "$LOG_FILE" || true
 docker exec "$CID" aibenchef pipeline quality-check --periodo "$PREV_MONTH" --triggered-by "cron:daily" 2>&1 | tee -a "$LOG_FILE" || true
+
+# Drift check: KPIs aibenchef vs SBS oficial (V158). Detecta cambios de
+# formula o bugs de import que rompen la calibracion con las cifras
+# publicadas por SBS. Solo para el mes anterior porque el actual puede
+# tener SBS aun no publicado.
+echo ""
+echo "     Drift check SBS oficial (V158)..."
+docker exec "$CID" aibenchef pipeline drift-check-sbs --periodo "$PREV_MONTH" --triggered-by "cron:daily" 2>&1 | tee -a "$LOG_FILE" || true
+
+# Alerta critical: si hay archivos SBS overdue en severity=critical, log
+# ERROR muy visible al final del cron. Sin esto los stale files se acumulan
+# silenciosamente hasta que un usuario abre /dashboard/admin/data-quality.
+#
+# Si el ambiente tiene SLACK_WEBHOOK_URL configurado, tambien manda alerta
+# a Slack (webhook simple, sin dependencias). Sin webhook, solo log.
+#
+# Query directa a la DB via psql — evita otra layer de indirección; el
+# container aibenchef-data tiene DATABASE_URL en env.
+echo ""
+echo "[6/6] Alerta Data Quality critical..."
+CRITICAL_JSON=$(docker exec "$CID" sh -c 'psql "$DATABASE_URL" -t -A -c "
+    SELECT COALESCE(json_agg(row_to_json(v))::text, ''[]'')
+    FROM (
+        SELECT periodo, grupo, topico, n_faltantes, fecha_esperada,
+               (CURRENT_DATE - fecha_esperada) AS dias_atraso
+        FROM admin.v_missing_files
+        WHERE severity = ''critical''
+        ORDER BY dias_atraso DESC, periodo DESC
+        LIMIT 20
+    ) v
+"' 2>/dev/null || echo "[]")
+
+if [ "$CRITICAL_JSON" != "[]" ] && [ -n "$CRITICAL_JSON" ]; then
+    N_CRITICAL=$(echo "$CRITICAL_JSON" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+    printf "\n"
+    printf "\033[0;31m╔══════════════════════════════════════════════════════════════════════╗\033[0m\n" | tee -a "$LOG_FILE"
+    printf "\033[0;31m║  DATA QUALITY ALERT — %s archivos SBS overdue (severity=critical)  ║\033[0m\n" "$N_CRITICAL" | tee -a "$LOG_FILE"
+    printf "\033[0;31m╚══════════════════════════════════════════════════════════════════════╝\033[0m\n" | tee -a "$LOG_FILE"
+    echo "$CRITICAL_JSON" | python3 -m json.tool 2>/dev/null | tee -a "$LOG_FILE" || echo "$CRITICAL_JSON" | tee -a "$LOG_FILE"
+    echo "Ver: https://aibenchef.azoramind.com/dashboard/admin/data-quality" | tee -a "$LOG_FILE"
+
+    # Slack notification si el webhook esta configurado.
+    # Formato simple: bloque de texto con los primeros N archivos + link al dashboard.
+    if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+        SLACK_TEXT=$(printf '⚠️ *Aibenchef Data Quality*: %s archivos SBS overdue (critical)\\n\\nVer: https://aibenchef.azoramind.com/dashboard/admin/data-quality' "$N_CRITICAL")
+        curl -s -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"$SLACK_TEXT\"}" \
+            "$SLACK_WEBHOOK_URL" > /dev/null 2>&1 && \
+            echo "  + Slack notification enviada" | tee -a "$LOG_FILE" || \
+            echo "  ! Slack notification fallo" | tee -a "$LOG_FILE"
+    fi
+else
+    echo "  OK — sin archivos overdue en severity=critical" | tee -a "$LOG_FILE"
+fi
 
 echo ""
 echo "=============================================================================="

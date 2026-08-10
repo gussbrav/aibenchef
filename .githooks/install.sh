@@ -6,9 +6,10 @@ set -e
 cd "$(dirname "$0")/.."
 
 git config core.hooksPath .githooks
-chmod +x .githooks/pre-push 2>/dev/null || true
+chmod +x .githooks/pre-push .githooks/pre-commit 2>/dev/null || true
 
 echo "[hooks] Activados:"
+echo "  - pre-commit (voseo argentino → castellano peruano)"
 echo "  - pre-push (ruff check + format + smoke tests)"
 echo ""
-echo "Bypass de emergencia: git push --no-verify"
+echo "Bypass de emergencia: git commit --no-verify / git push --no-verify"

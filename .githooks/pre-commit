@@ -1,0 +1,68 @@
+#!/usr/bin/env sh
+# Pre-commit hook — Aibenchef
+#
+# Objetivo: bloquear voseo argentino ANTES de que llegue a producción.
+# Rule de oro del proyecto (.claude/skills/aibenchef-sbs/SKILL.md +
+# CLAUDE.md): TODO castellano peruano (tu/tienes/puedes/estás), NUNCA
+# voseo argentino (vos/tenés/podés/elegí/ingresá/dejás).
+#
+# Reglamos porque la regla es intuitiva pero fácil de romper — Claude
+# genera voseo por defecto en algunos casos, y usuarios acostumbrados
+# al voseo argentino lo introducen sin darse cuenta. Detectar en el
+# pre-commit evita rework post-review.
+#
+# Corre solo sobre archivos .ts/.tsx STAGED en apps/web/. Los archivos
+# Python usan castellano peruano pero rara vez tienen voseo (poca UI).
+#
+# Bypass de emergencia (NO recomendado, requiere justificación en el PR):
+#   git commit --no-verify
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RESET='\033[0m'
+
+# Archivos staged relevantes: TypeScript/React + SQL + Python (comments/mensajes)
+# .md excluido porque puede tener citas o ejemplos con voseo intencional.
+staged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+    grep -E '\.(ts|tsx|py|sql|sh)$' || true)
+
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+# Patrón de voseo — verbos regulares e irregulares comunes en imperativo/
+# indicativo argentino. Word boundary (\b) para evitar falsos positivos
+# como "actualizás" dentro de "actualizásmelo".
+#
+# Lista curada según SKILL.md — expandir si aparecen nuevos casos.
+# Case-insensitive (-i) para atrapar mayúsculas al inicio de frase.
+VOSEO_PATTERN='\b(vos|elegí|escribí|ingresá|podés|tenés|dejás|hacé|marcá|usá|querés|volvé|actualizá|generá|copiá|guardá|creá|armá|refiná|probá|revisá|comentá|editá|configurá|agregá|quitá|abrí|cerrá|leé|explicá|contestá|entendés|sabés|conocés|preguntá|respondé)\b'
+
+# Grep con line numbers + filename. Descartamos matches en comentarios
+# multi-línea de código Python/JS que pueden tener contexto legítimo
+# (poco frecuente pero para reducir ruido, incluimos hint en el error).
+hits=$(git grep -n -i --cached -E "$VOSEO_PATTERN" -- $staged 2>/dev/null || true)
+
+if [ -n "$hits" ]; then
+    printf "${RED}[pre-commit] BLOQUEADO: voseo argentino detectado.${RESET}\n"
+    printf "${YELLOW}Regla del proyecto:${RESET} castellano peruano (tú/tienes/puedes/estás)\n"
+    printf "${YELLOW}Nunca voseo argentino${RESET} (vos/tenés/podés/elegí/ingresá)\n\n"
+    printf "%s\n" "$hits" | head -20
+    n=$(printf "%s\n" "$hits" | wc -l | tr -d ' ')
+    if [ "$n" -gt 20 ]; then
+        printf "${YELLOW}... y %s casos más.${RESET}\n" "$((n - 20))"
+    fi
+    printf "\n${YELLOW}Correcciones típicas:${RESET}\n"
+    printf "  elegí → elige       podés → puedes      tenés → tienes\n"
+    printf "  ingresá → agrega    dejás → dejas       hacé → haz\n"
+    printf "  configurá → configura   armá → arma     probá → prueba\n\n"
+    printf "${YELLOW}Bypass (justificar en PR):${RESET} git commit --no-verify\n"
+    exit 1
+fi
+
+printf "${BLUE}[pre-commit]${RESET} Castellano peruano ${GREEN}OK${RESET}\n"
+exit 0

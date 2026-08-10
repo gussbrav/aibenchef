@@ -45,9 +45,23 @@ done
 
 # Filtrar archivos Python dentro de data-platform/
 py_files=$(echo "$changed_files" | grep -E '^data-platform/.*\.py$' | sort -u || true)
+# Archivos TypeScript/TSX bajo apps/web/ (para el check server-only)
+web_ts_files=$(echo "$changed_files" | grep -E '^apps/web/.*\.(ts|tsx)$' | sort -u || true)
+
+# --- Check 0: server-only leaks en client components (bug de EasyPanel 2ae6082)
+# Corre solo si hay cambios de TS bajo apps/web/ Y node esta disponible.
+if [ -n "$web_ts_files" ] && command -v node > /dev/null 2>&1; then
+    printf "${BLUE}[pre-push]${RESET} Verificando client components (server-only leaks)..."
+    if ! (cd apps/web && node scripts/check-server-only-in-client.mjs > /dev/null 2>&1); then
+        printf "${RED}\n[pre-push] FAIL: server-only leak en client component.${RESET}\n"
+        printf "${YELLOW}  Detalle:${RESET} cd apps/web && node scripts/check-server-only-in-client.mjs\n"
+        exit 1
+    fi
+    printf " ${GREEN}OK${RESET}\n"
+fi
 
 if [ -z "$py_files" ]; then
-    printf "${BLUE}[pre-push]${RESET} Sin cambios en archivos Python — skip.\n"
+    printf "${BLUE}[pre-push]${RESET} Sin cambios en archivos Python — skip lint Python.\n"
     exit 0
 fi
 

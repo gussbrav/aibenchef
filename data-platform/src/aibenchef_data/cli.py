@@ -3336,6 +3336,149 @@ def pipeline_quality_check(periodo: str, triggered_by: str) -> None:
     asyncio.run(_run())
 
 
+@pipeline_grp.command("drift-check-sbs")
+@click.option(
+    "--periodo",
+    type=str,
+    required=True,
+    help="YYYYMM del periodo a chequear drift vs SBS oficial.",
+)
+@click.option(
+    "--triggered-by",
+    type=str,
+    default="cli",
+    help="Origen del run: cron | manual:<email> | cli:<user>.",
+)
+def pipeline_drift_check_sbs(periodo: str, triggered_by: str) -> None:
+    """Compara KPIs calculados por aibenchef vs los oficiales SBS (V158).
+
+    Detecta drift entre nuestros calculos (v_mora_global_por_entidad, etc)
+    y las cifras oficiales publicadas por SBS en el reporte mensual
+    consolidado (v_indicadores_ancho, V156).
+
+    Consumido en el cron diario para catch temprano de cambios de formula
+    o bugs de import que rompen la calibracion sin darnos cuenta.
+
+    Thresholds (por indicador, en pp):
+        <0.10  -> ok
+        <0.50  -> info
+        <2.00  -> warning
+        >=2.00 -> critical
+
+    Los resultados no-ok se persisten en admin.data_quality_checks con
+    check_type='drift_sbs_oficial' para inspeccion en /dashboard/admin/
+    data-quality.
+
+    V1 solo cubre mora_atrasados_sobre_directos (proof-of-concept).
+    Ampliar a ROE/ROA/CAR en V2.
+
+    Uso:
+        aibenchef pipeline drift-check-sbs --periodo 202606
+    """
+    import asyncio
+
+    from aibenchef_data.domains.shared import carga_log_context
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    p = Periodo.from_yyyymm(periodo)
+
+    async def _run() -> None:
+        await open_pool()
+        try:
+            async with carga_log_context(
+                connection,
+                stage="detectar-cambios",
+                periodo=p.to_int(),
+                triggered_by=triggered_by,
+                initial_metadata={"drift_check_sbs": True},
+            ) as log:
+                async with connection() as conn:
+                    async with conn.cursor() as cur:
+                        # Persistir solo status != ok (los OK no aportan).
+                        # Payload incluye ambos valores + drift para
+                        # inspeccion post-hoc.
+                        await cur.execute(
+                            """
+                            INSERT INTO admin.data_quality_checks
+                                (periodo, nomb_correg, check_type, carga_log_id,
+                                 status, expected_value, actual_value,
+                                 delta_abs, delta_pct, payload)
+                            SELECT
+                                %s,
+                                nomb_correg,
+                                'drift_sbs_oficial',
+                                %s,
+                                severity,
+                                valor_sbs::numeric,
+                                valor_aibenchef::numeric,
+                                drift_abs_pp::numeric,
+                                CASE
+                                    WHEN valor_sbs > 0
+                                    THEN (drift_pp / valor_sbs)::numeric
+                                    ELSE NULL
+                                END,
+                                jsonb_build_object(
+                                    'kpi', kpi,
+                                    'valor_sbs', valor_sbs,
+                                    'valor_aibenchef', valor_aibenchef,
+                                    'drift_pp', drift_pp,
+                                    'source', 'marts.v_dq_drift_kpis_sbs'
+                                )
+                            FROM marts.v_dq_drift_kpis_sbs
+                            WHERE periodo = %s
+                              AND severity NOT IN ('ok', 'sin_calculo_aibenchef')
+                            """,
+                            (p.to_int(), log.log_id, p.to_int()),
+                        )
+                        n_persistidos = cur.rowcount
+
+                    # Counts totales para reportar
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            SELECT severity, count(*)
+                            FROM marts.v_dq_drift_kpis_sbs
+                            WHERE periodo = %s
+                            GROUP BY severity
+                            """,
+                            (p.to_int(),),
+                        )
+                        rows = await cur.fetchall()
+                        counts = dict(rows)
+
+                    await conn.commit()
+
+                n_warning = counts.get("warning", 0)
+                n_critical = counts.get("critical", 0)
+                n_ok = counts.get("ok", 0)
+                n_info = counts.get("info", 0)
+                n_sin = counts.get("sin_calculo_aibenchef", 0)
+
+                log.rows_inserted = n_persistidos
+                log.metadata["warning_count"] = n_warning
+                log.metadata["critical_count"] = n_critical
+                log.metadata["ok_count"] = n_ok
+                log.metadata["info_count"] = n_info
+                log.metadata["sin_calculo_count"] = n_sin
+
+                click.echo("")
+                click.echo(
+                    f"# Drift check SBS periodo {periodo}: "
+                    f"{n_ok} ok, {n_info} info, {n_warning} warning, "
+                    f"{n_critical} critical ({n_sin} sin calculo aibenchef)."
+                )
+                if n_critical > 0:
+                    click.echo(
+                        f"# CRITICAL detectado. Revisa: SELECT * FROM "
+                        f"marts.v_dq_drift_kpis_sbs WHERE periodo={p.to_int()} "
+                        "AND severity='critical' ORDER BY drift_abs_pp DESC;"
+                    )
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
+
+
 @main.group("sbs")
 def sbs_group() -> None:
     """Comandos de sincronizacion con la SBS (cola de jobs + cron)."""
