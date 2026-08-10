@@ -149,9 +149,7 @@ class TestHtmlGap:
         assert result.status == DownloadStatus.OK
 
     @pytest.mark.asyncio
-    async def test_skip_if_exists_invalida_html_basura_en_disco(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_skip_if_exists_invalida_html_basura_en_disco(self, tmp_path: Path) -> None:
         """REGRESION V157: si en disco hay HTML basura legacy (bug historico),
         skip_if_exists lo detecta y fuerza re-descarga en lugar de saltarlo.
         """
