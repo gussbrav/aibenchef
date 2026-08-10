@@ -1,0 +1,15 @@
+# aibenchef work-jobs — cron LIVIANO cada 5 min para procesar la cola
+# de admin.sync_jobs. Complementa el daily-sync (3x/dia) reduciendo la
+# latencia de "user encola desde /admin/data-quality" a "worker lo
+# procesa" de hasta 8 horas a maximo 5 minutos.
+#
+# Si no hay sync_jobs pending, el script sale silencioso (cero overhead).
+#
+# Instalacion (host de EasyPanel):
+#   sudo cp aibenchef-work-jobs      /etc/cron.d/
+#   sudo cp aibenchef-work-jobs.sh   /usr/local/bin/
+#   sudo chmod +x /usr/local/bin/aibenchef-work-jobs.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/5 * * * * root /usr/local/bin/aibenchef-work-jobs.sh

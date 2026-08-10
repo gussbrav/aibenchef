@@ -6,10 +6,41 @@ Sincronización automática diaria de archivos SBS — scrape + import + quality
 
 | Archivo | Path en server | Propósito |
 |---|---|---|
-| `aibenchef-daily-sync.sh` | `/usr/local/bin/aibenchef-daily-sync.sh` | Script principal que orquesta el sync |
-| `aibenchef-daily` (cron) | `/etc/cron.d/aibenchef-daily` | Schedule **3x al día**: 06:00, 14:00, 22:00 Lima (= 11, 19, 03 UTC) |
+| `aibenchef-daily-sync.sh` | `/usr/local/bin/aibenchef-daily-sync.sh` | Script principal (queue + work + dump + quality-check + drift). Corre **3x al día** |
+| `aibenchef-daily` (cron) | `/etc/cron.d/aibenchef-daily` | Schedule 06:00, 14:00, 22:00 Lima (= 11, 19, 03 UTC) |
+| **`aibenchef-work-jobs.sh`** | `/usr/local/bin/aibenchef-work-jobs.sh` | **Script liviano: solo procesa la cola de sync_jobs pending. Corre cada 5 min** |
+| **`aibenchef-work-jobs`** (cron) | `/etc/cron.d/aibenchef-work-jobs` | **Schedule `*/5 * * * *` — reduce la latencia "user encola desde UI → worker procesa" de 8h a 5 min max** |
 | `aibenchef` (logrotate) | `/etc/logrotate.d/aibenchef` | Rotación mensual de logs, retiene 12 meses |
-| Logs | `/var/log/aibenchef/daily-sync-YYYY-MM-DD.log` | Output completo del run |
+| Logs | `/var/log/aibenchef/{daily-sync,work-jobs}-YYYY-MM-DD.log` | Output completo por script |
+
+## Instalación en el servidor EasyPanel
+
+```bash
+# 1. Copiar scripts a /usr/local/bin/
+sudo cp aibenchef-daily-sync.sh    /usr/local/bin/
+sudo cp aibenchef-work-jobs.sh     /usr/local/bin/
+sudo chmod +x /usr/local/bin/aibenchef-*.sh
+
+# 2. Instalar los 2 crons
+sudo cp aibenchef-daily            /etc/cron.d/
+sudo cp aibenchef-work-jobs        /etc/cron.d/
+# Reload cron (no siempre necesario pero seguro)
+sudo systemctl reload cron 2>/dev/null || sudo service cron reload
+
+# 3. Verificar que quedaron instalados
+sudo ls -la /etc/cron.d/aibenchef*
+tail -f /var/log/aibenchef/work-jobs-$(date -u +%Y-%m-%d).log
+```
+
+## Por qué 2 crons
+
+- **daily-sync (3x/día)**: pipeline COMPLETO — descubrir periodos nuevos, descargar,
+  importar, dump grid, quality checks, drift monitoring. Es pesado (~5-10 min por
+  corrida) y no tiene sentido correrlo cada 5 min.
+- **work-jobs (cada 5 min)**: SOLO procesa `admin.sync_jobs` pending. Es liviano
+  (~0-30 seg si hay jobs, 0 seg si no hay). Reduce a 5 min la latencia entre que
+  el user hace click en "Forzar re-descarga" en `/dashboard/admin/data-quality`
+  y el worker efectivamente descarga los archivos.
 
 ## Pipeline diario
 

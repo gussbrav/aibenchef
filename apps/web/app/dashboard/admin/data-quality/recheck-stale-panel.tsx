@@ -181,8 +181,8 @@ export function RecheckStalePanel() {
                 : state === "loading"
                   ? "Verificando archivos SBS..."
                   : hasStale
-                    ? `${total} archivos SBS stale — bloqueando data`
-                    : "Sin archivos stale — pipeline saludable"}
+                    ? `${total} archivos SBS atascados — bloqueando data`
+                    : "Sin archivos atascados — pipeline saludable"}
             </h3>
             <p className="text-xs text-slate-600 mt-0.5 max-w-3xl">
               {state === "error" ? (
@@ -191,13 +191,14 @@ export function RecheckStalePanel() {
                   Revisa el mensaje de error abajo y avisa a un admin si el problema persiste.
                 </>
               ) : state === "loading" ? (
-                "Consultando la vista de archivos stale..."
+                "Consultando qué archivos SBS están atascados..."
               ) : hasStale ? (
                 <>
-                  Estos archivos están marcados <code className="text-[10px] bg-white px-1 rounded">no_publicado_sbs</code>{" "}
-                  hace más tiempo que <code className="text-[10px] bg-white px-1 rounded">fecha_esperada + lag×1.5</code>.
-                  Típicamente: SBS los publicó tarde o el downloader guardó HTML basura como .xls (bug histórico
-                  resuelto con V158 magic-byte check). Al forzar re-descarga se validan y procesan correctamente.
+                  <strong>Atascados</strong> = archivos que llevan más tiempo esperando descarga
+                  del que deberían (más de 1.5× el lag típico de SBS). Las 2 causas comunes:
+                  (1) SBS los publicó pero nuestro descargador no los tomó, o
+                  (2) el descargador guardó HTML de error como .xls (bug histórico resuelto).
+                  Al forzar re-descarga se validan con magic-byte check y procesan correctamente.
                 </>
               ) : (
                 "Todos los archivos SBS esperados están procesados o dentro del lag razonable de publicación."
@@ -241,7 +242,7 @@ export function RecheckStalePanel() {
                   <th className="text-left px-3 py-2 font-semibold">Grupos faltantes</th>
                   <th className="text-left px-3 py-2 font-semibold">Tópicos afectados</th>
                   <th className="text-right px-3 py-2 font-semibold">Archivos</th>
-                  <th className="text-right px-3 py-2 font-semibold">Días stale</th>
+                  <th className="text-right px-3 py-2 font-semibold">Días esperando</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -371,11 +372,30 @@ export function RecheckStalePanel() {
                   ))}
                 </tbody>
               </table>
-              <p className="text-[10px] text-slate-500 mt-2">
-                El worker <code className="bg-slate-100 px-1 rounded">aibenchef-data</code> toma los jobs
-                pending y los procesa (scrape → import). Refrescá este panel en 2-3 minutos
-                para ver si bajaron los archivos.
-              </p>
+              <div className="mt-2 space-y-1 text-[10px] text-slate-500">
+                <p>
+                  El worker <code className="bg-slate-100 px-1 rounded">aibenchef-data</code> toma los
+                  jobs pending y los procesa (descarga desde SBS + importa a la DB).
+                </p>
+                <p>
+                  <strong className="text-slate-700">Latencia esperada:</strong>{" "}
+                  <span className="text-slate-600">
+                    hasta 5 min si el cron <code className="bg-slate-100 px-1 rounded">aibenchef-work-jobs</code>{" "}
+                    está instalado (recomendado);{" "}
+                  </span>
+                  <span className="text-amber-700">
+                    hasta 8 horas si solo corre el cron diario (06:00 / 14:00 / 22:00 Lima).
+                  </span>
+                </p>
+                <p>
+                  Refresca este panel en unos minutos con el botón{" "}
+                  <span className="inline-flex items-center gap-0.5 text-slate-700">
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    Refrescar
+                  </span>{" "}
+                  arriba a la derecha para ver el nuevo estado.
+                </p>
+              </div>
             </div>
           )}
 
