@@ -723,39 +723,44 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Margen antes de Impuestos",
     field: "pctMargenNeto",
     variant: "bold",
-    info: "Suma algebraica de todos los componentes: Rendimiento + Otros − Gasto Financiero − Costo Provisión − Gastos Operacionales. Es lo que la entidad genera antes de pagar impuestos y participación de trabajadores.",
+    info: "Suma algebraica de los 5 componentes con su signo natural: Rendimiento + Otros Ingresos + Gasto Financiero + Costo Provisión + Gastos Operacionales. Los 3 últimos son costos (signo negativo), por lo que restan. Es lo que la entidad genera antes de pagar impuestos y participación de trabajadores.",
   },
   {
     key: "puntoEq",
     label: "Punto de Equilibrio",
     field: "pctPuntoEq",
     variant: "highlight",
-    info: "Rendimiento mínimo requerido sobre cartera para cubrir todos los costos netos de Otros Ingresos. Fórmula: −(Otros + Gasto Financiero + Costo Provisión + Gastos Operacionales). Si Rendimiento > PE, la entidad genera margen positivo.",
+    info: "Contribución neta al margen de todos los componentes NO-rendimiento (con signo natural). Fórmula: Otros + Gasto Financiero + Costo Provisión + Gastos Operacionales. Cuando es negativo (caso común), significa que los costos superan a Otros Ingresos y el Rendimiento debe cubrir ese déficit. Se cumple: Margen antes de Impuestos = Rendimiento + Punto de Equilibrio.",
   },
 ];
 
 const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
 
 /**
- * Punto de Equilibrio — formula del analista financiero senior (Juan Jose):
+ * Punto de Equilibrio — contribucion neta de los componentes NO-Rendimiento
+ * al margen. Es la suma algebraica con SIGNO NATURAL de los 4 componentes:
  *
- *   PE = − ( Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales )
+ *   PE = Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales
  *
- * Es decir: el UMBRAL de rendimiento sobre cartera que la entidad necesita
- * para cubrir todos los costos (financieros + provisiones + operacionales)
- * NETO de Otros Ingresos. Se usa signo NEGADO en vez de valor absoluto:
- *   - Si costos > otros ingresos (comun) → PE > 0 (deficit a cubrir)
- *   - Si otros ingresos > costos (raro) → PE < 0 (superavit natural)
+ * Los componentes ya vienen con su signo real desde el backend:
+ *   - Otros Ingresos: (+) cuando es ingreso, (-) cuando es egreso
+ *   - Gasto Financiero, Costo Provision, Gastos Operacionales: siempre (-)
  *
- * El backend calcula _punto_eq = costo_fondeo + provisiones + gastos_op
- * (SIN incluir Otros). Recomputamos en el frontend con la formula correcta
- * usando los componentes que ya vienen en el row. No cambiamos backend para
- * no romper /informe u otras vistas que consumen la MV.
+ * Interpretacion:
+ *   - PE < 0 (comun): los costos superan a Otros Ingresos. El Rendimiento
+ *     debe cubrir este deficit. Margen = Rendimiento + PE.
+ *   - PE > 0 (raro): Otros Ingresos superan los costos — la entidad genera
+ *     margen incluso antes de considerar el rendimiento de cartera.
  *
- * Verificacion contra tabla del analista (Al cierre 2021 CA):
- *   Rend=22.9, Otros=0.8, GF=-5.3, Prov=-0.9, GO=-10.8
- *   PE = −(0.8 − 5.3 − 0.9 − 10.8) = −(−16.2) = +16.2% ✓
- *   Margen = 22.9 + 0.8 - 5.3 - 0.9 - 10.8 = 6.7% ✓ (backend ya lo calcula bien)
+ * El backend calcula _punto_eq de otra forma (costo_fondeo + provisiones +
+ * gastos_op sin Otros); recomputamos aca con la formula del analista Juan
+ * Jose. No tocamos backend para no romper /informe u otras vistas.
+ *
+ * Verificacion contra data real (Al cierre Jun-2026):
+ *   BCP:  Otros=6.84, GF=-2.16, Prov=-1.23, GO=-5.59 → PE = -2.14%
+ *         Margen = 9.63 + (-2.14) = 7.49% ✓
+ *   CMAC Arequipa: Otros=1.60, GF=-4.48, Prov=-5.09, GO=-7.55 → PE = -15.52%
+ *         Margen = 18.83 + (-15.52) = 3.31% ✓
  */
 function computedPuntoEq(row: {
   pctOtros: number | null;
@@ -765,8 +770,7 @@ function computedPuntoEq(row: {
 }): number | null {
   const parts = [row.pctOtros, row.pctCostoFondeo, row.pctProvisiones, row.pctGastosOp];
   if (parts.some((p) => p == null)) return null;
-  const sum = (parts as number[]).reduce((a, b) => a + b, 0);
-  return -sum;
+  return (parts as number[]).reduce((a, b) => a + b, 0);
 }
 
 function displayValueForField(
