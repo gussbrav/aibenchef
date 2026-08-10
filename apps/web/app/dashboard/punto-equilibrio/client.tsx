@@ -282,7 +282,7 @@ export function PuntoEquilibrioClient({
             icon={config.granularidad === "cierre" ? Users : TrendingUp}
             label={
               config.granularidad === "cierre"
-                ? `Cuadro por entidad (${config.peerGroup.length})`
+                ? `Cuadro por entidad (${draft.peerGroup.length})`
                 : "Histórico de mi entidad"
             }
           />
@@ -290,7 +290,7 @@ export function PuntoEquilibrioClient({
             active={tab === "comparativo"}
             onClick={() => setTab("comparativo")}
             icon={Users}
-            label={`Comparativo (${config.peerGroup.length})`}
+            label={`Comparativo (${draft.peerGroup.length})`}
           />
         </div>
       </div>

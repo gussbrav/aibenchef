@@ -1249,25 +1249,30 @@ function IndicadorChart({
                 dataKey={ent.nombCorreg}
                 fill={ent.color}
                 radius={[3, 3, 0, 0]}
-                maxBarSize={highlight ? 46 : 34}
+                maxBarSize={highlight ? 46 : 32}
               >
-                {/* Labels SOLO en chart principal (highlight). Best practice
-                    Bloomberg/FT/Vercel: subcharts pequeños confian en Tooltip
-                    hover — meter labels en 180px con 4-6 entidades colisiona
-                    matematicamente. Formato compacto (1 decimal, sin %) para
-                    ganar espacio horizontal en el chart principal. */}
-                {highlight && (
-                  <LabelList
-                    dataKey={ent.nombCorreg}
-                    position="top"
-                    formatter={(v: unknown) => {
-                      const n = Number(v);
-                      if (Number.isNaN(n)) return "";
-                      return n.toFixed(1);
-                    }}
-                    style={{ fontSize: 10, fill: "#334155", fontWeight: 600 }}
-                  />
-                )}
+                {/* Labels EN TODOS los charts — best practice actualizada
+                    (feedback usuario 2026-08-10): el analista quiere ver
+                    los valores exactos sin depender del hover del tooltip.
+                    Chart principal (highlight): fontSize 10, bold.
+                    Subcharts: fontSize 9, semibold — mismo formato compacto
+                    (1 decimal, sin %) para ganar espacio horizontal. */}
+                <LabelList
+                  dataKey={ent.nombCorreg}
+                  position="top"
+                  formatter={(v: unknown) => {
+                    const n = Number(v);
+                    if (Number.isNaN(n)) return "";
+                    // Numeros grandes (>= 10): 1 decimal para ahorrar espacio.
+                    // Numeros chicos (< 10): 2 decimales para no perder precision.
+                    return Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(2);
+                  }}
+                  style={{
+                    fontSize: highlight ? 10 : 9,
+                    fill: "#334155",
+                    fontWeight: highlight ? 600 : 500,
+                  }}
+                />
               </Bar>
             ))}
           </BarChart>

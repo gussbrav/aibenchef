@@ -35,7 +35,11 @@ export type DupontInsights = {
 // Bump esto cuando cambies el SYSTEM_PROMPT del LLM o el shape del user
 // prompt. Las entradas DB viejas quedan huerfanas (nunca hit) y se
 // regeneran con el prompt nuevo.
-export const DUPONT_PROMPT_VERSION = "v2-nyt";
+// v3-dupont-math: agregado bloque "MATEMATICA DUPONT (INVIOLABLE)" al
+// SYSTEM_PROMPT para prevenir causalidad invertida (bug reportado:
+// "Compartamos dispara ROE porque mantiene apalancamiento controlado
+// en 4.63x" — apalancamiento bajo REDUCE ROE, no lo dispara).
+export const DUPONT_PROMPT_VERSION = "v3-dupont-math";
 
 /**
  * Hash del input estable para el cache. Debe matchear EXACTAMENTE el hash
