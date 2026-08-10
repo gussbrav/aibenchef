@@ -3652,7 +3652,27 @@ def sbs_queue_monthly(
             retry_periodos = [row[0] for row in cur.fetchall()]
     candidatos.update(retry_periodos)
 
-    click.echo(f"# Candidatos: {len(candidatos)} (sliding={sliding}, retry={retry_periodos})")
+    # 3. Stale no_publicado_sbs (V157) — archivos que ya excedieron 1.5x el
+    # lag esperado. Estos son candidatos DE ALTA PRIORIDAD porque suelen
+    # ser sintoma de bug del downloader (HTML basura guardado como .xls) o
+    # publicacion tardia real. La vista admin.v_no_publicados_stale ya
+    # aplica el filtro de threshold.
+    stale_periodos: list[int] = []
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        try:
+            cur.execute(
+                "SELECT DISTINCT periodo FROM admin.v_no_publicados_stale ORDER BY periodo DESC"
+            )
+            stale_periodos = [row[0] for row in cur.fetchall()]
+        except psycopg.errors.UndefinedTable:
+            # Vista no existe aun (migracion V157 pendiente) — skip silenciosamente.
+            pass
+    candidatos.update(stale_periodos)
+
+    click.echo(
+        f"# Candidatos: {len(candidatos)} "
+        f"(sliding={sliding}, retry={retry_periodos}, stale={stale_periodos})"
+    )
 
     if dry_run:
         click.echo("# DRY-RUN: no se insertara nada.")
@@ -3689,6 +3709,135 @@ def sbs_queue_monthly(
     for periodo in skipeados:
         click.echo(f"  = skip periodo {periodo} (ya hay pending/running)")
     click.echo(f"# Encolados: {len(encolados)}, skipeados: {len(skipeados)}")
+
+
+@sbs_group.command("recheck-stale-no-publicados")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Listar archivos stale + acciones sin ejecutar cambios.",
+)
+@click.option(
+    "--delete-local-files",
+    is_flag=True,
+    default=True,
+    show_default=True,
+    help=(
+        "Borrar el .xls local corrupto (HTML basura) antes de re-encolar. "
+        "Sin este flag, el downloader lo detecta ahora via magic-byte check "
+        "e igual lo re-descarga, pero borrar explicito es mas transparente."
+    ),
+)
+def sbs_recheck_stale_no_publicados(dry_run: bool, delete_local_files: bool) -> None:
+    """Trigger MANUAL: re-cheque archivos SBS marcados stale y encola jobs.
+
+    Casos de uso:
+
+    - Un archivo lleva 40+ dias marcado 'no_publicado_sbs' pero SBS ya lo
+      publico (bug del downloader que guardo HTML como .xls + skip_if_exists
+      lo bloqueaba). Este comando invalida el archivo local y encola un
+      sync_job — el proximo work-jobs lo re-descarga y (gracias al magic-byte
+      check nuevo) lo procesa correctamente.
+
+    - Alerta manual del /dashboard/admin/data-quality tras la migracion V157
+      (que ahora dispara critical cuando actualizado_en < fecha_esperada + lag*1.5).
+
+    Flow:
+      1. Lee admin.v_no_publicados_stale (V157 vista).
+      2. Para cada archivo stale: borra el .xls local si existe.
+      3. Encola sync_jobs por periodo (idempotente — no duplica pending).
+
+    Recomendado desde el cron aibenchef-daily-sync.sh o manual tras una
+    alerta de data-quality:
+
+        aibenchef sbs recheck-stale-no-publicados
+        aibenchef sbs work-jobs
+    """
+    from pathlib import Path
+
+    import psycopg
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    stale_rows: list[tuple[int, str, str, str, int]] = []
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        try:
+            cur.execute(
+                """
+                SELECT periodo, grupo, topico, path_local, dias_stale
+                FROM admin.v_no_publicados_stale
+                ORDER BY dias_stale DESC, periodo DESC
+                """
+            )
+            stale_rows = list(cur.fetchall())
+        except psycopg.errors.UndefinedTable:
+            raise click.ClickException(
+                "admin.v_no_publicados_stale no existe. Aplica la migracion V157 primero."
+            )
+
+    if not stale_rows:
+        click.echo("# Sin archivos stale — nada que hacer.")
+        return
+
+    click.echo(f"# Archivos stale detectados: {len(stale_rows)}")
+
+    # 1. Invalidar archivos locales corruptos.
+    n_borrados = 0
+    n_no_existentes = 0
+    if delete_local_files:
+        for _periodo, _grupo, _topico, path_local, _dias in stale_rows:
+            p = Path(path_local)
+            if not p.exists():
+                n_no_existentes += 1
+                continue
+            action = "borraria" if dry_run else "borrado"
+            click.echo(f"  - {action}: {path_local}")
+            if not dry_run:
+                try:
+                    p.unlink()
+                    n_borrados += 1
+                except OSError as e:
+                    click.echo(f"    ! fallo al borrar: {e}", err=True)
+        click.echo(f"# Locales borrados: {n_borrados}, no-existentes: {n_no_existentes}")
+
+    # 2. Encolar sync_jobs por periodo (dedupe).
+    periodos_stale = sorted({row[0] for row in stale_rows}, reverse=True)
+    if dry_run:
+        click.echo(f"# DRY-RUN: encolaria {len(periodos_stale)} periodos: {periodos_stale}")
+        return
+
+    encolados: list[tuple[int, int]] = []
+    skipeados: list[int] = []
+    insert_sql = """
+        INSERT INTO admin.sync_jobs (periodo_desde, periodo_hasta, triggered_by)
+        SELECT %s, %s, 'recheck-stale'
+        WHERE NOT EXISTS (
+            SELECT 1 FROM admin.sync_jobs
+            WHERE status IN ('pending', 'running')
+              AND periodo_desde = %s
+              AND periodo_hasta = %s
+        )
+        RETURNING id
+    """
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        for periodo in periodos_stale:
+            cur.execute(insert_sql, (periodo, periodo, periodo, periodo))
+            row = cur.fetchone()
+            if row is not None:
+                encolados.append((row[0], periodo))
+            else:
+                skipeados.append(periodo)
+        conn.commit()
+
+    for job_id, periodo in encolados:
+        click.echo(f"  + encolado job {job_id} para periodo {periodo}")
+    for periodo in skipeados:
+        click.echo(f"  = skip periodo {periodo} (ya hay pending/running)")
+    click.echo(
+        f"# Encolados: {len(encolados)}, skipeados: {len(skipeados)}. "
+        f"Corre `aibenchef sbs work-jobs` para procesarlos."
+    )
 
 
 if __name__ == "__main__":
