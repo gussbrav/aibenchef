@@ -17,11 +17,26 @@ import "server-only";
  *   }
  */
 
+import { cache } from "react";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
 
 import { UnauthorizedError, ForbiddenError } from "@/lib/domains/shared/errors";
+
+/**
+ * getServerSession — versión deduplicada de auth.api.getSession para
+ * server components. Usa React.cache para que layout + page + subsecciones
+ * hagan UNA sola llamada por request (antes eran 2-3 auth roundtrips
+ * seriales que sumaban 100-300ms al TTFB).
+ *
+ * IMPORTANTE: solo dedupe DENTRO de un mismo request. Distintos requests
+ * SI hacen el lookup — no hay caching cross-request (correcto, la sesion
+ * puede expirar/cambiar).
+ */
+export const getServerSession = cache(async () => {
+  return auth.api.getSession({ headers: await headers() });
+});
 
 export type SessionUser = {
   id: string;

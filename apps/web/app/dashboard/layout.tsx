@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
 import { Container, ConfirmModalProvider } from "@/components/ui";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
@@ -17,7 +16,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getServerSession();
 
   if (!session) {
     redirect("/login");

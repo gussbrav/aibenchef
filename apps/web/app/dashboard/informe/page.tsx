@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { unstable_cache } from "next/cache";
 import {
   getInformeData,
@@ -9,7 +8,7 @@ import {
   listEntidadesDisponibles,
   parseColorsOverride,
 } from "@/lib/domains/informe/queries";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth-helpers";
 import { getUser } from "@/lib/domains/users";
 import { InformeClient } from "./informe-client";
 
@@ -157,7 +156,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   let userDefaultCliente: string | null = null;
   if (!params.cliente) {
     try {
-      const session = await auth.api.getSession({ headers: await headers() });
+      const session = await getServerSession();
       if (session) {
         const user = await getUser(session.user.id);
         userDefaultCliente = user.defaultClienteSlug;
