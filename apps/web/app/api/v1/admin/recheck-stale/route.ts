@@ -24,7 +24,7 @@ import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/infrastructure/db";
-import { requireAdminSession } from "@/lib/auth-helpers";
+import { requireSession } from "@/lib/auth-helpers";
 import { extractAuditContext, recordAuditEvent } from "@/lib/domains/governance";
 import { handleRoute } from "@/lib/domains/shared";
 
@@ -63,7 +63,7 @@ async function fetchStaleRows(): Promise<StaleRow[]> {
 
 export async function GET(_req: NextRequest) {
   return handleRoute(async () => {
-    await requireAdminSession();
+    await requireSession();
     const rows = await fetchStaleRows();
     // Resumen por periodo — util para mostrar summary en el UI.
     const porPeriodo = new Map<number, { grupos: Set<string>; topicos: Set<string>; maxDias: number }>();
@@ -97,7 +97,7 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
-    const session = await requireAdminSession();
+    const session = await requireSession();
     const rows = await fetchStaleRows();
 
     if (rows.length === 0) {

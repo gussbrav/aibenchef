@@ -111,30 +111,56 @@ export function RecheckStalePanel() {
 
   const total = data?.total ?? 0;
   const hasStale = total > 0;
+  const isError = error !== null;
+  // Estado visual del panel: error > stale > saludable.
+  // Si hay error, el "saludable" seria enganoso (no pudimos verificar).
+  const state: "error" | "stale" | "healthy" | "loading" = isError
+    ? "error"
+    : loading && !data
+      ? "loading"
+      : hasStale
+        ? "stale"
+        : "healthy";
+
+  const borderClass =
+    state === "error"
+      ? "border-red-300 bg-red-50/60"
+      : state === "stale"
+        ? "border-red-300 bg-red-50/60"
+        : state === "loading"
+          ? "border-slate-200 bg-slate-50"
+          : "border-emerald-200 bg-emerald-50/40";
 
   return (
-    <div
-      className={`rounded-lg border p-5 ${
-        hasStale
-          ? "border-red-300 bg-red-50/60"
-          : "border-emerald-200 bg-emerald-50/40"
-      }`}
-    >
+    <div className={`rounded-lg border p-5 ${borderClass}`}>
       <header className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-start gap-3">
-          {hasStale ? (
-            <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-          ) : (
+          {state === "healthy" ? (
             <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+          ) : state === "loading" ? (
+            <Loader2 className="w-6 h-6 text-slate-400 flex-shrink-0 mt-0.5 animate-spin" />
+          ) : (
+            <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
           )}
           <div className="min-w-0">
             <h3 className="text-base font-bold text-slate-900">
-              {hasStale
-                ? `${total} archivos SBS stale — bloqueando data`
-                : "Sin archivos stale — pipeline saludable"}
+              {state === "error"
+                ? "No se pudo verificar el estado del pipeline"
+                : state === "loading"
+                  ? "Verificando archivos SBS..."
+                  : hasStale
+                    ? `${total} archivos SBS stale — bloqueando data`
+                    : "Sin archivos stale — pipeline saludable"}
             </h3>
             <p className="text-xs text-slate-600 mt-0.5 max-w-3xl">
-              {hasStale ? (
+              {state === "error" ? (
+                <>
+                  No pudimos consultar <code className="text-[10px] bg-white px-1 rounded">admin.v_no_publicados_stale</code>.
+                  Revisa el mensaje de error abajo y avisa a un admin si el problema persiste.
+                </>
+              ) : state === "loading" ? (
+                "Consultando la vista de archivos stale..."
+              ) : hasStale ? (
                 <>
                   Estos archivos están marcados <code className="text-[10px] bg-white px-1 rounded">no_publicado_sbs</code>{" "}
                   hace más tiempo que <code className="text-[10px] bg-white px-1 rounded">fecha_esperada + lag×1.5</code>.
@@ -159,16 +185,16 @@ export function RecheckStalePanel() {
         </button>
       </header>
 
-      {loading && !data && (
-        <div className="flex items-center gap-2 text-xs text-slate-500 py-3">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Cargando estado de archivos stale...
-        </div>
-      )}
-
       {error && (
-        <div className="bg-white border border-red-200 rounded p-3 text-xs text-red-800 mb-3">
-          {error}
+        <div className="bg-white border border-red-200 rounded p-3 text-xs text-red-800 mb-3 space-y-1">
+          <p className="font-semibold">{error}</p>
+          {error.toLowerCase().includes("permiso") && (
+            <p className="text-red-700/80">
+              Tu sesión no tiene los permisos requeridos. Pide a un admin
+              que actualice tu rol en <code className="text-[10px] bg-white px-1 rounded">users.role = &apos;admin&apos;</code>{" "}
+              o inicia sesión con una cuenta de admin.
+            </p>
+          )}
         </div>
       )}
 
