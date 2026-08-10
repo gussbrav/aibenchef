@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth-helpers";
 import { listPublicaciones } from "@/lib/domains/publicaciones";
 import { getUser } from "@/lib/domains/users";
-import { listEntidadesDisponibles, getUltimoPeriodoPublicable } from "@/lib/domains/informe/queries";
+import {
+  getClienteBySlug,
+  listEntidadesDisponibles,
+  getUltimoPeriodoPublicable,
+} from "@/lib/domains/informe/queries";
 import { PublicacionesClient } from "./client";
 
 export const metadata: Metadata = {
@@ -21,7 +25,9 @@ export default async function PublicacionesPage() {
     redirect("/login");
   }
 
-  // Data del usuario para prefill del wizard
+  // Data del usuario para prefill del wizard — resolver el cliente por
+  // defecto + su entidad canonica asi el user no arranca con "Alfin Banco"
+  // (primera alfabetica) sino con SU entidad.
   let defaultClienteSlug: string | null = null;
   try {
     const user = await getUser(session.user.id);
@@ -29,18 +35,25 @@ export default async function PublicacionesPage() {
   } catch {
     /* fallback: cliente se pide en el wizard */
   }
+  const clienteSlug = defaultClienteSlug ?? "bcp";
 
-  const [publicaciones, entidadesDisponibles, ultimoPeriodo] = await Promise.all([
-    listPublicaciones({ createdBy: `user:${session.user.email}` }),
-    listEntidadesDisponibles({}),
-    getUltimoPeriodoPublicable(),
-  ]);
+  const [publicaciones, entidadesDisponibles, ultimoPeriodo, cliente] =
+    await Promise.all([
+      listPublicaciones({ createdBy: `user:${session.user.email}` }),
+      listEntidadesDisponibles({}),
+      getUltimoPeriodoPublicable(),
+      getClienteBySlug(clienteSlug).catch(() => null),
+    ]);
+
+  const defaultEntidadPropia =
+    cliente?.entidadPropia ?? "Banco de Crédito del Perú";
 
   return (
     <PublicacionesClient
       publicaciones={publicaciones}
       entidadesDisponibles={entidadesDisponibles}
-      defaultClienteSlug={defaultClienteSlug}
+      defaultClienteSlug={clienteSlug}
+      defaultEntidadPropia={defaultEntidadPropia}
       defaultPeriodo={ultimoPeriodo ?? 202606}
       userEmail={session.user.email}
     />

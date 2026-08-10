@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * PublicacionesClient — MVP de generacion de articulos long-form estilo
- * editorial (Hermes Holguin / Jesus Ferreyra) para publicar en LinkedIn.
+ * PublicacionesClient — generacion de articulos long-form con voz
+ * editorial senior para publicar en LinkedIn. Estilo tipo Hermes
+ * Holguin / Jesus Ferreyra (referentes internos del prompt engineering
+ * — NUNCA mencionar en UI).
  *
  * Vistas:
  *   - "lista" (default): grid de drafts + reviewed + published del user
@@ -37,7 +39,8 @@ type EntidadDisponible = {
 type Props = {
   publicaciones: PublicacionListItem[];
   entidadesDisponibles: EntidadDisponible[];
-  defaultClienteSlug: string | null;
+  defaultClienteSlug: string;
+  defaultEntidadPropia: string;
   defaultPeriodo: number;
   userEmail: string;
 };
@@ -65,6 +68,7 @@ export function PublicacionesClient({
   publicaciones: initialList,
   entidadesDisponibles,
   defaultClienteSlug,
+  defaultEntidadPropia,
   defaultPeriodo,
   userEmail: _userEmail,
 }: Props) {
@@ -90,15 +94,16 @@ export function PublicacionesClient({
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="w-4 h-4 text-brand-700" />
             <span className="text-[11px] uppercase tracking-wider font-semibold text-brand-700">
-              Publicaciones AI
+              Thought Leadership · IA
             </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Genera artículos para LinkedIn
+            Publica análisis sectoriales con tu firma
           </h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Artículos long-form estilo editorial (Hermes Holguín / Jesús Ferreyra)
-            construidos a partir de la data de tu benchmarking. Draft → revisar → copiar a LinkedIn.
+            Artículos long-form con voz de analista senior, construidos a partir
+            de tu data de benchmarking SBS. Genera el draft, refina el tono, y
+            publica en LinkedIn en un click.
           </p>
         </div>
         {vista.kind === "lista" && (
@@ -136,6 +141,7 @@ export function PublicacionesClient({
         <WizardVista
           entidadesDisponibles={entidadesDisponibles}
           defaultClienteSlug={defaultClienteSlug}
+          defaultEntidadPropia={defaultEntidadPropia}
           defaultPeriodo={defaultPeriodo}
           onGenerated={async (pub) => {
             await refreshLista();
@@ -196,10 +202,11 @@ function ListaVista({
       <section className="bg-white border border-slate-200 rounded-lg p-12 text-center">
         <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
         <h3 className="text-lg font-semibold text-slate-900 mb-1">
-          Aún no tenés artículos
+          Tu biblioteca está vacía
         </h3>
         <p className="text-sm text-slate-500 mb-5 max-w-md mx-auto">
-          Genera tu primer artículo eligiendo un tema y periodo. En 2-3 segundos tenés un draft listo para editar y publicar.
+          Elige un tema, un cierre y el grupo comparable — la IA construye el
+          primer draft con la data real de tu benchmarking en segundos.
         </p>
         <button
           type="button"
@@ -258,8 +265,6 @@ function ListaVista({
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-1">
                     Actualizado {new Date(item.updatedAt).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}
-                    {" · "}
-                    {item.tokensInput + item.tokensOutput} tokens · ${item.costUsd.toFixed(4)} USD
                   </p>
                 </div>
                 <div className="flex-shrink-0 flex items-center">
@@ -283,18 +288,27 @@ function ListaVista({
 // ============================================================================
 
 function WizardVista({
-  entidadesDisponibles, defaultClienteSlug, defaultPeriodo, onGenerated,
+  entidadesDisponibles, defaultClienteSlug, defaultEntidadPropia, defaultPeriodo, onGenerated,
 }: {
   entidadesDisponibles: EntidadDisponible[];
-  defaultClienteSlug: string | null;
+  defaultClienteSlug: string;
+  defaultEntidadPropia: string;
   defaultPeriodo: number;
   onGenerated: (pub: Publicacion) => Promise<void>;
 }) {
   const [tema, setTema] = useState<PublicacionTema>("benchmarking_sectorial");
-  const [clienteSlug, setClienteSlug] = useState(defaultClienteSlug ?? "bcp");
-  const [entidadPropia, setEntidadPropia] = useState<string>(
-    entidadesDisponibles[0]?.nombCorreg ?? "",
-  );
+  const [clienteSlug, setClienteSlug] = useState(defaultClienteSlug);
+  // Prefill con la entidad canonica del cliente (BCP -> "Banco de Credito
+  // del Peru"). Cae al primer valor disponible solo si la canonica no esta
+  // en la lista (edge case: cambio de nombre reciente).
+  const [entidadPropia, setEntidadPropia] = useState<string>(() => {
+    const isValid = entidadesDisponibles.some(
+      (e) => e.nombCorreg === defaultEntidadPropia,
+    );
+    return isValid
+      ? defaultEntidadPropia
+      : (entidadesDisponibles[0]?.nombCorreg ?? "");
+  });
   const [peerGroupInput, setPeerGroupInput] = useState<string>("");
   const [periodo, setPeriodo] = useState<number>(defaultPeriodo);
   const [eventosMacro, setEventosMacro] = useState("");
@@ -358,7 +372,8 @@ function WizardVista({
       <div>
         <h2 className="text-base font-bold text-slate-900 mb-1">Nuevo artículo</h2>
         <p className="text-xs text-slate-500">
-          Elegí el tema y los parámetros. La IA genera un draft en ~5-10 segundos que podés editar antes de publicar.
+          Configura el tema y el alcance del análisis. El draft se genera con
+          la data real del cierre — sin inventos ni especulación.
         </p>
       </div>
 
@@ -411,7 +426,7 @@ function WizardVista({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
-            Cliente (slug)
+            Cliente
           </label>
           <input
             type="text"
@@ -466,7 +481,7 @@ function WizardVista({
           className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
         />
         <p className="text-[10px] text-slate-400 mt-1">
-          Escribí los nombres exactos como aparecen en el selector de entidades del dashboard.
+          Usa los nombres exactos como aparecen en el selector de entidades del dashboard.
         </p>
       </div>
 
@@ -484,7 +499,7 @@ function WizardVista({
             className="w-full px-2 py-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
           />
           <p className="text-[10px] text-slate-400 mt-1">
-            Si dejás esto vacío, el artículo se limita a data del cierre sin especular sobre eventos externos.
+            Si lo dejas vacío, el artículo se limita a data del cierre sin especular sobre eventos externos.
           </p>
         </div>
       )}
@@ -506,7 +521,7 @@ function WizardVista({
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Generando... (~5-10s)
+              Redactando análisis...
             </>
           ) : (
             <>
