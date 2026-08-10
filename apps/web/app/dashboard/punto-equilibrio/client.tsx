@@ -13,7 +13,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
-  BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, RotateCcw, TrendingUp, Users, X,
+  BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, Palette, RotateCcw, TrendingUp, Users, X,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -393,6 +393,30 @@ function SelectoresBar({
           onChange={(v) => setDraft((d) => ({ ...d, entidad: v }))}
         />
 
+        {/* Granularidad — va PRIMERO porque decide el modo de analisis
+            (cierre unico deshabilita 'Desde año'). Ponerla antes evita
+            que el user vea 'Desde año' disabled sin entender por que. */}
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
+            <Layers className="w-3 h-3" />
+            Granularidad
+          </label>
+          <select
+            value={draft.granularidad}
+            onChange={(e) => {
+              const v = e.target.value as Granularidad;
+              setDraft((d) => ({ ...d, granularidad: v }));
+            }}
+            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+          >
+            {GRANULARIDADES.map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label} — {g.hint}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Desde año — deshabilitado en modo 'Cierre único' porque no aplica
             (ese modo muestra solo el hasta-periodo). */}
         <div>
@@ -421,28 +445,6 @@ function SelectoresBar({
           >
             {aniosDisponibles.map((a) => (
               <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Granularidad */}
-        <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
-            <Layers className="w-3 h-3" />
-            Granularidad
-          </label>
-          <select
-            value={draft.granularidad}
-            onChange={(e) => {
-              const v = e.target.value as Granularidad;
-              setDraft((d) => ({ ...d, granularidad: v }));
-            }}
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
-          >
-            {GRANULARIDADES.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.label} — {g.hint}
-              </option>
             ))}
           </select>
         </div>
@@ -676,8 +678,16 @@ type RowDef = {
   variant: "sum" | "sub" | "bold" | "highlight";
   /** Tooltip explicativo para la fila (mostrado con InfoTooltip). */
   info?: string;
-  /** Sub-filas que se muestran al expandir esta fila (patron Excel agrupar). */
-  subrows?: Array<{ key: string; label: string; field: keyof PuntoEquilibrioRow }>;
+  /** Sub-filas que se muestran al expandir esta fila (patron Excel agrupar).
+   *  ctaSbs es el codigo SBS oficial (opcional), se muestra solo en el
+   *  tooltip nativo del row para que analistas power-user puedan trazarlo
+   *  al reporte SBS, sin ensuciar visualmente el label del usuario final. */
+  subrows?: Array<{
+    key: string;
+    label: string;
+    field: keyof PuntoEquilibrioRow;
+    ctaSbs?: string;
+  }>;
 };
 
 const DEFAULT_ROW_ORDER: RowDef[] = [
@@ -686,19 +696,19 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Rendimiento de cartera",
     field: "pctRendimiento",
     variant: "sum",
-    info: "Ingresos por intereses de créditos directos (SBS cta 1.4) ÷ Cartera Promedio 12M × 100. Es el retorno bruto que la cartera genera antes de restar costos.",
+    info: "Ingresos por intereses de créditos directos ÷ Cartera Promedio 12M × 100. Es el retorno bruto que la cartera genera antes de restar costos. Fuente SBS: cuenta 1.4 del Estado de Resultados.",
   },
   {
     key: "otros",
     label: "Otros Ingresos (Egresos)",
     field: "pctOtros",
     variant: "sum",
-    info: "Ingresos netos por servicios financieros + ganancia por venta de cartera + otros ingresos/gastos. Fórmula SBS: (cta 6 − cta 7 + cta 8 + cta 13) ÷ Cartera Promedio 12M.",
+    info: "Ingresos netos por servicios financieros + ganancia por venta de cartera + otros ingresos/gastos. Todos ÷ Cartera Promedio 12M.",
     subrows: [
-      { key: "isf", label: "Ingresos por Servicios Financieros (cta 6)", field: "pctISF" },
-      { key: "gsf", label: "Gastos por Servicios Financieros (cta 7)", field: "pctGSF" },
-      { key: "venta", label: "Ganancia por Venta de Cartera (cta 8)", field: "pctVentaCartera" },
-      { key: "otrosIG", label: "Otros Ingresos y Gastos (cta 13)", field: "pctOtrosIngGas" },
+      { key: "isf", label: "Ingresos por Servicios Financieros", field: "pctISF", ctaSbs: "cta 6" },
+      { key: "gsf", label: "Gastos por Servicios Financieros", field: "pctGSF", ctaSbs: "cta 7" },
+      { key: "venta", label: "Ganancia por Venta de Cartera", field: "pctVentaCartera", ctaSbs: "cta 8" },
+      { key: "otrosIG", label: "Otros Ingresos y Gastos", field: "pctOtrosIngGas", ctaSbs: "cta 13" },
     ],
   },
   {
@@ -706,12 +716,12 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Gasto Financiero",
     field: "pctCostoFondeo",
     variant: "sub",
-    info: "Intereses pagados por fuentes de fondeo (SBS cta 2). Incluye depósitos del público, adeudos, obligaciones en circulación, etc. Signo negativo — es un costo.",
+    info: "Intereses pagados por fuentes de fondeo. Incluye depósitos del público, adeudos, obligaciones en circulación, etc. Signo negativo — es un costo. Fuente SBS: cuenta 2 del Estado de Resultados.",
     subrows: [
-      { key: "publico", label: "Obligaciones con el Público (cta 2.1)", field: "pctGfPublico" },
-      { key: "sf", label: "Depósitos SF + Organismos (cta 2.2)", field: "pctGfSF" },
-      { key: "adeudos", label: "Adeudos y Obligaciones (cta 2.4)", field: "pctGfAdeudos" },
-      { key: "obligCirc", label: "Obligaciones en Circulación (cta 2.5+2.6)", field: "pctGfObligaciones" },
+      { key: "publico", label: "Obligaciones con el Público", field: "pctGfPublico", ctaSbs: "cta 2.1" },
+      { key: "sf", label: "Depósitos SF + Organismos", field: "pctGfSF", ctaSbs: "cta 2.2" },
+      { key: "adeudos", label: "Adeudos y Obligaciones", field: "pctGfAdeudos", ctaSbs: "cta 2.4" },
+      { key: "obligCirc", label: "Obligaciones en Circulación", field: "pctGfObligaciones", ctaSbs: "cta 2.5+2.6" },
       { key: "otrosFin", label: "Otros gastos financieros", field: "pctGfOtrosFin" },
     ],
   },
@@ -720,10 +730,10 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Costo de Provisión",
     field: "pctProvisiones",
     variant: "sub",
-    info: "Provisiones para incobrabilidad de créditos (cta 4.2) + provisiones para desvalorización de inversiones (cta 4.1). Signo negativo — es un costo.",
+    info: "Provisiones por incobrabilidad de créditos y desvalorización de inversiones. Signo negativo — es un costo. Fuente SBS: cuenta 4 del Estado de Resultados.",
     subrows: [
-      { key: "provCred", label: "Provisiones para Créditos (cta 4.2)", field: "pctProvCredito" },
-      { key: "provInv", label: "Provisiones para Inversiones (cta 4.1)", field: "pctProvInversion" },
+      { key: "provCred", label: "Provisiones para Créditos", field: "pctProvCredito", ctaSbs: "cta 4.2" },
+      { key: "provInv", label: "Provisiones para Inversiones", field: "pctProvInversion", ctaSbs: "cta 4.1" },
     ],
   },
   {
@@ -731,11 +741,11 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Gastos Operacionales",
     field: "pctGastosOp",
     variant: "sub",
-    info: "Personal (cta 10.1) + Servicios Terceros + Impuestos (cta 10.3+10.4) + Depreciación + Amortización (cta 12.7+12.8). Todos los costos operativos ÷ Cartera Promedio 12M.",
+    info: "Personal + Servicios Terceros + Impuestos + Depreciación + Amortización. Todos los costos operativos ÷ Cartera Promedio 12M. Fuente SBS: cuentas 10 y 12 del Estado de Resultados.",
     subrows: [
-      { key: "personal", label: "Personal (cta 10.1)", field: "pctPersonal" },
-      { key: "generales", label: "Servicios Terceros + Impuestos (cta 10.3+10.4)", field: "pctGenerales" },
-      { key: "deprec", label: "Depreciación + Amortización (cta 12.7+12.8)", field: "pctDepreciacion" },
+      { key: "personal", label: "Personal", field: "pctPersonal", ctaSbs: "cta 10.1" },
+      { key: "generales", label: "Servicios Terceros + Impuestos", field: "pctGenerales", ctaSbs: "cta 10.3+10.4" },
+      { key: "deprec", label: "Depreciación + Amortización", field: "pctDepreciacion", ctaSbs: "cta 12.7+12.8" },
     ],
   },
   {
@@ -1153,7 +1163,10 @@ function HistoricoTable({
                       subIdx === 0 && "border-t border-dashed border-slate-200",
                     )}
                   >
-                    <td className="px-4 sticky left-0 z-10 bg-slate-50/60">
+                    <td
+                      className="px-4 sticky left-0 z-10 bg-slate-50/60"
+                      title={sub.ctaSbs ? `Código SBS: ${sub.ctaSbs}` : undefined}
+                    >
                       <div className="flex items-center gap-2 pl-8 py-1 text-[11.5px] text-slate-500">
                         <span className="text-slate-300 text-[10px]">└</span>
                         <span>{sub.label}</span>
@@ -1432,8 +1445,8 @@ function TablaComparativaCierre({
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-      <header className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-start justify-between gap-3 flex-wrap">
-        <div>
+      <header className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-slate-900">
             Cuadro comparativo por entidad
           </h3>
@@ -1446,30 +1459,32 @@ function TablaComparativaCierre({
             desplegar el detalle por cuenta SBS.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {Object.keys(colorOverrides).length > 0 && (
-            <button
-              type="button"
-              onClick={resetAllColors}
-              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
-              title="Restablecer todos los colores custom"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Restablecer colores
-            </button>
-          )}
-          {isCustomOrder && (
-            <button
-              type="button"
-              onClick={resetEntidadOrder}
-              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
-              title="Restablecer al orden original del peer group"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Restablecer orden
-            </button>
-          )}
-        </div>
+        {(Object.keys(colorOverrides).length > 0 || isCustomOrder) && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {Object.keys(colorOverrides).length > 0 && (
+              <button
+                type="button"
+                onClick={resetAllColors}
+                className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
+                title="Restablecer colores personalizados"
+                aria-label="Restablecer colores personalizados"
+              >
+                <Palette className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {isCustomOrder && (
+              <button
+                type="button"
+                onClick={resetEntidadOrder}
+                className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
+                title="Restablecer orden original del peer group"
+                aria-label="Restablecer orden original del peer group"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -1643,7 +1658,10 @@ function TablaComparativaCierre({
                         subIdx === 0 && "border-t border-dashed border-slate-200",
                       )}
                     >
-                      <td className="px-4 sticky left-0 z-10 bg-slate-50/60">
+                      <td
+                        className="px-4 sticky left-0 z-10 bg-slate-50/60"
+                        title={sub.ctaSbs ? `Código SBS: ${sub.ctaSbs}` : undefined}
+                      >
                         <div className="flex items-center gap-2 pl-8 py-1 text-[11.5px] text-slate-500">
                           <span className="text-slate-300 text-[10px]">└</span>
                           <span>{sub.label}</span>
