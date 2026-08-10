@@ -27,6 +27,7 @@ import {
   listSospechosos,
 } from "@/lib/domains/pipeline";
 import type { DQSeverity } from "@/lib/domains/pipeline";
+import { RecheckStalePanel } from "./recheck-stale-panel";
 
 export const metadata: Metadata = {
   title: "Data Quality",
@@ -52,6 +53,12 @@ export default async function DataQualityPage() {
           truncadas y MVs stale antes de que impacten al usuario final.
         </p>
       </header>
+
+      {/* RECHECK STALE — accion primaria si hay archivos SBS stuck.
+          Va ARRIBA porque es lo mas accionable: 1 click resuelve el
+          problema mas comun (archivos que SBS publico tarde o que se
+          guardaron corruptos por el bug historico del downloader). */}
+      <RecheckStalePanel />
 
       {/* SCORE */}
       <section className="space-y-3">
