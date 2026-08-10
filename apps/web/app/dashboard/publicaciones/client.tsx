@@ -41,6 +41,7 @@ type Props = {
   entidadesDisponibles: EntidadDisponible[];
   defaultClienteSlug: string;
   defaultEntidadPropia: string;
+  defaultPeerGroup: string[];
   defaultPeriodo: number;
   userEmail: string;
 };
@@ -69,6 +70,7 @@ export function PublicacionesClient({
   entidadesDisponibles,
   defaultClienteSlug,
   defaultEntidadPropia,
+  defaultPeerGroup,
   defaultPeriodo,
   userEmail: _userEmail,
 }: Props) {
@@ -142,6 +144,7 @@ export function PublicacionesClient({
           entidadesDisponibles={entidadesDisponibles}
           defaultClienteSlug={defaultClienteSlug}
           defaultEntidadPropia={defaultEntidadPropia}
+          defaultPeerGroup={defaultPeerGroup}
           defaultPeriodo={defaultPeriodo}
           onGenerated={async (pub) => {
             await refreshLista();
@@ -288,11 +291,12 @@ function ListaVista({
 // ============================================================================
 
 function WizardVista({
-  entidadesDisponibles, defaultClienteSlug, defaultEntidadPropia, defaultPeriodo, onGenerated,
+  entidadesDisponibles, defaultClienteSlug, defaultEntidadPropia, defaultPeerGroup, defaultPeriodo, onGenerated,
 }: {
   entidadesDisponibles: EntidadDisponible[];
   defaultClienteSlug: string;
   defaultEntidadPropia: string;
+  defaultPeerGroup: string[];
   defaultPeriodo: number;
   onGenerated: (pub: Publicacion) => Promise<void>;
 }) {
@@ -309,7 +313,12 @@ function WizardVista({
       ? defaultEntidadPropia
       : (entidadesDisponibles[0]?.nombCorreg ?? "");
   });
-  const [peerGroupInput, setPeerGroupInput] = useState<string>("");
+  // Peer group prefill = peer default del cliente (viene del backend
+  // via getDefaultPeerGroup). Asi el user arranca con un grupo sensato y
+  // solo lo edita si quiere personalizar.
+  const [peerGroupInput, setPeerGroupInput] = useState<string>(
+    defaultPeerGroup.join(", "),
+  );
   const [periodo, setPeriodo] = useState<number>(defaultPeriodo);
   const [eventosMacro, setEventosMacro] = useState("");
   const [loading, setLoading] = useState(false);
@@ -327,11 +336,13 @@ function WizardVista({
       .map((s) => s.trim())
       .filter(Boolean);
     if (peerGroup.length === 0) {
-      setError("Ingresá al menos 1 entidad en el grupo comparable.");
+      setError(
+        "Agrega al menos una entidad para comparar. Sin comparación no hay ranking ni análisis competitivo.",
+      );
       return;
     }
     if (!entidadPropia) {
-      setError("Elegí la entidad propia.");
+      setError("Elige la entidad sobre la que quieres escribir.");
       return;
     }
     setLoading(true);
@@ -438,7 +449,7 @@ function WizardVista({
         </div>
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
-            Entidad propia
+            Tu entidad
           </label>
           <select
             value={entidadPropia}
@@ -452,7 +463,7 @@ function WizardVista({
         </div>
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
-            Periodo (YYYYMM)
+            Cierre
           </label>
           <input
             type="number"
@@ -465,23 +476,30 @@ function WizardVista({
             }}
             className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
           />
+          <p className="text-[10px] text-slate-400 mt-1">
+            Formato AAAAMM · ej. 202606 = Jun 2026
+          </p>
         </div>
       </div>
 
       {/* Peer group */}
       <div>
         <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
-          Grupo comparable (nombres separados por coma)
+          Con quiénes comparar
         </label>
         <input
           type="text"
           value={peerGroupInput}
           onChange={(e) => setPeerGroupInput(e.target.value)}
-          placeholder="CMAC Arequipa, CMAC Cusco, CMAC Huancayo"
+          placeholder="Ej: CMAC Arequipa, CMAC Cusco, CMAC Huancayo"
           className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
         />
-        <p className="text-[10px] text-slate-400 mt-1">
-          Usa los nombres exactos como aparecen en el selector de entidades del dashboard.
+        <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+          Un artículo de benchmarking necesita <strong>al menos una entidad
+          para comparar</strong> con la tuya — así el análisis puede decir
+          quién lidera, quién queda rezagado y por qué. Escribe 2 a 5
+          nombres separados por coma. Ya te precargamos el grupo típico
+          de tu segmento; puedes ajustarlo.
         </p>
       </div>
 
@@ -594,7 +612,7 @@ function EditorVista({
   };
 
   const archive = async () => {
-    if (!confirm("¿Archivar esta publicación? Podés recuperarla desde la vista de admin.")) return;
+    if (!confirm("¿Archivar esta publicación? Puedes recuperarla desde la vista de admin.")) return;
     const res = await fetch(`/api/v1/publicaciones/${publicacion.id}`, { method: "DELETE" });
     if (res.ok) await onArchived();
   };

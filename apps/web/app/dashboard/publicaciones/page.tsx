@@ -6,6 +6,7 @@ import { listPublicaciones } from "@/lib/domains/publicaciones";
 import { getUser } from "@/lib/domains/users";
 import {
   getClienteBySlug,
+  getDefaultPeerGroup,
   listEntidadesDisponibles,
   getUltimoPeriodoPublicable,
 } from "@/lib/domains/informe/queries";
@@ -37,16 +38,23 @@ export default async function PublicacionesPage() {
   }
   const clienteSlug = defaultClienteSlug ?? "bcp";
 
-  const [publicaciones, entidadesDisponibles, ultimoPeriodo, cliente] =
+  const [publicaciones, entidadesDisponibles, ultimoPeriodo, cliente, defaultPeerGroup] =
     await Promise.all([
       listPublicaciones({ createdBy: `user:${session.user.email}` }),
       listEntidadesDisponibles({}),
       getUltimoPeriodoPublicable(),
       getClienteBySlug(clienteSlug).catch(() => null),
+      getDefaultPeerGroup(clienteSlug).catch(() => []),
     ]);
 
   const defaultEntidadPropia =
     cliente?.entidadPropia ?? "Banco de Crédito del Perú";
+  // Grupo comparable = peer group del cliente MENOS la entidad propia
+  // (ya la mostramos aparte como "tu entidad") — asi el user ve solo los
+  // competidores a comparar.
+  const defaultPeerGroupSinPropia = defaultPeerGroup.filter(
+    (n) => n !== defaultEntidadPropia,
+  );
 
   return (
     <PublicacionesClient
@@ -54,6 +62,7 @@ export default async function PublicacionesPage() {
       entidadesDisponibles={entidadesDisponibles}
       defaultClienteSlug={clienteSlug}
       defaultEntidadPropia={defaultEntidadPropia}
+      defaultPeerGroup={defaultPeerGroupSinPropia}
       defaultPeriodo={ultimoPeriodo ?? 202606}
       userEmail={session.user.email}
     />
