@@ -3581,7 +3581,11 @@ def sbs_work_jobs(max_jobs: int) -> None:
                 # Sin esto, los archivos quedan en status='descargado' eterno y
                 # nunca llegan a marts/dashboards. Idempotente: ON CONFLICT en
                 # las tablas raw + audit trail actualiza status='procesado'.
-                any_imported = False
+                #
+                # V161 (2026-08-10): antes trackeabamos `any_imported` para
+                # solo refrescar MVs si hubo rows nuevas. Removido — ahora
+                # siempre refrescamos tras ok (idempotente + garantiza MVs
+                # frescas incluso con re-imports sin filas nuevas).
                 if ok:
                     for p in range(desde, hasta + 1):
                         # Saltar gaps de mes (13, 14, etc) sin romper si desde/hasta
@@ -3598,19 +3602,22 @@ def sbs_work_jobs(max_jobs: int) -> None:
                                 f"{r.stderr[-500:]}"
                             )
                             ok = False
-                        elif "rows_insertadas=" in (r.stdout or "") and (
-                            "rows_insertadas=0" not in (r.stdout or "")
-                        ):
-                            any_imported = True
 
                 # Refresh de TODAS las derivadas (fix #126 fase 3 + V134).
-                # Por cada periodo importado: refresh-derived orquesta
+                # Por cada periodo del rango: refresh-derived orquesta
                 # dw.recalcular_microfinancieras(p) + refresh_kpis_anuales +
                 # refresh_all_marts. Sin esto, el dashboard tiene celdas vacias
                 # (Cartera MYPE/Total fue el primer sintoma — bug raiz issue #134).
                 # Es lento (mv_eeff_balance_ancho tarda 15+ min) — timeout 2h.
                 # Failure NO marca el job como failed: data ya en raw, retry OK.
-                if ok and any_imported:
+                #
+                # V161 fix (2026-08-10): antes solo refrescabamos si
+                # `any_imported=True`. Bug: los sync_jobs con force_redownload
+                # que re-procesan archivos ya en la DB dejaban las MVs stale
+                # porque no metian filas nuevas (dedup). Ahora refrescamos
+                # SIEMPRE tras un job OK — es idempotente y garantiza MVs
+                # frescas incluso cuando el import es solo re-validacion.
+                if ok:
                     for p in range(desde, hasta + 1):
                         if (p % 100) < 1 or (p % 100) > 12:
                             continue

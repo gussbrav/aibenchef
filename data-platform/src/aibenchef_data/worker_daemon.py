@@ -46,6 +46,13 @@ MAX_JOBS_PER_RUN = 10  # Igual que el cron
 RECONNECT_MIN_SEC = 1.0
 RECONNECT_MAX_SEC = 60.0
 
+# Safety net: cada N segundos verificamos si hay MVs con >6h sin refresh
+# y las refrescamos automaticamente. Esto captura casos donde el work-jobs
+# no llego a hacer refresh (crash, timeout, o job que no metio filas nuevas
+# pre-V161-fix). 6h es conservador — el SLA mas estricto de MVs es 24h.
+MV_STALE_CHECK_INTERVAL_SEC = 30 * 60  # 30 min
+MV_STALE_THRESHOLD_HOURS = 6
+
 
 def _run_work_jobs(reason: str) -> None:
     """Invoca el CLI `aibenchef sbs work-jobs` como subprocess.
@@ -81,6 +88,78 @@ def _run_work_jobs(reason: str) -> None:
         log.error("worker.run_timeout", duration_sec=round(time.time() - t0, 2))
     except Exception as e:
         log.error("worker.run_exception", error=str(e))
+
+
+def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:
+    """Safety net: si alguna MV lleva >MV_STALE_THRESHOLD_HOURS sin refresh,
+    dispara `aibenchef pipeline refresh-marts --concurrent` automaticamente.
+
+    Se llama periodicamente desde el loop del daemon (cada
+    MV_STALE_CHECK_INTERVAL_SEC segundos). Cero costo si las MVs estan
+    frescas (solo un COUNT rapido).
+
+    Concurrent=True para no bloquear reads del dashboard durante el refresh.
+    """
+    try:
+        with conn.cursor() as cur:
+            # Contamos MVs con >threshold horas sin refresh exitoso.
+            # admin.mv_refresh_log tiene 1 fila por refresh, tomamos el
+            # ultimo por mv_name.
+            cur.execute(
+                """
+                WITH ultimo_refresh AS (
+                    SELECT DISTINCT ON (mv_name) mv_name, refreshed_at, success
+                    FROM admin.mv_refresh_log
+                    ORDER BY mv_name, refreshed_at DESC
+                )
+                SELECT COUNT(*)
+                FROM ultimo_refresh
+                WHERE success = true
+                  AND refreshed_at < NOW() - INTERVAL '%s hours'
+                """,
+                (MV_STALE_THRESHOLD_HOURS,),
+            )
+            row = cur.fetchone()
+            n_stale = row[0] if row else 0
+    except Exception as e:
+        log.warning("worker.mv_stale_check_failed", error=str(e))
+        return
+
+    if n_stale == 0:
+        return  # todo fresco, salimos sin ruido
+
+    log.warning(
+        "worker.mv_stale_detected",
+        n_stale=n_stale,
+        threshold_hours=MV_STALE_THRESHOLD_HOURS,
+        action="refresh_marts",
+    )
+    t0 = time.time()
+    try:
+        result = subprocess.run(
+            ["aibenchef", "pipeline", "refresh-marts", "--concurrent"],
+            capture_output=True,
+            text=True,
+            timeout=7200,  # 2h — mv_eeff_balance_ancho puede tardar 15+ min
+        )
+        duration = time.time() - t0
+        if result.returncode == 0:
+            log.info(
+                "worker.mv_refresh_ok",
+                duration_sec=round(duration, 2),
+                n_stale_before=n_stale,
+            )
+        else:
+            log.error(
+                "worker.mv_refresh_failed",
+                duration_sec=round(duration, 2),
+                returncode=result.returncode,
+                stderr_tail=result.stderr[-500:] if result.stderr else "",
+            )
+    except subprocess.TimeoutExpired:
+        log.error("worker.mv_refresh_timeout", duration_sec=round(time.time() - t0, 2))
+    except Exception as e:
+        log.error("worker.mv_refresh_exception", error=str(e))
 
 
 def _recover_pending_jobs(conn: psycopg.Connection) -> None:
@@ -123,14 +202,48 @@ class Debouncer:
             self._timer.start()
 
 
+def _start_mv_stale_watchdog(url: str) -> None:
+    """Arranca un thread daemon que checa MVs stale cada N segundos.
+
+    Corre en paralelo al listen loop principal. Como es un thread separado,
+    no bloquea el LISTEN — el thread hace su propio psycopg.connect().
+
+    Cero polling caro: solo un COUNT sobre admin.mv_refresh_log. Si detecta
+    stale, dispara refresh-marts --concurrent (que corre en subprocess).
+    """
+
+    def watchdog() -> None:
+        # Delay inicial para no chocar con el startup recovery
+        time.sleep(60)
+        while True:
+            try:
+                with psycopg.connect(url, autocommit=True, connect_timeout=10) as conn:
+                    _refresh_stale_mvs_if_needed(conn)
+            except Exception as e:
+                log.warning("worker.watchdog_error", error=str(e))
+            time.sleep(MV_STALE_CHECK_INTERVAL_SEC)
+
+    t = threading.Thread(target=watchdog, daemon=True, name="mv-stale-watchdog")
+    t.start()
+    log.info(
+        "worker.watchdog_started",
+        interval_sec=MV_STALE_CHECK_INTERVAL_SEC,
+        threshold_hours=MV_STALE_THRESHOLD_HOURS,
+    )
+
+
 def _listen_loop() -> None:
     """Loop principal: LISTEN al canal, procesar en cada notify (debounced).
 
     Reconecta con exponential backoff si la conexion se cae.
+    Ademas arranca un watchdog thread que refresca MVs stale periodicamente.
     """
     debouncer = Debouncer(lambda: _run_work_jobs(reason="notify_debounced"), DEBOUNCE_SEC)
     backoff = RECONNECT_MIN_SEC
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # Arrancar el watchdog de MVs stale — se ejecuta paralelo, no bloquea
+    _start_mv_stale_watchdog(url)
 
     while True:
         try:
