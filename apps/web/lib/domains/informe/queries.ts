@@ -130,7 +130,7 @@ export async function getClienteBySlug(slug: string): Promise<Cliente> {
 }
 
 export async function getDefaultPeerGroup(clienteSlug: string): Promise<string[]> {
-  return safeQuery(
+  const configured = await safeQuery(
     "getDefaultPeerGroup",
     async () => {
       const rows = await db.execute<{ competidor_nomb_correg: string }>(sql`
@@ -142,8 +142,14 @@ export async function getDefaultPeerGroup(clienteSlug: string): Promise<string[]
       `);
       return rows.map((r) => String(r.competidor_nomb_correg));
     },
-    [],
+    [] as string[],
   );
+  // Si el cliente no tiene peer group configurado en config.peer_group,
+  // cae al fallback compartido (mismo que buildCompetidores usa). Asi los
+  // consumers de esta funcion — como /dashboard/publicaciones wizard —
+  // siempre tienen un peer group sensato precargado, no un array vacio.
+  if (configured.length > 0) return configured;
+  return PEER_GROUP_FALLBACK.map((p) => p.competidor_nomb_correg);
 }
 
 // Default peer group fallback (si config.peer_group no existe o esta vacio).
