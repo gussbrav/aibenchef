@@ -1236,29 +1236,46 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
 // ============================================================================
 
 function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) {
+  // Expand/collapse por row (persistido en localStorage con la MISMA key
+  // que la tabla historica → si el user expande 'Gasto Financiero' en
+  // Historico y luego cambia a modo cierre, se mantiene expandido).
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_EXPANDED_ROWS);
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        if (Array.isArray(arr)) setExpandedRows(new Set(arr));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleExpanded = (key: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem(LS_EXPANDED_ROWS, JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
   if (series.length === 0) return null;
-  // Ultimo periodo = el mas reciente en la serie de cualquiera (todos tienen
-  // los mismos periodos). Si series[0] esta vacio, no hay data.
   const primerSerie = series[0]!;
   const ultimoPunto = primerSerie.puntos[primerSerie.puntos.length - 1];
   if (!ultimoPunto) return null;
   const periodoLabel = ultimoPunto.periodoLabel;
 
-  // Componentes en orden Excel: Rendimiento, Otros, GF, Prov, GO, Margen, PE.
-  // Los signos y tooltips se manejan igual que en la tabla historica.
-  const componentes: Array<{
-    label: string;
-    field: "pctRendimiento" | "pctOtros" | "pctCostoFondeo" | "pctProvisiones" | "pctGastosOp" | "pctMargenNeto" | "pctPuntoEq";
-    variant: "sum" | "sub" | "bold" | "highlight";
-  }> = [
-    { label: "Rendimiento de cartera", field: "pctRendimiento", variant: "sum" },
-    { label: "Otros Ingresos (Egresos)", field: "pctOtros", variant: "sum" },
-    { label: "Gasto Financiero", field: "pctCostoFondeo", variant: "sub" },
-    { label: "Costo de Provisión", field: "pctProvisiones", variant: "sub" },
-    { label: "Gastos Operacionales", field: "pctGastosOp", variant: "sub" },
-    { label: "Margen antes de Impuestos", field: "pctMargenNeto", variant: "bold" },
-    { label: "Punto de Equilibrio", field: "pctPuntoEq", variant: "highlight" },
-  ];
+  // Reusa DEFAULT_ROW_ORDER — fuente unica de verdad para labels + info +
+  // subrows. Cualquier cambio en la tabla historica se refleja aca.
+  const rows = DEFAULT_ROW_ORDER;
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
@@ -1268,7 +1285,9 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
             Cuadro comparativo por entidad
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Cierre <strong>{periodoLabel}</strong> — valores anualizados (últimos 12 meses móviles), % sobre cartera promedio.
+            Cierre <strong>{periodoLabel}</strong> — valores anualizados
+            (últimos 12 meses móviles), % sobre cartera promedio. Click
+            en el chevron para ver el detalle por sub-cuenta SBS.
           </p>
         </div>
       </header>
@@ -1276,7 +1295,7 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
         <table className="w-full text-sm">
           <thead className="bg-slate-900 text-white">
             <tr>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[220px]">
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[280px]">
                 Componente
               </th>
               {series.map((s) => (
@@ -1300,58 +1319,133 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
             </tr>
           </thead>
           <tbody>
-            {componentes.map((c, idx) => {
-              const isHighlight = c.variant === "highlight";
-              const isBold = c.variant === "bold";
-              const isSum = c.variant === "sum";
-              const isSub = c.variant === "sub";
+            {rows.map((row, idx) => {
+              const isHighlight = row.variant === "highlight";
+              const isBold = row.variant === "bold";
+              const isSum = row.variant === "sum";
+              const isSub = row.variant === "sub";
+              const hasSubrows = !!row.subrows && row.subrows.length > 0;
+              const isExpanded = hasSubrows && expandedRows.has(row.key);
               return (
-                <tr
-                  key={c.field}
-                  className={cn(
-                    idx > 0 && "border-t border-slate-100",
-                    isBold && "border-t border-slate-200 bg-slate-50",
-                    isHighlight && "border-t-2 border-slate-800 bg-brand-50",
-                    !isBold && !isHighlight && "hover:bg-slate-50",
-                  )}
-                >
-                  <td
+                <Fragment key={row.key}>
+                  <tr
                     className={cn(
-                      "px-4 py-2 sticky left-0 z-10",
-                      isBold && "bg-slate-50 font-bold text-slate-900",
-                      isHighlight && "bg-brand-50 font-bold text-slate-900",
-                      !isBold && !isHighlight && "bg-white",
-                      isSum && "text-slate-700",
-                      isSub && "text-slate-600 pl-6 text-[13px]",
+                      idx > 0 && "border-t border-slate-100",
+                      isBold && "border-t border-slate-200 bg-slate-50",
+                      isHighlight && "border-t-2 border-slate-800 bg-brand-50",
+                      !isBold && !isHighlight && "hover:bg-slate-50 transition-colors",
                     )}
                   >
-                    {c.label}
-                  </td>
-                  {series.map((s) => {
-                    const ult = s.puntos[s.puntos.length - 1];
-                    const raw = ult ? (ult[c.field] as number | null) : null;
-                    // Para PE recomputamos con la formula del analista.
-                    const v = c.field === "pctPuntoEq" && ult
-                      ? computedPuntoEq(ult)
-                      : raw;
-                    return (
-                      <td
-                        key={s.entidad}
-                        className={cn(
-                          "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap",
-                          isBold && "font-bold text-slate-900 bg-slate-50",
-                          isHighlight && "font-bold text-slate-900 bg-brand-50",
-                          !isBold && !isHighlight && s.esPropio && "bg-brand-50/50",
-                          isSum && v != null && v >= 0 && "text-emerald-700",
-                          isSub && v != null && v < 0 && "text-rose-700",
-                          v == null && "text-slate-400 italic",
+                    <td
+                      className={cn(
+                        "px-4 py-2 sticky left-0 z-10",
+                        isBold && "bg-slate-50 font-bold text-slate-900",
+                        isHighlight && "bg-brand-50 font-bold text-slate-900",
+                        !isBold && !isHighlight && "bg-white",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {hasSubrows ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(row.key)}
+                            className="w-4 h-4 flex items-center justify-center rounded hover:bg-slate-200 flex-shrink-0"
+                            aria-label={isExpanded ? "Colapsar detalle" : "Ver detalle"}
+                            title={isExpanded ? "Colapsar detalle" : "Ver detalle"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-3 h-3 text-slate-600" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3 text-slate-600" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="w-4 h-4 flex-shrink-0" />
                         )}
-                      >
-                        {fmtPct(v)}
+                        {isSum && <span className="text-slate-400 font-mono text-xs">(+)</span>}
+                        {isSub && <span className="text-slate-400 font-mono text-xs">(−)</span>}
+                        <span
+                          className={cn(
+                            isHighlight && "uppercase text-xs tracking-wider",
+                          )}
+                        >
+                          {row.label}
+                        </span>
+                        {row.info && (
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded-full text-slate-400 hover:text-brand-600 hover:bg-brand-50 cursor-help flex-shrink-0"
+                            title={row.info}
+                            aria-label={`Info: ${row.info}`}
+                          >
+                            <Info className="w-3 h-3" />
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    {series.map((s) => {
+                      const ult = s.puntos[s.puntos.length - 1];
+                      const raw = ult ? (ult[row.field] as number | null | undefined) : null;
+                      // PE con formula del analista + signo natural. Otros
+                      // fields van directo (displayValueForField hace passthru).
+                      const v =
+                        row.field === "pctPuntoEq" && ult
+                          ? computedPuntoEq(ult)
+                          : raw ?? null;
+                      return (
+                        <td
+                          key={s.entidad}
+                          className={cn(
+                            "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap",
+                            isBold && "font-bold text-slate-900 bg-slate-50",
+                            isHighlight && "font-bold text-slate-900 bg-brand-50",
+                            !isBold && !isHighlight && s.esPropio && "bg-brand-50/50",
+                            isSum && v != null && v >= 0 && "text-emerald-700",
+                            isSub && v != null && v < 0 && "text-rose-700",
+                            v == null && "text-slate-400 italic",
+                          )}
+                        >
+                          {fmtPct(v)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {isExpanded && row.subrows?.map((sub, subIdx) => (
+                    <tr
+                      key={`${row.key}__${sub.key}`}
+                      className={cn(
+                        "bg-slate-50/40 hover:bg-slate-50/80 transition-colors",
+                        subIdx === 0 && "border-t border-dashed border-slate-200",
+                      )}
+                    >
+                      <td className="px-4 sticky left-0 z-10 bg-slate-50/60">
+                        <div className="flex items-center gap-2 pl-8 py-1 text-[11.5px] text-slate-500">
+                          <span className="text-slate-300 text-[10px]">└</span>
+                          <span>{sub.label}</span>
+                        </div>
                       </td>
-                    );
-                  })}
-                </tr>
+                      {series.map((s) => {
+                        const ult = s.puntos[s.puntos.length - 1];
+                        const raw = ult ? (ult[sub.field] as number | null | undefined) : null;
+                        const v = raw == null ? null : Number(raw);
+                        return (
+                          <td
+                            key={s.entidad}
+                            className={cn(
+                              "text-right px-3 py-1 font-mono tabular-nums whitespace-nowrap text-[11.5px]",
+                              s.esPropio && "bg-brand-50/30",
+                              v != null && v < 0 && "text-rose-500/80",
+                              v != null && v > 0 && "text-slate-500",
+                              v != null && v === 0 && "text-slate-300",
+                              v == null && "text-slate-300 italic",
+                            )}
+                          >
+                            {fmtPct(v)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </Fragment>
               );
             })}
           </tbody>

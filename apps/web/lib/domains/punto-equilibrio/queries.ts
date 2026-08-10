@@ -68,13 +68,29 @@ export type PuntoEquilibrioSerie = {
     pctPuntoEq: number | null;
     pctMargenNeto: number | null;
     pctRendimiento: number | null;
-    // Sub-componentes para recomputar PE en frontend con formula del
-    // analista: PE = |Otros + GF + Prov + GO|. El backend guarda un PE
-    // distinto (sin incluir Otros).
     pctOtros: number | null;
     pctCostoFondeo: number | null;
     pctProvisiones: number | null;
     pctGastosOp: number | null;
+    // Sub-componentes de gastos operacionales (pre-calculados en MV)
+    pctPersonal?: number | null;
+    pctGenerales?: number | null;
+    pctDepreciacion?: number | null;
+    // Sub-componentes de Otros / GF / Provisiones (calculados via ratios).
+    // No los traemos en getPuntoEquilibrioSeries por perf — para verlos
+    // en el cuadro comparativo modo cierre unico, el usuario cambia al
+    // tab Historico (unica entidad, query completa con sub-fields).
+    pctISF?: number | null;
+    pctGSF?: number | null;
+    pctVentaCartera?: number | null;
+    pctOtrosIngGas?: number | null;
+    pctGfPublico?: number | null;
+    pctGfSF?: number | null;
+    pctGfAdeudos?: number | null;
+    pctGfObligaciones?: number | null;
+    pctGfOtrosFin?: number | null;
+    pctProvCredito?: number | null;
+    pctProvInversion?: number | null;
   }>;
 };
 
@@ -519,6 +535,10 @@ export async function getPuntoEquilibrioSeries(opts: {
     pct_costo_fondeo: number | null;
     pct_provisiones: number | null;
     pct_gastos_op: number | null;
+    // Sub-componentes de gastos op (pre-calculados en la MV — cero costo)
+    pct_gastos_personal: number | null;
+    pct_gastos_generales: number | null;
+    pct_deprec: number | null;
   }>(sql`
     WITH entidades_solicitadas AS (
       SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
@@ -541,7 +561,8 @@ export async function getPuntoEquilibrioSeries(opts: {
     )
     SELECT DISTINCT ON (a.canonico, v.periodo)
            a.canonico, v.periodo, v.pct_punto_eq, v.pct_margen_neto, v.pct_rendimiento,
-           v.pct_otros, v.pct_costo_fondeo, v.pct_provisiones, v.pct_gastos_op
+           v.pct_otros, v.pct_costo_fondeo, v.pct_provisiones, v.pct_gastos_op,
+           v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec
     FROM aliases a
     JOIN marts.v_punto_equilibrio_ancho v
       ON LOWER(TRIM(v.nomb_correg)) = a.nombre_lower
@@ -575,6 +596,9 @@ export async function getPuntoEquilibrioSeries(opts: {
           pctCostoFondeo: r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo),
           pctProvisiones: r?.pct_provisiones == null ? null : Number(r.pct_provisiones),
           pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
+          pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
+          pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
+          pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
         };
       }),
     };
