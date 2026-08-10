@@ -1239,11 +1239,20 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
 // pero tambien en modo historico para comparar el cierre mas reciente).
 // ============================================================================
 
+const LS_COMP_ENTIDAD_ORDER = "pe-comparativo-entidad-order-v1";
+
 function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) {
   // Expand/collapse por row (persistido en localStorage con la MISMA key
   // que la tabla historica → si el user expande 'Gasto Financiero' en
   // Historico y luego cambia a modo cierre, se mantiene expandido).
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Orden custom de entidades (persistido). Guarda los nombres canónicos.
+  // Si la comparación cambia (usuario agrega/quita entidades), filtramos
+  // el orden guardado por las presentes y agregamos las nuevas al final.
+  const [entidadOrder, setEntidadOrder] = useState<string[] | null>(null);
+  const [draggedEntidad, setDraggedEntidad] = useState<string | null>(null);
+  const [dropTargetEntidad, setDropTargetEntidad] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -1252,10 +1261,26 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
         const arr = JSON.parse(raw) as string[];
         if (Array.isArray(arr)) setExpandedRows(new Set(arr));
       }
+      const ordRaw = localStorage.getItem(LS_COMP_ENTIDAD_ORDER);
+      if (ordRaw) {
+        const arr = JSON.parse(ordRaw) as string[];
+        if (Array.isArray(arr) && arr.every((x) => typeof x === "string")) {
+          setEntidadOrder(arr);
+        }
+      }
     } catch {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    if (entidadOrder === null) return;
+    try {
+      localStorage.setItem(LS_COMP_ENTIDAD_ORDER, JSON.stringify(entidadOrder));
+    } catch {
+      /* ignore */
+    }
+  }, [entidadOrder]);
 
   const toggleExpanded = (key: string) => {
     setExpandedRows((prev) => {
@@ -1271,11 +1296,61 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
     });
   };
 
+  // Series efectivas: reordenadas según orden custom (si existe y es válido).
+  // Entidades nuevas (no presentes en el orden guardado) van al final,
+  // manteniendo su orden original relativo.
+  const effectiveSeries = useMemo(() => {
+    if (!entidadOrder) return series;
+    const byNombre = new Map(series.map((s) => [s.entidad, s]));
+    const ordered: PuntoEquilibrioSerie[] = [];
+    for (const nombre of entidadOrder) {
+      const s = byNombre.get(nombre);
+      if (s) {
+        ordered.push(s);
+        byNombre.delete(nombre);
+      }
+    }
+    for (const s of series) {
+      if (byNombre.has(s.entidad)) ordered.push(s);
+    }
+    return ordered;
+  }, [series, entidadOrder]);
+
+  const moveEntidad = (from: string, to: string) => {
+    if (from === to) return;
+    setEntidadOrder(() => {
+      const base = effectiveSeries.map((s) => s.entidad);
+      const arr = [...base];
+      const fromIdx = arr.indexOf(from);
+      const toIdx = arr.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0) return base;
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, from);
+      return arr;
+    });
+  };
+
+  const resetEntidadOrder = () => {
+    setEntidadOrder(null);
+    try {
+      localStorage.removeItem(LS_COMP_ENTIDAD_ORDER);
+    } catch {
+      /* ignore */
+    }
+  };
+
   if (series.length === 0) return null;
-  const primerSerie = series[0]!;
+  const primerSerie = effectiveSeries[0]!;
   const ultimoPunto = primerSerie.puntos[primerSerie.puntos.length - 1];
   if (!ultimoPunto) return null;
   const periodoLabel = ultimoPunto.periodoLabel;
+
+  // Detectar orden custom: comparar contra el orden natural (series original).
+  const isCustomOrder =
+    entidadOrder !== null &&
+    entidadOrder.length > 0 &&
+    effectiveSeries.map((s) => s.entidad).join("|") !==
+      series.map((s) => s.entidad).join("|");
 
   // Reusa DEFAULT_ROW_ORDER — fuente unica de verdad para labels + info +
   // subrows. Cualquier cambio en la tabla historica se refleja aca.
@@ -1283,17 +1358,30 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-      <header className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <header className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h3 className="text-sm font-bold text-slate-900">
             Cuadro comparativo por entidad
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Cierre <strong>{periodoLabel}</strong> — valores anualizados
-            (últimos 12 meses móviles), % sobre cartera promedio. Click
-            en el chevron para ver el detalle por sub-cuenta SBS.
+            (últimos 12 meses móviles), % sobre cartera promedio. Arrastra
+            el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> del
+            encabezado para reordenar entidades. Click en el chevron para
+            ver el detalle por sub-cuenta SBS.
           </p>
         </div>
+        {isCustomOrder && (
+          <button
+            type="button"
+            onClick={resetEntidadOrder}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+            title="Restablecer al orden original del peer group"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Restablecer orden
+          </button>
+        )}
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -1302,24 +1390,57 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[280px]">
                 Componente
               </th>
-              {series.map((s) => (
-                <th
-                  key={s.entidad}
-                  className={cn(
-                    "text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap",
-                    s.esPropio && "bg-brand-700",
-                  )}
-                >
-                  <div className="flex items-center justify-end gap-1.5">
-                    <span
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: s.color }}
-                      aria-hidden
-                    />
-                    {s.entidad}
-                  </div>
-                </th>
-              ))}
+              {effectiveSeries.map((s) => {
+                const isDragging = draggedEntidad === s.entidad;
+                const isDropTarget = dropTargetEntidad === s.entidad;
+                return (
+                  <th
+                    key={s.entidad}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedEntidad(s.entidad);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => {
+                      setDraggedEntidad(null);
+                      setDropTargetEntidad(null);
+                    }}
+                    onDragOver={(e) => {
+                      if (draggedEntidad != null && draggedEntidad !== s.entidad) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDropTargetEntidad(s.entidad);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dropTargetEntidad === s.entidad) setDropTargetEntidad(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedEntidad != null) moveEntidad(draggedEntidad, s.entidad);
+                      setDropTargetEntidad(null);
+                    }}
+                    className={cn(
+                      "text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
+                      s.esPropio && "bg-brand-700",
+                      !s.esPropio && "hover:bg-slate-800",
+                      isDragging && "opacity-40",
+                      isDropTarget && "ring-2 ring-inset ring-brand-400 bg-brand-600",
+                    )}
+                    title="Arrastra para reordenar"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <GripVertical className="w-3 h-3 text-white/40 group-hover:text-white/80" />
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: s.color }}
+                        aria-hidden
+                      />
+                      {s.entidad}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -1386,7 +1507,7 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
                         )}
                       </div>
                     </td>
-                    {series.map((s) => {
+                    {effectiveSeries.map((s) => {
                       const ult = s.puntos[s.puntos.length - 1];
                       const raw = ult ? (ult[row.field] as number | null | undefined) : null;
                       // PE con formula del analista + signo natural. Otros
@@ -1427,7 +1548,7 @@ function TablaComparativaCierre({ series }: { series: PuntoEquilibrioSerie[] }) 
                           <span>{sub.label}</span>
                         </div>
                       </td>
-                      {series.map((s) => {
+                      {effectiveSeries.map((s) => {
                         const ult = s.puntos[s.puntos.length - 1];
                         const raw = ult ? (ult[sub.field] as number | null | undefined) : null;
                         const v = raw == null ? null : Number(raw);
