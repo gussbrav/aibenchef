@@ -374,26 +374,28 @@ export function RecheckStalePanel() {
               </table>
               <div className="mt-2 space-y-1 text-[10px] text-slate-500">
                 <p>
-                  El worker <code className="bg-slate-100 px-1 rounded">aibenchef-data</code> toma los
-                  jobs pending y los procesa (descarga desde SBS + importa a la DB).
+                  El worker <code className="bg-slate-100 px-1 rounded">aibenchef-data</code> escucha
+                  eventos de la DB en tiempo real (V160 LISTEN/NOTIFY) y procesa cada nuevo job
+                  sin esperar cron.
                 </p>
                 <p>
                   <strong className="text-slate-700">Latencia esperada:</strong>{" "}
-                  <span className="text-slate-600">
-                    hasta 5 min si el cron <code className="bg-slate-100 px-1 rounded">aibenchef-work-jobs</code>{" "}
-                    está instalado (recomendado);{" "}
-                  </span>
-                  <span className="text-amber-700">
-                    hasta 8 horas si solo corre el cron diario (06:00 / 14:00 / 22:00 Lima).
+                  <span className="text-emerald-700 font-semibold">
+                    &lt;1 segundo desde que se encola hasta que el worker empieza a descargar.
+                  </span>{" "}
+                  <span className="text-slate-500">
+                    (El cron diario a las 06:00 / 14:00 / 22:00 Lima sigue existiendo como
+                    safety net por si el daemon muriera.)
                   </span>
                 </p>
                 <p>
-                  Refresca este panel en unos minutos con el botón{" "}
+                  Refresca este panel con el botón{" "}
                   <span className="inline-flex items-center gap-0.5 text-slate-700">
                     <RefreshCw className="w-2.5 h-2.5" />
                     Refrescar
                   </span>{" "}
-                  arriba a la derecha para ver el nuevo estado.
+                  para ver el status actualizado. La descarga real puede tardar 30-120 seg
+                  según tamaño del .xls y latencia de SBS.
                 </p>
               </div>
             </div>

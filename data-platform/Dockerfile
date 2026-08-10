@@ -88,6 +88,10 @@ WORKDIR /app
 # Copiar venv del builder
 COPY --from=builder /app/.venv /app/.venv
 
+# Entrypoint script — arranca worker_daemon en background + delega al CMD
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Instalar browser chromium (solo el que usa el scraper SBS)
 RUN python -m playwright install chromium --with-deps 2>/dev/null \
     || python -m playwright install chromium  # fallback si --with-deps fails
@@ -105,7 +109,8 @@ RUN mkdir -p /app/local-data/raw /app/out /app/logs
 # Usuario no-root (mismo UID convencional EasyPanel: 1001)
 RUN groupadd --system --gid 1001 aibenchef \
     && useradd --system --uid 1001 --gid aibenchef --create-home aibenchef \
-    && chown -R aibenchef:aibenchef /app /opt/playwright
+    && chown -R aibenchef:aibenchef /app /opt/playwright \
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 USER aibenchef
 
@@ -113,8 +118,11 @@ USER aibenchef
 HEALTHCHECK --interval=60s --timeout=10s --start-period=15s --retries=3 \
     CMD aibenchef --help > /dev/null 2>&1 || exit 1
 
-# Tini como PID 1 para que SIGTERM se propague a procesos hijos
-ENTRYPOINT ["/usr/bin/tini", "--"]
+# Tini como PID 1 para que SIGTERM se propague a procesos hijos.
+# entrypoint.sh arranca worker_daemon en background y delega al CMD.
+# Worker daemon (V160) escucha admin.sync_jobs via LISTEN/NOTIFY y procesa
+# los pending en <1 seg de latencia — reemplaza el cron previo cada 5 min.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 
 # CMD pasivo: container queda vivo, los jobs se invocan con docker exec o cron
 CMD ["tail", "-f", "/dev/null"]
