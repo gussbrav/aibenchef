@@ -760,37 +760,45 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Punto de Equilibrio",
     field: "pctPuntoEq",
     variant: "highlight",
-    info: "Contribución neta al margen de todos los componentes NO-rendimiento (con signo natural). Fórmula: Otros + Gasto Financiero + Costo Provisión + Gastos Operacionales. Cuando es negativo (caso común), significa que los costos superan a Otros Ingresos y el Rendimiento debe cubrir ese déficit. Se cumple: Margen antes de Impuestos = Rendimiento + Punto de Equilibrio.",
+    info: "Rendimiento mínimo sobre cartera que la entidad necesita generar para cubrir todos sus costos netos de Otros Ingresos. Fórmula: |Otros + Gasto Financiero + Costo Provisión + Gastos Operacionales|. Se muestra en valor absoluto (siempre positivo) — es el 'hurdle rate': si el Rendimiento supera este umbral, hay margen positivo. Se cumple: Margen antes de Impuestos = Rendimiento − Punto de Equilibrio.",
   },
 ];
 
 const LS_EXPANDED_ROWS = "pe-expanded-rows-v1";
 
 /**
- * Punto de Equilibrio — contribucion neta de los componentes NO-Rendimiento
- * al margen. Es la suma algebraica con SIGNO NATURAL de los 4 componentes:
+ * Punto de Equilibrio — presentacion clasica del analisis financiero
+ * (recomendacion del experto Juan Jose, 2026-08-10):
  *
- *   PE = Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales
+ *   PE = |Otros Ingresos + Gasto Financiero + Costo de Provision + Gastos Operacionales|
  *
- * Los componentes ya vienen con su signo real desde el backend:
+ * Es el HURDLE RATE — el rendimiento minimo que la cartera debe generar
+ * para cubrir todos los costos netos de Otros Ingresos. SIEMPRE POSITIVO
+ * porque se interpreta como "cuanto rendimiento necesito", no como "que
+ * saldo neto contribuyen los no-rendimiento".
+ *
+ * Los componentes vienen con sus signos reales desde el backend:
  *   - Otros Ingresos: (+) cuando es ingreso, (-) cuando es egreso
  *   - Gasto Financiero, Costo Provision, Gastos Operacionales: siempre (-)
  *
- * Interpretacion:
- *   - PE < 0 (comun): los costos superan a Otros Ingresos. El Rendimiento
- *     debe cubrir este deficit. Margen = Rendimiento + PE.
- *   - PE > 0 (raro): Otros Ingresos superan los costos — la entidad genera
- *     margen incluso antes de considerar el rendimiento de cartera.
+ * La suma tipica es negativa (los costos exceden Otros); Math.abs() la
+ * convierte al hurdle positivo. Casos raros donde Otros >> costos darian
+ * suma positiva; el abs igual retorna positivo (mismo numero).
+ *
+ * Interpretacion prescriptiva:
+ *   - Si Rendimiento > PE → margen positivo (entidad genera utilidad).
+ *   - Si Rendimiento < PE → margen negativo (no cubre costos).
+ *   - Identidad: Margen antes de Impuestos = Rendimiento - PE.
  *
  * El backend calcula _punto_eq de otra forma (costo_fondeo + provisiones +
  * gastos_op sin Otros); recomputamos aca con la formula del analista Juan
  * Jose. No tocamos backend para no romper /informe u otras vistas.
  *
  * Verificacion contra data real (Al cierre Jun-2026):
- *   BCP:  Otros=6.84, GF=-2.16, Prov=-1.23, GO=-5.59 → PE = -2.14%
- *         Margen = 9.63 + (-2.14) = 7.49% ✓
- *   CMAC Arequipa: Otros=1.60, GF=-4.48, Prov=-5.09, GO=-7.55 → PE = -15.52%
- *         Margen = 18.83 + (-15.52) = 3.31% ✓
+ *   BCP:  Otros=6.84, GF=-2.16, Prov=-1.23, GO=-5.59 → sum=-2.14, PE=2.14%
+ *         Margen = 9.63 - 2.14 = 7.49% ✓
+ *   CMAC Arequipa: Otros=1.60, GF=-4.48, Prov=-5.09, GO=-7.55 → sum=-15.52, PE=15.52%
+ *         Margen = 18.83 - 15.52 = 3.31% ✓
  */
 function computedPuntoEq(row: {
   pctOtros: number | null;
@@ -800,7 +808,8 @@ function computedPuntoEq(row: {
 }): number | null {
   const parts = [row.pctOtros, row.pctCostoFondeo, row.pctProvisiones, row.pctGastosOp];
   if (parts.some((p) => p == null)) return null;
-  return (parts as number[]).reduce((a, b) => a + b, 0);
+  const sum = (parts as number[]).reduce((a, b) => a + b, 0);
+  return Math.abs(sum);
 }
 
 function displayValueForField(
@@ -975,11 +984,16 @@ function HistoricoTable({
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
       <header className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">
             Cuadro histórico — {entidad}
           </h2>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="inline-flex items-center gap-1 h-5 px-2 text-[10px] font-medium bg-white border border-slate-300 rounded-full text-slate-700">
+              % sobre Cartera Directa Promedio · últimos 12 meses móviles
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Valores anualizados (últimos 12 meses móviles). Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> para
+            Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> para
             reordenar filas o columnas. El orden se guarda en tu navegador.
           </p>
         </div>
@@ -1447,13 +1461,19 @@ function TablaComparativaCierre({
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
       <header className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-slate-900">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">
             Cuadro comparativo por entidad
           </h3>
+          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 h-5 px-2 text-[10px] font-medium bg-brand-50 border border-brand-200 rounded-full text-brand-800">
+              Cierre {periodoLabel}
+            </span>
+            <span className="inline-flex items-center gap-1 h-5 px-2 text-[10px] font-medium bg-white border border-slate-300 rounded-full text-slate-700">
+              % sobre Cartera Directa Promedio · últimos 12 meses móviles
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Cierre <strong>{periodoLabel}</strong> — valores anualizados
-            (últimos 12 meses móviles), % sobre cartera promedio. Arrastra
-            el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> del
+            Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> del
             encabezado para reordenar. Click en el <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" /> para
             personalizar el color. Click en la flecha <ChevronRight className="w-3 h-3 inline text-slate-400" /> para
             desplegar el detalle por cuenta SBS.
