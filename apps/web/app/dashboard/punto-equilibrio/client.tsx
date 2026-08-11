@@ -27,7 +27,8 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils/cn";
-import { RenombresToggle } from "@/components/ui";
+import { EntidadFreshnessBadge, RenombresToggle } from "@/components/ui";
+import { computeMaxUltimoPeriodo } from "@/lib/utils/periodo-freshness";
 import type { Cliente } from "@/lib/domains/informe/types";
 import type {
   Granularidad,
@@ -561,6 +562,10 @@ function PeerGroupModal({
   const filtered = disponibles.filter((e) =>
     !search || e.nombCorreg.toLowerCase().includes(search.toLowerCase()),
   );
+  const maxUltimoPeriodo = useMemo(
+    () => computeMaxUltimoPeriodo(disponibles),
+    [disponibles],
+  );
   const toggle = (n: string) => {
     const next = new Set(sel);
     if (next.has(n)) next.delete(n);
@@ -615,8 +620,14 @@ function PeerGroupModal({
                 onChange={() => toggle(e.nombCorreg)}
                 className="w-4 h-4"
               />
-              <span className="text-sm text-slate-800 flex-1">{e.nombCorreg}</span>
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-sm text-slate-800 flex-1 flex items-center gap-2 min-w-0">
+                <span className="truncate">{e.nombCorreg}</span>
+                <EntidadFreshnessBadge
+                  ultimoPeriodo={e.ultimoPeriodo}
+                  maxDisponible={maxUltimoPeriodo}
+                />
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
                 {e.primerPeriodo} – {e.ultimoPeriodo}
               </span>
             </label>

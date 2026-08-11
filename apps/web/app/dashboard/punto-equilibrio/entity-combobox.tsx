@@ -19,6 +19,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Building2, Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { EntidadFreshnessBadge } from "@/components/ui";
+import { computeMaxUltimoPeriodo } from "@/lib/utils/periodo-freshness";
 
 export type EntityOption = {
   nombCorreg: string;
@@ -53,6 +55,12 @@ export function EntityCombobox({
     if (!q) return options;
     return options.filter((o) => o.nombCorreg.toLowerCase().includes(q));
   }, [search, options]);
+
+  // Max ultimoPeriodo del universo para el badge "sin data reciente".
+  const maxUltimoPeriodo = useMemo(
+    () => computeMaxUltimoPeriodo(options),
+    [options],
+  );
 
   // Reset active idx cuando cambia el filtro
   useEffect(() => {
@@ -203,6 +211,10 @@ export function EntityCombobox({
                       <span className="text-sm text-slate-800 truncate">
                         {highlightMatch(opt.nombCorreg, search)}
                       </span>
+                      <EntidadFreshnessBadge
+                        ultimoPeriodo={opt.ultimoPeriodo}
+                        maxDisponible={maxUltimoPeriodo}
+                      />
                     </span>
                     {opt.primerPeriodo != null && opt.ultimoPeriodo != null && (
                       <span className="text-[10px] font-mono text-slate-400 flex-shrink-0 whitespace-nowrap">

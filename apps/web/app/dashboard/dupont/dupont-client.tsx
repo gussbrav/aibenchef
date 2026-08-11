@@ -34,6 +34,10 @@ import type { DupontData, DupontRow, DupontInsights } from "@/lib/domains/dupont
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
 import { RenombresToggle } from "@/components/ui";
+import {
+  fmtPeriodoLabel as fmtPeriodoLabelShared,
+  gapEnMeses as gapEnMesesShared,
+} from "@/lib/utils/periodo-freshness";
 
 // COOKIE para persistir filtros aplicados. Sobrevive cambio de tab
 // (Punto Equilibrio → DuPont) porque el Link del nav no preserva query
@@ -88,22 +92,14 @@ function fmtNum(v: number | null | undefined, digits = 2): string {
   return v.toFixed(digits);
 }
 
-function fmtPeriodoLabel(codigo: number): string {
-  const anio = Math.floor(codigo / 100);
-  const mes = codigo % 100;
-  const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-  return `${meses[mes - 1] ?? "?"}-${String(anio).slice(-2)}`;
-}
+// Re-exportamos con el nombre local que ya usan los callers en este archivo
+// (evita rename masivo). La implementacion vive en periodo-freshness.ts
+// como fuente unica de verdad compartida con /informe y /punto-equilibrio.
+const fmtPeriodoLabel = fmtPeriodoLabelShared;
 
 // Meses entre dos periodos YYYYMM. Usado para detectar entidades con
 // data obsoleta (>3 meses de gap = probable rename historico).
-function gapEnMeses(desde: number, hasta: number): number {
-  const aDesde = Math.floor(desde / 100);
-  const mDesde = desde % 100;
-  const aHasta = Math.floor(hasta / 100);
-  const mHasta = hasta % 100;
-  return (aHasta - aDesde) * 12 + (mHasta - mDesde);
-}
+const gapEnMeses = gapEnMesesShared;
 
 // ============================================================================
 // Componente raiz

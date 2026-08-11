@@ -19,7 +19,11 @@ import { Calendar, Users, X, Search, Check, Crown, GripVertical } from "lucide-r
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { TIPO_ENTIDAD_ORDER, tipoEntidadLabel } from "@/app/dashboard/_lib/format";
-import { RenombresToggle } from "@/components/ui";
+import { EntidadFreshnessBadge, RenombresToggle } from "@/components/ui";
+import {
+  computeMaxUltimoPeriodo,
+  fmtPeriodoLabel,
+} from "@/lib/utils/periodo-freshness";
 
 function periodoLabel(periodo: number): string {
   const anio = Math.floor(periodo / 100);
@@ -304,6 +308,13 @@ function PeerGroupEditor({
     });
   }, [entidadesDisponibles]);
 
+  // Max ultimoPeriodo del universo — referencia para calcular gap por-entidad
+  // y mostrar el badge "sin data reciente". Consistente con DuPont y PE.
+  const maxUltimoPeriodo = useMemo(
+    () => computeMaxUltimoPeriodo(entidadesDisponibles),
+    [entidadesDisponibles],
+  );
+
   const filtradas = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
     return entidadesDisponibles.filter((e) => {
@@ -435,16 +446,22 @@ function PeerGroupEditor({
                           className="w-4 h-4 rounded border-slate-300 text-brand-600"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-slate-900 truncate">
-                            {e.nombCorreg}
+                          <p className="text-sm text-slate-900 truncate flex items-center gap-2">
+                            <span className="truncate">{e.nombCorreg}</span>
                             {esPropio && (
-                              <span className="ml-2 text-[10px] uppercase font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">
+                              <span className="text-[10px] uppercase font-bold text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded flex-shrink-0">
                                 propia
                               </span>
                             )}
+                            <EntidadFreshnessBadge
+                              ultimoPeriodo={e.ultimoPeriodo}
+                              maxDisponible={maxUltimoPeriodo}
+                            />
                           </p>
                           <p className="text-[11px] text-slate-500">
-                            {tipoEntidadLabel(e.tipoEntidad)} {e.microfinanciera ? "· microfinanciera" : ""}
+                            {tipoEntidadLabel(e.tipoEntidad)}
+                            {e.microfinanciera ? " · microfinanciera" : ""}
+                            {e.ultimoPeriodo ? ` · última data ${fmtPeriodoLabel(e.ultimoPeriodo)}` : ""}
                           </p>
                         </div>
                         {checked && <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />}
