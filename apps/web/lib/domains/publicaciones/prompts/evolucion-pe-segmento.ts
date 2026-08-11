@@ -35,7 +35,7 @@ type EvolucionSerie = {
 };
 
 export const promptEvolucionPeSegmento: PublicacionPromptTemplate = {
-  version: "v1",
+  version: "v2-chart",
   tema: "evolucion_pe_segmento",
   hashtagsDefault: [
     "#PuntoDeEquilibrio",
@@ -112,10 +112,19 @@ ${evolucionPE}
 
 ANGULO EDITORIAL: contar la HISTORIA de la evolucion. El lector no quiere una tabla de numeros — quiere entender que paso en el segmento en los ultimos ${periodosUnicos.length} cierres, quien mejoro y por que, quien empeoro y por que.
 
+## PLACEHOLDER DEL CHART
+
+En el markdown que devuelvas, incluye EXACTAMENTE una vez la linea:
+
+    [[CHART:chart-pe-evolucion]]
+
+Ubicala DESPUES de la apertura y ANTES de la Seccion 1, en su propia linea (parrafo aparte). El chart es un line chart con la evolucion del Punto de Equilibrio anual, 1 linea por entidad, entidad propia destacada. La UI lo renderizara automaticamente.
+
 ESTRUCTURA sugerida:
 - **Titulo**: enfoque en la tendencia dominante. Ej: "5 cierres despues: ¿como evoluciono el margen de las cajas municipales?"
 - **Apertura**: la observacion mas llamativa de la serie temporal (ej: "en 5 cierres, el margen de X paso de Y% a Z%").
-- **Seccion 1 — 📊 La foto de arranque vs la foto actual**: comparar el primer y ultimo cierre para las entidades del grupo.
+- **[[CHART:chart-pe-evolucion]]** — aca va el placeholder. Solo pon la linea.
+- **Seccion 1 — 📊 La foto de arranque vs la foto actual**: interpreta el chart. Comparar el primer y ultimo cierre para las entidades del grupo. NO describas visualmente el chart — cuenta la historia.
 - **Seccion 2 — 💡 Quien mejoro y por que**: identificar la(s) entidad(es) que mostraron expansion de margen y descomponer si vino por rendimiento o por eficiencia.
 - **Seccion 3 — ⚠️ Quien esta bajo presion**: identificar compresion de margen y sus causas.
 - **Cierre**: proyeccion o pregunta retadora. Ej: "Si la tendencia se mantiene, ¿donde estara ${ctx.entidadPropia} en 3 cierres mas?"
@@ -126,7 +135,7 @@ REGLAS DURAS:
 - Cuando hables de "los ultimos ${periodosUnicos.length} cierres", refiere al rango real (${series[0]?.evolucion[0]?.periodoLabel ?? "—"} a ${ctx.periodoLabel}).
 - Prosa continua, cero bullets, subtitulos con emoji + titulo (##), bold moderado en cifras clave.
 
-Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas.`;
+Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas. En contenidoMd asegurate de incluir [[CHART:chart-pe-evolucion]] una y solo una vez.`;
 
     return { system: PUBLICACION_SYSTEM_PROMPT, user };
   },

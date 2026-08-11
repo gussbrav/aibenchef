@@ -40,7 +40,7 @@ type DupontRow = {
 };
 
 export const promptDupontRentabilidad: PublicacionPromptTemplate = {
-  version: "v1",
+  version: "v2-chart",
   tema: "dupont_rentabilidad",
   hashtagsDefault: [
     "#Rentabilidad",
@@ -100,17 +100,30 @@ Referencia del grupo:
 
 ANGULO EDITORIAL: no solo "quien tiene mas ROE" — el articulo tiene que responder "por que". Descomposicion DuPont es la herramienta.
 
+## PLACEHOLDERS DE CHARTS
+
+En el markdown debes incluir EXACTAMENTE dos placeholders, cada uno en su propia linea:
+
+    [[CHART:chart-dupont-roe]]     <- bar chart ranking ROE del cierre
+    [[CHART:chart-dupont-roa]]     <- bar chart ranking ROA (motor operativo)
+
+Ubicacion sugerida:
+- [[CHART:chart-dupont-roe]] DESPUES de la apertura, antes de la Seccion 1.
+- [[CHART:chart-dupont-roa]] antes de la Seccion 2 (para complementar la descomposicion).
+
 ESTRUCTURA sugerida:
 - **Titulo**: enfoque causal. Ej: "ROE de cajas municipales al cierre ${ctx.periodoLabel}: quien gana por eficiencia y quien gana por apalancamiento"
 - **Apertura**: cifra de ROE mas destacada + tension ("pero un ROE alto puede esconder riesgos").
-- **Seccion 1 — 📊 El ranking del ROE**: cifras del grupo. Menciona TODAS.
-- **Seccion 2 — 💡 Que motor lo explica**: descompone. Compara al lider con la entidad propia usando MON + Apalancamiento. Distingue ROA-driven vs Apalancamiento-driven.
+- **[[CHART:chart-dupont-roe]]** — line del placeholder solo.
+- **Seccion 1 — 📊 El ranking del ROE**: interpreta el chart. Menciona TODAS las entidades.
+- **[[CHART:chart-dupont-roa]]**
+- **Seccion 2 — 💡 Que motor lo explica**: descompone. Compara ROA vs ROE. Distingue ROA-driven vs Apalancamiento-driven usando el chart de ROA.
 - **Seccion 3 — ⚠️ Calidad del margen**: analiza sostenibilidad. Provisiones bajas hoy pueden revertir. MFB alto + eficiencia son estructurales.
 - **Cierre**: sintesis + pregunta retadora para ${ctx.entidadPropia}. Ej: "¿Es el ROE de ${ctx.entidadPropia} un margen sostenible o depende de un motor coyuntural?"
 
-Recuerda: prosa continua, subtitulos con emoji + titulo, bold moderado en cifras clave, cero bullets en el cuerpo.
+Recuerda: prosa continua, subtitulos con emoji + titulo, bold moderado en cifras clave, cero bullets en el cuerpo. Los charts NO se describen visualmente — se INTERPRETAN.
 
-Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas.`;
+Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas. En contenidoMd asegurate de incluir AMBOS placeholders exactamente una vez cada uno.`;
 
     return { system: PUBLICACION_SYSTEM_PROMPT, user };
   },

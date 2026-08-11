@@ -29,7 +29,7 @@ type PERow = {
 };
 
 export const promptCoyunturaMacro: PublicacionPromptTemplate = {
-  version: "v1",
+  version: "v2-chart",
   tema: "coyuntura_macro",
   hashtagsDefault: [
     "#SistemaFinancieroPeruano",
@@ -83,10 +83,19 @@ REFERENTE ESTILISTICO PRINCIPAL: Hermes A. Holguin ("El Niño 2026-2027 y su imp
 - Seccion "A priorizar" (✅): 3-5 recomendaciones operativas, cada una un parrafo corto (SIN listas numeradas — prosa continua con conectores "Primero, ...", "Ademas, ...", "Finalmente, ...").
 - Cierre: sintesis en 1 linea + call-to-action potente. Ej: "El Niño no se puede evitar, pero si la magnitud de su impacto en la cartera crediticia."
 
+## PLACEHOLDER DEL CHART
+
+En el markdown que devuelvas, incluye EXACTAMENTE una vez la linea:
+
+    [[CHART:chart-ranking-margen]]
+
+Ubicala DESPUES de la apertura y ANTES de la primera seccion analitica, en su propia linea (parrafo aparte). El chart es un bar chart horizontal con el ranking del margen neto del grupo al cierre analizado. La UI lo renderizara automaticamente.
+
 ESTRUCTURA sugerida:
 - **Titulo**: tension causal (evento macro + sistema). Ej: "El Niño 2026-2027 y las cajas municipales: aprendizajes de 2017 y 2023"
 - **Apertura**: cifras oficiales + hook.
-- **Seccion 1 — 📊 [Historia o comparativo]**
+- **[[CHART:chart-ranking-margen]]** — aca va el placeholder. Solo pon la linea.
+- **Seccion 1 — 📊 [Historia o comparativo]** — INTERPRETA el chart (no lo describas visualmente).
 - **Seccion 2 — ⚠️ [Exposicion actual del grupo]**
 - **Seccion 3 — 🏛️ [Regulacion o postura autoridad]** (solo si tienes el dato en el input)
 - **Seccion 4 — ✅ A priorizar** (recomendaciones en prosa)
@@ -98,7 +107,7 @@ REGLAS DURAS PARA COYUNTURA:
 - Toda mencion macro debe estar VINCULADA a un numero de la tabla: "la mora del grupo esta en X%, cifra que refleja el impacto del evento Y descrito en el input".
 - Menciona TODAS las entidades del grupo al menos una vez.
 
-Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas.`;
+Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas. En contenidoMd asegurate de incluir [[CHART:chart-ranking-margen]] una y solo una vez.`;
 
     return { system: PUBLICACION_SYSTEM_PROMPT, user };
   },

@@ -13,6 +13,7 @@ import "server-only";
 
 import { getPuntoEquilibrioSeries } from "@/lib/domains/punto-equilibrio";
 import { getAnalisisDupont } from "@/lib/domains/dupont";
+import { pickColorEstable } from "@/lib/domains/informe/queries";
 import { PublicacionesError } from "./service";
 import type { PublicacionChart, PublicacionTema } from "./types";
 import {
@@ -23,7 +24,28 @@ import {
 import {
   renderBarChartSvg,
   renderLineChartSvg,
+  type ChartSerie,
 } from "./charts/svg-renderer";
+
+// =============================================================================
+// Helper: colores estables por entidad. Entidad propia siempre brand-900
+// (#0F2A5E) para consistencia visual entre todos los charts del articulo.
+// =============================================================================
+function coloresPorEntidad(
+  entidadPropia: string,
+  entidades: string[],
+): Map<string, string> {
+  const map = new Map<string, string>();
+  map.set(entidadPropia, "#0F2A5E");
+  const usados = new Set<string>(["#0F2A5E"]);
+  for (const e of entidades) {
+    if (map.has(e)) continue;
+    const c = pickColorEstable(e, usados);
+    usados.add(c);
+    map.set(e, c);
+  }
+  return map;
+}
 
 export type BuildContextoInput = {
   tema: PublicacionTema;
@@ -296,7 +318,38 @@ export async function buildContextoForTema(
             .filter((x): x is NonNullable<typeof x> => x !== null),
         }))
         .filter((s) => s.evolucion.length > 0);
-      return { contexto: { serie }, charts: [] };
+
+      // Chart: line chart de evolucion del PE anual por entidad.
+      const colores = coloresPorEntidad(input.entidadPropia, serie.map((s) => s.entidad));
+      const seriesChart: ChartSerie[] = serie.map((s) => ({
+        nombre: s.entidad,
+        color: colores.get(s.entidad) ?? "#64748b",
+        destacada: s.entidad === input.entidadPropia,
+        puntos: s.evolucion.map((e) => ({
+          periodo: e.periodo,
+          valor: e.puntoEquilibrio,
+        })),
+      }));
+
+      const chartPeSvg = renderLineChartSvg({
+        titulo: `Evolución del Punto de Equilibrio — ${input.entidadPropia} y grupo comparable`,
+        subtitulo: `Cierres anuales — ${publicacionPeriodoLabelShort(input.periodo)}`,
+        ejeY: "% Punto de Equilibrio (Otros + GF + Prov + GO)",
+        fuente: `SBS Perú · Cierres anuales`,
+        series: seriesChart,
+        formato: "pct",
+      });
+
+      const chart: PublicacionChart = {
+        id: "chart-pe-evolucion",
+        tipo: "line",
+        titulo: `Evolución del Punto de Equilibrio`,
+        subtitulo: `${input.entidadPropia} y ${input.peerGroup.length} entidades comparables · cierres anuales`,
+        svg: chartPeSvg,
+        altText: `Gráfico de líneas mostrando la evolución del Punto de Equilibrio (Otros + Gasto Financiero + Provisiones + Gastos Operativos) en los últimos cierres anuales para ${input.entidadPropia} y su grupo comparable.`,
+      };
+
+      return { contexto: { serie }, charts: [chart] };
     }
 
     // benchmarking_sectorial + coyuntura_macro: shape es
@@ -332,13 +385,46 @@ export async function buildContextoForTema(
       );
     }
 
+    // Chart comun: bar chart horizontal del margen neto del cierre,
+    // ordenado desc (mayor margen arriba). Entidad propia destacada.
+    const coloresBench = coloresPorEntidad(
+      input.entidadPropia,
+      entidadesCtx.map((e) => e.entidad),
+    );
+    const barrasBench = entidadesCtx
+      .map((e) => ({
+        nombre: e.entidad,
+        valor: e.margenAntesImpuestos,
+        color: coloresBench.get(e.entidad) ?? "#64748b",
+        destacada: e.entidad === input.entidadPropia,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const chartBenchSvg = renderBarChartSvg({
+      titulo: `Margen Neto (antes de impuestos) — Cierre ${publicacionPeriodoLabelShort(input.periodo)}`,
+      subtitulo: `Ranking del grupo comparable · % sobre cartera directa promedio 12M`,
+      ejeY: "% Margen Neto",
+      fuente: `SBS Perú · Corte ${publicacionPeriodoLabelShort(input.periodo)}`,
+      barras: barrasBench,
+      formato: "pct",
+    });
+
+    const chartRanking: PublicacionChart = {
+      id: "chart-ranking-margen",
+      tipo: "bar",
+      titulo: `Ranking Margen Neto — ${publicacionPeriodoLabelShort(input.periodo)}`,
+      subtitulo: `${entidadesCtx.length} entidades ordenadas de mayor a menor margen`,
+      svg: chartBenchSvg,
+      altText: `Gráfico de barras horizontales con el ranking del margen neto (antes de impuestos) del cierre ${publicacionPeriodoLabelShort(input.periodo)}. Lidera ${barrasBench[0]?.nombre} con ${barrasBench[0]?.valor.toFixed(2)}%. Cierra ${barrasBench[barrasBench.length - 1]?.nombre} con ${barrasBench[barrasBench.length - 1]?.valor.toFixed(2)}%.`,
+    };
+
     if (tema === "coyuntura_macro") {
       return {
         contexto: { entidades: entidadesCtx, eventosMacro: input.eventosMacro ?? "" },
-        charts: [],
+        charts: [chartRanking],
       };
     }
-    return { contexto: { entidades: entidadesCtx }, charts: [] };
+    return { contexto: { entidades: entidadesCtx }, charts: [chartRanking] };
   }
 
   if (tema === "dupont_rentabilidad") {
@@ -397,7 +483,65 @@ export async function buildContextoForTema(
       );
     }
 
-    return { contexto: { entidades: entidadesCtx }, charts: [] };
+    // 2 bar charts: ROE ranking + ROA ranking. Entidad propia destacada.
+    const coloresDup = coloresPorEntidad(
+      input.entidadPropia,
+      entidadesCtx.map((e) => e.entidad),
+    );
+    const barrasRoe = entidadesCtx
+      .map((e) => ({
+        nombre: e.entidad,
+        valor: e.roe * 100, // fraccion -> pct
+        color: coloresDup.get(e.entidad) ?? "#64748b",
+        destacada: e.entidad === input.entidadPropia,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+    const barrasRoa = entidadesCtx
+      .map((e) => ({
+        nombre: e.entidad,
+        valor: e.roa * 100,
+        color: coloresDup.get(e.entidad) ?? "#64748b",
+        destacada: e.entidad === input.entidadPropia,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const chartRoeSvg = renderBarChartSvg({
+      titulo: `Ranking ROE — Cierre ${publicacionPeriodoLabelShort(input.periodo)}`,
+      subtitulo: `Rentabilidad sobre patrimonio · TTM`,
+      ejeY: "% ROE",
+      fuente: `SBS Perú · Corte ${publicacionPeriodoLabelShort(input.periodo)}`,
+      barras: barrasRoe,
+      formato: "pct",
+    });
+    const chartRoaSvg = renderBarChartSvg({
+      titulo: `Ranking ROA — Cierre ${publicacionPeriodoLabelShort(input.periodo)}`,
+      subtitulo: `Rentabilidad sobre activos · TTM (motor operativo antes del leverage)`,
+      ejeY: "% ROA",
+      fuente: `SBS Perú · Corte ${publicacionPeriodoLabelShort(input.periodo)}`,
+      barras: barrasRoa,
+      formato: "pct",
+    });
+
+    const chartsDupont: PublicacionChart[] = [
+      {
+        id: "chart-dupont-roe",
+        tipo: "bar",
+        titulo: `Ranking ROE — ${publicacionPeriodoLabelShort(input.periodo)}`,
+        subtitulo: `Rentabilidad sobre patrimonio · TTM`,
+        svg: chartRoeSvg,
+        altText: `Ranking del ROE del cierre ${publicacionPeriodoLabelShort(input.periodo)}. Lidera ${barrasRoe[0]?.nombre} con ${barrasRoe[0]?.valor.toFixed(2)}%.`,
+      },
+      {
+        id: "chart-dupont-roa",
+        tipo: "bar",
+        titulo: `Ranking ROA — ${publicacionPeriodoLabelShort(input.periodo)}`,
+        subtitulo: `Rentabilidad sobre activos (motor operativo antes del leverage)`,
+        svg: chartRoaSvg,
+        altText: `Ranking del ROA del cierre ${publicacionPeriodoLabelShort(input.periodo)}. Lidera ${barrasRoa[0]?.nombre} con ${barrasRoa[0]?.valor.toFixed(2)}%.`,
+      },
+    ];
+
+    return { contexto: { entidades: entidadesCtx }, charts: chartsDupont };
   }
 
   throw new PublicacionesError(

@@ -34,7 +34,7 @@ type PERow = {
 };
 
 export const promptBenchmarkingSectorial: PublicacionPromptTemplate = {
-  version: "v1",
+  version: "v2-chart",
   tema: "benchmarking_sectorial",
   hashtagsDefault: [
     "#SistemaFinancieroPeruano",
@@ -100,17 +100,26 @@ Referencia del grupo:
 
 ## INSTRUCCIONES ESPECIFICAS PARA ESTE ARTICULO:
 
+## PLACEHOLDER DEL CHART
+
+En el markdown que devuelvas, incluye EXACTAMENTE una vez la linea:
+
+    [[CHART:chart-ranking-margen]]
+
+Ubicala DESPUES de la apertura y ANTES de la Seccion 1, en su propia linea (parrafo aparte). El chart es un bar chart horizontal con el ranking del margen neto del cierre, entidad propia destacada. La UI lo renderizara automaticamente.
+
 ESTRUCTURA sugerida (adapta si el data lo permite):
 - **Titulo**: menciona el segmento y el cierre. Ej: "Cajas municipales al cierre ${ctx.periodoLabel}: quien lidera el margen y como lo consigue"
 - **Apertura** (1-2 parrafos): la observacion mas llamativa del ranking. Puede arrancar con la brecha entre lider y ultimo, o con una pregunta contraintuitiva.
-- **Seccion 1 — 📊 El ranking**: presenta las cifras principales del grupo. Menciona TODAS las entidades. Ubica a la entidad propia en el ranking.
+- **[[CHART:chart-ranking-margen]]** — aca va el placeholder. Solo pon la linea, nada mas.
+- **Seccion 1 — 📊 El ranking**: presenta las cifras principales del grupo. Menciona TODAS las entidades. Ubica a la entidad propia en el ranking. NO describas visualmente el chart — INTERPRETA lo que muestra.
 - **Seccion 2 — 💡 Que explica la diferencia**: descompone la causa. ¿Lider por rendimiento alto o por PE contenido? Compara componentes.
 - **Seccion 3 — ⚠️ Riesgos y presiones**: donde el grupo esta expuesto (costo fondeo si subieran tasas, provisiones si sube CAR, gastos op si presion salarial).
 - **Cierre**: sintesis + call-to-action o pregunta retadora para la entidad propia. Estilo Ferreyra: "¿Puede ${ctx.entidadPropia} sostener este ritmo si...?"
 
 Recuerda: prosa continua, cero bullets, subtitulos con emoji + titulo (##), bold moderado en cifras clave.
 
-Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas.`;
+Output: JSON exacto con {titulo, contenidoMd, hashtags} — nada mas. En contenidoMd asegurate de incluir [[CHART:chart-ranking-margen]] una y solo una vez.`;
 
     return { system: PUBLICACION_SYSTEM_PROMPT, user };
   },

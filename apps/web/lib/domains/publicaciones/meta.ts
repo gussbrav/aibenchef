@@ -35,25 +35,29 @@ export const PUBLICACION_TEMAS_META: Record<
   benchmarking_sectorial: {
     label: "Benchmarking sectorial",
     descripcion:
-      "Ranking del cierre entre entidades comparables: quien lidera y por que.",
+      "Ranking del cierre entre entidades comparables: quien lidera y por que. Incluye bar chart del ranking.",
     hashtagsDefault: promptBenchmarkingSectorial.hashtagsDefault,
+    charts: true,
   },
   coyuntura_macro: {
     label: "Coyuntura macro",
     descripcion:
-      "Conecta la data del cierre con eventos macro (El Niño, tasas BCRP, elecciones).",
+      "Conecta la data del cierre con eventos macro (El Niño, tasas BCRP, elecciones). Incluye bar chart del ranking.",
     hashtagsDefault: promptCoyunturaMacro.hashtagsDefault,
+    charts: true,
   },
   dupont_rentabilidad: {
     label: "DuPont / Rentabilidad",
     descripcion:
-      "Descomposicion del ROE: quien gana por eficiencia vs quien gana por apalancamiento.",
+      "Descomposicion del ROE: quien gana por eficiencia vs quien gana por apalancamiento. Incluye bar charts de ROE y ROA.",
     hashtagsDefault: promptDupontRentabilidad.hashtagsDefault,
+    charts: true,
   },
   evolucion_pe_segmento: {
     label: "Evolucion PE por segmento",
     descripcion:
-      "Historia del Punto de Equilibrio en los ultimos cierres: quien mejoro y quien esta bajo presion.",
+      "Historia del Punto de Equilibrio en los ultimos cierres: quien mejoro y quien esta bajo presion. Incluye line chart de evolucion.",
     hashtagsDefault: promptEvolucionPeSegmento.hashtagsDefault,
+    charts: true,
   },
 };
