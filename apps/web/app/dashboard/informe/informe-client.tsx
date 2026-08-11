@@ -1494,35 +1494,38 @@ const ACCORDION_SECTIONS: Array<{
   // 3) Mora Global = CAR + castigos 12m (limpieza interna)
   // 4) Mora Global con V/C = anterior + venta cartera 12m (limpieza total)
   // 5) Cobertura CAR
-  { metric: "atrasada",        titulo: "CALIDAD DE CARTERA — % Créditos Atrasados (SBS)",  subtitulo: "Cartera Atrasada / Cartera Bruta (criterio SBS oficial)",       formatoValor: "pct",
+  { metric: "atrasada",        titulo: "CALIDAD DE CARTERA — % Créditos Atrasados",        subtitulo: "Cartera Atrasada / Cartera Bruta (Créditos Directos)",          formatoValor: "pct",
     tooltip:
-      "Fórmula OFICIAL SBS: Cartera Atrasada / Cartera Bruta (Créditos Directos). Publicada en el Reporte " +
-      "de Indicadores mensual formato C-1301 bajo 'Créditos Atrasados (criterio SBS) / Créditos Directos'. " +
-      "Sirve para validar cross-reporte — el valor debe coincidir EXACTO con SBS y con las plantillas " +
-      "propias del user. NO incluye refinanciados, castigos ni venta de cartera.",
+      "Se calcula como Cartera Atrasada / Cartera Bruta (Créditos Directos). Es la métrica de calidad de " +
+      "activos que publica SBS en el Reporte de Indicadores mensual — sirve como campo de validación " +
+      "cross-reporte: el valor debe coincidir con lo que SBS publica para esa entidad y ese mes. " +
+      "No incluye refinanciados, castigos ni venta de cartera.",
   },
   { metric: "car",             titulo: "CALIDAD DE CARTERA — % Cartera de Alto Riesgo",    subtitulo: "(Atrasada + Refinanciada) / Cartera Bruta",                     formatoValor: "pct"       },
   { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global (con castigos)", subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct",       insightsSeccion: "mora_global",
     tooltip:
-      "Fórmula: (Cartera Atrasada + Cartera Refinanciada + Castigos últimos 12 meses) / Cartera Bruta actual. " +
-      "Añade al CAR los castigos internos del último año — refleja la mora que la entidad ya reconoció como " +
-      "pérdida vía castigos, aunque ya no aparezca en el balance. Diferencia grande vs mora básica indica " +
-      "política agresiva de limpieza de portfolio (deterioro histórico acumulado).",
+      "Se calcula como (Cartera Atrasada + Cartera Refinanciada + Castigos últimos 12 meses) / Cartera " +
+      "Bruta actual. Añade al CAR los castigos internos del último año — refleja la mora que la entidad " +
+      "ya reconoció como pérdida vía castigos, aunque ya no aparezca en el balance. Una diferencia grande " +
+      "vs la mora básica indica política agresiva de limpieza de portfolio (deterioro histórico acumulado).",
   },
-  { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m en el numerador",                  formatoValor: "pct",
+  { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m (aproximada) en el numerador",     formatoValor: "pct",
     tooltip:
-      "Fórmula: (Cartera Atrasada + Cartera Refinanciada + Castigos 12m + Venta de Cartera 12m) / Cartera Bruta. " +
-      "Métrica MÁS HONESTA de calidad histórica — suma toda la mora reconocida: la del balance actual, la " +
-      "limpiada vía castigos y la transferida vía venta a terceros. " +
+      "Se calcula como (Cartera Atrasada + Cartera Refinanciada + Castigos 12m + Venta de Cartera 12m) / " +
+      "Cartera Bruta. Es la métrica más honesta de calidad histórica — suma toda la mora reconocida: la " +
+      "del balance actual, la limpiada vía castigos y la transferida vía venta a terceros." +
       "\n\n" +
-      "CÓMO SE CALCULA 'VENTA DE CARTERA 12M': Aibenchef usa los valores mensuales OFICIALES que la entidad " +
-      "reporta a SBS en el archivo mensual 'Venta de Cartera', acumulando los últimos 12 meses. " +
-      "\n\n" +
-      "Referencia (plantilla Excel): cuando el dato oficial no está disponible se ESTIMA con la ecuación " +
-      "contable inversa:\n" +
-      "  1. Cálculo mes = (Provisiones prev − Provisiones actual) + Castigo del mes − Gasto de Provisiones del mes\n" +
-      "  2. Venta Cartera Mes ≈ |Cálculo mes| solo si el resultado es negativo (si es positivo, se asume 0)\n" +
-      "  3. Venta Cartera 12M = suma de los últimos 12 meses de Venta Cartera Mes",
+      "Cómo se estima la 'Venta de Cartera 12M': SBS no publica este dato directamente, se aproxima con " +
+      "la ecuación contable inversa mes a mes:" +
+      "\n" +
+      "  Cálculo del mes = (Provisiones prev − Provisiones actual) + Castigo del mes − Gasto de Provisiones del mes" +
+      "\n" +
+      "  Venta Cartera del mes ≈ |Cálculo| solo si el resultado es negativo (si es positivo, se asume 0)" +
+      "\n" +
+      "  Venta Cartera 12M = suma de los últimos 12 meses de Venta Cartera del mes" +
+      "\n" +
+      "Es una aproximación conservadora — bajo el supuesto de que las provisiones bajaron 'más de lo " +
+      "esperado por la contabilidad' indican salida de cartera vía venta.",
   },
   { metric: "cobCar",          titulo: "COBERTURA CARTERA ALTO RIESGO",                    subtitulo: "Provisiones / Cartera Alto Riesgo",                             formatoValor: "pct"       },
 ];
