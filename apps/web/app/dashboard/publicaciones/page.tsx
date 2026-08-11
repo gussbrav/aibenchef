@@ -67,8 +67,15 @@ export default async function PublicacionesPage() {
     return { codigo: p, label: `${MESES_LABEL[mes - 1] ?? "?"} ${anio}` };
   });
 
-  const defaultEntidadPropia =
-    cliente?.entidadPropia ?? "Banco de Crédito del Perú";
+  // Default fijo: Banco de Crédito del Perú (BCP). Reportado 2026-08-11
+  // por el user. Antes tomaba el default del cliente (ej. Caja Arequipa
+  // -> CMAC Arequipa) pero eso confundia cuando el analista queria
+  // arrancar sobre BCP como benchmark de mercado. El user sigue pudiendo
+  // cambiarla desde el dropdown "Tu entidad" — solo cambia el DEFAULT.
+  // Referencia a cliente.entidadPropia queda como fallback si BCP no
+  // esta en la lista de entidades disponibles (edge case improbable).
+  void cliente;
+  const defaultEntidadPropia = "Banco de Crédito del Perú";
   // Peer group default = VACIO. El user elige explicitamente con quien
   // comparar (o genera un articulo mono-entidad sin comparativa).
   // Reportado 2026-08-11: los defaults imponian entidades que confundian.
