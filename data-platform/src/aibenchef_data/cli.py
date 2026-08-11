@@ -3515,8 +3515,26 @@ def sbs_work_jobs(max_jobs: int) -> None:
             cur.execute(f"UPDATE admin.sync_jobs SET {cols} WHERE id = %s", vals)
         conn.commit()
 
+    # ADVISORY LOCK — solo 1 instancia de work-jobs a la vez (evita el bug
+    # 2026-08-11 donde 2 workers procesaban jobs en paralelo y sus
+    # refresh-derived respectivos se bloqueaban mutuamente por 18+ min,
+    # colgando 21 queries del dashboard).
+    #
+    # Lock ID arbitrario pero estable (hash de "sbs_work_jobs" en 64 bits).
+    # pg_try_advisory_lock: no espera si otro lo tiene, sale limpio.
+    LOCK_ID_SBS_WORK_JOBS = 6543210987654321
     procesados = 0
     with psycopg.connect(url, connect_timeout=10) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s)", (LOCK_ID_SBS_WORK_JOBS,))
+            got_lock = cur.fetchone()[0]
+        if not got_lock:
+            click.echo(
+                "# Otro sbs work-jobs esta corriendo (advisory lock ocupado). "
+                "Saliendo sin procesar. El otro proceso terminara los pending."
+            )
+            return
+
         for _ in range(max_jobs):
             # Tomar el job pending mas antiguo. force_redownload (V135) permite
             # forzar re-baja aunque el archivo exista en storage — clave para

@@ -191,23 +191,47 @@ def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:
         with conn.cursor() as cur:
             # Contamos MVs con >threshold horas sin refresh exitoso.
             # admin.mv_refresh_log tiene 1 fila por refresh, tomamos el
-            # ultimo por mv_name.
+            # ultimo por mv_name. Columna real: finished_at (fix bug 2026-08-11
+            # donde usabamos 'refreshed_at' que no existe).
             cur.execute(
                 """
                 WITH ultimo_refresh AS (
-                    SELECT DISTINCT ON (mv_name) mv_name, refreshed_at, success
+                    SELECT DISTINCT ON (mv_name) mv_name, finished_at, success
                     FROM admin.mv_refresh_log
-                    ORDER BY mv_name, refreshed_at DESC
+                    WHERE finished_at IS NOT NULL
+                    ORDER BY mv_name, finished_at DESC
                 )
                 SELECT COUNT(*)
                 FROM ultimo_refresh
                 WHERE success = true
-                  AND refreshed_at < NOW() - INTERVAL '%s hours'
+                  AND finished_at < NOW() - (%s || ' hours')::interval
                 """,
                 (MV_STALE_THRESHOLD_HOURS,),
             )
             row = cur.fetchone()
             n_stale = row[0] if row else 0
+
+            # Ademas: si ya hay un REFRESH corriendo, NO disparamos otro.
+            # Previene el deadlock reportado 2026-08-11 donde 2 refresh
+            # simultaneos bloquearon 21 queries del dashboard 18+ min.
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM pg_stat_activity
+                WHERE state = 'active'
+                  AND (query LIKE '%REFRESH MATERIALIZED VIEW%'
+                       OR query LIKE '%refresh_all_derived%'
+                       OR query LIKE '%refresh_all_marts%')
+                """
+            )
+            row = cur.fetchone()
+            n_refresh_running = row[0] if row else 0
+            if n_refresh_running > 0:
+                log.info(
+                    "worker.mv_refresh_already_running",
+                    n_running=n_refresh_running,
+                    action="skip",
+                )
+                return
     except Exception as e:
         log.warning("worker.mv_stale_check_failed", error=str(e))
         return
