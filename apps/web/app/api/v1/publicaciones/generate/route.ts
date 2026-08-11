@@ -58,9 +58,10 @@ export async function POST(req: NextRequest) {
     }
     if (!body.clienteSlug) throw new ValidationError("clienteSlug requerido");
     if (!body.entidadPropia) throw new ValidationError("entidadPropia requerida");
-    if (!Array.isArray(body.peerGroup) || body.peerGroup.length === 0) {
-      throw new ValidationError("peerGroup requerido (array no vacio)");
+    if (!Array.isArray(body.peerGroup)) {
+      throw new ValidationError("peerGroup requerido (array, puede ser vacio)");
     }
+    // peerGroup vacio permitido — articulo mono-entidad sin comparativa.
     if (typeof body.periodo !== "number" || Number.isNaN(body.periodo)) {
       throw new ValidationError("periodo requerido (number YYYYMM)");
     }

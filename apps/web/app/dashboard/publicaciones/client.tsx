@@ -367,16 +367,13 @@ function WizardVista({
 
   const generate = async () => {
     setError(null);
-    if (peerGroup.length === 0) {
-      setError(
-        "Agrega al menos una entidad para comparar. Sin comparación no hay ranking ni análisis competitivo.",
-      );
-      return;
-    }
     if (!entidadPropia) {
       setError("Elige la entidad sobre la que quieres escribir.");
       return;
     }
+    // Peer group vacio es valido: articulo mono-entidad (analisis solo
+    // de la propia sin ranking comparativo). El LLM se adapta al ver
+    // que solo hay 1 entidad en el contexto.
     setLoading(true);
     try {
       const res = await fetch("/api/v1/publicaciones/generate", {
@@ -546,8 +543,8 @@ function WizardVista({
         </label>
         <div className="w-full min-h-[36px] px-2 py-1.5 rounded-md border border-slate-300 bg-white flex items-center flex-wrap gap-1.5">
           {peerGroup.length === 0 ? (
-            <span className="text-xs text-slate-400 italic px-1">
-              Sin entidades. Click en &quot;Editar comparación&quot; para elegir.
+            <span className="text-xs text-slate-500 italic px-1">
+              Sin entidades — el artículo se enfocará solo en {entidadPropia}. Click en &quot;Editar comparación&quot; si quieres agregar comparativas.
             </span>
           ) : (
             peerGroup.map((nomb) => (
@@ -569,10 +566,8 @@ function WizardVista({
           )}
         </div>
         <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
-          Un artículo de benchmarking necesita <strong>al menos una entidad
-          para comparar</strong> con la tuya — así el análisis puede decir
-          quién lidera, quién queda rezagado y por qué. Ya te precargamos
-          el grupo típico de tu segmento; edítalo con el botón de arriba.
+          <strong>Opcional</strong> — puedes generar el artículo solo sobre tu entidad,
+          o agregar otras para hacer benchmarking comparativo (ranking, líder, rezagado).
         </p>
       </div>
 

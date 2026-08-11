@@ -69,12 +69,13 @@ export default async function PublicacionesPage() {
 
   const defaultEntidadPropia =
     cliente?.entidadPropia ?? "Banco de Crédito del Perú";
-  // Grupo comparable = peer group del cliente MENOS la entidad propia
-  // (ya la mostramos aparte como "tu entidad") — asi el user ve solo los
-  // competidores a comparar.
-  const defaultPeerGroupSinPropia = defaultPeerGroup.filter(
-    (n) => n !== defaultEntidadPropia,
-  );
+  // Peer group default = VACIO. El user elige explicitamente con quien
+  // comparar (o genera un articulo mono-entidad sin comparativa).
+  // Reportado 2026-08-11: los defaults imponian entidades que confundian.
+  // La variable defaultPeerGroup del server queda solo como hint para
+  // el UI ("sugerencia: podrias comparar con X, Y, Z") — futura mejora.
+  void defaultPeerGroup; // evita unused
+  const defaultPeerGroupSinPropia: string[] = [];
 
   return (
     <PublicacionesClient
