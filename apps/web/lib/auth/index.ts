@@ -30,12 +30,18 @@ export const auth = betterAuth({
     minPasswordLength: 8,
   },
 
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-    },
-  },
+  // Google OAuth: registrar el provider SOLO si ambas env vars están
+  // definidas. Sin este check, Better Auth emite warning en cada startup
+  // "Social provider google is missing clientId or clientSecret" incluso
+  // cuando no queremos habilitar Google login. Fix 2026-08-11.
+  socialProviders: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+      }
+    : {},
 
   plugins: [
     organization({

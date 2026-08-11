@@ -10,7 +10,6 @@ import type {
   GridApi,
   GridReadyEvent,
 } from "ag-grid-community";
-import { ClientSideRowModelModule, ModuleRegistry } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import {
@@ -35,7 +34,8 @@ import { evaluateFormula, type CellRawValue } from "./formula-engine";
 import { SheetChart } from "./sheet-chart";
 import { SheetChartEditor } from "./sheet-chart-editor";
 
-ModuleRegistry.registerModules([ClientSideRowModelModule]);
+// AG Grid v32 legacy package: ModuleRegistry.registerModules() no requerido
+// (trae ClientSideRowModelModule pre-registrado). Fix 2026-08-11 warning.
 
 const COL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 

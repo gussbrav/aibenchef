@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridReadyEvent, ValueFormatterParams } from "ag-grid-community";
-import { ClientSideRowModelModule, ModuleRegistry } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import { BarChart3, Download, Save, Palette } from "lucide-react";
@@ -26,8 +25,9 @@ import {
   type PivotResultado,
 } from "./types";
 
-// AG Grid v32 requiere registrar modulos antes del primer render.
-ModuleRegistry.registerModules([ClientSideRowModelModule]);
+// AG Grid v32 legacy package (`ag-grid-community`) trae los modules
+// pre-registrados. Llamar ModuleRegistry.registerModules() disparaba el
+// warning "mixing modules and packages". Fix 2026-08-11.
 
 export function AnalisisClient() {
   const [config, setConfig] = useState<PivotConfig>(DEFAULT_CONFIG);

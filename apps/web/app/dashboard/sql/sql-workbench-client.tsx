@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
-import { ClientSideRowModelModule, ModuleRegistry } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import { Play, Save, Trash2, Plus, Search } from "lucide-react";
@@ -12,7 +11,11 @@ import { cn } from "@/lib/utils/cn";
 import { formatNumber } from "@/app/dashboard/_lib/format";
 import { SqlEditor } from "@/components/sql-editor";
 
-ModuleRegistry.registerModules([ClientSideRowModelModule]);
+// AG Grid v32+: el paquete legacy `ag-grid-community` YA trae los modules
+// pre-registrados (incluye ClientSideRowModelModule por default). Llamar
+// ModuleRegistry.registerModules() manualmente dispara el warning "mixing
+// modules and packages" — es exclusivo del API modules (@ag-grid-community/core).
+// Fix 2026-08-11.
 
 const SQL_DEFAULT = `-- Ejemplo: util_neta promedio por tipo_entidad ultimos 12 meses
 -- Limita a app_sql_readonly: SELECT sobre marts.*, dw.*
