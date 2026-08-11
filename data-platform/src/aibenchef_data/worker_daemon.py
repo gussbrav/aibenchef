@@ -57,10 +57,19 @@ MV_STALE_THRESHOLD_HOURS = 6
 def _run_work_jobs(reason: str) -> None:
     """Invoca el CLI `aibenchef sbs work-jobs` como subprocess.
 
+    Antes de eso, detecta si hay sync_jobs especiales con topico
+    __refresh_mvs__ (encolados por /api/v1/admin/refresh-mvs?all=true)
+    y los procesa DIRECTO ejecutando refresh-marts en vez de work-jobs.
+
     Usar subprocess (no import directo) porque el comando click es sync
     y hace conexiones/commits propios — mezclarlo con el loop async del
     daemon es propenso a deadlocks. subprocess es hermetico.
     """
+    # PASO 1: procesar sync_jobs especiales __refresh_mvs__ ANTES del
+    # work-jobs normal. Estos jobs no descargan nada de SBS — solo
+    # dispararon un refresh-marts completo desde el UI admin.
+    _process_refresh_mvs_jobs()
+
     log.info("worker.run_start", reason=reason, max_jobs=MAX_JOBS_PER_RUN)
     t0 = time.time()
     try:
@@ -88,6 +97,84 @@ def _run_work_jobs(reason: str) -> None:
         log.error("worker.run_timeout", duration_sec=round(time.time() - t0, 2))
     except Exception as e:
         log.error("worker.run_exception", error=str(e))
+
+
+def _process_refresh_mvs_jobs() -> None:
+    """Detecta sync_jobs especiales con topicos=['__refresh_mvs__'] y
+    los procesa ejecutando `aibenchef pipeline refresh-marts --concurrent`.
+
+    Cuando el user hace click en "Refrescar MVs ahora" en el dashboard,
+    el endpoint encola un sync_job con este topico especial. El worker
+    daemon lo detecta aca, corre refresh-marts, y marca como completed.
+    """
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+    try:
+        with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+            # Tomar 1 refresh-mvs job pending (dedup con SKIP LOCKED)
+            cur.execute(
+                """
+                SELECT id FROM admin.sync_jobs
+                WHERE status = 'pending'
+                  AND topicos = ARRAY['__refresh_mvs__']::text[]
+                ORDER BY requested_at
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+                """
+            )
+            row = cur.fetchone()
+            if not row:
+                return  # no hay refresh-mvs pending
+            job_id = row[0]
+
+            # Marcar como running
+            cur.execute(
+                "UPDATE admin.sync_jobs SET status='running', started_at=NOW() WHERE id=%s",
+                (job_id,),
+            )
+            conn.commit()
+    except Exception as e:
+        log.warning("worker.refresh_mvs_lookup_error", error=str(e))
+        return
+
+    log.info("worker.refresh_mvs_start", job_id=job_id)
+    t0 = time.time()
+    try:
+        result = subprocess.run(
+            ["aibenchef", "pipeline", "refresh-marts", "--concurrent"],
+            capture_output=True,
+            text=True,
+            timeout=7200,  # 2h
+        )
+        duration = time.time() - t0
+        ok = result.returncode == 0
+        with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE admin.sync_jobs
+                SET status=%s, completed_at=NOW(),
+                    log_text=%s
+                WHERE id=%s
+                """,
+                (
+                    "completed" if ok else "failed",
+                    (result.stdout + "\n---STDERR---\n" + result.stderr)[:8000],
+                    job_id,
+                ),
+            )
+            conn.commit()
+        if ok:
+            log.info("worker.refresh_mvs_ok", job_id=job_id, duration_sec=round(duration, 2))
+        else:
+            log.error(
+                "worker.refresh_mvs_failed",
+                job_id=job_id,
+                duration_sec=round(duration, 2),
+                stderr_tail=result.stderr[-500:] if result.stderr else "",
+            )
+    except subprocess.TimeoutExpired:
+        log.error("worker.refresh_mvs_timeout", job_id=job_id)
+    except Exception as e:
+        log.error("worker.refresh_mvs_exception", job_id=job_id, error=str(e))
 
 
 def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:

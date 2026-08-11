@@ -28,6 +28,7 @@ import {
 } from "@/lib/domains/pipeline";
 import type { DQSeverity } from "@/lib/domains/pipeline";
 import { RecheckStalePanel } from "./recheck-stale-panel";
+import { RefreshMvsButton } from "./refresh-mvs-button";
 
 export const metadata: Metadata = {
   title: "Data Quality",
@@ -80,6 +81,9 @@ export default async function DataQualityPage() {
         <SectionHeader
           icon={Clock}
           title={`Freshness de MVs — ${freshness.filter((r) => r.severity !== "ok").length} fuera de SLA`}
+        />
+        <RefreshMvsButton
+          nStale={freshness.filter((r) => r.severity !== "ok").length}
         />
         <FreshnessTable rows={freshness} />
       </section>
