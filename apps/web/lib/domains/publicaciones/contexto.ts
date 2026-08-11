@@ -33,6 +33,10 @@ export type BuildContextoInput = {
   periodo: number;
   /** Opcional — solo aplica a coyuntura_macro. Texto libre del user. */
   eventosMacro?: string;
+  /** Ventana temporal para mora_visual — meses hacia atras. Default 24. */
+  mesesAtras?: number;
+  /** Ventana temporal para rentabilidad_visual — anios hacia atras. Default 5. */
+  aniosAtras?: number;
 };
 
 /**
@@ -65,7 +69,7 @@ export async function buildContextoForTema(
       entidades: input.peerGroup,
       entidadPropia: input.entidadPropia,
       hastaPeriodo: input.periodo,
-      mesesAtras: 24,
+      mesesAtras: input.mesesAtras ?? 24,
     });
 
     if (moraData.series.length === 0) {
@@ -150,7 +154,7 @@ export async function buildContextoForTema(
       entidades: input.peerGroup,
       entidadPropia: input.entidadPropia,
       hastaPeriodo: input.periodo,
-      aniosAtras: 5,
+      aniosAtras: input.aniosAtras ?? 5,
     });
 
     if (roeData.series.length === 0) {

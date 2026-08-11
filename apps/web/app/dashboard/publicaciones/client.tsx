@@ -348,6 +348,10 @@ function WizardVista({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [periodo, setPeriodo] = useState<number>(defaultPeriodo);
   const [eventosMacro, setEventosMacro] = useState("");
+  // Ventanas temporales configurables — solo se usan si el tema es visual.
+  // Defaults: mora 24 meses (2 años), rentabilidad 5 años.
+  const [mesesAtras, setMesesAtras] = useState<number>(24);
+  const [aniosAtras, setAniosAtras] = useState<number>(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -385,6 +389,8 @@ function WizardVista({
           peerGroup,
           periodo,
           eventosMacro: tema === "coyuntura_macro" ? eventosMacro : undefined,
+          mesesAtras: tema === "mora_visual" ? mesesAtras : undefined,
+          aniosAtras: tema === "rentabilidad_visual" ? aniosAtras : undefined,
         }),
       });
       const json = await res.json();
@@ -463,45 +469,17 @@ function WizardVista({
         </div>
       </div>
 
-      {/* Cliente (solo si hay 2+ tenants) + Entidad propia + Cierre.
-          Cuando hay 1 solo cliente, se auto-selecciona y el campo se
-          oculta — el usuario no lo necesita elegir. */}
-      <div className={cn(
-        "grid grid-cols-1 gap-3",
-        clientesActivos.length >= 2 ? "md:grid-cols-3" : "md:grid-cols-2",
-      )}>
-        {clientesActivos.length >= 2 && (
-          <div>
-            <label
-              className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1"
-              title="Tenant comercial que firma la publicación. NO es la entidad SBS a analizar (eso es 'Tu entidad')."
-            >
-              Cliente
-              <span className="normal-case font-normal text-slate-400">(quién firma)</span>
-            </label>
-            <select
-              value={clienteSlug}
-              onChange={(e) => setClienteSlug(e.target.value)}
-              className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
-            >
-              {clientesActivos.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.nombreCorto}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        {clientesActivos.length === 0 && (
-          <div>
-            <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
-              Cliente
-            </label>
-            <div className="w-full h-9 px-2 flex items-center text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md">
-              ⚠ No hay clientes activos configurados
-            </div>
-          </div>
-        )}
+      {/* Tu entidad + Cierre.
+          Cliente eliminado del UI 2026-08-11 (confundia al user). Se
+          auto-resuelve al defaultClienteSlug detras del formulario.
+          Cuando aparezca un 2do tenant, el UI de admin dedicado tendra
+          el switcher — el wizard sigue siendo simple. */}
+      {clientesActivos.length === 0 && (
+        <div className="w-full h-9 px-2 flex items-center text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md">
+          ⚠ No hay clientes activos configurados — el articulo no podra guardarse.
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
             Tu entidad
@@ -610,6 +588,56 @@ function WizardVista({
           }}
           onClose={() => setPickerOpen(false)}
         />
+      )}
+
+      {/* Ventana temporal — solo si tema es visual (mora o rentabilidad).
+          El default (24 meses / 5 años) matchea el estandar SBS pero el
+          user puede escoger otra antiguedad para historicos mas cortos
+          o mas largos. */}
+      {tema === "mora_visual" && (
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1">
+            Antigüedad del gráfico
+            <span className="normal-case font-normal text-slate-400">(cuántos meses hacia atrás)</span>
+          </label>
+          <select
+            value={mesesAtras}
+            onChange={(e) => setMesesAtras(Number.parseInt(e.target.value, 10))}
+            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+          >
+            <option value={12}>12 meses — 1 año</option>
+            <option value={18}>18 meses — 1.5 años</option>
+            <option value={24}>24 meses — 2 años (estándar SBS)</option>
+            <option value={36}>36 meses — 3 años</option>
+            <option value={48}>48 meses — 4 años</option>
+            <option value={60}>60 meses — 5 años (histórico completo)</option>
+          </select>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Rango de la serie mensual de mora en el line chart. Más largo = más ciclos económicos visibles.
+          </p>
+        </div>
+      )}
+
+      {tema === "rentabilidad_visual" && (
+        <div>
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1">
+            Antigüedad del gráfico
+            <span className="normal-case font-normal text-slate-400">(cuántos años hacia atrás)</span>
+          </label>
+          <select
+            value={aniosAtras}
+            onChange={(e) => setAniosAtras(Number.parseInt(e.target.value, 10))}
+            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+          >
+            <option value={3}>3 años (últimos 3 cierres)</option>
+            <option value={5}>5 años (estándar EEFF anualizados)</option>
+            <option value={7}>7 años</option>
+            <option value={10}>10 años (ciclo completo)</option>
+          </select>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Cierres anuales incluidos en el line chart de ROE. Más años = más contexto de tendencia.
+          </p>
+        </div>
       )}
 
       {/* Eventos macro — solo si tema es coyuntura_macro */}

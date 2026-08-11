@@ -37,6 +37,8 @@ type Body = {
   peerGroup?: unknown;
   periodo?: unknown;
   eventosMacro?: unknown;
+  mesesAtras?: unknown;
+  aniosAtras?: unknown;
 };
 
 export async function POST(req: NextRequest) {
@@ -78,6 +80,14 @@ export async function POST(req: NextRequest) {
         periodo: body.periodo,
         eventosMacro:
           typeof body.eventosMacro === "string" ? body.eventosMacro : undefined,
+        mesesAtras:
+          typeof body.mesesAtras === "number" && Number.isFinite(body.mesesAtras)
+            ? Math.max(6, Math.min(120, body.mesesAtras))
+            : undefined,
+        aniosAtras:
+          typeof body.aniosAtras === "number" && Number.isFinite(body.aniosAtras)
+            ? Math.max(2, Math.min(15, body.aniosAtras))
+            : undefined,
       });
 
       // 2. Generar articulo con el LLM.
