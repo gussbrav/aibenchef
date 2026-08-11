@@ -54,63 +54,85 @@ export function RefreshMvsButton({ nStale }: { nStale: number }) {
   };
 
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      {nStale > 0 && (
-        <span className="text-xs text-red-700 font-medium">
-          {nStale} MVs fuera de SLA — refrescá para poner al día
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={trigger}
-        disabled={loading}
-        className="inline-flex items-center gap-1.5 h-9 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded shadow-sm"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Encolando...
-          </>
-        ) : (
-          <>
-            <Zap className="w-4 h-4" />
-            Refrescar MVs ahora
-          </>
-        )}
-      </button>
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+      {/* Explicacion clara de que es AUTOMATICO */}
+      <div className="flex items-start gap-2 text-[11px] text-slate-600">
+        <span className="text-base leading-none">🤖</span>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-800 mb-0.5">
+            El refresh es <span className="text-emerald-700">automático</span> — no
+            necesitas hacer clic normalmente
+          </p>
+          <p className="leading-relaxed">
+            El worker <code className="text-[10px] bg-white px-1 rounded">aibenchef-data</code> refresca
+            las MVs sin intervención en 2 casos: (1) tras cada import exitoso de SBS
+            (LISTEN/NOTIFY, &lt;1 seg), y (2) cada 30 min si detecta MVs con &gt;6h de
+            atraso (watchdog automático). El botón de abajo es solo para{" "}
+            <strong>trigger inmediato</strong> si no quieres esperar hasta 30 min.
+          </p>
+        </div>
+      </div>
 
-      {result && (
-        <div
-          className={`text-xs px-2 py-1 rounded border ${
-            result.alreadyRunning
-              ? "bg-amber-50 border-amber-200 text-amber-800"
-              : "bg-emerald-50 border-emerald-200 text-emerald-800"
-          }`}
+      {/* Botón manual — presentado como excepción */}
+      <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-slate-200">
+        {nStale > 0 && (
+          <span className="text-xs text-red-700 font-medium">
+            ⚠️ {nStale} MVs fuera de SLA
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={trigger}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 h-8 px-2.5 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 border border-slate-300 text-[11px] font-medium rounded"
+          title="Trigger inmediato — atajo al watchdog automático"
         >
-          {result.mensaje}
-          {result.jobId && (
+          {loading ? (
             <>
-              {" · "}
-              <a href="/dashboard/admin/pipeline" className="underline">
-                Ver job #{result.jobId}
-              </a>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Encolando...
+            </>
+          ) : (
+            <>
+              <Zap className="w-3.5 h-3.5 text-blue-600" />
+              Forzar refresh inmediato (opcional)
             </>
           )}
-        </div>
-      )}
+        </button>
 
-      {error && (
-        <div className="text-xs px-2 py-1 rounded border bg-red-50 border-red-200 text-red-800">
-          {error}
-        </div>
-      )}
+        {result && (
+          <div
+            className={`text-[11px] px-2 py-1 rounded border ${
+              result.alreadyRunning
+                ? "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-emerald-50 border-emerald-200 text-emerald-800"
+            }`}
+          >
+            {result.mensaje}
+            {result.jobId && (
+              <>
+                {" · "}
+                <a href="/dashboard/admin/pipeline" className="underline">
+                  Ver job #{result.jobId}
+                </a>
+              </>
+            )}
+          </div>
+        )}
 
-      {!result && !error && !loading && (
-        <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-          <RefreshCw className="w-2.5 h-2.5" />
-          Latencia trigger: &lt;1 seg · Refresh real: 30-60 min en background
-        </span>
-      )}
+        {error && (
+          <div className="text-[11px] px-2 py-1 rounded border bg-red-50 border-red-200 text-red-800">
+            {error}
+          </div>
+        )}
+
+        {!result && !error && !loading && nStale > 0 && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+            <RefreshCw className="w-2.5 h-2.5" />
+            Sin hacer nada: se auto-refresca en máx 30 min
+          </span>
+        )}
+      </div>
     </div>
   );
 }
