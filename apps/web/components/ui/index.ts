@@ -9,3 +9,4 @@ export * from "./page-hero";
 export * from "./confirm-modal";
 export * from "./renombres-toggle";
 export * from "./entidad-freshness-badge";
+export * from "./formula-popover";

@@ -16,6 +16,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FileText, HelpCircle, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
 import dynamic from "next/dynamic";
+import { FormulaPopover } from "@/components/ui";
 import {
   ResponsiveContainer,
   ScatterChart,
@@ -725,12 +726,13 @@ function FragmentGrupo({
               <span className="inline-block w-2 h-2 rounded-full bg-slate-300 mr-2 align-middle" />
               {k.nombre}
               {k.tooltip && (
-                <span
-                  className="ml-1.5 inline-flex items-center cursor-help"
-                  title={k.tooltip}
-                  aria-label={k.tooltip}
-                >
-                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 inline align-middle" />
+                <span className="ml-1.5 inline-flex items-center align-middle">
+                  <FormulaPopover
+                    titulo={k.nombre}
+                    contenido={k.tooltip}
+                    iconoColor="text-slate-400"
+                    stopPropagation={false}
+                  />
                 </span>
               )}
             </td>
@@ -1496,36 +1498,33 @@ const ACCORDION_SECTIONS: Array<{
   // 5) Cobertura CAR
   { metric: "atrasada",        titulo: "CALIDAD DE CARTERA — % Créditos Atrasados",        subtitulo: "Cartera Atrasada / Cartera Bruta (Créditos Directos)",          formatoValor: "pct",
     tooltip:
-      "Se calcula como Cartera Atrasada / Cartera Bruta (Créditos Directos). Es la métrica de calidad de " +
-      "activos que publica SBS en el Reporte de Indicadores mensual — sirve como campo de validación " +
-      "cross-reporte: el valor debe coincidir con lo que SBS publica para esa entidad y ese mes. " +
-      "No incluye refinanciados, castigos ni venta de cartera.",
+      "Fórmula: Cartera Atrasada / Cartera Bruta." +
+      "\n\n" +
+      "Es la métrica que publica SBS en el Reporte de Indicadores mensual. Sirve como campo de validación — " +
+      "el valor debe coincidir con lo que SBS publica.",
   },
   { metric: "car",             titulo: "CALIDAD DE CARTERA — % Cartera de Alto Riesgo",    subtitulo: "(Atrasada + Refinanciada) / Cartera Bruta",                     formatoValor: "pct"       },
   { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global (con castigos)", subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct",       insightsSeccion: "mora_global",
     tooltip:
-      "Se calcula como (Cartera Atrasada + Cartera Refinanciada + Castigos últimos 12 meses) / Cartera " +
-      "Bruta actual. Añade al CAR los castigos internos del último año — refleja la mora que la entidad " +
-      "ya reconoció como pérdida vía castigos, aunque ya no aparezca en el balance. Una diferencia grande " +
-      "vs la mora básica indica política agresiva de limpieza de portfolio (deterioro histórico acumulado).",
+      "Fórmula: (Atrasada + Refinanciada + Castigos últimos 12 meses) / Cartera Bruta." +
+      "\n\n" +
+      "Añade los castigos internos al CAR — refleja mora que la entidad ya reconoció como pérdida, aunque " +
+      "salió del balance. Diferencia grande vs mora básica = limpieza agresiva de portfolio.",
   },
   { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m (aproximada) en el numerador",     formatoValor: "pct",
     tooltip:
-      "Se calcula como (Cartera Atrasada + Cartera Refinanciada + Castigos 12m + Venta de Cartera 12m) / " +
-      "Cartera Bruta. Es la métrica más honesta de calidad histórica — suma toda la mora reconocida: la " +
-      "del balance actual, la limpiada vía castigos y la transferida vía venta a terceros." +
+      "Fórmula: (Atrasada + Refinanciada + Castigos 12m + Venta Cartera 12m) / Cartera Bruta." +
       "\n\n" +
-      "Cómo se estima la 'Venta de Cartera 12M': SBS no publica este dato directamente, se aproxima con " +
-      "la ecuación contable inversa mes a mes:" +
+      "Es la métrica más honesta de calidad histórica — suma toda la mora reconocida: balance actual + " +
+      "castigos + venta a terceros." +
+      "\n\n" +
+      "Cómo se aproxima la Venta de Cartera del mes (SBS no la publica directa):" +
       "\n" +
-      "  Cálculo del mes = (Provisiones prev − Provisiones actual) + Castigo del mes − Gasto de Provisiones del mes" +
+      "  Δ = (Prov previa − Prov actual) + Castigo − Gasto Provisión" +
       "\n" +
-      "  Venta Cartera del mes ≈ |Cálculo| solo si el resultado es negativo (si es positivo, se asume 0)" +
+      "  Venta ≈ |Δ|  si Δ < 0, sino 0" +
       "\n" +
-      "  Venta Cartera 12M = suma de los últimos 12 meses de Venta Cartera del mes" +
-      "\n" +
-      "Es una aproximación conservadora — bajo el supuesto de que las provisiones bajaron 'más de lo " +
-      "esperado por la contabilidad' indican salida de cartera vía venta.",
+      "  Venta 12M = suma de los últimos 12 meses.",
   },
   { metric: "cobCar",          titulo: "COBERTURA CARTERA ALTO RIESGO",                    subtitulo: "Provisiones / Cartera Alto Riesgo",                             formatoValor: "pct"       },
 ];

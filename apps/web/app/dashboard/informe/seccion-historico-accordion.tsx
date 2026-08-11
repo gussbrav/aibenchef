@@ -16,7 +16,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, AlertTriangle, Info } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { FormulaPopover } from "@/components/ui";
 
 import { cn } from "@/lib/utils/cn";
 import type { HistoricoEntidadSerie } from "@/lib/domains/informe/types";
@@ -284,13 +285,12 @@ export function SeccionHistoricoAccordion({
             <p className="text-[11px] text-white/75 mt-0.5 truncate flex items-center gap-1.5">
               <span className="truncate">{subtitulo}</span>
               {tooltip && (
-                <span
-                  className="inline-flex flex-shrink-0 items-center cursor-help"
-                  title={tooltip}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="Ver fórmula detallada"
-                >
-                  <Info className="w-3.5 h-3.5 text-white/70 hover:text-white transition-colors" />
+                <span className="flex-shrink-0 text-white/70">
+                  <FormulaPopover
+                    titulo="Cómo se calcula"
+                    contenido={tooltip}
+                    iconoColor="text-white/70"
+                  />
                 </span>
               )}
             </p>

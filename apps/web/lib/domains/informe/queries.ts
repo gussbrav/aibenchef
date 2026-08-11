@@ -895,11 +895,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       signo: -1,
       seccion: "cartera",
       tooltip:
-        "Se calcula como Cartera Atrasada / Cartera Bruta (Créditos Directos). Es la métrica de calidad " +
-        "de activos que publica SBS en el Reporte de Indicadores mensual y sirve como campo de validación " +
-        "cross-reporte — el valor debe coincidir con lo que SBS publica para esa entidad y ese mes " +
-        "(ej. CMAC Piura Abr-20 = 8.44%). No incluye refinanciados, castigos ni venta de cartera; " +
-        "refleja solo la mora 'visible hoy' en el balance. Rango sano del sector microfinanciero: 3-9%.",
+        "Fórmula: Cartera Atrasada / Cartera Bruta." +
+        "\n\n" +
+        "Es la métrica que publica SBS en el Reporte de Indicadores mensual. Sirve como campo de validación — " +
+        "el valor debe coincidir con lo que SBS publica.",
       valores: mk((r) => (r.pct_mora_basica == null ? null : Number(r.pct_mora_basica))),
     },
     {
@@ -909,11 +908,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       signo: -1,
       seccion: "cartera",
       tooltip:
-        "Se calcula como (Cartera Atrasada + Cartera Refinanciada + Castigos últimos 12 meses) / Cartera Bruta " +
-        "actual. Mide la mora ampliada sin incluir venta de cartera — refleja el deterioro que la entidad ya " +
-        "reconoció vía castigos internos, pero antes de vender cartera a terceros. Rango típico del sistema " +
-        "microfinanciero: 5-20%. Valores altos con castigos elevados indican política agresiva de limpieza " +
-        "de portfolio.",
+        "Fórmula: (Atrasada + Refinanciada + Castigos últimos 12 meses) / Cartera Bruta." +
+        "\n\n" +
+        "Añade los castigos internos al CAR — refleja mora que la entidad ya reconoció como pérdida, aunque " +
+        "salió del balance. Diferencia grande vs mora básica = limpieza agresiva de portfolio.",
       valores: mk((r) => (r.pct_mora_global == null ? null : Number(r.pct_mora_global))),
     },
     {
@@ -923,23 +921,18 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       signo: -1,
       seccion: "cartera",
       tooltip:
-        "Se calcula como (Cartera Atrasada + Cartera Refinanciada + Castigos 12m + Venta de Cartera 12m) " +
-        "/ Cartera Bruta actual. Añade al numerador la cartera vendida a terceros en los últimos 12 meses. " +
-        "Refleja la mora total que la entidad tuvo que reconocer (visible en balance + limpiada vía castigos " +
-        "+ transferida vía venta). Es la métrica más honesta de la calidad histórica del portfolio — dos " +
-        "entidades con misma mora básica pueden tener mora con V/C muy distinta si una limpia agresivamente." +
+        "Fórmula: (Atrasada + Refinanciada + Castigos 12m + Venta Cartera 12m) / Cartera Bruta." +
         "\n\n" +
-        "Cómo se estima la 'Venta de Cartera 12M': SBS no publica este dato directamente, se aproxima con " +
-        "la ecuación contable inversa mes a mes:" +
+        "Es la métrica más honesta de calidad histórica — suma toda la mora reconocida: balance actual + " +
+        "castigos + venta a terceros." +
+        "\n\n" +
+        "Cómo se aproxima la Venta de Cartera del mes (SBS no la publica directa):" +
         "\n" +
-        "  Cálculo del mes = (Provisiones prev − Provisiones actual) + Castigo del mes − Gasto de Provisiones del mes" +
+        "  Δ = (Prov previa − Prov actual) + Castigo − Gasto Provisión" +
         "\n" +
-        "  Venta Cartera del mes ≈ |Cálculo| solo si el resultado es negativo (si es positivo, se asume 0)" +
+        "  Venta ≈ |Δ|  si Δ < 0, sino 0" +
         "\n" +
-        "  Venta Cartera 12M = suma de los últimos 12 meses de Venta Cartera del mes" +
-        "\n" +
-        "Es una aproximación conservadora — bajo el supuesto de que las provisiones bajaron 'más de lo " +
-        "esperado por la contabilidad' indican salida de cartera vía venta.",
+        "  Venta 12M = suma de los últimos 12 meses.",
       valores: mk((r) => (r.pct_mora_global_vc == null ? null : Number(r.pct_mora_global_vc))),
     },
     {
@@ -949,10 +942,10 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       signo: 1,
       seccion: "cartera",
       tooltip:
-        "Se calcula como Provisiones / CAR (Cartera Atrasada + Refinanciada + Reestructurada). " +
-        "Mide el colchón de solvencia contra créditos deteriorados. Una cobertura mayor a 100% significa " +
-        "que las provisiones exceden el CAR (posición conservadora). El regulador exige mínimo 100% para " +
-        "operaciones MES/PEQ tipo NORMAL, y más para categorías CPP/DEF/DUD/PER.",
+        "Fórmula: Provisiones / CAR (Atrasada + Refinanciada + Reestructurada)." +
+        "\n\n" +
+        "Colchón de solvencia contra créditos deteriorados. Cobertura > 100% = posición conservadora " +
+        "(provisiones exceden al CAR). Mínimo regulatorio: 100% para operaciones NORMAL, más para CPP/DEF/DUD/PER.",
       valores: mk((r) => (r.pct_cobertura_car == null ? null : Number(r.pct_cobertura_car))),
     },
 
