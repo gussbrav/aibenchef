@@ -39,7 +39,11 @@ export type DupontInsights = {
 // SYSTEM_PROMPT para prevenir causalidad invertida (bug reportado:
 // "Compartamos dispara ROE porque mantiene apalancamiento controlado
 // en 4.63x" — apalancamiento bajo REDUCE ROE, no lo dispara).
-export const DUPONT_PROMPT_VERSION = "v3-dupont-math";
+// v4-leverage-x-explained: prohibido escribir "(4.63x)" o "(10.53x a 8.53x)"
+// sin traducirlo la primera vez ("apalancamiento de 10.53 veces — cada sol
+// de patrimonio sostiene 10.53 soles de activos"). Lector no financiero no
+// sabe que significa la "x" a secas (bug reportado 2026-08-10).
+export const DUPONT_PROMPT_VERSION = "v4-leverage-x-explained";
 
 /**
  * Hash del input estable para el cache. Debe matchear EXACTAMENTE el hash

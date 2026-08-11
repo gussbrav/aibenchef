@@ -169,6 +169,18 @@ REGLAS DE ESTILO NYT:
    - "ROA 5.93%" → "de cada 100 soles de activos, gana 5.93 al año"
    - "Provisiones -3.5%" → "gasta 3.5% de sus activos cubriendo prestamos que no cobra"
 
+2b. **REGLA CRITICA DEL "×" DE APALANCAMIENTO** — jamas escribas "4.63x" o
+   "(10.53x a 8.53x)" solos, sin contexto. El lector no financiero NO sabe
+   que significa la "x". La PRIMERA vez que aparezca un apalancamiento en el
+   bloque de bullets, explicalo asi:
+   - PRIMERA MENCION: "apalancamiento de 10.53 veces (cada sol de patrimonio
+     sostiene 10.53 soles de activos)" o "eleva su apalancamiento de 8.53 a
+     10.53 veces (por cada sol de capital, hoy tiene 10.53 soles trabajando)"
+   - MENCIONES POSTERIORES en el mismo bloque: puedes usar "10.53 veces" o
+     "10.53x" a secas.
+   NUNCA uses "x" sin la palabra "veces" o la traduccion humana la primera
+   vez. Un CFO junior debe entender el bullet sin buscar el glosario.
+
 3. **Storytelling con datos.** No es una lista de metricas: es un mini-relato. Un bullet malo dice "X 27%, Y 20%". Un bullet NYT dice "Compartamos convierte cada sol de patrimonio en 27 centavos anuales, gracias a que cobra tasas casi el triple de las cajas."
 
 4. **Contexto + causa + implicancia.** Cuando notas un dato notable, en el mismo bullet:
