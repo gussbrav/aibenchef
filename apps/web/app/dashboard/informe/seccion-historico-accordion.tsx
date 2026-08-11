@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, Info } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 import type { HistoricoEntidadSerie } from "@/lib/domains/informe/types";
@@ -44,6 +44,7 @@ export function SeccionHistoricoAccordion({
   metric,
   titulo,
   subtitulo,
+  tooltip,
   formatoValor,
   periodo,
   peerGroup,
@@ -59,6 +60,8 @@ export function SeccionHistoricoAccordion({
   metric: AccordionMetric;
   titulo: string;
   subtitulo?: string;
+  /** Tooltip largo con formula detallada. Renderiza icono ⓘ al lado del subtitulo. */
+  tooltip?: string;
   formatoValor: "numero" | "pct" | "moneda_mm";
   /** Periodo actual del informe (en formato YYYYMM). */
   periodo: number;
@@ -278,7 +281,19 @@ export function SeccionHistoricoAccordion({
         <div className="min-w-0">
           <h2 className="text-base font-bold tracking-wide truncate">{titulo}</h2>
           {subtitulo && (
-            <p className="text-[11px] text-white/75 mt-0.5 truncate">{subtitulo}</p>
+            <p className="text-[11px] text-white/75 mt-0.5 truncate flex items-center gap-1.5">
+              <span className="truncate">{subtitulo}</span>
+              {tooltip && (
+                <span
+                  className="inline-flex flex-shrink-0 items-center cursor-help"
+                  title={tooltip}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Ver fórmula detallada"
+                >
+                  <Info className="w-3.5 h-3.5 text-white/70 hover:text-white transition-colors" />
+                </span>
+              )}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

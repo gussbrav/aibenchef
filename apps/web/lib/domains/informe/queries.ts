@@ -927,7 +927,14 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
         "Añade al numerador la cartera vendida a terceros en los últimos 12 meses. Refleja la mora TOTAL que la " +
         "entidad tuvo que reconocer (visible en balance + limpiada vía castigos + transferida vía venta). Es la " +
         "métrica más honesta de la calidad histórica del portfolio — dos entidades con misma mora básica pueden " +
-        "tener mora con V/C muy distinta si una limpia agresivamente.",
+        "tener mora con V/C muy distinta si una limpia agresivamente. " +
+        "\n\n" +
+        "CÓMO SE CALCULA LA 'VENTA DE CARTERA 12M': valores mensuales reportados por la entidad a SBS en el " +
+        "archivo 'Venta de Cartera' (dato oficial, no estimado), acumulados los últimos 12 meses. " +
+        "Alternativamente, cuando el dato oficial no está disponible, la plantilla Excel de referencia lo " +
+        "estima con la ecuación contable inversa: " +
+        "Venta ≈ Gasto Provisiones del mes − Δ Provisiones del balance − Castigos del mes (tomando solo el " +
+        "valor absoluto si el resultado es negativo). Aibenchef usa SIEMPRE el dato oficial SBS.",
       valores: mk((r) => (r.pct_mora_global_vc == null ? null : Number(r.pct_mora_global_vc))),
     },
     {

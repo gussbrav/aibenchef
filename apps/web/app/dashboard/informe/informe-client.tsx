@@ -1467,6 +1467,9 @@ const ACCORDION_SECTIONS: Array<{
   formatoValor: "numero" | "pct" | "moneda_mm";
   /** Si esta definido, habilita el panel de insights AI en esa seccion. */
   insightsSeccion?: InsightSeccion;
+  /** Tooltip largo con explicacion detallada. Se renderiza como ⓘ al lado
+   *  del subtitulo. Para metricas con formula compleja (ej. venta de cartera). */
+  tooltip?: string;
 }> = [
   { metric: "carteraBruta",    titulo: "CARTERA BRUTA",                                    subtitulo: "Saldo de Cartera por entidad (MM S/)",                          formatoValor: "moneda_mm", insightsSeccion: "cartera_bruta" },
   { metric: "oficinas",        titulo: "N° DE OFICINAS",                                   subtitulo: "Tendencia ultimos 5 periodos",                                  formatoValor: "numero"    },
@@ -1485,10 +1488,42 @@ const ACCORDION_SECTIONS: Array<{
   { metric: "utilidad",        titulo: "RENTABILIDAD — Utilidad Neta",                     subtitulo: "Anualizada (últimos 12 meses) — MM S/",                         formatoValor: "moneda_mm" },
   { metric: "roe",             titulo: "RENTABILIDAD — % ROE",                             subtitulo: "Utilidad 12 meses / Patrimonio promedio 12m",                   formatoValor: "pct"       },
   { metric: "roa",             titulo: "RENTABILIDAD — % ROA",                             subtitulo: "Utilidad 12 meses / Activos promedio 12m",                      formatoValor: "pct"       },
-  { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global",               subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct",       insightsSeccion: "mora_global" },
-  { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m en el numerador",                  formatoValor: "pct"       },
-  { metric: "atrasada",        titulo: "INDICADORES DE CALIDAD — % Cartera Atrasada",      subtitulo: "Cartera Atrasada / Cartera Bruta",                              formatoValor: "pct"       },
-  { metric: "car",             titulo: "INDICADORES DE CALIDAD — % Cartera de Alto Riesgo", subtitulo: "(Atrasada + Refinanciada) / Cartera Bruta",                    formatoValor: "pct"       },
+  // Bloque CALIDAD DE CARTERA — ordenado de menor a mayor granularidad
+  // 1) Mora basica oficial SBS (campo de validacion, sin castigos ni venta)
+  // 2) CAR = mora + refi (siguiente nivel de granularidad)
+  // 3) Mora Global = CAR + castigos 12m (limpieza interna)
+  // 4) Mora Global con V/C = anterior + venta cartera 12m (limpieza total)
+  // 5) Cobertura CAR
+  { metric: "atrasada",        titulo: "CALIDAD DE CARTERA — % Créditos Atrasados (SBS)",  subtitulo: "Cartera Atrasada / Cartera Bruta (criterio SBS oficial)",       formatoValor: "pct",
+    tooltip:
+      "Fórmula OFICIAL SBS: Cartera Atrasada / Cartera Bruta (Créditos Directos). Publicada en el Reporte " +
+      "de Indicadores mensual formato C-1301 bajo 'Créditos Atrasados (criterio SBS) / Créditos Directos'. " +
+      "Sirve para validar cross-reporte — el valor debe coincidir EXACTO con SBS y con las plantillas " +
+      "propias del user. NO incluye refinanciados, castigos ni venta de cartera.",
+  },
+  { metric: "car",             titulo: "CALIDAD DE CARTERA — % Cartera de Alto Riesgo",    subtitulo: "(Atrasada + Refinanciada) / Cartera Bruta",                     formatoValor: "pct"       },
+  { metric: "mora",            titulo: "CALIDAD DE CARTERA — % Mora Global (con castigos)", subtitulo: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta",     formatoValor: "pct",       insightsSeccion: "mora_global",
+    tooltip:
+      "Fórmula: (Cartera Atrasada + Cartera Refinanciada + Castigos últimos 12 meses) / Cartera Bruta actual. " +
+      "Añade al CAR los castigos internos del último año — refleja la mora que la entidad ya reconoció como " +
+      "pérdida vía castigos, aunque ya no aparezca en el balance. Diferencia grande vs mora básica indica " +
+      "política agresiva de limpieza de portfolio (deterioro histórico acumulado).",
+  },
+  { metric: "moraVc",          titulo: "CALIDAD DE CARTERA — % Mora Global (con V/C)",     subtitulo: "Incluye venta de cartera 12m en el numerador",                  formatoValor: "pct",
+    tooltip:
+      "Fórmula: (Cartera Atrasada + Cartera Refinanciada + Castigos 12m + Venta de Cartera 12m) / Cartera Bruta. " +
+      "Métrica MÁS HONESTA de calidad histórica — suma toda la mora reconocida: la del balance actual, la " +
+      "limpiada vía castigos y la transferida vía venta a terceros. " +
+      "\n\n" +
+      "CÓMO SE CALCULA 'VENTA DE CARTERA 12M': Aibenchef usa los valores mensuales OFICIALES que la entidad " +
+      "reporta a SBS en el archivo mensual 'Venta de Cartera', acumulando los últimos 12 meses. " +
+      "\n\n" +
+      "Referencia (plantilla Excel): cuando el dato oficial no está disponible se ESTIMA con la ecuación " +
+      "contable inversa:\n" +
+      "  1. Cálculo mes = (Provisiones prev − Provisiones actual) + Castigo del mes − Gasto de Provisiones del mes\n" +
+      "  2. Venta Cartera Mes ≈ |Cálculo mes| solo si el resultado es negativo (si es positivo, se asume 0)\n" +
+      "  3. Venta Cartera 12M = suma de los últimos 12 meses de Venta Cartera Mes",
+  },
   { metric: "cobCar",          titulo: "COBERTURA CARTERA ALTO RIESGO",                    subtitulo: "Provisiones / Cartera Alto Riesgo",                             formatoValor: "pct"       },
 ];
 
@@ -1524,6 +1559,7 @@ function SectionsAccordion({
           metric={s.metric}
           titulo={s.titulo}
           subtitulo={s.subtitulo}
+          tooltip={s.tooltip}
           formatoValor={s.formatoValor}
           periodo={periodo}
           peerGroup={peerGroup}
