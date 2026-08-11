@@ -68,7 +68,9 @@ export async function POST(req: NextRequest) {
 
     try {
       // 1. Armar contexto server-side (consulta las MV segun el tema).
-      const contexto = await buildContextoForTema({
+      //    Los temas "visuales" tambien devuelven charts SVG pre-generados
+      //    que se persisten con la publicacion.
+      const { contexto, charts } = await buildContextoForTema({
         tema: body.tema as PublicacionTema,
         clienteSlug: body.clienteSlug,
         entidadPropia: body.entidadPropia,
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
           peerGroup,
           periodo: body.periodo,
           contexto,
+          charts,
         },
         { email: session.email },
       );

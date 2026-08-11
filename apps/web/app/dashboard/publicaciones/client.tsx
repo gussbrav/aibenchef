@@ -695,11 +695,14 @@ function EditorVista({
   const copyForLinkedIn = async () => {
     // Formato LinkedIn: sin markdown syntax, con saltos limpios + hashtags al final.
     // Removemos # de titulos, ** de bold, y otros markers que LinkedIn no interpreta.
+    // Los placeholders [[CHART:xxx]] tambien se remueven (LinkedIn no soporta SVG).
     const clean = contenidoMd
+      .replace(/\[\[CHART:[^\]]+\]\]/g, "") // placeholders de charts -> nada
       .replace(/^#+\s+/gm, "") // #, ##, ### -> quitar
       .replace(/\*\*(.*?)\*\*/g, "$1") // **bold** -> texto plano
       .replace(/\*(.*?)\*/g, "$1") // *italic* -> texto plano
       .replace(/^\s*[-*+]\s+/gm, "• ") // bullets -> viñeta unicode
+      .replace(/\n{3,}/g, "\n\n") // colapsar 3+ saltos consecutivos
       .trim();
     const hashtags = hashtagsStr.split(/\s+/).filter(Boolean).map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
     const finalText = `${clean}\n\n${hashtags}`;
@@ -710,6 +713,67 @@ function EditorVista({
     } catch {
       alert("No se pudo copiar al portapapeles. Selecciona manualmente.");
     }
+  };
+
+  const downloadHtml = () => {
+    // Genera HTML autocontenido (con SVGs inline) para blog / newsletter.
+    // Estilo NYT-inspired — sin dependencias, portable, todo inline.
+    const hashtags = hashtagsStr.split(/\s+/).filter(Boolean).map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+    const html = renderArticuloHtml({
+      titulo,
+      contenidoMd,
+      charts: publicacion.charts,
+      hashtags,
+      periodoLabel: formatPeriodo(publicacion.periodo),
+      entidadPropia: publicacion.entidadPropia,
+    });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slugify(titulo)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadChartPng = (chart: Publicacion["charts"][number]) => {
+    // Convertir SVG a PNG via canvas para poder subirlo a LinkedIn (SVG
+    // no es soportado como upload directo). 1200x675 (aspect 16:9) es
+    // el sweet spot de preview en LinkedIn feed.
+    const svgBlob = new Blob([chart.svg], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const outW = 1200;
+      const outH = Math.round(1200 * (img.height / img.width));
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(svgUrl);
+        return;
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const pngUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = `${slugify(chart.titulo)}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(pngUrl);
+        URL.revokeObjectURL(svgUrl);
+      }, "image/png");
+    };
+    img.onerror = () => URL.revokeObjectURL(svgUrl);
+    img.src = svgUrl;
   };
 
   return (
@@ -740,6 +804,17 @@ function EditorVista({
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? "Copiado" : "Copiar para LinkedIn"}
           </button>
+          {publicacion.charts.length > 0 && (
+            <button
+              type="button"
+              onClick={downloadHtml}
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded border bg-white border-slate-300 text-slate-700 hover:bg-slate-100"
+              title="Descargar HTML autocontenido (con gráficos SVG inline) para blog o newsletter"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Descargar HTML
+            </button>
+          )}
           <button
             type="button"
             onClick={archive}
@@ -750,6 +825,26 @@ function EditorVista({
           </button>
         </div>
       </header>
+
+      {/* Preview del articulo con charts embebidos — solo si hay charts */}
+      {publicacion.charts.length > 0 && (
+        <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
+              Vista previa del artículo
+            </p>
+            <p className="text-[10px] text-slate-400">
+              {publicacion.charts.length} {publicacion.charts.length === 1 ? "gráfico" : "gráficos"} embebidos
+            </p>
+          </div>
+          <ArticuloPreview
+            titulo={titulo}
+            contenidoMd={contenidoMd}
+            charts={publicacion.charts}
+            onDownloadChartPng={downloadChartPng}
+          />
+        </div>
+      )}
 
       <div className="p-5 space-y-4">
         {/* Titulo */}
@@ -978,4 +1073,274 @@ function EntidadesPickerModal({
       </div>
     </div>
   );
+}
+
+// ============================================================================
+// ArticuloPreview + helpers de rendering (charts embebidos, HTML export)
+// ============================================================================
+
+/**
+ * Preview del articulo con SVG charts renderizados inline. Parser markdown
+ * minimo intencional (headers + bold + parrafos + placeholder de charts).
+ * Cero dependencias (no queremos arrastrar remark/rehype al client bundle).
+ */
+function ArticuloPreview({
+  titulo,
+  contenidoMd,
+  charts,
+  onDownloadChartPng,
+}: {
+  titulo: string;
+  contenidoMd: string;
+  charts: Publicacion["charts"];
+  onDownloadChartPng: (chart: Publicacion["charts"][number]) => void;
+}) {
+  const chartById = useMemo(() => {
+    const m = new Map<string, Publicacion["charts"][number]>();
+    for (const c of charts) m.set(c.id, c);
+    return m;
+  }, [charts]);
+
+  // Split del markdown por lineas + procesamiento minimo
+  const bloques = useMemo(() => parseMarkdownBloques(contenidoMd), [contenidoMd]);
+
+  return (
+    <article className="bg-white rounded-lg border border-slate-200 p-6 md:p-8 shadow-sm max-w-3xl mx-auto text-slate-800 leading-relaxed">
+      <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-4 leading-tight">
+        {titulo}
+      </h1>
+      {bloques.map((b, i) => {
+        if (b.tipo === "chart-placeholder") {
+          const chart = chartById.get(b.chartId);
+          if (!chart) {
+            return (
+              <div
+                key={i}
+                className="my-6 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800"
+              >
+                ⚠ Placeholder <code>[[CHART:{b.chartId}]]</code> sin chart asociado.
+              </div>
+            );
+          }
+          return (
+            <figure key={i} className="my-6 -mx-2 md:-mx-4">
+              <div
+                className="rounded-lg border border-slate-200 overflow-hidden bg-white"
+                dangerouslySetInnerHTML={{ __html: chart.svg }}
+                role="img"
+                aria-label={chart.altText}
+              />
+              <figcaption className="mt-2 flex items-start justify-between gap-3 text-[11px] text-slate-500">
+                <span className="italic">{chart.subtitulo}</span>
+                <button
+                  type="button"
+                  onClick={() => onDownloadChartPng(chart)}
+                  className="flex-shrink-0 text-brand-700 hover:text-brand-800 font-medium inline-flex items-center gap-1"
+                  title="Descargar como PNG para subir a LinkedIn"
+                >
+                  ⬇ PNG
+                </button>
+              </figcaption>
+            </figure>
+          );
+        }
+        if (b.tipo === "h1") {
+          // Ya renderizamos el titulo arriba — omitir h1 duplicado
+          return null;
+        }
+        if (b.tipo === "h2") {
+          return (
+            <h2 key={i} className="text-lg md:text-xl font-bold text-slate-900 mt-6 mb-3 leading-snug">
+              {renderInline(b.texto)}
+            </h2>
+          );
+        }
+        if (b.tipo === "h3") {
+          return (
+            <h3 key={i} className="text-base font-semibold text-slate-800 mt-4 mb-2">
+              {renderInline(b.texto)}
+            </h3>
+          );
+        }
+        // parrafo
+        return (
+          <p key={i} className="my-3 text-[15px]">
+            {renderInline(b.texto)}
+          </p>
+        );
+      })}
+    </article>
+  );
+}
+
+type MdBloque =
+  | { tipo: "h1"; texto: string }
+  | { tipo: "h2"; texto: string }
+  | { tipo: "h3"; texto: string }
+  | { tipo: "parrafo"; texto: string }
+  | { tipo: "chart-placeholder"; chartId: string };
+
+function parseMarkdownBloques(md: string): MdBloque[] {
+  const lineas = md.split(/\r?\n/);
+  const bloques: MdBloque[] = [];
+  let bufferParrafo: string[] = [];
+  const flush = () => {
+    if (bufferParrafo.length > 0) {
+      const texto = bufferParrafo.join(" ").trim();
+      if (texto) bloques.push({ tipo: "parrafo", texto });
+      bufferParrafo = [];
+    }
+  };
+  for (const raw of lineas) {
+    const linea = raw.trim();
+    if (!linea) {
+      flush();
+      continue;
+    }
+    const chartMatch = linea.match(/^\[\[CHART:([^\]]+)\]\]$/);
+    if (chartMatch) {
+      flush();
+      bloques.push({ tipo: "chart-placeholder", chartId: chartMatch[1]! });
+      continue;
+    }
+    const h1 = linea.match(/^#\s+(.+)$/);
+    if (h1) {
+      flush();
+      bloques.push({ tipo: "h1", texto: h1[1]! });
+      continue;
+    }
+    const h2 = linea.match(/^##\s+(.+)$/);
+    if (h2) {
+      flush();
+      bloques.push({ tipo: "h2", texto: h2[1]! });
+      continue;
+    }
+    const h3 = linea.match(/^###\s+(.+)$/);
+    if (h3) {
+      flush();
+      bloques.push({ tipo: "h3", texto: h3[1]! });
+      continue;
+    }
+    bufferParrafo.push(linea);
+  }
+  flush();
+  return bloques;
+}
+
+/** Render inline: **bold** -> <strong>. Preserva el resto plano. */
+function renderInline(texto: string): React.ReactNode {
+  const partes: React.ReactNode[] = [];
+  const regex = /\*\*(.+?)\*\*/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  let k = 0;
+  while ((match = regex.exec(texto)) !== null) {
+    if (match.index > lastIdx) partes.push(texto.slice(lastIdx, match.index));
+    partes.push(
+      <strong key={k++} className="font-semibold text-slate-900">
+        {match[1]}
+      </strong>,
+    );
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < texto.length) partes.push(texto.slice(lastIdx));
+  return partes;
+}
+
+/**
+ * Renderiza HTML autocontenido del articulo (para blog / newsletter).
+ * Estilo NYT — tipografia serif, layout centrado max-width 720px,
+ * SVGs inline, meta tags OG para preview en redes.
+ */
+function renderArticuloHtml(input: {
+  titulo: string;
+  contenidoMd: string;
+  charts: Publicacion["charts"];
+  hashtags: string;
+  periodoLabel: string;
+  entidadPropia: string;
+}): string {
+  const bloques = parseMarkdownBloques(input.contenidoMd);
+  const chartById = new Map<string, Publicacion["charts"][number]>();
+  for (const c of input.charts) chartById.set(c.id, c);
+  const bodyHtml = bloques
+    .map((b) => {
+      if (b.tipo === "h1") return ""; // titulo va aparte
+      if (b.tipo === "chart-placeholder") {
+        const chart = chartById.get(b.chartId);
+        if (!chart) return `<div class="chart-warn">Chart faltante: ${escapeHtml(b.chartId)}</div>`;
+        return `<figure><div class="chart-wrap">${chart.svg}</div><figcaption>${escapeHtml(chart.subtitulo)}</figcaption></figure>`;
+      }
+      if (b.tipo === "h2") return `<h2>${renderInlineHtml(b.texto)}</h2>`;
+      if (b.tipo === "h3") return `<h3>${renderInlineHtml(b.texto)}</h3>`;
+      return `<p>${renderInlineHtml(b.texto)}</p>`;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${escapeHtml(input.titulo)}</title>
+<meta property="og:title" content="${escapeHtml(input.titulo)}"/>
+<meta property="og:description" content="Análisis del sistema financiero peruano · ${escapeHtml(input.entidadPropia)} · Cierre ${escapeHtml(input.periodoLabel)}"/>
+<meta property="og:type" content="article"/>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Georgia, 'Times New Roman', serif; background: #ffffff; color: #1e293b; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+  .container { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
+  .meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 12px; }
+  h1 { font-size: 34px; font-weight: 800; color: #0f172a; line-height: 1.2; margin: 0 0 24px; letter-spacing: -0.02em; }
+  h2 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; color: #0f172a; margin: 32px 0 12px; line-height: 1.3; }
+  h3 { font-size: 17px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin: 14px 0; font-size: 17px; }
+  strong { font-weight: 700; color: #0f172a; }
+  figure { margin: 32px -16px; padding: 0; }
+  .chart-wrap { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; overflow: hidden; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; }
+  figcaption { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-style: italic; color: #64748b; margin-top: 6px; text-align: center; }
+  .chart-warn { padding: 12px; background: #fef3c7; border: 1px solid #fcd34d; color: #78350f; font-size: 13px; border-radius: 6px; }
+  .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #64748b; }
+  .hashtags { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #2563eb; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <main class="container">
+    <div class="meta">${escapeHtml(input.entidadPropia)} · Cierre ${escapeHtml(input.periodoLabel)}</div>
+    <h1>${escapeHtml(input.titulo)}</h1>
+    ${bodyHtml}
+    <div class="footer">
+      <div class="hashtags">${escapeHtml(input.hashtags)}</div>
+      <p style="margin-top: 16px;">Fuente: Superintendencia de Banca, Seguros y AFP del Perú. Análisis generado con Aibenchef.</p>
+    </div>
+  </main>
+</body>
+</html>`;
+}
+
+function renderInlineHtml(texto: string): string {
+  return escapeHtml(texto).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** slug filename-safe. Ej: "El ROE de..." -> "el-roe-de" */
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 60) || "articulo";
 }

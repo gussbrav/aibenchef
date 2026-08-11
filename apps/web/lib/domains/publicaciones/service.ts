@@ -23,6 +23,8 @@ import { promptBenchmarkingSectorial } from "./prompts/benchmarking-sectorial";
 import { promptCoyunturaMacro } from "./prompts/coyuntura-macro";
 import { promptDupontRentabilidad } from "./prompts/dupont-rentabilidad";
 import { promptEvolucionPeSegmento } from "./prompts/evolucion-pe-segmento";
+import { promptMoraVisual } from "./prompts/mora-visual";
+import { promptRentabilidadVisual } from "./prompts/rentabilidad-visual";
 import {
   publicacionPeriodoLabel,
   type PublicacionPromptTemplate,
@@ -30,6 +32,7 @@ import {
 import type {
   GeneratePublicacionInput,
   Publicacion,
+  PublicacionChart,
   PublicacionListItem,
   PublicacionPromptContext,
   PublicacionStatus,
@@ -41,6 +44,8 @@ const PROMPT_REGISTRY: Record<PublicacionTema, PublicacionPromptTemplate> = {
   coyuntura_macro: promptCoyunturaMacro,
   dupont_rentabilidad: promptDupontRentabilidad,
   evolucion_pe_segmento: promptEvolucionPeSegmento,
+  mora_visual: promptMoraVisual,
+  rentabilidad_visual: promptRentabilidadVisual,
 };
 
 export class PublicacionesError extends Error {
@@ -69,6 +74,7 @@ function rowToPublicacion(r: Record<string, unknown>): Publicacion {
     titulo: String(r.titulo),
     contenidoMd: String(r.contenido_md),
     hashtags: (r.hashtags as string[] | null) ?? [],
+    charts: Array.isArray(r.charts) ? (r.charts as PublicacionChart[]) : [],
     clienteSlug: r.cliente_slug == null ? null : String(r.cliente_slug),
     periodo: Number(r.periodo),
     entidadPropia: String(r.entidad_propia),
@@ -190,9 +196,11 @@ export async function generatePublicacion(
       ? sql`ARRAY[]::text[]`
       : sql`ARRAY[${sql.join(input.peerGroup.map((p) => sql`${p}`), sql`, `)}]::text[]`;
 
+  const chartsJson = JSON.stringify(input.charts ?? []);
+
   const inserted = await db.execute<Record<string, unknown>>(sql`
     INSERT INTO admin.publicaciones (
-      tema, titulo, contenido_md, hashtags,
+      tema, titulo, contenido_md, hashtags, charts,
       cliente_slug, periodo, entidad_propia, peer_group,
       contexto_json,
       model, prompt_version,
@@ -203,6 +211,7 @@ export async function generatePublicacion(
       ${parsed.titulo}::text,
       ${parsed.contenidoMd}::text,
       ${hashtagsSql},
+      ${chartsJson}::jsonb,
       ${input.clienteSlug}::text,
       ${input.periodo}::int,
       ${input.entidadPropia}::text,

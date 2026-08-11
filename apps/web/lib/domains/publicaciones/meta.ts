@@ -10,12 +10,28 @@ import { promptBenchmarkingSectorial } from "./prompts/benchmarking-sectorial";
 import { promptCoyunturaMacro } from "./prompts/coyuntura-macro";
 import { promptDupontRentabilidad } from "./prompts/dupont-rentabilidad";
 import { promptEvolucionPeSegmento } from "./prompts/evolucion-pe-segmento";
+import { promptMoraVisual } from "./prompts/mora-visual";
+import { promptRentabilidadVisual } from "./prompts/rentabilidad-visual";
 import type { PublicacionTema } from "./types";
 
 export const PUBLICACION_TEMAS_META: Record<
   PublicacionTema,
-  { label: string; descripcion: string; hashtagsDefault: string[] }
+  { label: string; descripcion: string; hashtagsDefault: string[]; charts?: boolean }
 > = {
+  mora_visual: {
+    label: "Mora visual (con gráfico)",
+    descripcion:
+      "Radiografía de mora global — evolución mensual últimos 24 meses con gráfico embebido. Estilo NYT.",
+    hashtagsDefault: promptMoraVisual.hashtagsDefault,
+    charts: true,
+  },
+  rentabilidad_visual: {
+    label: "Rentabilidad visual (con gráficos)",
+    descripcion:
+      "ROE del grupo comparable — evolución 5 años + ranking del cierre. 2 gráficos embebidos.",
+    hashtagsDefault: promptRentabilidadVisual.hashtagsDefault,
+    charts: true,
+  },
   benchmarking_sectorial: {
     label: "Benchmarking sectorial",
     descripcion:

@@ -11,14 +11,34 @@ export type PublicacionTema =
   | "benchmarking_sectorial"
   | "coyuntura_macro"
   | "dupont_rentabilidad"
-  | "evolucion_pe_segmento";
+  | "evolucion_pe_segmento"
+  | "mora_visual"
+  | "rentabilidad_visual";
 
 export const PUBLICACION_TEMAS: PublicacionTema[] = [
   "benchmarking_sectorial",
   "coyuntura_macro",
   "dupont_rentabilidad",
   "evolucion_pe_segmento",
+  "mora_visual",
+  "rentabilidad_visual",
 ];
+
+/**
+ * Chart SVG embebido en el articulo. El markdown incluye placeholder
+ * `[[CHART:${id}]]` que la UI reemplaza al renderizar. Persistido en
+ * admin.publicaciones.charts (JSONB, V164).
+ */
+export type PublicacionChart = {
+  id: string;
+  tipo: "line" | "bar";
+  titulo: string;
+  subtitulo: string;
+  /** SVG completo listo para embed (incluye viewBox, styles inline). */
+  svg: string;
+  /** Descripcion textual del chart para accesibilidad y SEO. */
+  altText: string;
+};
 
 export type PublicacionStatus = "draft" | "reviewed" | "published" | "archived";
 
@@ -35,6 +55,8 @@ export type Publicacion = {
   titulo: string;
   contenidoMd: string;
   hashtags: string[];
+  /** Charts SVG embebidos. Vacio si el articulo es solo texto. */
+  charts: PublicacionChart[];
   clienteSlug: string | null;
   periodo: number;
   entidadPropia: string;
@@ -82,6 +104,13 @@ export type GeneratePublicacionInput = {
   periodo: number;
   /** Data especifica del tema (ver prompts/*.ts para shape esperado). */
   contexto: Record<string, unknown>;
+  /**
+   * Charts pre-generados (SVG server-side) que se persisten con la
+   * publicacion. Los ids referenciados en `contenidoMd` como
+   * `[[CHART:${id}]]` se resuelven contra este array al renderizar.
+   * Cero charts = articulo solo-texto (backward compatible).
+   */
+  charts?: PublicacionChart[];
 };
 
 /**
