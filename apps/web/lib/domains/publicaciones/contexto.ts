@@ -12,6 +12,7 @@
 import "server-only";
 
 import { getPuntoEquilibrioSeries } from "@/lib/domains/punto-equilibrio";
+import { getAnalisisDupont } from "@/lib/domains/dupont";
 import { PublicacionesError } from "./service";
 import type { PublicacionChart, PublicacionTema } from "./types";
 import {
@@ -337,13 +338,62 @@ export async function buildContextoForTema(
   }
 
   if (tema === "dupont_rentabilidad") {
-    // TODO: reusar queries del dominio dupont (necesita ROE, ROA,
-    // apalancamiento, MON, MFB, provisiones, gastos op). Por ahora
-    // el tema esta bloqueado hasta la iteracion siguiente.
-    throw new PublicacionesError(
-      "El tema 'DuPont / Rentabilidad' aun no esta disponible — proximamente.",
-      "unsupported_tema",
+    // Habilitado 2026-08-11 — usa getAnalisisDupont del dominio dupont.
+    // Toma el ULTIMO periodo (el cierre pedido) para armar el shape que
+    // espera promptDupontRentabilidad: entidades[] con ROE/ROA/apal/etc.
+    const entidadesUnicas = Array.from(
+      new Set([input.entidadPropia, ...input.peerGroup]),
     );
+
+    const dupontData = await getAnalisisDupont({
+      entidades: entidadesUnicas,
+      periodos: [input.periodo],
+      consolidar: true,
+    });
+
+    // Aplanar por entidad — tomar la fila del periodo actual.
+    // Shape esperado por el prompt: { entidad, roe, roa, apalancamiento,
+    //   mon, mfb, isfn, provisiones, gastosOp, otros, impuestos } todos
+    //   como fraccion (0-1), no porcentaje.
+    const entidadesCtx = entidadesUnicas
+      .map((nomb) => {
+        const row = dupontData.filas.find(
+          (f) => f.entidad === nomb && f.periodo === input.periodo,
+        );
+        if (!row) return null;
+        // Convertir % (0-100) a fraccion (0-1) para el prompt.
+        const pct = (v: number | null | undefined): number | null =>
+          v == null ? null : v / 100;
+        const roa = pct(row.roaPct);
+        const apal = row.apalancamiento;
+        const roe = pct(row.roePct);
+        if (roa == null || apal == null || roe == null) return null;
+        return {
+          entidad: nomb,
+          roe,
+          roa,
+          apalancamiento: apal,
+          mon: pct(row.margenOpPct) ?? 0,
+          mfb: pct(row.mfbPct) ?? 0,
+          isfn: pct(row.isfnPct) ?? 0,
+          provisiones: pct(row.provisionesPct) ?? 0,
+          // gastosOp = personal + generales (los 2 componentes principales)
+          gastosOp:
+            (pct(row.personalPct) ?? 0) + (pct(row.generalesPct) ?? 0),
+          otros: pct(row.otrosIngPct) ?? 0,
+          impuestos: pct(row.impuestosPct) ?? 0,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (entidadesCtx.length === 0) {
+      throw new PublicacionesError(
+        "No hay data DuPont para las entidades del peer group en ese cierre",
+        "parse_error",
+      );
+    }
+
+    return { contexto: { entidades: entidadesCtx }, charts: [] };
   }
 
   throw new PublicacionesError(

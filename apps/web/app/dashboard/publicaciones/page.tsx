@@ -9,6 +9,7 @@ import {
   getDefaultPeerGroup,
   listClientesActivos,
   listEntidadesDisponibles,
+  listPeriodosDisponibles,
   getUltimoPeriodoPublicable,
 } from "@/lib/domains/informe/queries";
 import { PublicacionesClient } from "./client";
@@ -48,14 +49,23 @@ export default async function PublicacionesPage() {
       ? defaultClienteSlug
       : (clientesActivos[0]?.slug ?? "");
 
-  const [publicaciones, entidadesDisponibles, ultimoPeriodo, cliente, defaultPeerGroup] =
+  const [publicaciones, entidadesDisponibles, ultimoPeriodo, periodos, cliente, defaultPeerGroup] =
     await Promise.all([
       listPublicaciones({ createdBy: `user:${session.user.email}` }),
       listEntidadesDisponibles({}),
       getUltimoPeriodoPublicable(),
+      listPeriodosDisponibles({ ultimosN: 120 }),
       clienteSlug ? getClienteBySlug(clienteSlug).catch(() => null) : Promise.resolve(null),
       clienteSlug ? getDefaultPeerGroup(clienteSlug).catch(() => []) : Promise.resolve([]),
     ]);
+
+  // Formatear periodos disponibles con label "Mes AAAA" para el selector.
+  const MESES_LABEL = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const periodosDisponibles = periodos.map((p) => {
+    const anio = Math.floor(p / 100);
+    const mes = p % 100;
+    return { codigo: p, label: `${MESES_LABEL[mes - 1] ?? "?"} ${anio}` };
+  });
 
   const defaultEntidadPropia =
     cliente?.entidadPropia ?? "Banco de Crédito del Perú";
@@ -71,6 +81,7 @@ export default async function PublicacionesPage() {
       publicaciones={publicaciones}
       entidadesDisponibles={entidadesDisponibles}
       clientesActivos={clientesActivos}
+      periodosDisponibles={periodosDisponibles}
       defaultClienteSlug={clienteSlug}
       defaultEntidadPropia={defaultEntidadPropia}
       defaultPeerGroup={defaultPeerGroupSinPropia}

@@ -46,10 +46,16 @@ type ClienteActivo = {
   nombreCorto: string;
 };
 
+type PeriodoDisponible = {
+  codigo: number;
+  label: string;
+};
+
 type Props = {
   publicaciones: PublicacionListItem[];
   entidadesDisponibles: EntidadDisponible[];
   clientesActivos: ClienteActivo[];
+  periodosDisponibles: PeriodoDisponible[];
   defaultClienteSlug: string;
   defaultEntidadPropia: string;
   defaultPeerGroup: string[];
@@ -80,6 +86,7 @@ export function PublicacionesClient({
   publicaciones: initialList,
   entidadesDisponibles,
   clientesActivos,
+  periodosDisponibles,
   defaultClienteSlug,
   defaultEntidadPropia,
   defaultPeerGroup,
@@ -155,6 +162,7 @@ export function PublicacionesClient({
         <WizardVista
           entidadesDisponibles={entidadesDisponibles}
           clientesActivos={clientesActivos}
+          periodosDisponibles={periodosDisponibles}
           defaultClienteSlug={defaultClienteSlug}
           defaultEntidadPropia={defaultEntidadPropia}
           defaultPeerGroup={defaultPeerGroup}
@@ -304,10 +312,11 @@ function ListaVista({
 // ============================================================================
 
 function WizardVista({
-  entidadesDisponibles, clientesActivos, defaultClienteSlug, defaultEntidadPropia, defaultPeerGroup, defaultPeriodo, onGenerated,
+  entidadesDisponibles, clientesActivos, periodosDisponibles, defaultClienteSlug, defaultEntidadPropia, defaultPeerGroup, defaultPeriodo, onGenerated,
 }: {
   entidadesDisponibles: EntidadDisponible[];
   clientesActivos: ClienteActivo[];
+  periodosDisponibles: PeriodoDisponible[];
   defaultClienteSlug: string;
   defaultEntidadPropia: string;
   defaultPeerGroup: string[];
@@ -416,7 +425,9 @@ function WizardVista({
           {(Object.keys(PUBLICACION_TEMAS_META) as PublicacionTema[]).map((t) => {
             const meta = PUBLICACION_TEMAS_META[t];
             const active = tema === t;
-            const disabled = t === "dupont_rentabilidad";
+            // DuPont / Rentabilidad habilitado 2026-08-11 — usa
+            // getAnalisisDupont con el shape que espera el prompt.
+            const disabled = false;
             return (
               <button
                 key={t}
@@ -452,25 +463,22 @@ function WizardVista({
         </div>
       </div>
 
-      {/* Cliente + Entidad propia + Periodo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label
-            className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1"
-            title="Tenant comercial de Aibenchef que firma la publicación. NO es la entidad SBS a analizar (eso es 'Tu entidad')."
-          >
-            Cliente
-            <span className="normal-case font-normal text-slate-400">(quién firma)</span>
-          </label>
-          {clientesActivos.length === 0 ? (
-            <div className="w-full h-9 px-2 flex items-center text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md">
-              ⚠ No hay clientes activos configurados
-            </div>
-          ) : clientesActivos.length === 1 ? (
-            <div className="w-full h-9 px-2 flex items-center text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md">
-              {clientesActivos[0]!.nombreCorto}
-            </div>
-          ) : (
+      {/* Cliente (solo si hay 2+ tenants) + Entidad propia + Cierre.
+          Cuando hay 1 solo cliente, se auto-selecciona y el campo se
+          oculta — el usuario no lo necesita elegir. */}
+      <div className={cn(
+        "grid grid-cols-1 gap-3",
+        clientesActivos.length >= 2 ? "md:grid-cols-3" : "md:grid-cols-2",
+      )}>
+        {clientesActivos.length >= 2 && (
+          <div>
+            <label
+              className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1"
+              title="Tenant comercial que firma la publicación. NO es la entidad SBS a analizar (eso es 'Tu entidad')."
+            >
+              Cliente
+              <span className="normal-case font-normal text-slate-400">(quién firma)</span>
+            </label>
             <select
               value={clienteSlug}
               onChange={(e) => setClienteSlug(e.target.value)}
@@ -482,8 +490,18 @@ function WizardVista({
                 </option>
               ))}
             </select>
-          )}
-        </div>
+          </div>
+        )}
+        {clientesActivos.length === 0 && (
+          <div>
+            <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
+              Cliente
+            </label>
+            <div className="w-full h-9 px-2 flex items-center text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md">
+              ⚠ No hay clientes activos configurados
+            </div>
+          </div>
+        )}
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
             Tu entidad
@@ -502,19 +520,35 @@ function WizardVista({
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
             Cierre
           </label>
-          <input
-            type="number"
-            value={periodo}
-            min={200901}
-            max={210012}
-            onChange={(e) => {
-              const n = Number.parseInt(e.target.value, 10);
-              if (n >= 200901 && n <= 210012) setPeriodo(n);
-            }}
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
-          />
+          {periodosDisponibles.length === 0 ? (
+            <input
+              type="number"
+              value={periodo}
+              min={200901}
+              max={210012}
+              onChange={(e) => {
+                const n = Number.parseInt(e.target.value, 10);
+                if (n >= 200901 && n <= 210012) setPeriodo(n);
+              }}
+              className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
+            />
+          ) : (
+            <select
+              value={periodo}
+              onChange={(e) => setPeriodo(Number.parseInt(e.target.value, 10))}
+              className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+            >
+              {periodosDisponibles.map((p) => (
+                <option key={p.codigo} value={p.codigo}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          )}
           <p className="text-[10px] text-slate-400 mt-1">
-            Formato AAAAMM · ej. 202606 = Jun 2026
+            {periodosDisponibles.length > 0
+              ? `${periodosDisponibles.length} periodos disponibles en el catálogo`
+              : "Formato AAAAMM · ej. 202606 = Jun 2026"}
           </p>
         </div>
       </div>
