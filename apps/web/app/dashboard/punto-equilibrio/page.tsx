@@ -4,7 +4,6 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import {
   getClienteBySlug,
-  getDefaultPeerGroup,
   getUltimoPeriodoPublicable,
   pickColorEstable,
 } from "@/lib/domains/informe/queries";
@@ -82,26 +81,21 @@ export default async function PuntoEquilibrioPage({
   // completa por default). Solo se desactiva si viene "?consolidar=false".
   const consolidar = params.consolidar !== "false";
 
-  // Peer group:
-  // - Modo historico (anual/mensual): default = top 2 del peer group SBS
-  //   del cliente. Necesario para que el line chart tenga la banda de peers
-  //   (min-max shaded area) de arranque, sin comparativa el grafico se ve
-  //   plano y vacio.
-  // - Modo "cierre unico": default vacio. El tab por defecto es "Cuadro por
-  //   entidad" que es una comparativa EXPLICITA — imponer 2 peers automaticos
-  //   (Financiera Compartamos + Mibanco para BCP) resulta enganoso porque
-  //   el usuario cree que las eligio el, cuando en realidad son defaults.
-  //   Fix reportado 2026-08-10.
-  const peerGroup: string[] = await (async () => {
-    if (params.peers) {
-      return params.peers.split(",").map((s) => s.trim()).filter(Boolean);
-    }
-    if (granularidad === "cierre") {
-      return [];
-    }
-    const defaults = await getDefaultPeerGroup(cliente.slug);
-    return defaults.slice(0, 2);
-  })();
+  // Peer group: SIEMPRE vacio si no viene ?peers en la URL. Sin importar
+  // el modo (cierre, anual o mensual). El usuario elige EXPLICITAMENTE
+  // con quien comparar — nunca imponer defaults automaticos.
+  //
+  // Historia: antes cargabamos top-2 del peer group SBS del cliente cuando
+  // no venia ?peers. Resultado: el usuario abria /punto-equilibrio y veia
+  // "Financiera Compartamos + Mibanco" como comparativa aunque nunca las
+  // eligio — engañoso. Fix reportado 2026-08-10.
+  //
+  // Trade-off aceptado: el line chart aparece vacio hasta que el usuario
+  // agrega peers. Es preferible a la sorpresa de ver entidades ajenas.
+  // El estado vacio tiene CTA claro ("Agrega entidades para comparar").
+  const peerGroup: string[] = params.peers
+    ? params.peers.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
   // Data inicial en paralelo
   const [historico, entidadesDisponibles, competidoresCon] = await Promise.all([
