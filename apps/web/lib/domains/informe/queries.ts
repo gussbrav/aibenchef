@@ -468,6 +468,7 @@ type CuadroResumenRow = {
   pct_part_sf_coloc: number | null;
   pct_part_sf_dep: number | null;
   pct_cartera_mype: number | null;
+  pct_mora_basica: number | null;
   pct_mora_global: number | null;
   pct_mora_global_vc: number | null;
   pct_cobertura_car: number | null;
@@ -643,7 +644,12 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
         AND nomb_correg IN (SELECT canon FROM input WHERE canon IS NOT NULL)
     ),
     mora AS (
-      SELECT nomb_correg, pct_mora_global, pct_mora_global_vc
+      SELECT nomb_correg, pct_mora_global, pct_mora_global_vc,
+             cartera_bruta, cartera_atrasada,
+             CASE WHEN cartera_bruta > 0
+                  THEN cartera_atrasada / cartera_bruta
+                  ELSE NULL
+             END AS pct_mora_basica
       FROM ${consolidar
         ? sql.raw("marts.v_mora_global_por_entidad")
         : sql.raw("marts.v_mora_global_historica")}
@@ -689,6 +695,7 @@ async function getCuadroResumenRaw(periodo: number, entidades: string[], consoli
       sfc.pct_participacion_sf                         AS pct_part_sf_coloc,
       sfd.pct_participacion_sf                         AS pct_part_sf_dep,
       my.pct_cartera_mype                              AS pct_cartera_mype,
+      mo.pct_mora_basica                               AS pct_mora_basica,
       mo.pct_mora_global                               AS pct_mora_global,
       mo.pct_mora_global_vc                            AS pct_mora_global_vc,
       cb.pct_cobertura_car                             AS pct_cobertura_car,
@@ -880,6 +887,21 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
         if (r.cartera_bruta == null || r.n_clientes == null || r.n_clientes === 0) return null;
         return Number(r.cartera_bruta) / Number(r.n_clientes);
       }),
+    },
+    {
+      codigo: "cr_mora_basica",
+      nombre: "% Créditos Atrasados (criterio SBS) / Créditos Directos",
+      unidad: "pct",
+      signo: -1,
+      seccion: "cartera",
+      tooltip:
+        "Fórmula OFICIAL SBS: Cartera Atrasada / Cartera Bruta (Créditos Directos). Es la métrica que " +
+        "SBS publica en el Reporte de Indicadores mensual (formato C-1301) bajo 'CALIDAD DE ACTIVOS'. " +
+        "Sirve como campo de validación: el valor aquí debe coincidir EXACTO con lo que publica SBS " +
+        "para esa entidad y ese mes (ej. CMAC Piura Abr-20 = 8.44%). NO incluye refinanciados, NO " +
+        "castigos, NO venta de cartera — es la mora 'visible hoy' en el balance. Rango sano del " +
+        "sector microfinanciero: 3-9%.",
+      valores: mk((r) => (r.pct_mora_basica == null ? null : Number(r.pct_mora_basica))),
     },
     {
       codigo: "cr_mora_global",
