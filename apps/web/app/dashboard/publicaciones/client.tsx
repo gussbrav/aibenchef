@@ -31,9 +31,13 @@ import type {
   PublicacionTema,
 } from "@/lib/domains/publicaciones/types";
 import { PUBLICACION_TEMAS_META } from "@/lib/domains/publicaciones/meta";
+import { EntidadFreshnessBadge } from "@/components/ui";
+import { computeMaxUltimoPeriodo } from "@/lib/utils/periodo-freshness";
 
 type EntidadDisponible = {
   nombCorreg: string;
+  tipoEntidad?: string;
+  ultimoPeriodo?: number;
 };
 
 type ClienteActivo = {
@@ -326,9 +330,13 @@ function WizardVista({
   // Peer group prefill = peer default del cliente (viene del backend
   // via getDefaultPeerGroup). Asi el user arranca con un grupo sensato y
   // solo lo edita si quiere personalizar.
-  const [peerGroupInput, setPeerGroupInput] = useState<string>(
-    defaultPeerGroup.join(", "),
-  );
+  //
+  // Fix 2026-08-10: antes era un input de texto libre donde el user podia
+  // escribir cualquier cosa (typo -> no matcheaba entidad -> articulo con
+  // data vacia). Ahora es una lista tipada validada contra entidades
+  // reales via chips + modal picker (patron consistente con /pe y /dupont).
+  const [peerGroup, setPeerGroup] = useState<string[]>(defaultPeerGroup);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [periodo, setPeriodo] = useState<number>(defaultPeriodo);
   const [eventosMacro, setEventosMacro] = useState("");
   const [loading, setLoading] = useState(false);
@@ -339,12 +347,13 @@ function WizardVista({
     [entidadesDisponibles],
   );
 
+  const maxUltimoPeriodo = useMemo(
+    () => computeMaxUltimoPeriodo(entidadesDisponibles),
+    [entidadesDisponibles],
+  );
+
   const generate = async () => {
     setError(null);
-    const peerGroup = peerGroupInput
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
     if (peerGroup.length === 0) {
       setError(
         "Agrega al menos una entidad para comparar. Sin comparación no hay ranking ni análisis competitivo.",
@@ -510,26 +519,64 @@ function WizardVista({
         </div>
       </div>
 
-      {/* Peer group */}
+      {/* Peer group — chips validados + modal picker (no input libre) */}
       <div>
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
-          Con quiénes comparar
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center justify-between">
+          <span>Con quiénes comparar ({peerGroup.length})</span>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="normal-case text-[11px] font-medium text-brand-700 hover:text-brand-800 inline-flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" />
+            Editar comparación
+          </button>
         </label>
-        <input
-          type="text"
-          value={peerGroupInput}
-          onChange={(e) => setPeerGroupInput(e.target.value)}
-          placeholder="Ej: CMAC Arequipa, CMAC Cusco, CMAC Huancayo"
-          className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
-        />
+        <div className="w-full min-h-[36px] px-2 py-1.5 rounded-md border border-slate-300 bg-white flex items-center flex-wrap gap-1.5">
+          {peerGroup.length === 0 ? (
+            <span className="text-xs text-slate-400 italic px-1">
+              Sin entidades. Click en &quot;Editar comparación&quot; para elegir.
+            </span>
+          ) : (
+            peerGroup.map((nomb) => (
+              <span
+                key={nomb}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs text-slate-700"
+              >
+                {nomb}
+                <button
+                  type="button"
+                  onClick={() => setPeerGroup((prev) => prev.filter((n) => n !== nomb))}
+                  className="text-slate-400 hover:text-rose-600"
+                  title="Quitar"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))
+          )}
+        </div>
         <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
           Un artículo de benchmarking necesita <strong>al menos una entidad
           para comparar</strong> con la tuya — así el análisis puede decir
-          quién lidera, quién queda rezagado y por qué. Escribe 2 a 5
-          nombres separados por coma. Ya te precargamos el grupo típico
-          de tu segmento; puedes ajustarlo.
+          quién lidera, quién queda rezagado y por qué. Ya te precargamos
+          el grupo típico de tu segmento; edítalo con el botón de arriba.
         </p>
       </div>
+
+      {pickerOpen && (
+        <EntidadesPickerModal
+          disponibles={entidadesDisponibles}
+          seleccionadas={peerGroup}
+          entidadPropia={entidadPropia}
+          maxUltimoPeriodo={maxUltimoPeriodo}
+          onSave={(nuevas) => {
+            setPeerGroup(nuevas);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       {/* Eventos macro — solo si tema es coyuntura_macro */}
       {tema === "coyuntura_macro" && (
@@ -793,5 +840,142 @@ function EditorVista({
         </div>
       </div>
     </section>
+  );
+}
+
+// ============================================================================
+// EntidadesPickerModal — selector multi validado contra entidades reales.
+// Reemplaza el input libre donde el user podia tipear cualquier cosa (typo
+// -> no matcheaba entidad -> articulo con data vacia). Mismo patron que
+// PeerGroupModal de /punto-equilibrio y el modal de DuPont.
+// ============================================================================
+
+function EntidadesPickerModal({
+  disponibles,
+  seleccionadas,
+  entidadPropia,
+  maxUltimoPeriodo,
+  onSave,
+  onClose,
+}: {
+  disponibles: EntidadDisponible[];
+  seleccionadas: string[];
+  entidadPropia: string;
+  maxUltimoPeriodo: number;
+  onSave: (nuevas: string[]) => void;
+  onClose: () => void;
+}) {
+  const [sel, setSel] = useState(new Set(seleccionadas));
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    // Excluimos la entidad propia — no tiene sentido "compararse consigo mismo"
+    return disponibles.filter((e) => {
+      if (e.nombCorreg === entidadPropia) return false;
+      if (!q) return true;
+      return e.nombCorreg.toLowerCase().includes(q);
+    });
+  }, [disponibles, search, entidadPropia]);
+
+  const toggle = (n: string) => {
+    const next = new Set(sel);
+    if (next.has(n)) next.delete(n);
+    else next.add(n);
+    setSel(next);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ent-picker-title"
+    >
+      <div
+        className="bg-white w-full max-w-2xl rounded-xl shadow-2xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 id="ent-picker-title" className="text-base font-semibold text-slate-900">
+              Con quiénes comparar
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Elige 2 a 5 entidades SBS reales. Tu entidad ({entidadPropia}) ya está incluida por defecto.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-700"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </header>
+        <div className="px-5 py-3 border-b border-slate-100">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar entidad…"
+            className="w-full h-9 px-3 text-sm rounded border border-slate-300 focus:border-brand-500 outline-none"
+            autoFocus
+          />
+          <p className="text-[11px] text-slate-500 mt-1.5">
+            Seleccionadas: <strong>{sel.size}</strong> de {filtered.length}
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          {filtered.map((e) => (
+            <label
+              key={e.nombCorreg}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-slate-50",
+                sel.has(e.nombCorreg) && "bg-brand-50",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={sel.has(e.nombCorreg)}
+                onChange={() => toggle(e.nombCorreg)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm text-slate-800 flex-1 flex items-center gap-2 min-w-0">
+                <span className="truncate">{e.nombCorreg}</span>
+                <EntidadFreshnessBadge
+                  ultimoPeriodo={e.ultimoPeriodo}
+                  maxDisponible={maxUltimoPeriodo}
+                />
+              </span>
+              {e.tipoEntidad && (
+                <span className="text-[10px] text-slate-400 flex-shrink-0">
+                  {e.tipoEntidad}
+                </span>
+              )}
+            </label>
+          ))}
+          {filtered.length === 0 && (
+            <div className="p-8 text-center text-sm text-slate-500">
+              Sin resultados para &quot;{search}&quot;
+            </div>
+          )}
+        </div>
+        <footer className="px-5 py-3 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
+          <button
+            onClick={onClose}
+            className="px-3 h-9 text-sm text-slate-700 hover:bg-slate-100 rounded"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => onSave(Array.from(sel))}
+            className="px-4 h-9 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded"
+          >
+            Aplicar {sel.size > 0 && `(${sel.size})`}
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }
