@@ -887,6 +887,11 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: -1,
       seccion: "cartera",
+      tooltip:
+        "Fórmula: (Cartera Atrasada + Cartera Refinanciada + Castigos últimos 12 meses) / Cartera Bruta actual. " +
+        "Mide la mora AMPLIADA sin incluir venta de cartera — refleja el deterioro que la entidad ya reconoció " +
+        "vía castigos internos, pero antes de vender cartera a terceros. Rango típico del sistema microfinanciero: " +
+        "5-20%. Valores altos con castigos elevados indican política agresiva de limpieza de portfolio.",
       valores: mk((r) => (r.pct_mora_global == null ? null : Number(r.pct_mora_global))),
     },
     {
@@ -895,6 +900,12 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: -1,
       seccion: "cartera",
+      tooltip:
+        "Fórmula: (Cartera Atrasada + Cartera Refinanciada + Castigos 12m + Venta de Cartera 12m) / Cartera Bruta actual. " +
+        "Añade al numerador la cartera vendida a terceros en los últimos 12 meses. Refleja la mora TOTAL que la " +
+        "entidad tuvo que reconocer (visible en balance + limpiada vía castigos + transferida vía venta). Es la " +
+        "métrica más honesta de la calidad histórica del portfolio — dos entidades con misma mora básica pueden " +
+        "tener mora con V/C muy distinta si una limpia agresivamente.",
       valores: mk((r) => (r.pct_mora_global_vc == null ? null : Number(r.pct_mora_global_vc))),
     },
     {
@@ -903,6 +914,11 @@ function buildCuadroResumen(map: Map<string, CuadroResumenRow>, competidores: Co
       unidad: "pct",
       signo: 1,
       seccion: "cartera",
+      tooltip:
+        "Fórmula: Provisiones / CAR (Cartera Atrasada + Refinanciada + Reestructurada). " +
+        "Mide el colchón de solvencia contra créditos deteriorados. Cobertura >100% significa que las " +
+        "provisiones exceden el CAR (posición conservadora). SBS exige mínimo 100% para operaciones " +
+        "MES/PEQ tipo NORMAL, más para categorías CPP/DEF/DUD/PER.",
       valores: mk((r) => (r.pct_cobertura_car == null ? null : Number(r.pct_cobertura_car))),
     },
 
