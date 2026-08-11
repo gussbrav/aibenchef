@@ -3639,12 +3639,19 @@ def sbs_work_jobs(max_jobs: int) -> None:
                     for p in range(desde, hasta + 1):
                         if (p % 100) < 1 or (p % 100) > 12:
                             continue
+                        # V164 (2026-08-10): SIEMPRE --concurrent aca. Sin ello,
+                        # REFRESH MATERIALIZED VIEW toma AccessExclusiveLock y
+                        # bloquea TODAS las queries del dashboard sobre las MVs
+                        # por 15-20 min c/u. Con --concurrent solo AccessShareLock
+                        # y reads siguen funcionando. Fue la causa raiz del
+                        # incidente 2026-08-11 (dashboard "Cargando..." 15 min).
                         cmd_refresh = [
                             "aibenchef",
                             "pipeline",
                             "refresh-derived",
                             "--periodo",
                             str(p),
+                            "--concurrent",
                             "--triggered-by",
                             f"sync_job:{job_id}",
                         ]
