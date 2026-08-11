@@ -36,9 +36,16 @@ type EntidadDisponible = {
   nombCorreg: string;
 };
 
+type ClienteActivo = {
+  slug: string;
+  nombre: string;
+  nombreCorto: string;
+};
+
 type Props = {
   publicaciones: PublicacionListItem[];
   entidadesDisponibles: EntidadDisponible[];
+  clientesActivos: ClienteActivo[];
   defaultClienteSlug: string;
   defaultEntidadPropia: string;
   defaultPeerGroup: string[];
@@ -68,6 +75,7 @@ const STATUS_META: Record<PublicacionStatus, { label: string; color: string }> =
 export function PublicacionesClient({
   publicaciones: initialList,
   entidadesDisponibles,
+  clientesActivos,
   defaultClienteSlug,
   defaultEntidadPropia,
   defaultPeerGroup,
@@ -142,6 +150,7 @@ export function PublicacionesClient({
       {vista.kind === "wizard" && (
         <WizardVista
           entidadesDisponibles={entidadesDisponibles}
+          clientesActivos={clientesActivos}
           defaultClienteSlug={defaultClienteSlug}
           defaultEntidadPropia={defaultEntidadPropia}
           defaultPeerGroup={defaultPeerGroup}
@@ -291,9 +300,10 @@ function ListaVista({
 // ============================================================================
 
 function WizardVista({
-  entidadesDisponibles, defaultClienteSlug, defaultEntidadPropia, defaultPeerGroup, defaultPeriodo, onGenerated,
+  entidadesDisponibles, clientesActivos, defaultClienteSlug, defaultEntidadPropia, defaultPeerGroup, defaultPeriodo, onGenerated,
 }: {
   entidadesDisponibles: EntidadDisponible[];
+  clientesActivos: ClienteActivo[];
   defaultClienteSlug: string;
   defaultEntidadPropia: string;
   defaultPeerGroup: string[];
@@ -436,16 +446,34 @@ function WizardVista({
       {/* Cliente + Entidad propia + Periodo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">
+          <label
+            className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1"
+            title="Tenant comercial de Aibenchef que firma la publicación. NO es la entidad SBS a analizar (eso es 'Tu entidad')."
+          >
             Cliente
+            <span className="normal-case font-normal text-slate-400">(quién firma)</span>
           </label>
-          <input
-            type="text"
-            value={clienteSlug}
-            onChange={(e) => setClienteSlug(e.target.value)}
-            placeholder="bcp"
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
-          />
+          {clientesActivos.length === 0 ? (
+            <div className="w-full h-9 px-2 flex items-center text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md">
+              ⚠ No hay clientes activos configurados
+            </div>
+          ) : clientesActivos.length === 1 ? (
+            <div className="w-full h-9 px-2 flex items-center text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md">
+              {clientesActivos[0]!.nombreCorto}
+            </div>
+          ) : (
+            <select
+              value={clienteSlug}
+              onChange={(e) => setClienteSlug(e.target.value)}
+              className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+            >
+              {clientesActivos.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.nombreCorto}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 block">

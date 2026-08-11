@@ -129,6 +129,40 @@ export async function getClienteBySlug(slug: string): Promise<Cliente> {
   );
 }
 
+/**
+ * Lista los clientes activos (tenants comerciales que contratan Aibenchef,
+ * NO las entidades SBS). Ordenados alfabeticamente por nombre_corto.
+ *
+ * Usado en el wizard de /publicaciones para poblar el selector "Cliente"
+ * (antes era un input libre que fallaba con FK si el usuario tipeaba un
+ * slug inexistente — bug reportado 2026-08-10).
+ */
+export async function listClientesActivos(): Promise<
+  Array<{ slug: string; nombreCorto: string; nombre: string }>
+> {
+  return safeQuery(
+    "listClientesActivos",
+    async () => {
+      const rows = await db.execute<{
+        slug: string;
+        nombre: string;
+        nombre_corto: string;
+      }>(sql`
+        SELECT slug, nombre, nombre_corto
+        FROM config.cliente
+        WHERE activo
+        ORDER BY nombre_corto
+      `);
+      return rows.map((r) => ({
+        slug: String(r.slug),
+        nombre: String(r.nombre),
+        nombreCorto: String(r.nombre_corto),
+      }));
+    },
+    [],
+  );
+}
+
 export async function getDefaultPeerGroup(clienteSlug: string): Promise<string[]> {
   const configured = await safeQuery(
     "getDefaultPeerGroup",

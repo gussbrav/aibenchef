@@ -7,6 +7,7 @@ import { getUser } from "@/lib/domains/users";
 import {
   getClienteBySlug,
   getDefaultPeerGroup,
+  listClientesActivos,
   listEntidadesDisponibles,
   getUltimoPeriodoPublicable,
 } from "@/lib/domains/informe/queries";
@@ -29,6 +30,10 @@ export default async function PublicacionesPage() {
   // Data del usuario para prefill del wizard — resolver el cliente por
   // defecto + su entidad canonica asi el user no arranca con "Alfin Banco"
   // (primera alfabetica) sino con SU entidad.
+  //
+  // Fix 2026-08-10: antes teniamos fallback hardcoded "bcp" que fallaba con
+  // FK cuando el slug no existia en config.cliente. Ahora leemos la lista
+  // real de clientes activos y usamos el primero como fallback.
   let defaultClienteSlug: string | null = null;
   try {
     const user = await getUser(session.user.id);
@@ -36,15 +41,20 @@ export default async function PublicacionesPage() {
   } catch {
     /* fallback: cliente se pide en el wizard */
   }
-  const clienteSlug = defaultClienteSlug ?? "bcp";
+
+  const clientesActivos = await listClientesActivos();
+  const clienteSlug =
+    defaultClienteSlug && clientesActivos.some((c) => c.slug === defaultClienteSlug)
+      ? defaultClienteSlug
+      : (clientesActivos[0]?.slug ?? "");
 
   const [publicaciones, entidadesDisponibles, ultimoPeriodo, cliente, defaultPeerGroup] =
     await Promise.all([
       listPublicaciones({ createdBy: `user:${session.user.email}` }),
       listEntidadesDisponibles({}),
       getUltimoPeriodoPublicable(),
-      getClienteBySlug(clienteSlug).catch(() => null),
-      getDefaultPeerGroup(clienteSlug).catch(() => []),
+      clienteSlug ? getClienteBySlug(clienteSlug).catch(() => null) : Promise.resolve(null),
+      clienteSlug ? getDefaultPeerGroup(clienteSlug).catch(() => []) : Promise.resolve([]),
     ]);
 
   const defaultEntidadPropia =
@@ -60,6 +70,7 @@ export default async function PublicacionesPage() {
     <PublicacionesClient
       publicaciones={publicaciones}
       entidadesDisponibles={entidadesDisponibles}
+      clientesActivos={clientesActivos}
       defaultClienteSlug={clienteSlug}
       defaultEntidadPropia={defaultEntidadPropia}
       defaultPeerGroup={defaultPeerGroupSinPropia}
