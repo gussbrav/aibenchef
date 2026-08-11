@@ -82,14 +82,26 @@ export default async function PuntoEquilibrioPage({
   // completa por default). Solo se desactiva si viene "?consolidar=false".
   const consolidar = params.consolidar !== "false";
 
-  // Peer group: default = peer del cliente (top 5 SBS). URL puede override
-  // Por default para comparativo usamos SOLO 2 entidades (entidad propia + 1)
-  // para que el line chart sea legible. El usuario puede agregar mas.
-  const peerNames = params.peers
-    ? params.peers.split(",").map((s) => s.trim()).filter(Boolean)
-    : await getDefaultPeerGroup(cliente.slug);
-  // Si no vino peers, tomar solo 2 primeras (entidad propia + siguiente)
-  const peerGroup = params.peers ? peerNames : peerNames.slice(0, 2);
+  // Peer group:
+  // - Modo historico (anual/mensual): default = top 2 del peer group SBS
+  //   del cliente. Necesario para que el line chart tenga la banda de peers
+  //   (min-max shaded area) de arranque, sin comparativa el grafico se ve
+  //   plano y vacio.
+  // - Modo "cierre unico": default vacio. El tab por defecto es "Cuadro por
+  //   entidad" que es una comparativa EXPLICITA — imponer 2 peers automaticos
+  //   (Financiera Compartamos + Mibanco para BCP) resulta enganoso porque
+  //   el usuario cree que las eligio el, cuando en realidad son defaults.
+  //   Fix reportado 2026-08-10.
+  const peerGroup: string[] = await (async () => {
+    if (params.peers) {
+      return params.peers.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    if (granularidad === "cierre") {
+      return [];
+    }
+    const defaults = await getDefaultPeerGroup(cliente.slug);
+    return defaults.slice(0, 2);
+  })();
 
   // Data inicial en paralelo
   const [historico, entidadesDisponibles, competidoresCon] = await Promise.all([
