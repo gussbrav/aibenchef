@@ -2,6 +2,10 @@ import { Container, Section, SectionHeading } from "@/components/ui";
 
 const faqs = [
   {
+    q: "¿Puedo probar sin registrarme?",
+    a: "Sí. Cada módulo tiene una demo interactiva pública con data real (BCP + 4 bancos comparables al último cierre) que puedes explorar sin crear cuenta. Ve al menú Producto arriba y elige el módulo que quieras probar. La demo tiene las mismas visualizaciones que la app completa; solo cambia que no puedes editar el peer group ni el período — para eso necesitas cuenta.",
+  },
+  {
     q: "¿De dónde sacan los datos?",
     a: "Directo de las publicaciones mensuales de la Superintendencia de Banca, Seguros y AFP (SBS). Los archivos .xls oficiales que cualquiera puede bajar, pero limpios, tipados, conectados y comparables.",
   },
