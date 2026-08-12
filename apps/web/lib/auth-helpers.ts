@@ -19,8 +19,11 @@ import "server-only";
 
 import { cache } from "react";
 import { headers } from "next/headers";
+import { sql } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/infrastructure/db";
+import type { UserPlan } from "@/lib/plans";
 
 import { UnauthorizedError, ForbiddenError } from "@/lib/domains/shared/errors";
 
@@ -63,3 +66,35 @@ export async function requireAdminSession(): Promise<SessionUser> {
   }
   return user;
 }
+
+/**
+ * Devuelve el plan comercial del user (free/pro/business). Deduplica por
+ * request via React.cache. Fallback a 'free' si el user no existe o el
+ * campo esta null (deberia no pasar pero es defensivo).
+ */
+export const getUserPlan = cache(async (userId: string): Promise<UserPlan> => {
+  try {
+    const rows = await db.execute<{ plan: string | null }>(sql`
+      SELECT plan FROM auth.users WHERE id = ${userId}::uuid LIMIT 1
+    `);
+    const p = rows[0]?.plan;
+    if (p === "pro" || p === "business" || p === "free") return p;
+  } catch {
+    /* fallback silencioso a free */
+  }
+  return "free";
+});
+
+/**
+ * Lee el flag onboarded_at para saber si mostrar el modal welcome.
+ */
+export const getUserOnboarded = cache(async (userId: string): Promise<boolean> => {
+  try {
+    const rows = await db.execute<{ onboarded_at: string | null }>(sql`
+      SELECT onboarded_at FROM auth.users WHERE id = ${userId}::uuid LIMIT 1
+    `);
+    return rows[0]?.onboarded_at != null;
+  } catch {
+    return true; // fail-open: no molestar con modal si el lookup falla
+  }
+});

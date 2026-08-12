@@ -17,9 +17,12 @@
  */
 
 import type { NextRequest } from "next/server";
+import { sql } from "drizzle-orm";
 
-import { requireSession } from "@/lib/auth-helpers";
-import { handleRoute, ValidationError, ConflictError, RateLimitError } from "@/lib/domains/shared";
+import { requireSession, getUserPlan } from "@/lib/auth-helpers";
+import { db } from "@/lib/infrastructure/db";
+import { handleRoute, ValidationError, ConflictError, RateLimitError, EntitlementError } from "@/lib/domains/shared";
+import { PLAN_LIMITS } from "@/lib/plans";
 import {
   generatePublicacion,
   PublicacionesError,
@@ -68,6 +71,56 @@ export async function POST(req: NextRequest) {
     const peerGroup = (body.peerGroup as unknown[]).filter(
       (x): x is string => typeof x === "string",
     );
+
+    // Enforcement por plan comercial (V167).
+    //   - maxPeers: cuantas entidades comparadas contra la propia
+    //   - publicacionesPorMes: cap mensual (calendario UTC-5 Lima)
+    // Se cheque ANTES de gastar tokens del LLM. UI ya deberia advertir,
+    // esto es defensa server-side.
+    const plan = await getUserPlan(session.id);
+    const limits = PLAN_LIMITS[plan];
+
+    if (peerGroup.length > limits.maxPeers) {
+      throw new EntitlementError(
+        `Tu plan ${plan} permite hasta ${limits.maxPeers} entidades en el peer group. Reduce la seleccion o sube de plan.`,
+        {
+          plan,
+          limit: "maxPeers",
+          allowed: limits.maxPeers,
+          requested: peerGroup.length,
+          upgradeHint: "Sube a Pro para comparar hasta 10 entidades.",
+        },
+      );
+    }
+
+    // Conteo del mes actual (created_by = "user:<email>") — mismo formato
+    // que usa el INSERT en el service. Zona Lima (America/Lima) para que
+    // el corte se sienta natural al usuario (no UTC).
+    const createdBy = `user:${session.email}`;
+    const usage = await db.execute<{ count: number }>(sql`
+      SELECT COUNT(*)::int AS count
+      FROM admin.publicaciones
+      WHERE created_by = ${createdBy}::text
+        AND status <> 'archived'
+        AND date_trunc('month', created_at AT TIME ZONE 'America/Lima')
+            = date_trunc('month', now() AT TIME ZONE 'America/Lima')
+    `);
+    const usedThisMonth = usage[0]?.count ?? 0;
+    if (usedThisMonth >= limits.publicacionesPorMes) {
+      throw new EntitlementError(
+        `Ya usaste tus ${limits.publicacionesPorMes} publicacion(es) de este mes en el plan ${plan}. El contador se resetea el 1 del proximo mes.`,
+        {
+          plan,
+          limit: "publicacionesPorMes",
+          allowed: limits.publicacionesPorMes,
+          used: usedThisMonth,
+          upgradeHint:
+            plan === "free"
+              ? "Sube a Pro para 20 publicaciones al mes."
+              : "Sube a Business para publicaciones ilimitadas.",
+        },
+      );
+    }
 
     try {
       // 1. Armar contexto server-side (consulta las MV segun el tema).

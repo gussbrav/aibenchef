@@ -11,6 +11,12 @@ export const users = authSchema.table("users", {
   name: text("name"),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // Plan comercial: 'free' (default) | 'pro' | 'business'.
+  // Ver apps/web/lib/plans.ts para limites y enforcement. V167.
+  plan: text("plan").notNull().default("free"),
+  // Timestamp del primer login exitoso con onboarding completado.
+  // NULL = mostrar modal welcome. V167.
+  onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -3,9 +3,11 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { ArrowRight, BarChart3, Building2, Activity } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { getUserOnboarded } from "@/lib/auth-helpers";
 import { Card, Container, PageHero } from "@/components/ui";
 import { getRatiosLatest } from "@/lib/domains/analytics";
 import { WelcomeBanner } from "./welcome-banner";
+import { OnboardingModal } from "./onboarding-modal";
 import {
   formatPct,
   formatNumberCompact,
@@ -22,6 +24,13 @@ export const dynamic = "force-dynamic";
 export default async function DashboardHome() {
   const session = await auth.api.getSession({ headers: await headers() });
   const userName = session?.user.name ?? "";
+
+  // Onboarding — se muestra la PRIMERA vez que un user entra al dashboard.
+  // Persistencia via auth.users.onboarded_at (V167). Si el lookup falla,
+  // fail-open (no molestar con modal).
+  const onboarded = session
+    ? await getUserOnboarded(session.user.id)
+    : true;
 
   const rows = await getRatiosLatest({ moneda: "TOTAL" });
   const lastPeriod = rows[0]?.periodo;
@@ -46,6 +55,7 @@ export default async function DashboardHome() {
 
   return (
     <Container size="xl" className="space-y-8 px-0">
+      {!onboarded && <OnboardingModal />}
       <WelcomeBanner userName={userName} />
 
       <PageHero
