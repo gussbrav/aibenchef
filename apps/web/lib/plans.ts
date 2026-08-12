@@ -51,7 +51,9 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   free: {
     maxPeers: 2,
     maxHistoricoMeses: 12,
-    publicacionesPorMes: 1,
+    // 0 = feature deshabilitada. Publicaciones AI son parte del valor Pro
+    // (no se ofrecen en Free). El menu se oculta y el endpoint devuelve 402.
+    publicacionesPorMes: 0,
     insightsAI: false,
     exportPDF: false,
     exportExcel: false,

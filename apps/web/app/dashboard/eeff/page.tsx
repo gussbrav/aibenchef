@@ -3,6 +3,9 @@ import { Calendar, FileText } from "lucide-react";
 import { Card, Container, PageHero } from "@/components/ui";
 import { getRatios, getRatiosLatest, listEntidades } from "@/lib/domains/analytics";
 import type { Moneda, RatioEeff } from "@/lib/domains/analytics";
+import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
+import { isAdmin } from "@/lib/domains/users";
+import { PlanUpgradePage } from "@/components/plan-upgrade-page";
 import { EntidadSelector } from "./entidad-selector";
 import { MonedaTabs } from "./moneda-tabs";
 import { KpiTrendCard } from "./kpi-trend-card";
@@ -24,6 +27,33 @@ interface PageProps {
 
 export default async function EeffDashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
+
+  // Gate V167: Estados Financieros historicos completos son Pro+.
+  const session = await getServerSession().catch(() => null);
+  if (session) {
+    const admin = await isAdmin(session.user.id).catch(() => false);
+    if (!admin) {
+      const plan = await getUserPlan(session.user.id);
+      if (plan === "free") {
+        return (
+          <PlanUpgradePage
+            feature="Estados Financieros"
+            titulo="Estados Financieros históricos"
+            descripcion="Balance General y Estado de Resultados de cualquier entidad regulada por la SBS, con evolución mes a mes y comparativas contra pares."
+            bullets={[
+              "Balance General y ER mensual por entidad y moneda",
+              "ER anualizado con tendencia de últimos 12 meses móviles",
+              "Cambio automático MN / ME / Total",
+              "5 años de histórico completo en Pro",
+              "Base para reportes ejecutivos y análisis vertical/horizontal",
+            ]}
+            planRequerido="Pro"
+          />
+        );
+      }
+    }
+  }
+
   const monedaParam = params.moneda as Moneda | undefined;
   const moneda: Moneda = monedaParam && VALID_MONEDAS.has(monedaParam) ? monedaParam : "TOTAL";
 

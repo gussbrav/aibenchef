@@ -71,16 +71,16 @@ const SLIDES: Slide[] = [
     icono: FileText,
     colorBg: "bg-gradient-to-br from-violet-500 to-fuchsia-600",
     colorText: "text-white",
-    titulo: "Publicaciones con IA",
+    titulo: "Publicaciones con IA (Pro)",
     descripcion:
-      "Generas un articulo listo para LinkedIn en menos de un minuto. Tema, entidad, peer group — y la IA arma la narrativa con los numeros correctos.",
+      "En el plan Pro generas un articulo listo para LinkedIn en menos de un minuto. Tema, entidad, peer group — y la IA arma la narrativa con los numeros correctos.",
     bullets: [
       "6 temas: Benchmarking, Mora, Rentabilidad, DuPont, PE, Macro",
       "Graficos SVG embebidos en TODOS los articulos",
-      "Plan Free: 1 publicacion al mes",
+      "20 publicaciones al mes en Pro, ilimitadas en Business",
     ],
-    ctaHref: "/dashboard/publicaciones",
-    ctaLabel: "Ir a Publicaciones",
+    ctaHref: "/#planes",
+    ctaLabel: "Ver planes",
   },
   {
     icono: Building2,

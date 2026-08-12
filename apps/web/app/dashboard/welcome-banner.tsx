@@ -6,22 +6,38 @@ import {
   ArrowRight,
   BarChart3,
   Code,
+  FileText,
+  Gauge,
   LayoutDashboard,
   NotebookText,
+  PieChart,
   Sparkles,
   TableProperties,
   X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+import type { UserPlan } from "@/lib/plans";
 
 const STORAGE_KEY = "aibenchef.welcome.dismissed";
 
 /**
  * Banner de bienvenida — se muestra en /dashboard hasta que el usuario lo cierra.
  * No bloquea, solo orienta. Persiste el dismiss en localStorage.
+ *
+ * Tiles: adaptado al plan del user. Free ve las 3 features disponibles
+ * (Benchmark, PE, DuPont) + tile de upgrade. Pro/Business ve el catalogo
+ * completo. Admin ve tambien las tools power-user (notebook/SQL).
  */
-export function WelcomeBanner({ userName }: { userName: string }) {
+export function WelcomeBanner({
+  userName,
+  plan,
+  admin = false,
+}: {
+  userName: string;
+  plan: UserPlan;
+  admin?: boolean;
+}) {
   const [dismissed, setDismissed] = useState(true); // start hidden hasta validar storage
   const [mounted, setMounted] = useState(false);
 
@@ -78,42 +94,80 @@ export function WelcomeBanner({ userName }: { userName: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
+        {/* Free y Pro+ ven las 3 features core */}
         <Tile
-          href="/dashboard/eeff"
+          href="/dashboard/informe"
           icon={BarChart3}
-          label="Estados Financieros"
-          desc="EE.FF. histórico por entidad"
+          label="Benchmark"
+          desc="Informe ejecutivo vs peers"
           color="brand"
         />
         <Tile
-          href="/dashboard/tableros"
-          icon={LayoutDashboard}
-          label="Tableros"
-          desc="Dashboards multi-widget"
+          href="/dashboard/punto-equilibrio"
+          icon={Gauge}
+          label="Punto de Equilibrio"
+          desc="Rendimiento mínimo requerido"
           color="emerald"
         />
         <Tile
-          href="/dashboard/analisis"
-          icon={TableProperties}
-          label="Analisis Dinamico"
-          desc="Pivot estilo Excel"
+          href="/dashboard/dupont"
+          icon={PieChart}
+          label="DuPont"
+          desc="Descomposición del ROE"
           color="sky"
         />
-        <Tile
-          href="/dashboard/aiben"
-          icon={Sparkles}
-          label="Aiben"
-          desc="Pregunta en lenguaje natural"
-          color="violet"
-        />
-        <Tile
-          href="/dashboard/sql"
-          icon={Code}
-          label="SQL Workbench"
-          desc="Queries ad-hoc con Monaco"
-          color="amber"
-        />
+
+        {/* Pro/Business ven las features avanzadas. Free ve un tile con
+            invitación a subir de plan. */}
+        {plan === "free" ? (
+          <UpgradeTile />
+        ) : (
+          <Tile
+            href="/dashboard/publicaciones"
+            icon={FileText}
+            label="Publicaciones AI"
+            desc="Artículos LinkedIn con IA"
+            color="violet"
+          />
+        )}
+
+        {(admin || plan !== "free") && (
+          <>
+            <Tile
+              href="/dashboard/eeff"
+              icon={BarChart3}
+              label="Estados Financieros"
+              desc="EE.FF. histórico por entidad"
+              color="amber"
+            />
+            <Tile
+              href="/dashboard/tableros"
+              icon={LayoutDashboard}
+              label="Tableros"
+              desc="Dashboards multi-widget"
+              color="emerald"
+            />
+            <Tile
+              href="/dashboard/analisis"
+              icon={TableProperties}
+              label="Analisis Dinamico"
+              desc="Pivot estilo Excel"
+              color="sky"
+            />
+          </>
+        )}
+
+        {/* Herramientas power-user solo admin */}
+        {admin && (
+          <Tile
+            href="/dashboard/sql"
+            icon={Code}
+            label="SQL Workbench"
+            desc="Queries ad-hoc con Monaco"
+            color="amber"
+          />
+        )}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-3 text-xs text-slate-600">
@@ -121,16 +175,35 @@ export function WelcomeBanner({ userName }: { userName: string }) {
           <kbd className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[10px]">Ctrl K</kbd>
           Buscar lo que sea
         </span>
-        <Link
-          href="/dashboard/notebooks"
-          className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/60 border border-slate-200 rounded-full hover:bg-white"
-        >
-          <NotebookText className="w-3 h-3" />
-          Empezar con un notebook
-          <ArrowRight className="w-3 h-3" />
-        </Link>
+        {admin && (
+          <Link
+            href="/dashboard/notebooks"
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/60 border border-slate-200 rounded-full hover:bg-white"
+          >
+            <NotebookText className="w-3 h-3" />
+            Empezar con un notebook
+            <ArrowRight className="w-3 h-3" />
+          </Link>
+        )}
       </div>
     </section>
+  );
+}
+
+function UpgradeTile() {
+  return (
+    <Link
+      href={"/#planes" as never}
+      className="group bg-gradient-to-br from-brand-500 to-indigo-600 hover:from-brand-600 hover:to-indigo-700 text-white border border-brand-400 shadow-sm hover:shadow-md rounded-lg p-3 transition flex flex-col"
+    >
+      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center mb-2">
+        <Sparkles className="w-4 h-4" />
+      </div>
+      <div className="text-xs font-semibold">Subí a Pro</div>
+      <div className="text-[10px] text-white/80 mt-0.5 leading-tight">
+        Publicaciones AI, EEFF históricos, Análisis y más
+      </div>
+    </Link>
   );
 }
 

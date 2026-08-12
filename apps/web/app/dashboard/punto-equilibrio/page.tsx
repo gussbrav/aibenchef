@@ -6,6 +6,7 @@ import { getUserPlan } from "@/lib/auth-helpers";
 import {
   getClienteBySlug,
   getUltimoPeriodoPublicable,
+  listPeriodosDisponibles,
   pickColorEstable,
 } from "@/lib/domains/informe/queries";
 import {
@@ -118,28 +119,30 @@ export default async function PuntoEquilibrioPage({
   }
 
   // Data inicial en paralelo
-  const [historico, entidadesDisponibles, competidoresCon] = await Promise.all([
-    getPuntoEquilibrioHistorico({
-      entidad,
-      desdeAnio,
-      hastaPeriodo,
-      granularidad,
-      consolidar,
-    }),
-    listEntidadesConDataPE(),
-    (async () => {
-      const usados = new Set<string>();
-      return peerGroup.map((nombCorreg) => {
-        const color = pickColorEstable(nombCorreg, usados);
-        usados.add(color);
-        return {
-          nombCorreg,
-          color,
-          esPropio: nombCorreg === entidad,
-        };
-      });
-    })(),
-  ]);
+  const [historico, entidadesDisponibles, periodosDisponibles, competidoresCon] =
+    await Promise.all([
+      getPuntoEquilibrioHistorico({
+        entidad,
+        desdeAnio,
+        hastaPeriodo,
+        granularidad,
+        consolidar,
+      }),
+      listEntidadesConDataPE(),
+      listPeriodosDisponibles({ ultimosN: 240 }),
+      (async () => {
+        const usados = new Set<string>();
+        return peerGroup.map((nombCorreg) => {
+          const color = pickColorEstable(nombCorreg, usados);
+          usados.add(color);
+          return {
+            nombCorreg,
+            color,
+            esPropio: nombCorreg === entidad,
+          };
+        });
+      })(),
+    ]);
 
   const series = await getPuntoEquilibrioSeries({
     entidades: competidoresCon,
@@ -157,6 +160,7 @@ export default async function PuntoEquilibrioPage({
       historico={historico}
       series={series}
       entidadesDisponibles={entidadesDisponibles}
+      periodosDisponibles={periodosDisponibles}
       config={{
         desdeAnio,
         hastaPeriodo,

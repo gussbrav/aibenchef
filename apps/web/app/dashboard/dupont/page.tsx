@@ -182,10 +182,9 @@ async function readFiltersCookie(): Promise<DupontFiltersSnapshot | null> {
 export default async function DupontPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
 
-  // Enforcement de plan (V167). DuPont no tiene concepto "propia vs peers",
-  // solo "entidades a comparar". Interpretamos maxPeers como maxEntidades - 1
-  // (asumiendo que 1 es la "propia"), asi total max entidades = maxPeers + 1.
-  // Admin bypass.
+  // Enforcement de plan (V167). En DuPont "entidades a comparar" son N
+  // entidades sin distincion propia/peer — asi que aplicamos directamente
+  // maxPeers como cap (Free=2 entidades max). Admin bypass.
   const session = await getServerSession().catch(() => null);
   let maxEntidades: number | undefined;
   let insightsAllowed = true;
@@ -194,7 +193,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
     if (!admin) {
       const plan = await getUserPlan(session.user.id);
       const limits = PLAN_LIMITS[plan];
-      maxEntidades = limits.maxPeers + 1;
+      maxEntidades = limits.maxPeers;
       insightsAllowed = limits.insightsAI;
     }
   }

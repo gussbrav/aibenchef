@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { getServerSession } from "@/lib/auth-helpers";
+import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
 import { listPublicaciones } from "@/lib/domains/publicaciones";
-import { getUser } from "@/lib/domains/users";
+import { getUser, isAdmin } from "@/lib/domains/users";
 import {
   getClienteBySlug,
   getDefaultPeerGroup,
@@ -12,6 +12,7 @@ import {
   listPeriodosDisponibles,
   getUltimoPeriodoPublicable,
 } from "@/lib/domains/informe/queries";
+import { PlanUpgradePage } from "@/components/plan-upgrade-page";
 import { PublicacionesClient } from "./client";
 
 export const metadata: Metadata = {
@@ -26,6 +27,30 @@ export default async function PublicacionesPage() {
   const session = await getServerSession();
   if (!session) {
     redirect("/login");
+  }
+
+  // Gate V167: Publicaciones AI es feature Pro/Business. Free ve el
+  // upgrade prompt. Admin bypass.
+  const admin = await isAdmin(session.user.id).catch(() => false);
+  if (!admin) {
+    const plan = await getUserPlan(session.user.id);
+    if (plan === "free") {
+      return (
+        <PlanUpgradePage
+          feature="Publicaciones"
+          titulo="Publicaciones con IA para LinkedIn"
+          descripcion="Convierte cualquier análisis SBS en un artículo listo para publicar, con gráficos embebidos y narrativa profesional generada por IA."
+          bullets={[
+            "6 temas: Benchmarking, Mora, Rentabilidad, DuPont, PE, Macro",
+            "Gráficos SVG embebidos automáticamente en todos los artículos",
+            "20 publicaciones al mes en Pro, ilimitadas en Business",
+            "Editor rico para ajustar el copy antes de publicar",
+            "Historial de todas tus publicaciones anteriores",
+          ]}
+          planRequerido="Pro"
+        />
+      );
+    }
   }
 
   // Data del usuario para prefill del wizard — resolver el cliente por

@@ -73,6 +73,8 @@ type Props = {
   historico: PuntoEquilibrioRow[];
   series: PuntoEquilibrioSerie[];
   entidadesDisponibles: EntidadDisponible[];
+  /** Lista de periodos publicados (YYYYMM) — feed al dropdown "Hasta periodo". */
+  periodosDisponibles: number[];
   config: Config;
   /** Enforcement V167: true si el server trunco el peer group por plan. */
   planLimited?: boolean;
@@ -114,6 +116,7 @@ export function PuntoEquilibrioClient({
   historico,
   series,
   entidadesDisponibles,
+  periodosDisponibles,
   config,
   planLimited = false,
   planMaxPeers,
@@ -289,6 +292,7 @@ export function PuntoEquilibrioClient({
       {/* SELECTORES globales (sin peer group — ese va en el tab Comparativo) */}
       <SelectoresBar
         entidadesDisponibles={entidadesDisponibles}
+        periodosDisponibles={periodosDisponibles}
         draft={draft}
         setDraft={setDraft}
         changeCount={changeCount}
@@ -381,6 +385,7 @@ export function PuntoEquilibrioClient({
  */
 function SelectoresBar({
   entidadesDisponibles,
+  periodosDisponibles,
   draft,
   setDraft,
   changeCount,
@@ -388,6 +393,7 @@ function SelectoresBar({
   onReset,
 }: {
   entidadesDisponibles: EntidadDisponible[];
+  periodosDisponibles: number[];
   draft: DraftState;
   setDraft: (fn: (prev: DraftState) => DraftState) => void;
   changeCount: number;
@@ -476,26 +482,31 @@ function SelectoresBar({
           </select>
         </div>
 
-        {/* Hasta periodo */}
+        {/* Hasta periodo — dropdown de periodos publicados. Antes era input
+            libre YYYYMM que permitia escribir cualquier numero (incluso
+            periodos sin data). Dropdown evita ese error y muestra label
+            legible ("Jun 2026") + codigo. */}
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
             <Calendar className="w-3 h-3" />
-            Hasta periodo (YYYYMM)
+            Hasta periodo
           </label>
-          <input
-            type="number"
+          <select
             value={draft.hastaPeriodo}
-            min={200901}
-            max={210012}
-            step={1}
             onChange={(e) => {
               const n = Number.parseInt(e.target.value, 10);
-              if (n >= 200901 && n <= 210012) {
+              if (Number.isFinite(n)) {
                 setDraft((d) => ({ ...d, hastaPeriodo: n }));
               }
             }}
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white font-mono"
-          />
+            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
+          >
+            {periodosDisponibles.map((p) => (
+              <option key={p} value={p}>
+                {formatPeriodoOption(p)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -2772,4 +2783,16 @@ function PeerGroupControl({
       </p>
     </div>
   );
+}
+
+const MESES_CORTOS = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
+
+function formatPeriodoOption(periodo: number): string {
+  const anio = Math.floor(periodo / 100);
+  const mes = periodo % 100;
+  const mesLabel = MESES_CORTOS[mes - 1] ?? "?";
+  return `${mesLabel} ${anio} (${periodo})`;
 }

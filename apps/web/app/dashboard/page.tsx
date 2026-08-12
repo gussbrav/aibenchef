@@ -3,7 +3,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { ArrowRight, BarChart3, Building2, Activity } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { getUserOnboarded } from "@/lib/auth-helpers";
+import { getUserOnboarded, getUserPlan } from "@/lib/auth-helpers";
+import { isAdmin } from "@/lib/domains/users";
 import { Card, Container, PageHero } from "@/components/ui";
 import { getRatiosLatest } from "@/lib/domains/analytics";
 import { WelcomeBanner } from "./welcome-banner";
@@ -32,6 +33,14 @@ export default async function DashboardHome() {
     ? await getUserOnboarded(session.user.id)
     : true;
 
+  // Plan + admin — para adaptar los tiles del WelcomeBanner. Fail-open a
+  // 'free' + no admin si algo se rompe (no queremos exponer features
+  // premium por accidente ante lookup fallido).
+  const plan = session ? await getUserPlan(session.user.id) : "free";
+  const admin = session
+    ? await isAdmin(session.user.id).catch(() => false)
+    : false;
+
   const rows = await getRatiosLatest({ moneda: "TOTAL" });
   const lastPeriod = rows[0]?.periodo;
   const lastFecha = rows[0]?.fechaCierre;
@@ -56,7 +65,7 @@ export default async function DashboardHome() {
   return (
     <Container size="xl" className="space-y-8 px-0">
       {!onboarded && <OnboardingModal />}
-      <WelcomeBanner userName={userName} />
+      <WelcomeBanner userName={userName} plan={plan} admin={admin} />
 
       <PageHero
         icon={Activity}

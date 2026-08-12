@@ -133,10 +133,9 @@ export function UpgradeModal({
               precio="$0"
               descripcion="Actual"
               features={[
-                "1 entidad propia",
-                "2 competidores",
+                "1 entidad propia + 2 competidores",
                 "12 meses de histórico",
-                "1 publicación / mes",
+                "Benchmark, PE y DuPont",
               ]}
               current
             />
@@ -147,10 +146,10 @@ export function UpgradeModal({
               features={[
                 "10 competidores",
                 "5 años de histórico",
-                "20 publicaciones / mes",
-                "Insights AI del dashboard",
+                "Publicaciones AI (20/mes)",
+                "Estados Financieros y Análisis",
+                "Insights AI en el dashboard",
                 "Export PDF + Excel",
-                "Colores personalizables",
               ]}
               highlighted
               ctaHref="/#planes"

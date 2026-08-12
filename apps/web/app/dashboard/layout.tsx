@@ -58,43 +58,53 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/informe" label="Benchmark" />
               <NavLink href="/dashboard/punto-equilibrio" label="Punto Equilibrio" />
               <NavLink href="/dashboard/dupont" label="DuPont" />
-              <NavLink href="/dashboard/publicaciones" label="Publicaciones" />
 
-              <NavDropdown
-                label="Estados Financieros"
-                items={[
-                  {
-                    href: "/dashboard/eeff",
-                    label: "EEFF mensuales",
-                    description: "Balance General + Estado de Resultados de cualquier entidad y periodo",
-                  },
-                  {
-                    href: "/dashboard/eeff/acumulado",
-                    label: "ER Anualizado",
-                    description: "Tendencia del Estado de Resultados anualizado (últimos 12 meses móviles)",
-                  },
-                ]}
-              />
+              {/* Menus solo para plan Pro+/Business (o admin). El plan Free
+                  arranca con lo esencial (Resumen + Benchmark + PE + DuPont)
+                  para no sentirse abrumado con opciones bloqueadas. La UI
+                  crece al subir de plan. Gate en pagina sigue vigente para
+                  defensa en profundidad. */}
+              {(admin || plan !== "free") && (
+                <>
+                  <NavLink href="/dashboard/publicaciones" label="Publicaciones" />
 
-              <NavDropdown
-                label="Análisis"
-                items={[
-                  {
-                    href: "/dashboard/tableros",
-                    label: "Tableros ejecutivos",
-                    description: "Dashboards personalizados con KPIs, gráficos y tablas para presentar a directorio",
-                  },
-                  {
-                    href: "/dashboard/analisis",
-                    label: "Análisis dinámico",
-                    description: "Compará entidades, períodos y métricas con tablas pivote sin escribir SQL",
-                  },
-                  // Aiben ✨ IA: oculto temporalmente. La feature funciona pero
-                  // esta pendiente estabilizar la calidad de las respuestas y
-                  // definir el scope final antes de re-habilitarlo. Volver a
-                  // agregar aca cuando este listo para usuarios finales.
-                ]}
-              />
+                  <NavDropdown
+                    label="Estados Financieros"
+                    items={[
+                      {
+                        href: "/dashboard/eeff",
+                        label: "EEFF mensuales",
+                        description: "Balance General + Estado de Resultados de cualquier entidad y periodo",
+                      },
+                      {
+                        href: "/dashboard/eeff/acumulado",
+                        label: "ER Anualizado",
+                        description: "Tendencia del Estado de Resultados anualizado (últimos 12 meses móviles)",
+                      },
+                    ]}
+                  />
+
+                  <NavDropdown
+                    label="Análisis"
+                    items={[
+                      {
+                        href: "/dashboard/tableros",
+                        label: "Tableros ejecutivos",
+                        description: "Dashboards personalizados con KPIs, gráficos y tablas para presentar a directorio",
+                      },
+                      {
+                        href: "/dashboard/analisis",
+                        label: "Análisis dinámico",
+                        description: "Compará entidades, períodos y métricas con tablas pivote sin escribir SQL",
+                      },
+                      // Aiben ✨ IA: oculto temporalmente. La feature funciona pero
+                      // esta pendiente estabilizar la calidad de las respuestas y
+                      // definir el scope final antes de re-habilitarlo. Volver a
+                      // agregar aca cuando este listo para usuarios finales.
+                    ]}
+                  />
+                </>
+              )}
 
               {admin && (
                 <NavDropdown

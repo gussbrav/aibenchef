@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { LayoutDashboard, Activity, BarChart3, Layers } from "lucide-react";
 
 import { auth } from "@/lib/auth";
+import { getUserPlan } from "@/lib/auth-helpers";
+import { isAdmin } from "@/lib/domains/users";
+import { PlanUpgradePage } from "@/components/plan-upgrade-page";
 import { Card, FeatureTile, PageHero } from "@/components/ui";
 import { listTableros } from "@/lib/domains/tableros";
 
@@ -17,6 +20,27 @@ export const dynamic = "force-dynamic";
 export default async function TablerosPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
+
+  const admin = await isAdmin(session.user.id).catch(() => false);
+  if (!admin) {
+    const plan = await getUserPlan(session.user.id);
+    if (plan === "free") {
+      return (
+        <PlanUpgradePage
+          feature="Tableros"
+          titulo="Tableros ejecutivos personalizados"
+          descripcion="Combina KPIs, gráficos y tablas en dashboards que presentas directo al directorio, sin abrir Power BI ni armarlos de cero cada mes."
+          bullets={[
+            "Layout drag-and-drop con widgets de KPI, línea, barra y tabla",
+            "Data siempre fresca de la última publicación SBS",
+            "Compartís por URL — cualquiera puede consumir tu tablero",
+            "Múltiples tableros por usuario, sin límite en Business",
+          ]}
+          planRequerido="Pro"
+        />
+      );
+    }
+  }
 
   const tableros = await listTableros(session.user.id);
 
@@ -69,7 +93,7 @@ export default async function TablerosPage() {
           <Card variant="elevated" className="p-12 text-center">
             <LayoutDashboard className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-600 mb-4">
-              Creá tu primer tablero en 30 segundos. Empezás con uno en blanco y agregás widgets.
+              Crea tu primer tablero en 30 segundos. Empiezas con uno en blanco y agregas widgets.
             </p>
             <NewTableroButton variant="cta" />
           </Card>
