@@ -64,11 +64,13 @@ export default async function PuntoEquilibrioPage({
 
   // Enforcement de plan (V167). Admin bypass.
   let maxPeers: number | undefined;
+  let maxHistoricoMeses: number | undefined;
   if (session) {
     const admin = await isAdmin(session.user.id).catch(() => false);
     if (!admin) {
       const plan = await getUserPlan(session.user.id);
       maxPeers = PLAN_LIMITS[plan].maxPeers;
+      maxHistoricoMeses = PLAN_LIMITS[plan].maxHistoricoMeses;
     }
   }
   const clienteSlug = params.cliente ?? userDefaultCliente ?? BCP_DEFAULT.slug;
@@ -82,11 +84,30 @@ export default async function PuntoEquilibrioPage({
     ? Number.parseInt(params.periodo, 10)
     : (await getUltimoPeriodoPublicable()) ?? 202412;
 
-  // Rango desde: default 5 años atras
+  // Rango desde: default 5 años atras.
+  // Enforcement V167: si el plan limita la ventana historica (Free = 24
+  // meses), clampeamos el desdeAnio para no permitir consultas mas
+  // profundas. En Pro/Business/admin es undefined y no aplica.
   const anioActual = Math.floor(hastaPeriodo / 100);
-  const desdeAnio = params.desde
+  const mesActual = hastaPeriodo % 100;
+  let desdeAnio = params.desde
     ? Number.parseInt(params.desde, 10)
     : Math.max(2009, anioActual - 5);
+  let planLimitedHistorico = false;
+  if (typeof maxHistoricoMeses === "number") {
+    // El anio mas temprano permitido es el que contiene el mes
+    // (hastaPeriodo - maxHistoricoMeses + 1). En Free (24m) con
+    // hastaPeriodo=202606, minima ventana desde = 202407 → desdeAnio = 2024.
+    const earliestPeriodo =
+      anioActual * 100 + mesActual - maxHistoricoMeses + 1;
+    const earliestAnio = Math.floor(
+      earliestPeriodo > 0 ? earliestPeriodo / 100 : anioActual,
+    );
+    if (desdeAnio < earliestAnio) {
+      planLimitedHistorico = true;
+      desdeAnio = earliestAnio;
+    }
+  }
 
   const granularidad = (params.granularidad ?? "anual") as Granularidad;
 
@@ -109,7 +130,7 @@ export default async function PuntoEquilibrioPage({
   let peerGroup: string[] = params.peers
     ? params.peers.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
-  let planLimited = false;
+  let planLimited = planLimitedHistorico;
   if (typeof maxPeers === "number") {
     const otros = peerGroup.filter((n) => n !== entidad);
     if (otros.length > maxPeers) {
@@ -170,6 +191,7 @@ export default async function PuntoEquilibrioPage({
       }}
       planLimited={planLimited}
       planMaxPeers={maxPeers}
+      planMaxHistoricoMeses={maxHistoricoMeses}
     />
   );
 }

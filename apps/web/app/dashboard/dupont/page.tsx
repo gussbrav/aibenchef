@@ -187,6 +187,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
   // maxPeers como cap (Free=2 entidades max). Admin bypass.
   const session = await getServerSession().catch(() => null);
   let maxEntidades: number | undefined;
+  let maxHistoricoMeses: number | undefined;
   let insightsAllowed = true;
   if (session) {
     const admin = await isAdmin(session.user.id).catch(() => false);
@@ -194,6 +195,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
       const plan = await getUserPlan(session.user.id);
       const limits = PLAN_LIMITS[plan];
       maxEntidades = limits.maxPeers;
+      maxHistoricoMeses = limits.maxHistoricoMeses;
       insightsAllowed = limits.insightsAI;
     }
   }
@@ -277,6 +279,27 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
     const anio = Math.floor(ultimo / 100);
     // Default: Dic hace 2 años + Dic anterior + ultimo publicable
     periodos = [(anio - 2) * 100 + 12, (anio - 1) * 100 + 12, ultimo];
+  }
+
+  // V167: enforcement de ventana historica. Free (24m) descarta periodos
+  // que caigan fuera de los ultimos maxHistoricoMeses respecto al mayor
+  // periodo seleccionado. Si eso deja al array vacio (edge case), dejamos
+  // al menos el mas reciente para no romper el fetch.
+  if (typeof maxHistoricoMeses === "number" && periodos.length > 0) {
+    const maxP = Math.max(...periodos);
+    const anioMax = Math.floor(maxP / 100);
+    const mesMax = maxP % 100;
+    const earliestAllowed = anioMax * 100 + mesMax - maxHistoricoMeses + 1;
+    const antes = periodos.length;
+    const filtrados = periodos.filter((p) => p >= earliestAllowed);
+    if (filtrados.length === 0) {
+      periodos = [maxP];
+    } else {
+      periodos = filtrados;
+    }
+    if (periodos.length < antes) {
+      planLimited = true;
+    }
   }
 
   // Fetch en paralelo — cachedListPeriodos y cachedListEntidades sirven

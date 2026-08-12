@@ -10,7 +10,8 @@
  * en futura iteracion).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
 
@@ -81,9 +82,32 @@ export function UpgradeModal({
    *  contexto arriba: "Necesitas Pro para: exportar PDF". */
   motivo?: string;
 }) {
-  return (
+  // React Portal a document.body para escapar el containing block del
+  // header sticky (que tiene backdrop-blur, lo cual "atrapa" position:fixed
+  // dentro de un elemento de 56px de alto → el modal quedaba centrado
+  // arriba del viewport y se salia del cuadro).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    // Bloquear scroll del body mientras el modal esta abierto.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // Cerrar con Escape
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -134,7 +158,7 @@ export function UpgradeModal({
               descripcion="Actual"
               features={[
                 "1 entidad propia + 2 competidores",
-                "12 meses de histórico",
+                "Últimos 2 años de histórico",
                 "Benchmark, PE y DuPont",
               ]}
               current
@@ -184,7 +208,8 @@ export function UpgradeModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -79,6 +79,8 @@ type Props = {
   /** Enforcement V167: true si el server trunco el peer group por plan. */
   planLimited?: boolean;
   planMaxPeers?: number;
+  /** V167: ventana historica maxima en meses (Free=24). Undefined = sin cap. */
+  planMaxHistoricoMeses?: number;
 };
 
 type Tab = "historico" | "comparativo";
@@ -120,6 +122,7 @@ export function PuntoEquilibrioClient({
   config,
   planLimited = false,
   planMaxPeers,
+  planMaxHistoricoMeses,
 }: Props) {
   const [tab, setTab] = useState<Tab>("historico");
   const [peerModalCierreOpen, setPeerModalCierreOpen] = useState(false);
@@ -298,6 +301,7 @@ export function PuntoEquilibrioClient({
         changeCount={changeCount}
         onApply={applyFilters}
         onReset={resetFilters}
+        planMaxHistoricoMeses={planMaxHistoricoMeses}
       />
 
       {/* Tabs — el nombre del primer tab cambia segun granularidad:
@@ -391,6 +395,7 @@ function SelectoresBar({
   changeCount,
   onApply,
   onReset,
+  planMaxHistoricoMeses,
 }: {
   entidadesDisponibles: EntidadDisponible[];
   periodosDisponibles: number[];
@@ -399,14 +404,23 @@ function SelectoresBar({
   changeCount: number;
   onApply: () => void;
   onReset: () => void;
+  planMaxHistoricoMeses?: number;
 }) {
-  // Años disponibles: desde 2009 hasta año actual del draft
+  // Años disponibles: desde 2009 hasta año actual del draft.
+  // V167: si el plan limita ventana historica, el minimo permitido es
+  // (hastaPeriodo - maxHistoricoMeses). Debajo de ese anio, dropdown lo omite.
   const anioActual = Math.floor(draft.hastaPeriodo / 100);
+  const mesActual = draft.hastaPeriodo % 100;
+  const anioMin = useMemo(() => {
+    if (typeof planMaxHistoricoMeses !== "number") return ANIO_MIN;
+    const earliest = anioActual * 100 + mesActual - planMaxHistoricoMeses + 1;
+    return Math.max(ANIO_MIN, Math.floor(earliest / 100));
+  }, [planMaxHistoricoMeses, anioActual, mesActual]);
   const aniosDisponibles = useMemo(() => {
     const r: number[] = [];
-    for (let a = ANIO_MIN; a <= anioActual; a++) r.push(a);
+    for (let a = anioMin; a <= anioActual; a++) r.push(a);
     return r;
-  }, [anioActual]);
+  }, [anioMin, anioActual]);
 
   const dirty = changeCount > 0;
 

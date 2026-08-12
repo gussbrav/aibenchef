@@ -20,7 +20,7 @@ const plans = [
     features: [
       "1 entidad propia",
       "Hasta 2 competidores para comparar",
-      "12 meses de histórico",
+      "Últimos 2 años de histórico",
       "Benchmark ejecutivo (informe completo)",
       "Punto de Equilibrio y DuPont",
     ],
