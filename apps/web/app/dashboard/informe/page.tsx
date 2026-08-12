@@ -8,8 +8,9 @@ import {
   listEntidadesDisponibles,
   parseColorsOverride,
 } from "@/lib/domains/informe/queries";
-import { getServerSession } from "@/lib/auth-helpers";
-import { getUser } from "@/lib/domains/users";
+import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
+import { getUser, isAdmin } from "@/lib/domains/users";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { InformeClient } from "./informe-client";
 
 // PERF: Cache de queries auxiliares que casi nunca cambian (~1 vez/mes con
@@ -80,6 +81,8 @@ type CacheableInformeOpts = {
   ordenOverride?: string[];
   consolidar: boolean;
   colorsOverride: Map<string, string> | null;
+  /** Limite de plan comercial (V167). undefined = admin o sin gating. */
+  maxPeers?: number;
 };
 
 async function getInformeDataCached(opts: CacheableInformeOpts) {
@@ -97,6 +100,7 @@ async function getInformeDataCached(opts: CacheableInformeOpts) {
     o: opts.ordenOverride ?? null,
     cs: opts.consolidar,
     co: opts.colorsOverride ? [...opts.colorsOverride.entries()].sort() : null,
+    mp: opts.maxPeers ?? null,
   });
   return unstable_cache(
     () => getInformeData(opts),
@@ -154,15 +158,30 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   // al BCP_DEFAULT global. Esto NO restringe — cualquiera puede navegar a
   // otro ?cliente=X (modelo B / abierto), solo mejora el landing por default.
   let userDefaultCliente: string | null = null;
-  if (!params.cliente) {
+  const session = await getServerSession().catch(() => null);
+  if (!params.cliente && session) {
     try {
-      const session = await getServerSession();
-      if (session) {
-        const user = await getUser(session.user.id);
-        userDefaultCliente = user.defaultClienteSlug;
-      }
+      const user = await getUser(session.user.id);
+      userDefaultCliente = user.defaultClienteSlug;
     } catch {
       // No romper el SSR si falla el lookup de perfil — cae a BCP.
+    }
+  }
+
+  // Enforcement de plan (V167). Admins bypass total. Los demas usuarios
+  // ven su peer group truncado segun PLAN_LIMITS[plan].maxPeers.
+  // undefined = sin limite (admin o sin sesion — este ultimo caso raro
+  // porque el layout ya redirect a /login).
+  let maxPeers: number | undefined;
+  let planLimited = false;
+  let insightsAllowed = true;
+  if (session) {
+    const admin = await isAdmin(session.user.id).catch(() => false);
+    if (!admin) {
+      const plan = await getUserPlan(session.user.id);
+      const limits = PLAN_LIMITS[plan];
+      maxPeers = limits.maxPeers;
+      insightsAllowed = limits.insightsAI;
     }
   }
 
@@ -186,9 +205,24 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
     periodo = (await cachedUltimoPeriodo()) ?? 202004;
   }
 
-  const peerGroup = params.peerGroup
+  let peerGroup = params.peerGroup
     ? params.peerGroup.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
+
+  // Si el user pego una URL con mas peers de los que su plan permite,
+  // truncamos server-side. Bandera para el banner al cliente.
+  if (peerGroup && typeof maxPeers === "number") {
+    const propia = params.entidadPropia;
+    const otros = propia
+      ? peerGroup.filter((n) => n !== propia)
+      : peerGroup;
+    if (otros.length > maxPeers) {
+      planLimited = true;
+      peerGroup = propia
+        ? [propia, ...otros.slice(0, maxPeers)]
+        : otros.slice(0, maxPeers);
+    }
+  }
   const orden = params.orden
     ? params.orden.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined;
@@ -214,11 +248,22 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
         ordenOverride: orden,
         consolidar,
         colorsOverride,
+        maxPeers,
       }),
       cachedListPeriodos(),
       cachedListEntidades(),
       cachedCompletenessStatus(periodo),
     ]);
+
+  // Signal para banner: si el user esta con maxPeers y la vista renderizada
+  // esta al tope del cap, mostramos la nota upgrade. Cubre tanto default (5
+  // competidores del sistema truncado a maxPeers) como URL con demasiados.
+  if (
+    typeof maxPeers === "number" &&
+    data.competidores.length - 1 >= maxPeers
+  ) {
+    planLimited = true;
+  }
 
   return (
     <InformeClient
@@ -226,6 +271,9 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       periodosDisponibles={periodosDisponibles}
       entidadesDisponibles={entidadesDisponibles}
       completenessStatus={completenessStatus}
+      planLimited={planLimited}
+      planMaxPeers={maxPeers}
+      insightsAllowed={insightsAllowed}
     />
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
+import { getUserPlan } from "@/lib/auth-helpers";
 import {
   getClienteBySlug,
   getUltimoPeriodoPublicable,
@@ -13,7 +14,8 @@ import {
   listEntidadesConDataPE,
   type Granularidad,
 } from "@/lib/domains/punto-equilibrio";
-import { getUser } from "@/lib/domains/users";
+import { getUser, isAdmin } from "@/lib/domains/users";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { PuntoEquilibrioClient } from "./client";
 
 export const metadata: Metadata = {
@@ -46,16 +48,26 @@ export default async function PuntoEquilibrioPage({
   const params = await searchParams;
 
   // Resolver cliente por defecto (para el header + peer group)
+  const session = await auth.api
+    .getSession({ headers: await headers() })
+    .catch(() => null);
   let userDefaultCliente: string | null = null;
-  if (!params.cliente) {
+  if (!params.cliente && session) {
     try {
-      const session = await auth.api.getSession({ headers: await headers() });
-      if (session) {
-        const user = await getUser(session.user.id);
-        userDefaultCliente = user.defaultClienteSlug;
-      }
+      const user = await getUser(session.user.id);
+      userDefaultCliente = user.defaultClienteSlug;
     } catch {
       /* fallback */
+    }
+  }
+
+  // Enforcement de plan (V167). Admin bypass.
+  let maxPeers: number | undefined;
+  if (session) {
+    const admin = await isAdmin(session.user.id).catch(() => false);
+    if (!admin) {
+      const plan = await getUserPlan(session.user.id);
+      maxPeers = PLAN_LIMITS[plan].maxPeers;
     }
   }
   const clienteSlug = params.cliente ?? userDefaultCliente ?? BCP_DEFAULT.slug;
@@ -93,9 +105,17 @@ export default async function PuntoEquilibrioPage({
   // Trade-off aceptado: el line chart aparece vacio hasta que el usuario
   // agrega peers. Es preferible a la sorpresa de ver entidades ajenas.
   // El estado vacio tiene CTA claro ("Agrega entidades para comparar").
-  const peerGroup: string[] = params.peers
+  let peerGroup: string[] = params.peers
     ? params.peers.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
+  let planLimited = false;
+  if (typeof maxPeers === "number") {
+    const otros = peerGroup.filter((n) => n !== entidad);
+    if (otros.length > maxPeers) {
+      planLimited = true;
+      peerGroup = otros.slice(0, maxPeers);
+    }
+  }
 
   // Data inicial en paralelo
   const [historico, entidadesDisponibles, competidoresCon] = await Promise.all([
@@ -144,6 +164,8 @@ export default async function PuntoEquilibrioPage({
         peerGroup: peerGroup,
         consolidar,
       }}
+      planLimited={planLimited}
+      planMaxPeers={maxPeers}
     />
   );
 }

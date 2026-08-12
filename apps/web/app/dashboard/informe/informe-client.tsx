@@ -14,7 +14,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileText, HelpCircle, Info, AlertCircle, AlertTriangle, Paintbrush } from "lucide-react";
+import { FileText, HelpCircle, Info, AlertCircle, AlertTriangle, Paintbrush, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import { FormulaPopover } from "@/components/ui";
 import {
@@ -242,11 +242,20 @@ export function InformeClient({
   periodosDisponibles,
   entidadesDisponibles,
   completenessStatus,
+  planLimited = false,
+  planMaxPeers,
+  insightsAllowed = true,
 }: {
   data: InformeData;
   periodosDisponibles: number[];
   entidadesDisponibles: EntidadDisponible[];
   completenessStatus: PeriodoCompletenessStatus | null;
+  /** Flag server-side: true si la vista esta topada por plan (V167). */
+  planLimited?: boolean;
+  /** Numero maximo de competidores del plan del user, si aplica. */
+  planMaxPeers?: number;
+  /** V167: false para plan Free — oculta el panel de insights AI. */
+  insightsAllowed?: boolean;
 }) {
   const {
     cliente,
@@ -524,6 +533,30 @@ export function InformeClient({
         </div>
       </header>
 
+      {/* Banner plan (V167) — solo cuando el server marca planLimited=true.
+          Fuera del <header> para que no se imprima en el PDF (no-print).
+          Copy comercial en lugar de tecnico — invita a subir sin culpar al user. */}
+      {planLimited && (
+        <div className="no-print mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              Tu plan actual permite hasta {planMaxPeers} competidor
+              {planMaxPeers === 1 ? "" : "es"} en la comparativa
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              Estamos mostrando los primeros {planMaxPeers} del sistema.{" "}
+              <Link
+                href={"/#planes" as never}
+                className="font-semibold underline hover:text-amber-950"
+              >
+                Sube de plan para comparar hasta 10 entidades.
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ============ SELECTORES ============ */}
       <Suspense fallback={<div className="h-12" />}>
         <SelectoresToolbarConTema
@@ -570,6 +603,7 @@ export function InformeClient({
         waterfallVsDic={margenNetoWaterfallVsDic}
         periodoLabelYoY={periodoComparativo.label}
         periodoLabelVsDic={periodoDicPrev.label}
+        insightsAllowed={insightsAllowed}
       />
 
       {/* ============ WATERFALL vs mismo mes año previo ============ */}
@@ -917,6 +951,7 @@ function SeccionMargenNetoBubble({
   waterfallVsDic,
   periodoLabelYoY,
   periodoLabelVsDic,
+  insightsAllowed,
 }: {
   data: BubblePoint[];
   competidores: Competidor[];
@@ -930,6 +965,7 @@ function SeccionMargenNetoBubble({
   waterfallVsDic: WaterfallData[];
   periodoLabelYoY: string;
   periodoLabelVsDic: string;
+  insightsAllowed: boolean;
 }) {
   if (data.length === 0) {
     return (
@@ -1140,46 +1176,50 @@ function SeccionMargenNetoBubble({
           </div>
         </div>
         <div className="space-y-3 w-full">
-          <ReportInsights
-            periodo={periodo}
-            seccion="margen_neto"
-            clienteSlug={clienteSlug}
-            entidadPropia={entidadPropia}
-            peerGroup={peerGroup}
-            contexto={{
-              bubbles: scatterData.map((d) => ({
-                entidad: d.label,
-                deltaPe: d.x,
-                deltaRend: d.y,
-                margenNetoActual: d.margenNeto,
-              })),
-              // Cascada por competidor — para que el LLM pueda decir
-              // "el margen de X subio +40bps: +25 de rendimiento, -15 de
-              // provisiones, +30 de costos operativos".
-              waterfallYoY: {
-                periodoBaseLabel: periodoLabelYoY,
-                periodoFinalLabel: comparativoLabel,
-                series: waterfallYoY.map((w) => ({
-                  entidad: w.competidor,
-                  basePct: w.base,
-                  finalPct: w.final,
-                  totalBps: w.totalBps,
-                  componentes: w.componentes,
+          {insightsAllowed ? (
+            <ReportInsights
+              periodo={periodo}
+              seccion="margen_neto"
+              clienteSlug={clienteSlug}
+              entidadPropia={entidadPropia}
+              peerGroup={peerGroup}
+              contexto={{
+                bubbles: scatterData.map((d) => ({
+                  entidad: d.label,
+                  deltaPe: d.x,
+                  deltaRend: d.y,
+                  margenNetoActual: d.margenNeto,
                 })),
-              },
-              waterfallVsDic: {
-                periodoBaseLabel: periodoLabelVsDic,
-                periodoFinalLabel: comparativoLabel,
-                series: waterfallVsDic.map((w) => ({
-                  entidad: w.competidor,
-                  basePct: w.base,
-                  finalPct: w.final,
-                  totalBps: w.totalBps,
-                  componentes: w.componentes,
-                })),
-              },
-            }}
-          />
+                // Cascada por competidor — para que el LLM pueda decir
+                // "el margen de X subio +40bps: +25 de rendimiento, -15 de
+                // provisiones, +30 de costos operativos".
+                waterfallYoY: {
+                  periodoBaseLabel: periodoLabelYoY,
+                  periodoFinalLabel: comparativoLabel,
+                  series: waterfallYoY.map((w) => ({
+                    entidad: w.competidor,
+                    basePct: w.base,
+                    finalPct: w.final,
+                    totalBps: w.totalBps,
+                    componentes: w.componentes,
+                  })),
+                },
+                waterfallVsDic: {
+                  periodoBaseLabel: periodoLabelVsDic,
+                  periodoFinalLabel: comparativoLabel,
+                  series: waterfallVsDic.map((w) => ({
+                    entidad: w.competidor,
+                    basePct: w.base,
+                    finalPct: w.final,
+                    totalBps: w.totalBps,
+                    componentes: w.componentes,
+                  })),
+                },
+              }}
+            />
+          ) : (
+            <InsightsUpgradeTeaser />
+          )}
           {comentario ? <ComentarioBox texto={comentario} /> : null}
         </div>
       </div>
@@ -1645,5 +1685,34 @@ function EntidadChip({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Teaser cuando el plan del user no incluye insights AI. Placeholder elegante
+ * en el lugar donde iria ReportInsights, invitando al upgrade sin gritar.
+ */
+function InsightsUpgradeTeaser() {
+  return (
+    <div className="no-print rounded-lg border border-dashed border-brand-200 bg-gradient-to-br from-brand-50/40 to-indigo-50/40 px-4 py-3 flex items-start gap-3">
+      <span className="mt-0.5 inline-flex w-7 h-7 rounded-md bg-brand-100 items-center justify-center flex-shrink-0">
+        <Sparkles className="w-3.5 h-3.5 text-brand-700" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-slate-900">
+          Insights AI disponibles en Pro
+        </p>
+        <p className="text-xs text-slate-600 mt-0.5">
+          Análisis automático de cada sección con bullets accionables generados
+          por IA sobre tu peer group.{" "}
+          <Link
+            href={"/#planes" as never}
+            className="font-semibold text-brand-700 hover:text-brand-800 underline"
+          >
+            Ver planes
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

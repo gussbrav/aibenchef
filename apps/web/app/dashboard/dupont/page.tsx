@@ -16,6 +16,9 @@ import {
   type DupontOpts,
 } from "@/lib/domains/dupont";
 import { db } from "@/lib/infrastructure/db";
+import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
+import { isAdmin } from "@/lib/domains/users";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { DupontClient } from "./dupont-client";
 
 export const metadata: Metadata = {
@@ -179,6 +182,23 @@ async function readFiltersCookie(): Promise<DupontFiltersSnapshot | null> {
 export default async function DupontPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
 
+  // Enforcement de plan (V167). DuPont no tiene concepto "propia vs peers",
+  // solo "entidades a comparar". Interpretamos maxPeers como maxEntidades - 1
+  // (asumiendo que 1 es la "propia"), asi total max entidades = maxPeers + 1.
+  // Admin bypass.
+  const session = await getServerSession().catch(() => null);
+  let maxEntidades: number | undefined;
+  let insightsAllowed = true;
+  if (session) {
+    const admin = await isAdmin(session.user.id).catch(() => false);
+    if (!admin) {
+      const plan = await getUserPlan(session.user.id);
+      const limits = PLAN_LIMITS[plan];
+      maxEntidades = limits.maxPeers + 1;
+      insightsAllowed = limits.insightsAI;
+    }
+  }
+
   // Prioridad de resolucion de filtros (mayor → menor):
   //   1. URL params explicitos (share link, deep link, refresh con filters)
   //   2. Cookie del user (ultimos filtros aplicados — sobrevive nav entre tabs)
@@ -202,7 +222,14 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
 
   // Normalizar a canonicos actuales + dedupear. Fix del bug donde 2 labels
   // que resuelven al mismo canonico daban 2 chips duplicados.
-  const entidadesParam = await normalizarCanonicos(entidadesRaw);
+  let entidadesParam = await normalizarCanonicos(entidadesRaw);
+
+  // Enforcement V167 — truncar a maxEntidades del plan. Preserva orden.
+  let planLimited = false;
+  if (typeof maxEntidades === "number" && entidadesParam.length > maxEntidades) {
+    planLimited = true;
+    entidadesParam = entidadesParam.slice(0, maxEntidades);
+  }
 
   // Resolver periodos: URL > cookie > default sistema
   const periodosParam = params.periodos
@@ -268,7 +295,10 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
   //
   // Este chequeo NO llama al LLM ni bloquea el TTFB — solo hace 1 SELECT
   // por hash en app.dupont_insights_cache (indexed PK, <5ms).
-  const cachedInsights = await getDupontInsightsFromCache(data);
+  // V167: si el plan no tiene insightsAI, no adjuntar el cache.
+  const cachedInsights = insightsAllowed
+    ? await getDupontInsightsFromCache(data)
+    : null;
 
   return (
     <DupontClient
@@ -278,6 +308,9 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
       consolidar={consolidar}
       initialInsights={cachedInsights?.insights ?? null}
       initialInsightsModel={cachedInsights?.model ?? null}
+      planLimited={planLimited}
+      planMaxEntidades={maxEntidades}
+      insightsAllowed={insightsAllowed}
     />
   );
 }

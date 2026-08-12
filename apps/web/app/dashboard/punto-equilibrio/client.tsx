@@ -10,6 +10,7 @@
  */
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -73,6 +74,9 @@ type Props = {
   series: PuntoEquilibrioSerie[];
   entidadesDisponibles: EntidadDisponible[];
   config: Config;
+  /** Enforcement V167: true si el server trunco el peer group por plan. */
+  planLimited?: boolean;
+  planMaxPeers?: number;
 };
 
 type Tab = "historico" | "comparativo";
@@ -111,6 +115,8 @@ export function PuntoEquilibrioClient({
   series,
   entidadesDisponibles,
   config,
+  planLimited = false,
+  planMaxPeers,
 }: Props) {
   const [tab, setTab] = useState<Tab>("historico");
   const [peerModalCierreOpen, setPeerModalCierreOpen] = useState(false);
@@ -221,6 +227,26 @@ export function PuntoEquilibrioClient({
 
   return (
     <div className="space-y-5 max-w-[1400px] mx-auto px-2">
+      {planLimited && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+          <span className="mt-0.5 text-amber-600 font-bold">!</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              Tu plan actual permite hasta {planMaxPeers} entidad
+              {planMaxPeers === 1 ? "" : "es"} para comparar
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              Estamos mostrando los primeros {planMaxPeers}.{" "}
+              <Link
+                href={"/#planes" as never}
+                className="font-semibold underline hover:text-amber-950"
+              >
+                Sube de plan para hasta 10 entidades.
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
       {/* Header con branding del cliente + tooltip 'que es el PE' inline.
           overflow-visible (no hidden) para que el popover del InfoTooltip
           pueda escapar del hero — el gradient vive en el propio header

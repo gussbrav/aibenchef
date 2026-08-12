@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   BarChart,
@@ -112,6 +113,9 @@ export function DupontClient({
   consolidar,
   initialInsights = null,
   initialInsightsModel = null,
+  planLimited = false,
+  planMaxEntidades,
+  insightsAllowed = true,
 }: {
   data: DupontData;
   periodosDisponibles: number[];
@@ -122,6 +126,11 @@ export function DupontClient({
    * inicial — elimina el "Generando..." al cambiar de tab. */
   initialInsights?: DupontInsights | null;
   initialInsightsModel?: string | null;
+  /** Enforcement V167: true si el server trunco entidades por plan. */
+  planLimited?: boolean;
+  planMaxEntidades?: number;
+  /** V167: false para plan Free — oculta panel de insights AI. */
+  insightsAllowed?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -316,10 +325,35 @@ export function DupontClient({
   // Si initialInsights vino del server (cache DB hit), se usa directamente
   // → cero "Generando..." al montar. Solo se dispara fetch si initial=null
   // (cache miss) o si data cambia (nueva combinacion peer+periodos).
-  const narrativaIA = useNarrativaIA(data, initialInsights, initialInsightsModel);
+  const narrativaIA = useNarrativaIA(
+    data,
+    initialInsights,
+    initialInsightsModel,
+    insightsAllowed,
+  );
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 px-4 animate-premium-in">
+      {planLimited && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+          <span className="mt-0.5 text-amber-600 font-bold">!</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              Tu plan actual permite hasta {planMaxEntidades} entidad
+              {planMaxEntidades === 1 ? "" : "es"} en el análisis
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              Estamos mostrando las primeras {planMaxEntidades}.{" "}
+              <Link
+                href={"/#planes" as never}
+                className="font-semibold underline hover:text-amber-950"
+              >
+                Sube de plan para comparar más entidades.
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
       {/* ============ HEADER ============ */}
       <header className="rounded-xl text-white p-8 relative bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 shadow-lg">
         <div
@@ -1329,6 +1363,7 @@ function useNarrativaIA(
   data: DupontData,
   initialInsights: DupontInsights | null,
   initialModel: string | null,
+  enabled: boolean = true,
 ): NarrativaState {
   // Si el server ya nos paso initialInsights (cache DB hit en SSR), el
   // estado inicial es "ok" → cero flash de "Generando..." al montar.
@@ -1358,6 +1393,12 @@ function useNarrativaIA(
   const initialKeyRef = useRef<string | null>(initialInsights ? dataKey : null);
 
   useEffect(() => {
+    // V167: si el plan no incluye insights AI, dejamos estado "fallback"
+    // y no gastamos LLM ni exponemos el panel de bullets.
+    if (!enabled) {
+      setState({ status: "fallback", data: null, model: null });
+      return;
+    }
     // Skip: si el server nos dio initialInsights Y el data actual matchea
     // el data del SSR, no re-fetch. La primera navegacion post-mount es
     // instant con SSR data.
@@ -1399,7 +1440,7 @@ function useNarrativaIA(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey]);
+  }, [dataKey, enabled]);
 
   return state;
 }

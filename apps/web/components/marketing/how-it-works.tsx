@@ -3,21 +3,21 @@ import { Container, Section, SectionHeading } from "@/components/ui";
 const steps = [
   {
     n: "01",
-    title: "Te suscribes",
+    title: "Te registras gratis",
     description:
-      "Eliges el plan que mejor calza con tu equipo. Prueba de 14 días sin tarjeta para los planes Starter y Pro.",
+      "Login con Google o email en un click. Sin tarjeta de crédito. El plan Free te deja explorar tu entidad + 2 competidores desde el minuto uno.",
   },
   {
     n: "02",
-    title: "Accedes a la plataforma",
+    title: "Eliges tu entidad y peers",
     description:
-      "Dashboards listos para EEFF, Colocaciones, Depósitos, Indicadores y más. Filtras por entidad, período y moneda.",
+      "Dashboards listos para Benchmark, DuPont, Punto de Equilibrio y Estados Financieros. Filtras por entidad, período y moneda.",
   },
   {
     n: "03",
-    title: "Decides con datos",
+    title: "Publicas o exportas",
     description:
-      "Exportas a PDF para directorio, a Excel para seguir trabajando, o consumes vía API si necesitas integrar.",
+      "Generas artículos con IA listos para LinkedIn en menos de un minuto, o exportas a PDF/Excel cuando activas el plan Pro.",
   },
 ];
 

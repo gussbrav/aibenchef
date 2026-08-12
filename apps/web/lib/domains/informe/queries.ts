@@ -1222,6 +1222,15 @@ export async function getInformeData(opts: {
    */
   colorsOverride?: Map<string, string> | null;
   consolidar?: boolean; // default true: aplica renombres (Financiera Compartamos -> Compartamos Banco)
+  /**
+   * Enforcement de plan comercial (V167). Numero maximo de competidores
+   * excluyendo la entidad propia. Undefined = sin limite (admin o
+   * consumer sin gating). Si peerList resuelto > maxPeers, se trunca a la
+   * propia + primeros maxPeers competidores. Se refleja en cuadroResumen,
+   * historicos y bubble automaticamente porque se ejecuta ANTES de
+   * buildCompetidores.
+   */
+  maxPeers?: number;
 }): Promise<InformeData> {
   // PERF: Fase 1 — 3 queries INDEPENDIENTES en paralelo (antes eran seriales).
   //   getClienteBySlug: siempre.
@@ -1298,6 +1307,18 @@ export async function getInformeData(opts: {
     // Override manual del usuario que se olvido de incluir a la propia:
     // agregarla al final para no perderla, pero SIN reordenar el resto.
     peerList = [...peerList, cliente.entidadPropia];
+  }
+
+  // Enforcement de plan (V167). Trunca competidores conservando SIEMPRE la
+  // entidad propia + los primeros N competidores en el orden original. Si el
+  // usuario listo su propia al final, la reintroducimos al principio para
+  // no perderla al truncar.
+  if (peerList && typeof opts.maxPeers === "number" && opts.maxPeers >= 0) {
+    const propia = cliente.entidadPropia;
+    const otros = peerList.filter((n) => n !== propia);
+    if (otros.length > opts.maxPeers) {
+      peerList = [propia, ...otros.slice(0, opts.maxPeers)];
+    }
   }
 
   let competidores = await buildCompetidores(

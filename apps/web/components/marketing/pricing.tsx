@@ -2,32 +2,42 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { Container, Section, SectionHeading, Card, Button } from "@/components/ui";
 
+/**
+ * Pricing publico — DEBE reflejar exactamente lo que enforcea el server
+ * en apps/web/lib/plans.ts (PLAN_LIMITS). Si cambias limites aca sin
+ * actualizar plans.ts, mentis al usuario. Si cambias plans.ts sin
+ * actualizar aca, tenes UI desactualizada.
+ *
+ * Fuente de verdad: lib/plans.ts.
+ */
+
 const plans = [
   {
-    name: "Starter",
-    price: 49,
-    description: "Para analistas individuales empezando a explorar el sistema.",
+    name: "Free",
+    price: 0,
+    priceLabel: "Gratis",
+    description: "Para probar la plataforma con tu entidad y ver el valor real.",
     features: [
-      "1 grupo de entidades (a elección)",
-      "24 meses de histórico",
-      "1 usuario",
-      "Exportar a PDF",
-      "Soporte por email",
+      "1 entidad propia",
+      "Hasta 2 competidores por informe",
+      "12 meses de histórico",
+      "1 publicación con IA por mes",
+      "Todos los módulos: Benchmark, DuPont, Punto Equilibrio",
     ],
-    cta: "Empezar prueba",
+    cta: "Empezar gratis",
     highlighted: false,
   },
   {
     name: "Pro",
     price: 149,
-    description: "Para equipos de análisis con cobertura multi-segmento.",
+    description: "Para analistas que arman informes mensuales de verdad.",
     features: [
-      "3 grupos de entidades",
-      "60 meses de histórico",
-      "5 usuarios",
+      "Hasta 10 competidores por informe",
+      "5 años de histórico completo",
+      "20 publicaciones con IA por mes",
+      "Insights AI del dashboard",
       "Exportar a PDF + Excel",
-      "Comparador multi-entidad",
-      "Soporte prioritario",
+      "Colores personalizables persistidos",
     ],
     cta: "Empezar prueba",
     highlighted: true,
@@ -37,14 +47,13 @@ const plans = [
     price: 399,
     description: "Para gerencias y consultoras que necesitan TODA la data.",
     features: [
-      "Todos los grupos + histórico completo",
-      "15 usuarios",
-      "API por uso (10k req/mes)",
-      "Alertas automáticas",
-      "Reportes mensuales en PDF",
-      "Soporte dedicado + SLA",
+      "Todo lo de Pro sin límites",
+      "Publicaciones con IA ilimitadas",
+      "API REST + autenticación JWT",
+      "SLA + soporte dedicado",
+      "White-label disponible",
     ],
-    cta: "Empezar prueba",
+    cta: "Hablemos",
     highlighted: false,
   },
 ];
@@ -55,8 +64,8 @@ export function Pricing() {
       <Container size="xl">
         <SectionHeading
           eyebrow="Planes"
-          title="Pago mensual o anual, cancelas cuando quieras"
-          description="Precios transparentes. Sin contratos largos, sin 'contáctanos'."
+          title="Empezá gratis. Pagá cuando lo necesites."
+          description="Sin permanencia. Cancelas cuando quieras. Precios en USD, factura electrónica peruana."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {plans.map((plan) => (
@@ -75,11 +84,23 @@ export function Pricing() {
                 {plan.description}
               </p>
               <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-5xl font-bold text-slate-900">${plan.price}</span>
-                <span className="text-slate-500">/mes</span>
+                {plan.price === 0 ? (
+                  <span className="text-5xl font-bold text-slate-900">
+                    {plan.priceLabel ?? "Gratis"}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-5xl font-bold text-slate-900">
+                      ${plan.price}
+                    </span>
+                    <span className="text-slate-500">/mes</span>
+                  </>
+                )}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                USD. Anual con 20% off disponible.
+              <p className="text-xs text-slate-500 mt-1 min-h-[1rem]">
+                {plan.price === 0
+                  ? "Sin tarjeta de crédito. Siempre gratis."
+                  : "USD. Facturación mensual. Factura electrónica peruana."}
               </p>
               <ul className="mt-8 space-y-3 flex-1">
                 {plan.features.map((f) => (
@@ -89,7 +110,10 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Link href="/signup" className="mt-8">
+              <Link
+                href={plan.name === "Business" ? "/solicitar-acceso?plan=business" as never : "/signup"}
+                className="mt-8"
+              >
                 <Button
                   fullWidth
                   size="lg"
@@ -102,9 +126,9 @@ export function Pricing() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
-          ¿Necesitas más usuarios, API ilimitada, white-label o SLA enterprise?{" "}
+          ¿Necesitás algo distinto? White-label, on-premise, integraciones a medida —{" "}
           <Link href={"/solicitar-acceso?plan=enterprise" as never} className="text-brand-600 hover:underline font-medium">
-            Hablemos del plan Enterprise
+            hablemos del plan Enterprise
           </Link>
           .
         </p>
