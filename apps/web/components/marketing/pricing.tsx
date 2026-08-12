@@ -89,7 +89,7 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Link href={"/solicitar-acceso" as never} className="mt-8">
+              <Link href="/signup" className="mt-8">
                 <Button
                   fullWidth
                   size="lg"

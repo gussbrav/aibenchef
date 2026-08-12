@@ -10,6 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
+  const googleEnabled = !!(
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+  );
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-white via-brand-50/30 to-white py-12 flex items-center">
       <Container size="sm">
@@ -31,13 +35,13 @@ export default function LoginPage() {
         </div>
 
         <Card variant="elevated" className="p-8">
-          <LoginForm />
+          <LoginForm googleEnabled={googleEnabled} />
         </Card>
 
         <p className="text-sm text-slate-600 text-center mt-6">
           ¿Aún no tienes cuenta?{" "}
           <Link href="/signup" className="text-brand-600 hover:underline font-medium">
-            Crea una
+            Empieza gratis
           </Link>
         </p>
       </Container>

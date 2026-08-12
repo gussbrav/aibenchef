@@ -35,7 +35,7 @@ export function DemoCTA({
               ))}
             </ul>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Link href={"/solicitar-acceso" as never}>
+              <Link href="/signup">
                 <Button size="lg" className="bg-white text-brand-700 hover:bg-brand-50 group">
                   Empezar prueba gratis
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

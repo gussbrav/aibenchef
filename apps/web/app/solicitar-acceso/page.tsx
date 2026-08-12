@@ -25,11 +25,18 @@ export default function SolicitarAccesoPage() {
 
         <div className="space-y-2 mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900">
-            Solicita acceso al beta
+            Contáctanos
           </h1>
           <p className="text-slate-600 max-w-xl mx-auto">
-            Aibenchef es una plataforma para entidades del sistema financiero peruano.
-            Cuéntanos quién eres en 30 segundos y te respondemos en 24–48h hábiles.
+            ¿Necesitas plan Enterprise, más usuarios, API ilimitada, white-label o
+            SLA dedicado? Cuéntanos en 30 segundos y te respondemos en 24–48h hábiles.
+          </p>
+          <p className="text-sm text-slate-500 max-w-xl mx-auto pt-3">
+            Si solo quieres probar, puedes{" "}
+            <Link href="/signup" className="text-brand-600 hover:underline font-medium">
+              crear una cuenta gratis
+            </Link>{" "}
+            en menos de un minuto — sin este formulario.
           </p>
         </div>
 

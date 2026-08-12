@@ -48,7 +48,7 @@ export function Hero() {
             no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
-            <Link href={"/solicitar-acceso" as never}>
+            <Link href="/signup">
               <Button size="lg" className="group">
                 Empezar gratis
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

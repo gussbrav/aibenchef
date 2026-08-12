@@ -28,15 +28,15 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
               <span>
                 <strong>Vista pública</strong> — para elegir tu propia entidad, peer group,
                 período y descargar reportes,{" "}
-                <Link href={"/solicitar-acceso" as never} className="underline font-semibold hover:text-amber-950">
+                <Link href="/signup" className="underline font-semibold hover:text-amber-950">
                   crea tu cuenta gratis
                 </Link>
                 .
               </span>
             </div>
-            <Link href={"/solicitar-acceso" as never} className="flex-shrink-0">
+            <Link href="/signup" className="flex-shrink-0">
               <Button size="sm" className="group">
-                Empezar prueba
+                Empezar gratis
                 <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
               </Button>
             </Link>
@@ -89,8 +89,8 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="hover:text-slate-900">Inicio</Link>
               <Link href="/#planes" className="hover:text-slate-900">Planes</Link>
               <Link href="/#faq" className="hover:text-slate-900">FAQ</Link>
-              <Link href={"/solicitar-acceso" as never} className="text-brand-700 font-semibold hover:text-brand-800">
-                Solicitar acceso
+              <Link href="/signup" className="text-brand-700 font-semibold hover:text-brand-800">
+                Empezar gratis
               </Link>
             </div>
           </div>

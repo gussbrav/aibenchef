@@ -22,8 +22,8 @@ export function Footer() {
                   </Link>
                 </li>
                 <li>
-                  <Link href={"/solicitar-acceso" as never} className="hover:text-white transition-colors">
-                    Solicitar acceso
+                  <Link href="/signup" className="hover:text-white transition-colors">
+                    Empezar gratis
                   </Link>
                 </li>
               </ul>

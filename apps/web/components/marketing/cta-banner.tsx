@@ -18,7 +18,7 @@ export function CTABanner() {
             Crea tu cuenta y explora la data del sistema financiero peruano. Sin tarjeta, sin compromiso.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-            <Link href={"/solicitar-acceso" as never}>
+            <Link href="/signup">
               <Button size="lg" className="group">
                 Empezar gratis
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

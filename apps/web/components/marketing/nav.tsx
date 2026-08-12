@@ -117,8 +117,8 @@ export function Nav() {
             >
               Entrar
             </Link>
-            <Link href={"/solicitar-acceso" as never}>
-              <Button size="sm">Solicitar acceso</Button>
+            <Link href="/signup">
+              <Button size="sm">Empezar gratis</Button>
             </Link>
           </div>
         </div>
