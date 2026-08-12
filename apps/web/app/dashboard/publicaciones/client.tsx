@@ -2,9 +2,9 @@
 
 /**
  * PublicacionesClient — generacion de articulos long-form con voz
- * editorial senior para publicar en LinkedIn. Estilo tipo Hermes
- * Holguin / Jesus Ferreyra (referentes internos del prompt engineering
- * — NUNCA mencionar en UI).
+ * editorial senior para publicar en LinkedIn. Estilo periodistico
+ * financiero peruano — patrones editoriales genericos, sin citar
+ * nombres de terceros (personas, medios, marcas).
  *
  * Vistas:
  *   - "lista" (default): grid de drafts + reviewed + published del user
@@ -774,7 +774,7 @@ function EditorVista({
 
   const downloadHtml = () => {
     // Genera HTML autocontenido (con SVGs inline) para blog / newsletter.
-    // Estilo NYT-inspired — sin dependencias, portable, todo inline.
+    // Estilo editorial — sin dependencias, portable, todo inline.
     const hashtags = hashtagsStr.split(/\s+/).filter(Boolean).map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
     const html = renderArticuloHtml({
       titulo,
@@ -1306,7 +1306,7 @@ function renderInline(texto: string): React.ReactNode {
 
 /**
  * Renderiza HTML autocontenido del articulo (para blog / newsletter).
- * Estilo NYT — tipografia serif, layout centrado max-width 720px,
+ * Estilo editorial — tipografia serif, layout centrado max-width 720px,
  * SVGs inline, meta tags OG para preview en redes.
  */
 function renderArticuloHtml(input: {

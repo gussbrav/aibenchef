@@ -90,7 +90,7 @@ Ubicala DESPUES de la apertura y ANTES de la primera seccion analitica, en su pr
 
 ## INSTRUCCIONES ESPECIFICAS PARA ESTE ARTICULO
 
-ANGULO EDITORIAL: la mora es la señal de salud crediticia. Un articulo NYT sobre mora responde 3 preguntas: (1) donde estan hoy, (2) hacia donde van (trayectoria), (3) que significa para el negocio. NO listar los numeros — hay que interpretar.
+ANGULO EDITORIAL: la mora es la señal de salud crediticia. Un articulo periodistico serio sobre mora responde 3 preguntas: (1) donde estan hoy, (2) hacia donde van (trayectoria), (3) que significa para el negocio. NO listar los numeros — hay que interpretar.
 
 ESTRUCTURA sugerida:
 - **Titulo**: enfoque causal + insight. Ej: "La mora del sistema microfinanciero al cierre ${ctx.periodoLabel}: ${contexto.liderMenorMora?.entidad ?? "quien"} contiene mientras el promedio se deteriora"

@@ -58,6 +58,9 @@ function InformeMockup() {
           ))}
         </tbody>
       </table>
+      <div className="px-2 py-1 border-t border-slate-100 bg-slate-50/50 text-[8.5px] text-slate-500 italic">
+        Fuente: SBS Perú · data pública
+      </div>
     </div>
   );
 }
@@ -98,6 +101,9 @@ function DupontMockup() {
           </div>
         ))}
       </div>
+      <p className="text-[8.5px] text-slate-500 italic pt-1 border-t border-slate-100">
+        Fuente: SBS Perú · data pública
+      </p>
     </div>
   );
 }
@@ -153,6 +159,9 @@ function PuntoEquilibrioMockup() {
           <span className="w-3 border-t border-dashed border-slate-400" /> Promedio Bancos
         </span>
       </div>
+      <p className="text-[8.5px] text-slate-500 italic pt-1 border-t border-slate-100">
+        Fuente: SBS Perú · data pública
+      </p>
     </div>
   );
 }
@@ -194,9 +203,9 @@ function PublicacionesMockup() {
           </div>
         ))}
       </div>
-      <div className="pt-1 text-[9px] text-slate-400 flex items-center justify-between">
-        <span>Chart SVG embebido</span>
-        <span>#RiesgoCrediticio #SBS</span>
+      <div className="pt-1 border-t border-slate-100 text-[9px] flex items-center justify-between">
+        <span className="text-slate-500 italic">Chart SVG · Fuente: SBS Perú</span>
+        <span className="text-slate-400">#RiesgoCrediticio #SBS</span>
       </div>
     </div>
   );
@@ -241,7 +250,7 @@ const modulos = [
     tag: "Publicaciones",
     title: "Artículos con gráficos AI",
     description:
-      "Genera análisis long-form estilo NYT con gráficos SVG embebidos, listo para LinkedIn.",
+      "Genera análisis editorial long-form con gráficos SVG embebidos, listo para LinkedIn.",
     features: ["6 temas editoriales", "Gráficos SVG embebidos", "Descarga HTML + PNG"],
     Mockup: PublicacionesMockup,
     href: "/demo/publicaciones",

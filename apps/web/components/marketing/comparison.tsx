@@ -1,10 +1,10 @@
 /**
  * Seccion comparativa "Alternativas a Aibenchef" — 4 opciones que el
  * cliente evalua antes de decidir. Formato tabla honesta con checks +
- * cruces. Estilo NYT/Stripe: sin bashing agresivo, solo trade-offs
+ * cruces. Tono neutral y editorial: sin bashing agresivo, solo trade-offs
  * verificables.
  *
- * Columnas: Excel manual · Consultora externa · Bloomberg Terminal · Aibenchef
+ * Columnas: Excel manual · Consultora externa · Terminal financiera · Aibenchef
  * Filas: Costo · Actualizacion · Cobertura · Time-to-insight · Auditabilidad · Trazable
  */
 
@@ -19,7 +19,7 @@ type Fila = {
   detalle?: string;
   excel: { estado: Estado; texto: string };
   consultora: { estado: Estado; texto: string };
-  bloomberg: { estado: Estado; texto: string };
+  terminal: { estado: Estado; texto: string };
   aibenchef: { estado: Estado; texto: string };
 };
 
@@ -28,22 +28,22 @@ const filas: Fila[] = [
     atributo: "Costo mensual",
     excel: { estado: "yes", texto: "$0 pero 40h/mes analista" },
     consultora: { estado: "no", texto: "$3,000-8,000 por informe" },
-    bloomberg: { estado: "no", texto: "~$2,000/usuario" },
+    terminal: { estado: "no", texto: "~$2,000/usuario" },
     aibenchef: { estado: "yes", texto: "Desde $49" },
   },
   {
     atributo: "Cobertura SBS Perú",
-    detalle: "200+ entidades, todos los grupos regulados",
+    detalle: "50+ entidades activas, todos los grupos regulados",
     excel: { estado: "yes", texto: "Solo lo que descargas" },
     consultora: { estado: "partial", texto: "El scope contratado" },
-    bloomberg: { estado: "no", texto: "Bancos globales, no SBS" },
-    aibenchef: { estado: "yes", texto: "200+ entidades, 10 tópicos" },
+    terminal: { estado: "no", texto: "Cobertura global, sin foco SBS Perú" },
+    aibenchef: { estado: "yes", texto: "50+ entidades activas, 10 tópicos" },
   },
   {
     atributo: "Actualización automática",
     excel: { estado: "no", texto: "Descargas cada mes manual" },
     consultora: { estado: "no", texto: "Encargas cada vez" },
-    bloomberg: { estado: "yes", texto: "Tiempo real" },
+    terminal: { estado: "yes", texto: "Tiempo real" },
     aibenchef: { estado: "yes", texto: "Día siguiente del cierre" },
   },
   {
@@ -51,7 +51,7 @@ const filas: Fila[] = [
     detalle: "Desde tener la data cruda hasta responder al directorio",
     excel: { estado: "no", texto: "3-5 días" },
     consultora: { estado: "no", texto: "2-4 semanas" },
-    bloomberg: { estado: "partial", texto: "1-2 días (sin data SBS local)" },
+    terminal: { estado: "partial", texto: "1-2 días (sin data SBS local)" },
     aibenchef: { estado: "yes", texto: "5 minutos" },
   },
   {
@@ -59,14 +59,14 @@ const filas: Fila[] = [
     detalle: "Cada número enlaza a su fuente oficial",
     excel: { estado: "partial", texto: "Depende del analista" },
     consultora: { estado: "partial", texto: "Depende del entregable" },
-    bloomberg: { estado: "yes", texto: "Sí" },
+    terminal: { estado: "yes", texto: "Sí" },
     aibenchef: { estado: "yes", texto: "Sí, a nivel celda" },
   },
   {
     atributo: "Comparativos multi-entidad",
     excel: { estado: "partial", texto: "Manual con tablas dinámicas" },
     consultora: { estado: "yes", texto: "Sí (paga por peer)" },
-    bloomberg: { estado: "partial", texto: "Bancos globales" },
+    terminal: { estado: "partial", texto: "Cobertura global" },
     aibenchef: { estado: "yes", texto: "Sí, peer group configurable" },
   },
   {
@@ -74,7 +74,7 @@ const filas: Fila[] = [
     detalle: "Con gráficos + prosa editorial lista",
     excel: { estado: "no", texto: "Copy-paste + Photoshop" },
     consultora: { estado: "no", texto: "Escribe tú" },
-    bloomberg: { estado: "no", texto: "No aplica" },
+    terminal: { estado: "no", texto: "No aplica" },
     aibenchef: { estado: "yes", texto: "Sí, artículos con AI" },
   },
 ];
@@ -108,7 +108,7 @@ export function Comparison() {
                   Consultora
                 </th>
                 <th className="text-center px-4 py-4 text-sm font-semibold text-slate-700 border-b-2 border-slate-200">
-                  Bloomberg
+                  Terminal financiera
                 </th>
                 <th className="text-center px-4 py-4 text-sm font-semibold border-b-2 border-brand-500 bg-brand-50/50 rounded-t-lg">
                   <span className="text-brand-900">Aibenchef</span>
@@ -142,9 +142,9 @@ export function Comparison() {
                   </td>
                   <td className="px-4 py-4 text-center align-top">
                     <div className="flex flex-col items-center gap-1">
-                      {iconByEstado[f.bloomberg.estado]}
+                      {iconByEstado[f.terminal.estado]}
                       <span className="text-[11px] text-slate-600 leading-tight">
-                        {f.bloomberg.texto}
+                        {f.terminal.texto}
                       </span>
                     </div>
                   </td>
@@ -162,7 +162,7 @@ export function Comparison() {
           </table>
         </div>
         <p className="text-center text-xs text-slate-500 mt-8 max-w-2xl mx-auto italic">
-          Los precios de Bloomberg y consultoras son referenciales del mercado peruano.
+          Los precios de terminales financieras y consultoras son referenciales del mercado peruano.
           Aibenchef no reemplaza al analista — le devuelve las horas.
         </p>
       </Container>

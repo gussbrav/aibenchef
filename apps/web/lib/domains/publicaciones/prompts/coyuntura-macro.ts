@@ -1,7 +1,7 @@
 /**
  * Prompt template: "Coyuntura macro" — articulo que conecta la data del
  * cierre con eventos macro relevantes al periodo (El Niño, tasas BCRP,
- * elecciones, cambios regulatorios SBS). Estilo Hermes Holguin.
+ * elecciones, cambios regulatorios SBS). Estilo editorial financiero peruano.
  *
  * Contexto esperado en ctx.contexto:
  *   entidades: Array<{ ...misma shape que benchmarking }>

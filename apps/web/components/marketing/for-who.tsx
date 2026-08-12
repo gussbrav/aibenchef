@@ -23,19 +23,19 @@ const personas = [
   },
   {
     icon: Briefcase,
-    titulo: "Consultoras y clasificadoras",
-    subtitulo: "Equilibrium · Apoyo · Auditoras · Boutique",
+    titulo: "Consultoras",
+    subtitulo: "Análisis financiero · Riesgo · Estrategia",
     jobs: [
-      "Informes de fundamentos para calificación",
+      "Informes de fundamentos con data auditable",
       "Comparativos multi-entidad reproducibles",
-      "Data auditable para clientes y regulador",
+      "Reportes profesionales para clientes",
     ],
     color: "emerald",
   },
   {
     icon: GraduationCap,
     titulo: "Docentes y estudiantes",
-    subtitulo: "Universidades · MBA · Programas SBS",
+    subtitulo: "Formación en finanzas y banca",
     jobs: [
       "Casos con data real, no ejemplos ficticios",
       "Series históricas desde 2010 sin descargar Excels",
@@ -46,11 +46,11 @@ const personas = [
   {
     icon: ShieldCheck,
     titulo: "Áreas de cumplimiento",
-    subtitulo: "Compliance · Auditoría interna · Riesgo operacional",
+    subtitulo: "Compliance · Auditoría · Riesgo",
     jobs: [
       "Monitoreo de la exposición del sistema en tiempo real",
       "Alertas cuando se aleja del promedio del sector",
-      "Trazabilidad hasta el .xls oficial SBS",
+      "Trazabilidad hasta la fuente pública SBS",
     ],
     color: "amber",
   },

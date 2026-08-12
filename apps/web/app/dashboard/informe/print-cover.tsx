@@ -1,6 +1,6 @@
 /**
  * PrintCover — portada premium del PDF exportado. Estilo de reporte
- * corporativo Big 4 (BCG/Deloitte/Moody's). Solo visible al imprimir.
+ * corporativo profesional. Solo visible al imprimir.
  *
  * Layout:
  *   - Barra de brand con gradiente arriba

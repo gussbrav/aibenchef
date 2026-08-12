@@ -12,15 +12,15 @@ export function CTABanner() {
       <Container size="md" className="relative">
         <div className="text-center space-y-6">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white">
-            Empieza con 50% off el primer trimestre
+            Empieza gratis en menos de un minuto
           </h2>
           <p className="text-lg text-slate-300 max-w-xl mx-auto">
-            Registrate y empieza a usarlo. Cupo limitado para asegurar calidad de servicio.
+            Crea tu cuenta y explora la data del sistema financiero peruano. Sin tarjeta, sin compromiso.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
             <Link href={"/solicitar-acceso" as never}>
               <Button size="lg" className="group">
-                Solicitar acceso
+                Empezar gratis
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>

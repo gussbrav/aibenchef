@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: "¿Cuánto histórico tienen?",
-    a: "Desde enero 2010 para todos los tópicos en todas las entidades supervisadas. Más de 200 entidades x 10 tópicos x 180+ meses.",
+    a: "Desde enero 2010 para todos los tópicos en todas las entidades supervisadas por SBS. 52 entidades activas al cierre actual y más de 100 con histórico (incluye entidades que se fusionaron o cambiaron de nombre en el camino) x 10 tópicos x 180+ meses.",
   },
   {
     q: "¿Es legal publicar esta data?",

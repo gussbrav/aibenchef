@@ -15,7 +15,7 @@ import { DashboardMockup } from "./dashboard-mockup";
  */
 
 const credibilidad = [
-  { valor: "200+", label: "entidades SBS" },
+  { valor: "50+", label: "entidades reguladas activas" },
   { valor: "desde 2010", label: "histórico mensual" },
   { valor: "Automático", label: "actualización mensual" },
   { valor: "100%", label: "auditable a nivel celda" },
@@ -50,7 +50,7 @@ export function Hero() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
             <Link href={"/solicitar-acceso" as never}>
               <Button size="lg" className="group">
-                Solicitar acceso
+                Empezar gratis
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>
@@ -61,8 +61,7 @@ export function Hero() {
             </Link>
           </div>
           <p className="text-sm text-slate-500">
-            Los primeros en registrarse acceden con{" "}
-            <strong className="text-slate-700">50% off el primer trimestre</strong>
+            Sin tarjeta, sin compromiso. Explora la data del sistema financiero peruano en minutos.
           </p>
         </div>
 

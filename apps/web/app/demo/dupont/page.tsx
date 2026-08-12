@@ -52,7 +52,7 @@ export default function DemoDupontPage() {
         icon={GitBranch}
         tag="DuPont · Rentabilidad descompuesta"
         titulo="ROE de las 4 principales microfinancieras peruanas"
-        descripcion="Árbol DuPont completo: ROE = ROA × Apalancamiento. Descompone quién gana por eficiencia operativa vs quién por leverage, con lectura editorial estilo NYT generada por AI."
+        descripcion="Árbol DuPont completo: ROE = ROA × Apalancamiento. Descompone quién gana por eficiencia operativa vs quién por leverage, con lectura editorial senior generada por AI."
         chips={[
           { label: "Cierre", value: "Jun 2026", fijo: true },
           { label: "Entidad propia", value: "Compartamos", fijo: true },
@@ -101,7 +101,7 @@ export default function DemoDupontPage() {
                 Lectura AI · ROE
               </h3>
               <span className="text-[10px] text-brand-600 bg-brand-100 px-2 py-0.5 rounded-full font-semibold">
-                estilo NYT Business
+                análisis editorial
               </span>
             </div>
             <ul className="space-y-2.5 text-[13.5px] text-slate-800 leading-relaxed">
@@ -193,7 +193,7 @@ export default function DemoDupontPage() {
         titulo="Descompone el ROE de tu entidad vs cualquier peer group"
         features={[
           "Árbol DuPont de 4 niveles interactivo",
-          "Lectura AI estilo NYT que interpreta la data",
+          "Lectura AI editorial que interpreta la data",
           "Compara 2-6 entidades simultáneas",
           "Serie histórica de ROE por múltiples cierres",
           "Colores personalizables por entidad",

@@ -2,14 +2,13 @@
  * Sector Knowledge Base v2 — vocabulario, marco analitico y estilo
  * narrativo del sistema financiero peruano regulado por SBS.
  *
- * Extraido de reportes reales de las clasificadoras:
- *   - Moody's Local Peru (Caja Arequipa 2023, Mibanco Mar-26, BCP Jul-26)
- *   - Apoyo & Asociados / Fitch (Caja Arequipa 2025)
- *   - MicroRate (CMAC Piura Mar-26)
+ * Base de conocimiento construida sobre patrones editoriales publicos del
+ * sector (data SBS, reportes de calificacion publicos y prensa financiera
+ * peruana). NO se menciona ninguna fuente especifica en el output del LLM.
  *
  * Se INYECTA al system prompt de todos los templates para que el LLM
  * (i) use la terminologia correcta, (ii) siga el framework 5D estandar
- * de las clasificadoras y (iii) escriba con el estilo narrativo del sector.
+ * del analisis crediticio y (iii) escriba con el estilo narrativo del sector.
  */
 
 export const SECTOR_KNOWLEDGE_SBS = `

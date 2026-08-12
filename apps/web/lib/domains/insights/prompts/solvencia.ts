@@ -1,6 +1,6 @@
 /**
  * Prompt template para "Solvencia" — evalua el respaldo patrimonial del
- * peer group vs riesgos asumidos. Framework analitico Moody's.
+ * peer group vs riesgos asumidos. Framework analitico crediticio estandar.
  *
  * Contexto esperado en ctx.contexto:
  *   serie: Array<{

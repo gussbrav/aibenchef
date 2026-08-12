@@ -48,7 +48,7 @@ export function DemoCTA({
               </Link>
             </div>
             <p className="text-xs text-white/70">
-              50% off el primer trimestre para los primeros en registrarse. Sin tarjeta requerida.
+              Sin tarjeta, sin compromiso. Cancelas cuando quieras.
             </p>
           </div>
         </div>

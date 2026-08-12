@@ -1,6 +1,6 @@
 /**
  * Prompt template para "Cobertura de Cartera" — evalua el aprovisionamiento
- * vs riesgos latentes en cartera. Framework Moody's: cobertura por CAR y
+ * vs riesgos latentes en cartera. Framework de analisis crediticio: cobertura por CAR y
  * Cartera Problema, compromiso patrimonial.
  *
  * Contexto esperado en ctx.contexto:

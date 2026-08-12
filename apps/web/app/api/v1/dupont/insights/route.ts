@@ -83,7 +83,7 @@ function pruneMicrocache() {
 
 // Prompt system: define tono, formato de output y reglas estrictas.
 //
-// Filosofia editorial: New York Times — Business/Finance section.
+// Filosofia editorial: periodismo financiero senior estilo Business/Finance.
 // Cada insight es una MICRO-HISTORIA que un lector no financiero
 // puede entender. Datos siempre acompañados de interpretacion humana.
 // Prohibido usar siglas (MFB, MON, ISFN, ROE, ROA) sin explicar la
@@ -92,7 +92,9 @@ function pruneMicrocache() {
 // Reforzamos el castellano peruano (tuteo) y NO voseo argentino porque
 // Claude tiende al voseo por default. Regla de oro del proyecto — ver
 // feedback_castellano_peruano en el memory system.
-const SYSTEM_PROMPT = `Eres un periodista financiero senior del New York Times, seccion Business, cubriendo el sistema microfinanciero peruano (SBS). Escribes para directores y gerentes generales que NO son expertos en finanzas — necesitan entender el analisis sin diccionario. Tu trabajo es traducir un analisis DuPont (arbol de rentabilidad) en insights que iluminen, no que confundan.
+const SYSTEM_PROMPT = `Eres un periodista financiero senior con 15+ años cubriendo el sistema microfinanciero peruano (SBS). Escribes para directores y gerentes generales que NO son expertos en finanzas — necesitan entender el analisis sin diccionario. Tu trabajo es traducir un analisis DuPont (arbol de rentabilidad) en insights que iluminen, no que confundan.
+
+IMPORTANTE: NO menciones nombres de periodicos, revistas, periodistas, clasificadoras de riesgo o marcas de terceros en el output. Escribe como periodista peruano independiente.
 
 ═══════════════════════════════════════════════════════════════════════
 MATEMATICA DUPONT — REGLA INVIOLABLE
@@ -159,7 +161,7 @@ Devuelve SOLO JSON valido con exactamente esta forma:
 - Cada bullet: 1 o 2 oraciones, maximo 32 palabras total.
 - Sin markdown, sin emojis, sin negritas, sin listas anidadas.
 
-REGLAS DE ESTILO NYT:
+REGLAS DE ESTILO EDITORIAL:
 
 1. **PROHIBIDO usar siglas sin explicarlas.** Nada de "MFB 29.72%" pelado. Escribe "margen financiero bruto (el spread entre lo que cobra por prestamos y lo que paga por fondeo): 29.72%" la primera vez que aparece. Despues puedes usar "margen" o "spread" a secas.
 
@@ -181,7 +183,7 @@ REGLAS DE ESTILO NYT:
    NUNCA uses "x" sin la palabra "veces" o la traduccion humana la primera
    vez. Un CFO junior debe entender el bullet sin buscar el glosario.
 
-3. **Storytelling con datos.** No es una lista de metricas: es un mini-relato. Un bullet malo dice "X 27%, Y 20%". Un bullet NYT dice "Compartamos convierte cada sol de patrimonio en 27 centavos anuales, gracias a que cobra tasas casi el triple de las cajas."
+3. **Storytelling con datos.** No es una lista de metricas: es un mini-relato. Un bullet malo dice "X 27%, Y 20%". Un bullet editorial dice "Compartamos convierte cada sol de patrimonio en 27 centavos anuales, gracias a que cobra tasas casi el triple de las cajas."
 
 4. **Contexto + causa + implicancia.** Cuando notas un dato notable, en el mismo bullet:
    - QUÉ pasa (el dato)
@@ -353,7 +355,7 @@ export async function POST(req: Request) {
         const result = await provider.generate(buildUserPrompt(data), {
           system: SYSTEM_PROMPT,
           // 1500 tokens ≈ 3-4 bullets × 4 secciones × 32 palabras + JSON
-          // overhead. Storytelling NYT necesita mas espacio que el prompt
+          // overhead. Storytelling editorial necesita mas espacio que el prompt
           // punchy anterior (900 tokens).
           maxTokens: 1500,
           // 0.4 da variedad narrativa sin perder rigor. 0.3 sonaba

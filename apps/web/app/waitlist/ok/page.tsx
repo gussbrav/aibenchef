@@ -21,8 +21,8 @@ export default function WaitlistOkPage() {
               Ya estás en la lista
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed">
-              Te vamos a avisar por email apenas revisemos tu solicitud. Los
-              primeros en acceder tienen <strong className="text-slate-900">50% off el primer trimestre</strong>.
+              Te vamos a avisar por email apenas revisemos tu solicitud.
+              Mientras tanto, puedes <Link href={"/demo/informe" as never} className="text-brand-700 hover:text-brand-800 font-medium underline">explorar las demos públicas</Link> del producto.
             </p>
           </div>
           <div className="pt-2">

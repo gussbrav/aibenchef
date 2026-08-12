@@ -21,7 +21,7 @@ export const PUBLICACION_TEMAS_META: Record<
   mora_visual: {
     label: "Mora visual (con gráfico)",
     descripcion:
-      "Radiografía de mora global — evolución mensual últimos 24 meses con gráfico embebido. Estilo NYT.",
+      "Radiografía de mora global — evolución mensual últimos 24 meses con gráfico embebido.",
     hashtagsDefault: promptMoraVisual.hashtagsDefault,
     charts: true,
   },

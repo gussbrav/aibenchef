@@ -161,7 +161,7 @@ function computePerformance(
 }
 
 /**
- * Conditional formatting tipo Bloomberg/S&P: tinte de fondo sobre la celda
+ * Conditional formatting tipo terminal financiera: tinte de fondo sobre la celda
  * numerica + texto en negrita y color en los extremos. Sin dots — el numero
  * queda como protagonista pero el color guia el ojo a los outliers.
  *

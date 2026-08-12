@@ -1,11 +1,16 @@
 import { Container, Section, SectionHeading } from "@/components/ui";
 
+// Numeros REALES verificados en la base de datos de produccion al cierre
+// Jun 2026 — reflejan entidades ACTIVAS en el ultimo periodo publicado
+// por SBS. El total historico (incluyendo entidades que ya no operan, se
+// fusionaron o cambiaron de nombre) es mayor (~120) y esa data tambien
+// esta disponible en la app.
 const groups = [
-  { name: "Banca Múltiple", count: 17, color: "from-brand-500 to-brand-600" },
-  { name: "Empresas Financieras", count: 9, color: "from-emerald-500 to-emerald-600" },
-  { name: "Cajas Municipales (CMAC)", count: 12, color: "from-amber-500 to-amber-600" },
+  { name: "Banca Múltiple", count: 22, color: "from-brand-500 to-brand-600" },
+  { name: "Empresas Financieras", count: 5, color: "from-emerald-500 to-emerald-600" },
+  { name: "Cajas Municipales (CMAC)", count: 13, color: "from-amber-500 to-amber-600" },
   { name: "Cajas Rurales (CRAC)", count: 6, color: "from-rose-500 to-rose-600" },
-  { name: "EDPYMEs", count: 9, color: "from-violet-500 to-violet-600" },
+  { name: "EDPYMEs", count: 6, color: "from-violet-500 to-violet-600" },
 ];
 
 const topics = [
@@ -28,7 +33,7 @@ export function Coverage() {
         <SectionHeading
           eyebrow="Cobertura"
           title="Todo el sistema bancario peruano, un solo lugar"
-          description="200+ entidades reguladas por la SBS, 10 tópicos por entidad, histórico mensual desde 2010."
+          description="52 entidades activas reguladas por la SBS al cierre actual, más de 100 con histórico desde 2010 (incluye cambios de nombre y fusiones). 10 tópicos por entidad, actualización mensual."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {groups.map((g) => (

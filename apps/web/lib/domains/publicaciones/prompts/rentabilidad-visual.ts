@@ -79,7 +79,7 @@ Ubicacion sugerida:
 
 ## INSTRUCCIONES ESPECIFICAS PARA ESTE ARTICULO
 
-ANGULO EDITORIAL: la rentabilidad es lo que atrae capital. Un articulo NYT sobre ROE responde: (1) quien esta rentabilizando mejor SU capital, (2) es sostenible la trayectoria, (3) que puede hacer ${ctx.entidadPropia} para acercarse al lider.
+ANGULO EDITORIAL: la rentabilidad es lo que atrae capital. Un articulo periodistico serio sobre ROE responde: (1) quien esta rentabilizando mejor SU capital, (2) es sostenible la trayectoria, (3) que puede hacer ${ctx.entidadPropia} para acercarse al lider.
 
 ESTRUCTURA sugerida:
 - **Titulo**: enfoque causal + insight. Ej: "El ROE del segmento al cierre ${ctx.periodoLabel}: ${contexto.liderRoe?.entidad ?? "quien"} sostiene rentabilidad mientras el promedio se contrae"

@@ -2,9 +2,9 @@
  * Prompt template para "Analisis del Punto de Equilibrio" — cuadro
  * comparativo por entidad en modo cierre unico.
  *
- * Estilo: inspirado en los posts de LinkedIn de Jesus Ferreyra
- * (Aprendiz de Microfinanzas / Gerente Central de Negocios). Combina
- * la rigurosidad SBS del SYSTEM_PROMPT_BASE con:
+ * Estilo: inspirado en el tono punchy y directo del analisis financiero
+ * peruano especializado en microfinanzas. Combina la rigurosidad SBS
+ * del SYSTEM_PROMPT_BASE con:
  *   - Observaciones punchy que llaman la atencion
  *   - Comparaciones directas entre entidades ("X vs Y")
  *   - Emojis con proposito (🔥 logro notable, ⚠️ riesgo, 🎯 oportunidad)
@@ -104,7 +104,7 @@ Referencia del grupo:
 
 ## INSTRUCCIONES ESPECIFICAS DE ESTA SECCION (estilo del analisis):
 
-TONO Y VOZ — inspirado en los posts de Jesus Ferreyra (LinkedIn: "Aprendiz de Microfinanzas", Gerente Central de Negocios). Su estilo caracteristico:
+TONO Y VOZ — estilo punchy y directo del analisis financiero peruano especializado en microfinanzas:
 
 PATRONES DE APERTURA:
 - ARRANCA con la observacion mas llamativa del cierre — nunca con "El grupo comparativo muestra..." ni "En este cierre observamos...".

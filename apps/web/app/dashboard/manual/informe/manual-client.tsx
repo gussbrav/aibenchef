@@ -167,7 +167,7 @@ export function ManualInformeClient() {
           <p>
             En varias secciones vas a ver un panel <strong>"Análisis del experto"</strong>. Es un análisis
             ejecutivo generado por inteligencia artificial usando los datos exactos que ves en pantalla,
-            con el tono de las clasificadoras de riesgo peruanas (Moody's, Apoyo, Equilibrium).
+            con el tono editorial de un analista financiero senior del sector.
           </p>
           <ol className="manual-numbered">
             <li>Busca el panel — está debajo de cada gráfico principal.</li>

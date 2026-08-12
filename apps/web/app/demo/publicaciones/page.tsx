@@ -103,7 +103,7 @@ export default function DemoPublicacionesPage() {
         icon={FileText}
         tag="Publicaciones · Artículos con gráficos AI"
         titulo="Análisis long-form listos para LinkedIn"
-        descripcion="Artículos editoriales estilo NYT Business generados con AI desde tu data real. Cada uno incluye 1-2 gráficos SVG embebidos, tono peruano, cifras exactas y hashtags optimizados."
+        descripcion="Artículos editoriales long-form generados con AI desde tu data real. Cada uno incluye 1-2 gráficos SVG embebidos, tono periodístico financiero peruano, cifras exactas y hashtags optimizados."
         chips={[
           { label: "Tema", value: "Mora visual", fijo: true },
           { label: "Entidad propia", value: "CMAC Arequipa", fijo: true },
@@ -146,7 +146,7 @@ export default function DemoPublicacionesPage() {
             </div>
           </div>
 
-          {/* Articulo estilo NYT */}
+          {/* Articulo editorial long-form */}
           <article className="bg-white ring-1 ring-slate-200 rounded-b-2xl p-8 md:p-12 shadow-lg">
             <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-3">
               CMAC Arequipa · Cierre Jun 2026

@@ -1,7 +1,7 @@
 /**
  * Chart engine SVG server-side — sin dependencias externas.
  *
- * Filosofia NYT/Datawrapper: SVG limpio, escrito a mano, con control
+ * Filosofia editorial: SVG limpio, escrito a mano, con control
  * total del estilo. Cero librerias (Recharts/Highcharts) para:
  *   - Zero runtime cost en el server (JSON.stringify a mano)
  *   - Zero bundle bloat en el client (los SVGs se sirven inline en el HTML)

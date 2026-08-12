@@ -21,7 +21,7 @@ import { Footer } from "@/components/marketing/footer";
  * 4. ForWho — para quien es (4 personas)
  * 5. Coverage — que tan completo (numeros + 10 topicos)
  * 6. HowItWorks — como se usa (3 pasos)
- * 7. Comparison — vs alternativas (Excel / Consultora / Bloomberg)
+ * 7. Comparison — vs alternativas (Excel / Consultora / Terminal financiera)
  * 8. Pricing — cuanto cuesta
  * 9. FAQ — objeciones frecuentes
  * 10. CTABanner — cierre final

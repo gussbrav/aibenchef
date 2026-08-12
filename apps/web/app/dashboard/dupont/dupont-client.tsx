@@ -1005,7 +1005,7 @@ function SeccionDupont({
         </div>
       </div>
 
-      {/* Layout NUEVO — recomendacion UX (Bloomberg/FT/Vercel Analytics):
+      {/* Layout NUEVO — patron UX de dashboards financieros modernos:
           la narrativa va ARRIBA como banner colapsable (details/summary),
           no como sidebar. Sin sidebar, el chart usa 100% del ancho de la
           seccion → barras mas gruesas, labels sin colision, con espacio

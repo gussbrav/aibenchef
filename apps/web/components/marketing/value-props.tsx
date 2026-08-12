@@ -18,7 +18,7 @@ const valueProps = [
     icon: Layers,
     title: "Cobertura total",
     description:
-      "Banca Múltiple, Empresas Financieras, Cajas Municipales, Cajas Rurales y EDPYMEs. 200+ entidades, 10 tópicos, histórico desde 2010.",
+      "Banca Múltiple, Empresas Financieras, Cajas Municipales, Cajas Rurales y EDPYMEs. Más de 50 entidades activas, 10 tópicos, histórico desde 2010 (incluye cambios de nombre y fusiones).",
   },
   {
     icon: Shield,
