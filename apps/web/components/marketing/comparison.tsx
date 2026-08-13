@@ -37,7 +37,7 @@ const filas: Fila[] = [
     excel: { estado: "yes", texto: "Solo lo que descargas" },
     consultora: { estado: "partial", texto: "El scope contratado" },
     terminal: { estado: "no", texto: "Cobertura global, sin foco local" },
-    aibenchef: { estado: "yes", texto: "50+ entidades activas, 10 tópicos" },
+    aibenchef: { estado: "yes", texto: "50+ entidades activas, 11 tópicos" },
   },
   {
     atributo: "Actualización automática",

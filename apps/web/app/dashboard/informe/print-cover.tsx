@@ -246,8 +246,9 @@ export function PrintFooter({
           (ROE, ROA) usan promedios de saldos de 12 meses en el denominador.
         </li>
         <li>
-          El grupo comparable se construye siguiendo la regla SBS: una entidad top por tipo regulatorio
-          (Bancos, Financieras, CMAC, CRAC, EDPYMES). La entidad propia reemplaza al top de su mismo tipo.
+          El grupo comparable se construye siguiendo la regla regulatoria: una entidad top por tipo
+          (Bancos, Financieras, CMAC, CRAC, Empresas de Créditos). La entidad propia reemplaza al top
+          de su mismo tipo.
         </li>
         <li>
           Los insights generados con inteligencia artificial son de apoyo — no constituyen recomendacion

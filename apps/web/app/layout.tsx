@@ -6,17 +6,17 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://aibenchef.azoramind.c
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: "Aibenchef · Inteligencia financiera SBS Perú",
+    default: "Aibenchef · Inteligencia financiera del sistema financiero peruano",
     template: "%s · Aibenchef",
   },
   description:
-    "Toda la data pública de la SBS limpia, comparada y visualizada. Bancos, financieras, cajas municipales, rurales y EDPYMEs en una sola plataforma. Decisiones en minutos, no semanas.",
+    "Bancos, financieras, cajas y empresas de créditos — toda la data pública, limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
   keywords: [
-    "SBS",
     "banca peruana",
+    "sistema financiero peruano",
     "microfinanzas Perú",
     "estados financieros",
-    "Caja Arequipa",
+    "benchmarking bancario",
     "Banca Múltiple",
     "BI bancario",
     "Aibenchef",

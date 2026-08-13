@@ -81,7 +81,7 @@ export default async function OpenGraphImage() {
           flexWrap: "wrap",
         }}
       >
-        {["Banca Multiple", "Financieras", "CMAC", "CRAC", "EDPYMEs"].map((t) => (
+        {["Banca Multiple", "Financieras", "CMAC", "CRAC", "Emp. Creditos"].map((t) => (
           <span
             key={t}
             style={{

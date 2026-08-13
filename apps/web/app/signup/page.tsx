@@ -116,9 +116,9 @@ export default function SignupPage() {
                   <strong className="text-white">100+ entidades</strong> con histórico desde 2010 (incluye fusiones y renombres)
                 </li>
                 <li>
-                  <strong className="text-white">10 tópicos</strong> por entidad (EEFF, colocaciones, mora, etc.)
+                  <strong className="text-white">11 tópicos</strong> por entidad (EEFF, colocaciones, tasas, mora, etc.)
                 </li>
-                <li>Cada número enlaza a su fuente original SBS</li>
+                <li>Cada número enlaza a su fuente pública oficial</li>
               </ul>
             </div>
 

@@ -10,7 +10,7 @@ const groups = [
   { name: "Empresas Financieras", count: 5, color: "from-emerald-500 to-emerald-600" },
   { name: "Cajas Municipales (CMAC)", count: 13, color: "from-amber-500 to-amber-600" },
   { name: "Cajas Rurales (CRAC)", count: 6, color: "from-rose-500 to-rose-600" },
-  { name: "EDPYMEs", count: 6, color: "from-violet-500 to-violet-600" },
+  { name: "Empresas de Créditos", count: 6, color: "from-violet-500 to-violet-600" },
 ];
 
 const topics = [
@@ -23,6 +23,7 @@ const topics = [
   "Oficinas y Geografía",
   "Personal",
   "Tasas Activas",
+  "Tasas Pasivas",
   "Indicadores Regulatorios",
 ];
 
@@ -32,8 +33,8 @@ export function Coverage() {
       <Container size="xl">
         <SectionHeading
           eyebrow="Cobertura"
-          title="Todo el sistema bancario peruano, un solo lugar"
-          description="52 entidades reguladas activas al cierre actual, más de 100 con histórico desde 2010 (incluye cambios de nombre y fusiones). 10 tópicos por entidad, actualización mensual."
+          title="Todo el sistema financiero peruano, un solo lugar"
+          description="52 entidades reguladas activas al cierre actual, más de 100 con histórico desde 2010 (incluye cambios de nombre y fusiones). 11 tópicos por entidad, actualización mensual."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {groups.map((g) => (
@@ -53,7 +54,7 @@ export function Coverage() {
 
         <div className="mt-16 max-w-4xl mx-auto">
           <p className="text-center text-sm font-semibold tracking-widest text-slate-500 uppercase mb-6">
-            10 tópicos por entidad
+            11 tópicos por entidad
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             {topics.map((t) => (

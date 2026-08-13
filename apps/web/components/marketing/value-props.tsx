@@ -18,7 +18,7 @@ const valueProps = [
     icon: Layers,
     title: "Cobertura amplia",
     description:
-      "Banca Múltiple, Financieras, Cajas Municipales, Cajas Rurales y EDPYMEs. Más de 50 entidades activas, histórico mensual desde 2010 (incluye cambios de nombre y fusiones).",
+      "Banca Múltiple, Financieras, Cajas Municipales, Cajas Rurales y Empresas de Créditos. Más de 50 entidades activas, histórico mensual desde 2010 (incluye cambios de nombre y fusiones).",
   },
   {
     icon: Shield,

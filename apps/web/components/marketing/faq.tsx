@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: "¿Cuánto histórico tienen?",
-    a: "Desde enero 2010 en las entidades reguladas del sistema financiero peruano. 52 entidades activas al cierre actual y más de 100 con histórico (incluye entidades que se fusionaron o cambiaron de nombre) × 10 tópicos × 180+ meses.",
+    a: "Desde enero 2010 en las entidades reguladas del sistema financiero peruano. 52 entidades activas al cierre actual y más de 100 con histórico (incluye entidades que se fusionaron o cambiaron de nombre) × 11 tópicos × 180+ meses.",
   },
   {
     q: "¿Es legal usar esta data?",

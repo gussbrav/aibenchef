@@ -39,13 +39,13 @@ export function Hero() {
             Inteligencia financiera para
             <br />
             <span className="bg-gradient-to-r from-brand-600 via-brand-500 to-brand-700 bg-clip-text text-transparent">
-              la banca peruana
+              el sistema financiero peruano
             </span>
           </h1>
           <p className="text-xl lg:text-2xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
-            Estados financieros públicos de las entidades reguladas, limpios,
-            comparados y visualizados. Sin descargar Excels ni armar tablas
-            dinámicas. Decisión lista en minutos, no semanas.
+            Bancos, financieras, cajas y empresas de créditos — toda la data
+            pública, limpia, comparada y visualizada. Sin descargar Excels ni
+            armar tablas dinámicas. Decisión lista en minutos, no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
             <Link href="/signup">
@@ -61,7 +61,7 @@ export function Hero() {
             </Link>
           </div>
           <p className="text-sm text-slate-500">
-            Sin tarjeta, sin compromiso. Explora la data del sistema financiero peruano en minutos.
+            Sin tarjeta, sin compromiso. Explora todo el sistema financiero peruano en minutos.
           </p>
         </div>
 
