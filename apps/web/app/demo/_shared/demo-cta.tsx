@@ -42,7 +42,15 @@ export function DemoCTA({
                 </Button>
               </Link>
               <Link href="/#planes">
-                <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+                {/* variant="outline" trae bg-white + text-slate-700 que hacian
+                    el label invisible sobre el fondo azul del CTA. Forzamos
+                    transparente + texto/borde blanco solido con ! para ganar
+                    la especificidad de la variante. */}
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="!bg-transparent !text-white !border-white/60 hover:!bg-white/15"
+                >
                   Ver planes
                 </Button>
               </Link>
