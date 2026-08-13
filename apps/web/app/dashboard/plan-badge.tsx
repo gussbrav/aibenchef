@@ -38,8 +38,29 @@ const COLORS: Record<UserPlan, { bg: string; text: string; border: string; ring:
   },
 };
 
-export function PlanBadge({ plan }: { plan: UserPlan }) {
+export function PlanBadge({
+  plan,
+  admin = false,
+}: {
+  plan: UserPlan;
+  /** V167: los admins ven un chip 'Admin' distintivo, no el chip de plan
+   *  comercial (que confunde porque su rol no depende del plan). */
+  admin?: boolean;
+}) {
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Admin toma prioridad sobre el plan comercial.
+  if (admin) {
+    return (
+      <span
+        className="hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-300/40 text-[11px] font-semibold uppercase tracking-wider"
+        title="Cuenta administrador"
+      >
+        Admin
+      </span>
+    );
+  }
+
   const c = COLORS[plan];
   const isFree = plan === "free";
 

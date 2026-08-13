@@ -38,15 +38,15 @@ export function DashboardUserMenu({ name, email }: { name: string; email: string
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition-colors"
+        className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-800/60 transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="flex w-8 h-8 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-xs font-bold">
+        <span className="flex w-8 h-8 items-center justify-center rounded-full bg-brand-500/20 text-brand-200 text-xs font-bold border border-brand-400/30">
           {initials || "?"}
         </span>
-        <span className="hidden sm:inline text-sm font-medium text-slate-700">{name}</span>
-        <ChevronDown className="w-4 h-4 text-slate-500" />
+        <span className="hidden sm:inline text-sm font-medium text-white">{name}</span>
+        <ChevronDown className="w-4 h-4 text-slate-300" />
       </button>
 
       {open && (

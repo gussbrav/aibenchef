@@ -696,7 +696,7 @@ function SeccionCuadroResumen({
   return (
     <section>
       <div className="flex items-end justify-between gap-4 flex-wrap mb-1">
-        <h2 className="text-xl font-bold text-slate-900 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+        <h2 className="text-xl font-bold inline-block px-4 py-2 rounded bg-slate-900 text-white">
           Cuadro Resumen
         </h2>
         <PerfLegend />
