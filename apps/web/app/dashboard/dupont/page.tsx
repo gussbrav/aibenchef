@@ -322,10 +322,18 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
     ? await getDupontInsightsFromCache(data)
     : null;
 
+  // V167: filtrar dropdown de periodos al alcance del plan. Free ve solo
+  // los ultimos maxHistoricoMeses periodos. La lista viene ordenada DESC
+  // (mas reciente primero) → slice(0, N) es correcto.
+  const periodosVisibles =
+    typeof maxHistoricoMeses === "number"
+      ? periodosDisponibles.slice(0, maxHistoricoMeses)
+      : periodosDisponibles;
+
   return (
     <DupontClient
       data={data}
-      periodosDisponibles={periodosDisponibles}
+      periodosDisponibles={periodosVisibles}
       entidadesDisponibles={entidadesDisponibles}
       consolidar={consolidar}
       initialInsights={cachedInsights?.insights ?? null}

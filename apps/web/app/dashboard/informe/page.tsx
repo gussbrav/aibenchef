@@ -271,10 +271,25 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
     planLimited = true;
   }
 
+  // V167: filtrar dropdown de periodos al alcance del plan. Free ve solo
+  // los ultimos maxHistoricoMeses periodos (24 = 2 anios). Pro ve 60.
+  // Admin ve todo. Los periodos vienen ordenados DESC (mas reciente primero)
+  // segun listPeriodosDisponibles.
+  const periodosVisibles =
+    typeof maxHistoricoMeses === "number"
+      ? periodosDisponibles.slice(0, maxHistoricoMeses)
+      : periodosDisponibles;
+  if (
+    typeof maxHistoricoMeses === "number" &&
+    periodosVisibles.length < periodosDisponibles.length
+  ) {
+    planLimited = true;
+  }
+
   return (
     <InformeClient
       data={data}
-      periodosDisponibles={periodosDisponibles}
+      periodosDisponibles={periodosVisibles}
       entidadesDisponibles={entidadesDisponibles}
       completenessStatus={completenessStatus}
       planLimited={planLimited}

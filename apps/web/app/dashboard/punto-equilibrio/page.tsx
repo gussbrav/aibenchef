@@ -173,6 +173,12 @@ export default async function PuntoEquilibrioPage({
     consolidar,
   });
 
+  // V167: filtrar dropdown 'Hasta periodo' al alcance del plan.
+  const periodosVisibles =
+    typeof maxHistoricoMeses === "number"
+      ? periodosDisponibles.slice(0, maxHistoricoMeses)
+      : periodosDisponibles;
+
   return (
     <PuntoEquilibrioClient
       cliente={cliente}
@@ -181,7 +187,7 @@ export default async function PuntoEquilibrioPage({
       historico={historico}
       series={series}
       entidadesDisponibles={entidadesDisponibles}
-      periodosDisponibles={periodosDisponibles}
+      periodosDisponibles={periodosVisibles}
       config={{
         desdeAnio,
         hastaPeriodo,
