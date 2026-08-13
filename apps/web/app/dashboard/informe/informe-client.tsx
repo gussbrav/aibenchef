@@ -695,8 +695,9 @@ function SeccionCuadroResumen({
 
   return (
     <section>
-      <div className="flex items-end justify-between gap-4 flex-wrap mb-1">
-        <h2 className="text-xl font-bold inline-block px-4 py-2 rounded bg-brand-500 text-white">
+      <div className="flex items-end justify-between gap-4 flex-wrap mb-3">
+        <h2 className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <span className="w-1 h-3 rounded-sm bg-brand-500" />
           Cuadro Resumen
         </h2>
         <PerfLegend />
@@ -704,18 +705,21 @@ function SeccionCuadroResumen({
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-brand-500 text-white">
+            <thead className="bg-slate-50/60 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider min-w-[260px]" />
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500 min-w-[260px]" />
                 {competidores.map((c) => (
                   <th
                     key={c}
-                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider border-b-2 ${
+                    className={`px-4 py-3 text-right text-[11px] uppercase tracking-[0.1em] whitespace-nowrap ${
                       c === clientePropio
-                        ? "bg-white text-brand-700 font-bold border-amber-400"
-                        : "font-semibold border-transparent text-brand-50"
+                        ? "text-slate-900 font-semibold"
+                        : "text-slate-500 font-medium"
                     }`}
                   >
+                    {c === clientePropio && (
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-500 mr-1.5 align-middle" />
+                    )}
                     {c}
                   </th>
                 ))}
@@ -788,7 +792,7 @@ function FragmentGrupo({
                   title={tooltip}
                   className={`px-4 py-2 text-right tabular-nums text-[13px] ${
                     esPropio
-                      ? "bg-blue-50 font-semibold text-slate-900"
+                      ? "bg-brand-50/60 font-semibold text-slate-900"
                       : `${style.cell} ${style.text || "text-slate-700"}`
                   }`}
                 >
@@ -841,20 +845,23 @@ function SeccionPuntoEquilibrio({
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-brand-500 text-white">
+            <thead className="bg-slate-50/60 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider min-w-[260px]">
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500 min-w-[260px]">
                   Componente
                 </th>
                 {competidores.map((c) => (
                   <th
                     key={c}
-                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider border-b-2 ${
+                    className={`px-4 py-3 text-right text-[11px] uppercase tracking-[0.1em] whitespace-nowrap ${
                       c === clientePropio
-                        ? "bg-white text-brand-700 font-bold border-amber-400"
-                        : "font-semibold border-transparent text-brand-50"
+                        ? "text-slate-900 font-semibold"
+                        : "text-slate-500 font-medium"
                     }`}
                   >
+                    {c === clientePropio && (
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-500 mr-1.5 align-middle" />
+                    )}
                     {c}
                   </th>
                 ))}

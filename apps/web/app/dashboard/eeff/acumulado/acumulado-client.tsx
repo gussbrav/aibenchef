@@ -218,19 +218,19 @@ export function AcumuladoClient() {
           {/* Tabla principal */}
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-xs">
-              <thead className="bg-brand-500 text-white">
+              <thead className="bg-slate-50/60 border-b border-slate-200">
                 <tr>
-                  <th className="text-left px-3 py-2 font-semibold uppercase tracking-wider text-[11px]">
+                  <th className="text-left px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">
                     Estado de Resultados
                   </th>
-                  <th className="text-right px-3 py-2 font-semibold w-24">{data.periodoPrev.label}</th>
-                  <th className="text-right px-3 py-2 font-semibold w-24">{data.periodoActual.label}</th>
-                  <th className="text-right px-3 py-2 font-semibold w-24">Var. S/.</th>
-                  <th className="text-right px-3 py-2 font-semibold w-20">Var. %</th>
-                  <th className="text-right px-3 py-2 font-semibold w-20 text-[10px]">
+                  <th className="text-right px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 w-24">{data.periodoPrev.label}</th>
+                  <th className="text-right px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 w-24">{data.periodoActual.label}</th>
+                  <th className="text-right px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 w-24">Var. S/.</th>
+                  <th className="text-right px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 w-20">Var. %</th>
+                  <th className="text-right px-3 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500 w-20">
                     A V<br />{data.periodoPrev.label}
                   </th>
-                  <th className="text-right px-3 py-2 font-semibold w-20 text-[10px]">
+                  <th className="text-right px-3 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500 w-20">
                     A V<br />{data.periodoActual.label}
                   </th>
                 </tr>
