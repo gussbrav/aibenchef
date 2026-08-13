@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { EntidadFreshnessBadge, RenombresToggle } from "@/components/ui";
 import { computeMaxUltimoPeriodo } from "@/lib/utils/periodo-freshness";
+import { earliestPeriodoForWindow } from "@/lib/plans";
 import type { Cliente } from "@/lib/domains/informe/types";
 import type {
   Granularidad,
@@ -408,14 +409,16 @@ function SelectoresBar({
 }) {
   // Años disponibles: desde 2009 hasta año actual del draft.
   // V167: si el plan limita ventana historica, el minimo permitido es
-  // (hastaPeriodo - maxHistoricoMeses). Debajo de ese anio, dropdown lo omite.
+  // el anio de earliestPeriodoForWindow(hasta, maxHistoricoMeses).
   const anioActual = Math.floor(draft.hastaPeriodo / 100);
-  const mesActual = draft.hastaPeriodo % 100;
   const anioMin = useMemo(() => {
     if (typeof planMaxHistoricoMeses !== "number") return ANIO_MIN;
-    const earliest = anioActual * 100 + mesActual - planMaxHistoricoMeses + 1;
+    const earliest = earliestPeriodoForWindow(
+      draft.hastaPeriodo,
+      planMaxHistoricoMeses,
+    );
     return Math.max(ANIO_MIN, Math.floor(earliest / 100));
-  }, [planMaxHistoricoMeses, anioActual, mesActual]);
+  }, [planMaxHistoricoMeses, draft.hastaPeriodo]);
   const aniosDisponibles = useMemo(() => {
     const r: number[] = [];
     for (let a = anioMin; a <= anioActual; a++) r.push(a);

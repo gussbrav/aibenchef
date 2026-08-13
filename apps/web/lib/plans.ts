@@ -134,6 +134,28 @@ export function limitsForPlan(plan: UserPlan | null | undefined): PlanLimits {
 }
 
 /**
+ * Calcula el periodo YYYYMM mas antiguo permitido dado un hasta-periodo y
+ * una ventana en meses. Ejemplo: (202606, 24) → 202407.
+ *
+ * IMPORTANTE: usa aritmetica de meses reales, NO restar sobre YYYYMM
+ * (esto ultimo da valores basura porque no hay 13 meses en un anio).
+ */
+export function earliestPeriodoForWindow(
+  hastaPeriodo: number,
+  windowMonths: number,
+): number {
+  const anio = Math.floor(hastaPeriodo / 100);
+  const mes = hastaPeriodo % 100;
+  // Convertir a "meses totales desde el año 0" (mes 0 = Ene).
+  const totalMesHasta = anio * 12 + (mes - 1);
+  const totalMesEarly = totalMesHasta - windowMonths + 1;
+  const earlyAnio = Math.floor(totalMesEarly / 12);
+  // Corrige mod negativo si la ventana cae antes del año 0 (edge muy raro).
+  const earlyMesIdx = ((totalMesEarly % 12) + 12) % 12;
+  return earlyAnio * 100 + (earlyMesIdx + 1);
+}
+
+/**
  * True si el plan tiene acceso a un feature especifico. Ergonomia mejor
  * que llamar limitsForPlan(plan).xxx en cada check.
  */

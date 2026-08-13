@@ -18,7 +18,7 @@ import {
 import { db } from "@/lib/infrastructure/db";
 import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
-import { PLAN_LIMITS } from "@/lib/plans";
+import { PLAN_LIMITS, earliestPeriodoForWindow } from "@/lib/plans";
 import { DupontClient } from "./dupont-client";
 
 export const metadata: Metadata = {
@@ -287,9 +287,7 @@ export default async function DupontPage({ searchParams }: { searchParams: Searc
   // al menos el mas reciente para no romper el fetch.
   if (typeof maxHistoricoMeses === "number" && periodos.length > 0) {
     const maxP = Math.max(...periodos);
-    const anioMax = Math.floor(maxP / 100);
-    const mesMax = maxP % 100;
-    const earliestAllowed = anioMax * 100 + mesMax - maxHistoricoMeses + 1;
+    const earliestAllowed = earliestPeriodoForWindow(maxP, maxHistoricoMeses);
     const antes = periodos.length;
     const filtrados = periodos.filter((p) => p >= earliestAllowed);
     if (filtrados.length === 0) {

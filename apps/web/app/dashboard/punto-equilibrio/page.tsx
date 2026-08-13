@@ -16,7 +16,7 @@ import {
   type Granularidad,
 } from "@/lib/domains/punto-equilibrio";
 import { getUser, isAdmin } from "@/lib/domains/users";
-import { PLAN_LIMITS } from "@/lib/plans";
+import { PLAN_LIMITS, earliestPeriodoForWindow } from "@/lib/plans";
 import { PuntoEquilibrioClient } from "./client";
 
 export const metadata: Metadata = {
@@ -89,20 +89,18 @@ export default async function PuntoEquilibrioPage({
   // meses), clampeamos el desdeAnio para no permitir consultas mas
   // profundas. En Pro/Business/admin es undefined y no aplica.
   const anioActual = Math.floor(hastaPeriodo / 100);
-  const mesActual = hastaPeriodo % 100;
   let desdeAnio = params.desde
     ? Number.parseInt(params.desde, 10)
     : Math.max(2009, anioActual - 5);
   let planLimitedHistorico = false;
   if (typeof maxHistoricoMeses === "number") {
-    // El anio mas temprano permitido es el que contiene el mes
-    // (hastaPeriodo - maxHistoricoMeses + 1). En Free (24m) con
-    // hastaPeriodo=202606, minima ventana desde = 202407 → desdeAnio = 2024.
-    const earliestPeriodo =
-      anioActual * 100 + mesActual - maxHistoricoMeses + 1;
-    const earliestAnio = Math.floor(
-      earliestPeriodo > 0 ? earliestPeriodo / 100 : anioActual,
+    // Ejemplo: hastaPeriodo=202606, maxHistoricoMeses=24 → earliest=202407
+    // → desdeAnio minimo permitido = 2024.
+    const earliestPeriodo = earliestPeriodoForWindow(
+      hastaPeriodo,
+      maxHistoricoMeses,
     );
+    const earliestAnio = Math.floor(earliestPeriodo / 100);
     if (desdeAnio < earliestAnio) {
       planLimitedHistorico = true;
       desdeAnio = earliestAnio;
