@@ -705,7 +705,7 @@ function SeccionCuadroResumen({
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-100 border-y border-slate-200">
+            <thead className="bg-white border-b-2 border-slate-300">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[260px]" />
                 {competidores.map((c) => (
@@ -750,9 +750,15 @@ function FragmentGrupo({
 }) {
   return (
     <>
-      <tr className="bg-slate-100">
-        <td colSpan={competidores.length + 1} className="px-4 py-2 text-xs font-bold uppercase text-slate-700 tracking-wider">
-          {label}
+      <tr className="bg-slate-50 border-t border-b border-slate-200">
+        <td
+          colSpan={competidores.length + 1}
+          className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-brand-700"
+        >
+          <span className="inline-flex items-center gap-2">
+            <span className="w-1 h-3.5 rounded-full bg-brand-500" />
+            {label}
+          </span>
         </td>
       </tr>
       {kpis.map((k) => {
@@ -845,7 +851,7 @@ function SeccionPuntoEquilibrio({
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-100 border-y border-slate-200">
+            <thead className="bg-white border-b-2 border-slate-300">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[260px]">
                   Componente

@@ -1076,9 +1076,9 @@ function HistoricoTable({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-100 border-y border-slate-200">
+          <thead className="bg-white border-b-2 border-slate-300">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[240px] sticky left-0 bg-slate-100 z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[240px] sticky left-0 bg-white z-10">
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
@@ -1575,7 +1575,7 @@ function TablaComparativaCierre({
         <table className="w-full text-sm">
           <thead className="bg-slate-50/60 border-b border-slate-200">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 sticky left-0 bg-slate-100 z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 sticky left-0 bg-white z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {

@@ -218,7 +218,7 @@ export function AcumuladoClient() {
           {/* Tabla principal */}
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-xs">
-              <thead className="bg-slate-100 border-y border-slate-200">
+              <thead className="bg-white border-b-2 border-slate-300">
                 <tr>
                   <th className="text-left px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-600">
                     Estado de Resultados
