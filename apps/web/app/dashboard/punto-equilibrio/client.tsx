@@ -1076,9 +1076,9 @@ function HistoricoTable({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50/60 border-b border-slate-200">
+          <thead className="bg-slate-100 border-y border-slate-200">
             <tr>
-              <th className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500 min-w-[240px] sticky left-0 bg-slate-50/60 z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[240px] sticky left-0 bg-slate-100 z-10">
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
@@ -1113,8 +1113,8 @@ function HistoricoTable({
                       setDropTarget(null);
                     }}
                     className={cn(
-                      "text-right px-3 py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500 min-w-[95px] whitespace-nowrap cursor-move select-none",
-                      "hover:bg-slate-100 hover:text-slate-700 transition-colors group",
+                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[95px] whitespace-nowrap cursor-move select-none",
+                      "hover:bg-slate-200 hover:text-slate-800 transition-colors group",
                       isDragging && "opacity-40",
                       isDropTarget && "bg-brand-50 ring-1 ring-brand-300 ring-inset",
                     )}
@@ -1575,7 +1575,7 @@ function TablaComparativaCierre({
         <table className="w-full text-sm">
           <thead className="bg-slate-50/60 border-b border-slate-200">
             <tr>
-              <th className="text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500 sticky left-0 bg-slate-50/60 z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 sticky left-0 bg-slate-100 z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1609,10 +1609,10 @@ function TablaComparativaCierre({
                       setDropTargetEntidad(null);
                     }}
                     className={cn(
-                      "relative text-right px-3 py-2.5 text-[11px] uppercase tracking-[0.1em] min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
+                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors border-b-2",
                       s.esPropio
-                        ? "text-slate-900 font-semibold"
-                        : "text-slate-500 font-medium hover:bg-slate-100 hover:text-slate-700",
+                        ? "bg-brand-50 text-brand-800 font-bold border-brand-500"
+                        : "text-slate-600 font-semibold border-transparent hover:bg-slate-200 hover:text-slate-800",
                       isDragging && "opacity-40",
                       isDropTarget && "ring-1 ring-inset ring-brand-300 bg-brand-50",
                     )}
