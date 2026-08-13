@@ -8,7 +8,7 @@ import { DemoCTA } from "../_shared/demo-cta";
 export const metadata: Metadata = {
   title: "Demo — Publicaciones AI · Aibenchef",
   description:
-    "Vista pública del módulo Publicaciones: artículos long-form con gráficos SVG embebidos generados por AI a partir de data real SBS.",
+    "Vista pública del módulo Publicaciones: artículos long-form con gráficos SVG embebidos generados por AI a partir de data pública del sistema financiero peruano.",
 };
 
 // =============================================================================
@@ -87,7 +87,7 @@ function MoraChartSvg() {
       })}
       {/* Fuente */}
       <text x={padLeft} y={H - 8} fontSize="9" fill="#94a3b8" fontStyle="italic">
-        Fuente: SBS Perú · Corte Jun-26
+        Fuente pública oficial · Corte Jun-26
       </text>
     </svg>
   );
@@ -210,7 +210,7 @@ export default function DemoPublicacionesPage() {
 
             {/* Hashtags */}
             <div className="mt-8 pt-6 border-t border-slate-200 flex items-center gap-2 flex-wrap">
-              {["#Mora", "#RiesgoCrediticio", "#Microfinanzas", "#SBS", "#SistemaFinancieroPeruano"].map((h) => (
+              {["#Mora", "#RiesgoCrediticio", "#Microfinanzas", "#BancaPeruana", "#SistemaFinancieroPeruano"].map((h) => (
                 <span key={h} className="text-[13px] text-brand-700 font-medium">
                   {h}
                 </span>

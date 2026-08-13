@@ -7,27 +7,27 @@ const faqs = [
   },
   {
     q: "¿De dónde sacan los datos?",
-    a: "Directo de las publicaciones mensuales de la Superintendencia de Banca, Seguros y AFP (SBS). Los archivos .xls oficiales que cualquiera puede bajar, pero limpios, tipados, conectados y comparables.",
+    a: "De las publicaciones mensuales oficiales del regulador peruano del sistema financiero. Son archivos públicos que cualquiera puede descargar; nuestra propuesta es entregártelos ya limpios, tipados, conectados y comparables.",
   },
   {
     q: "¿Cada cuánto se actualiza?",
-    a: "Cada mes, automáticamente al día siguiente que la SBS publica el cierre (típicamente entre el día 30 y 45 después de fin de mes). Recibes un email cuando hay data nueva.",
+    a: "Cada mes, automáticamente cuando el regulador publica el nuevo cierre (típicamente entre el día 30 y 45 después de fin de mes). Recibes un email cuando hay data nueva.",
   },
   {
     q: "¿Cuánto histórico tienen?",
-    a: "Desde enero 2010 para todos los tópicos en todas las entidades supervisadas por SBS. 52 entidades activas al cierre actual y más de 100 con histórico (incluye entidades que se fusionaron o cambiaron de nombre en el camino) x 10 tópicos x 180+ meses.",
+    a: "Desde enero 2010 en las entidades reguladas del sistema financiero peruano. 52 entidades activas al cierre actual y más de 100 con histórico (incluye entidades que se fusionaron o cambiaron de nombre) × 10 tópicos × 180+ meses.",
   },
   {
-    q: "¿Es legal publicar esta data?",
-    a: "Sí. La data SBS es pública por ley peruana. Aibenchef cobra por el procesamiento, la visualización y el acceso cómodo, no por la data en sí.",
+    q: "¿Es legal usar esta data?",
+    a: "Sí. La información es pública por ley peruana; el regulador la publica gratis todos los meses. Aibenchef cobra por el procesamiento, la visualización y el acceso cómodo, no por la data en sí.",
   },
   {
-    q: "¿Tienen API?",
-    a: "Sí, disponible en el plan Business+. REST con autenticación JWT, paginación cursor-based, rate limits documentados. SDK en próximas versiones.",
+    q: "¿Tienen API pública?",
+    a: "Aún no. Consumo programático (REST) está reservado al plan Enterprise por acuerdo caso a caso. Contáctanos si lo necesitas.",
   },
   {
     q: "¿Y si quiero data de mi propia entidad para combinar?",
-    a: "El plan Enterprise permite cargar tus propios datos al lado de la data SBS. Ideal para benchmarking interno vs el sistema.",
+    a: "El plan Enterprise permite cargar tus propios datos al lado de la data pública. Ideal para benchmarking interno vs el sistema.",
   },
   {
     q: "¿Puedo cancelar en cualquier momento?",

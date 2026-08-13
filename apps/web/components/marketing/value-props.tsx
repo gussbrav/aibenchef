@@ -6,7 +6,7 @@ const valueProps = [
     icon: Clock,
     title: "De días a minutos",
     description:
-      "Lo que te toma armar manualmente cada mes con .xls de la SBS, Aibenchef te lo entrega listo el día 1 del cierre publicado.",
+      "Lo que te toma armar cada mes con archivos oficiales sueltos, Aibenchef te lo entrega listo el día que la información se publica.",
   },
   {
     icon: BarChart3,
@@ -16,15 +16,15 @@ const valueProps = [
   },
   {
     icon: Layers,
-    title: "Cobertura total",
+    title: "Cobertura amplia",
     description:
-      "Banca Múltiple, Empresas Financieras, Cajas Municipales, Cajas Rurales y EDPYMEs. Más de 50 entidades activas, 10 tópicos, histórico desde 2010 (incluye cambios de nombre y fusiones).",
+      "Banca Múltiple, Financieras, Cajas Municipales, Cajas Rurales y EDPYMEs. Más de 50 entidades activas, histórico mensual desde 2010 (incluye cambios de nombre y fusiones).",
   },
   {
     icon: Shield,
     title: "Auditable y trazable",
     description:
-      "Cada número enlaza a su fuente original SBS. Cero magia. Cero black box. Listo para presentar a directorio o regulador.",
+      "Cada número enlaza a la fuente pública oficial. Cero magia, cero black box. Listo para presentar a directorio.",
   },
 ];
 
@@ -35,7 +35,7 @@ export function ValueProps() {
         <SectionHeading
           eyebrow="Por qué Aibenchef"
           title="Decisiones más rápidas con la misma data pública"
-          description="La SBS publica todo gratis. El problema es que usarla toma días por mes. Resolvemos eso."
+          description="La información está publicada gratis por el regulador. Usarla toma días por mes. Resolvemos eso."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-6">
           {valueProps.map(({ icon: Icon, title, description }) => (

@@ -184,7 +184,7 @@ export function DashboardMockup() {
         {/* Footer con leyenda de heatmap */}
         <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-2 text-[10px] text-slate-500">
           <span>
-            Fuente: SBS Perú · Data pública procesada por Aibenchef
+            Fuente pública oficial · Data procesada por Aibenchef
           </span>
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">

@@ -32,11 +32,11 @@ const filas: Fila[] = [
     aibenchef: { estado: "yes", texto: "Desde $49" },
   },
   {
-    atributo: "Cobertura SBS Perú",
-    detalle: "50+ entidades activas, todos los grupos regulados",
+    atributo: "Cobertura banca peruana",
+    detalle: "50+ entidades reguladas activas, todos los grupos",
     excel: { estado: "yes", texto: "Solo lo que descargas" },
     consultora: { estado: "partial", texto: "El scope contratado" },
-    terminal: { estado: "no", texto: "Cobertura global, sin foco SBS Perú" },
+    terminal: { estado: "no", texto: "Cobertura global, sin foco local" },
     aibenchef: { estado: "yes", texto: "50+ entidades activas, 10 tópicos" },
   },
   {
@@ -51,7 +51,7 @@ const filas: Fila[] = [
     detalle: "Desde tener la data cruda hasta responder al directorio",
     excel: { estado: "no", texto: "3-5 días" },
     consultora: { estado: "no", texto: "2-4 semanas" },
-    terminal: { estado: "partial", texto: "1-2 días (sin data SBS local)" },
+    terminal: { estado: "partial", texto: "1-2 días (sin data local)" },
     aibenchef: { estado: "yes", texto: "5 minutos" },
   },
   {
@@ -92,7 +92,7 @@ export function Comparison() {
         <SectionHeading
           eyebrow="Alternativas"
           title="Cómo se compara Aibenchef con lo que ya usas"
-          description="No decimos que somos los mejores en todo. Somos los mejores en una cosa: benchmarking SBS Perú, ejecutable en minutos."
+          description="No decimos que somos los mejores en todo. Somos los mejores en una cosa: benchmarking de la banca peruana, ejecutable en minutos."
         />
         <div className="mt-16 overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse">

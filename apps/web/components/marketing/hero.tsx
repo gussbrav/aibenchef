@@ -43,9 +43,9 @@ export function Hero() {
             </span>
           </h1>
           <p className="text-xl lg:text-2xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
-            Toda la data pública de la SBS limpia, comparada y visualizada. Sin
-            descargar Excels, sin armar tablas dinámicas. Decisión lista en minutos,
-            no semanas.
+            Estados financieros públicos de las entidades reguladas, limpios,
+            comparados y visualizados. Sin descargar Excels ni armar tablas
+            dinámicas. Decisión lista en minutos, no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
             <Link href="/signup">
@@ -84,7 +84,7 @@ export function Hero() {
           <DashboardMockup />
           <p className="text-center text-xs text-slate-500 mt-4 italic">
             Vista previa del Cuadro Resumen — Banca Múltiple peruana al cierre Jun 2026.
-            Data pública SBS procesada automáticamente.
+            Data pública oficial procesada automáticamente.
           </p>
         </div>
       </Container>

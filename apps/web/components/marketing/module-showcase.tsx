@@ -59,7 +59,7 @@ function InformeMockup() {
         </tbody>
       </table>
       <div className="px-2 py-1 border-t border-slate-100 bg-slate-50/50 text-[8.5px] text-slate-500 italic">
-        Fuente: SBS Perú · data pública
+        Fuente: pública oficial
       </div>
     </div>
   );
@@ -102,7 +102,7 @@ function DupontMockup() {
         ))}
       </div>
       <p className="text-[8.5px] text-slate-500 italic pt-1 border-t border-slate-100">
-        Fuente: SBS Perú · data pública
+        Fuente: pública oficial
       </p>
     </div>
   );
@@ -160,7 +160,7 @@ function PuntoEquilibrioMockup() {
         </span>
       </div>
       <p className="text-[8.5px] text-slate-500 italic pt-1 border-t border-slate-100">
-        Fuente: SBS Perú · data pública
+        Fuente: pública oficial
       </p>
     </div>
   );
@@ -204,8 +204,8 @@ function PublicacionesMockup() {
         ))}
       </div>
       <div className="pt-1 border-t border-slate-100 text-[9px] flex items-center justify-between">
-        <span className="text-slate-500 italic">Chart SVG · Fuente: SBS Perú</span>
-        <span className="text-slate-400">#RiesgoCrediticio #SBS</span>
+        <span className="text-slate-500 italic">Chart SVG · Fuente pública oficial</span>
+        <span className="text-slate-400">#RiesgoCrediticio #Banca</span>
       </div>
     </div>
   );
@@ -264,7 +264,7 @@ export function ModuleShowcase() {
         <SectionHeading
           eyebrow="Explora los módulos"
           title="Cuatro herramientas, un solo cierre"
-          description="Todos los módulos comparten data SBS, peer group y período. Cambias el cierre en un lugar y todo se actualiza."
+          description="Todos los módulos comparten la misma data pública, peer group y período. Cambias el cierre en un lugar y todo se actualiza."
         />
         <div className="mt-16 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {modulos.map(({ icon: Icon, tag, title, description, features, Mockup, href }) => (

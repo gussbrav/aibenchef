@@ -84,7 +84,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       <footer className="border-t border-slate-200 bg-white py-6">
         <Container size="xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <p>Data pública SBS Perú · procesada por Aibenchef</p>
+            <p>Data pública oficial · procesada por Aibenchef</p>
             <div className="flex gap-4">
               <Link href="/" className="hover:text-slate-900">Inicio</Link>
               <Link href="/#planes" className="hover:text-slate-900">Planes</Link>

@@ -2,8 +2,8 @@ import { Container, Section, SectionHeading } from "@/components/ui";
 
 // Numeros REALES verificados en la base de datos de produccion al cierre
 // Jun 2026 — reflejan entidades ACTIVAS en el ultimo periodo publicado
-// por SBS. El total historico (incluyendo entidades que ya no operan, se
-// fusionaron o cambiaron de nombre) es mayor (~120) y esa data tambien
+// oficialmente. El total historico (incluyendo entidades que ya no operan,
+// se fusionaron o cambiaron de nombre) es mayor (~120) y esa data tambien
 // esta disponible en la app.
 const groups = [
   { name: "Banca Múltiple", count: 22, color: "from-brand-500 to-brand-600" },
@@ -33,7 +33,7 @@ export function Coverage() {
         <SectionHeading
           eyebrow="Cobertura"
           title="Todo el sistema bancario peruano, un solo lugar"
-          description="52 entidades activas reguladas por la SBS al cierre actual, más de 100 con histórico desde 2010 (incluye cambios de nombre y fusiones). 10 tópicos por entidad, actualización mensual."
+          description="52 entidades reguladas activas al cierre actual, más de 100 con histórico desde 2010 (incluye cambios de nombre y fusiones). 10 tópicos por entidad, actualización mensual."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {groups.map((g) => (

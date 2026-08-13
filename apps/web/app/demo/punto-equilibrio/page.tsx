@@ -194,7 +194,7 @@ export default function DemoPuntoEquilibrioPage() {
                 })}
               </svg>
               <p className="text-[11px] text-slate-500 italic mt-3 text-center">
-                Fuente: SBS Perú · Cierres anuales Dic-21 a Jun-26
+                Fuente pública oficial · Cierres anuales Dic-21 a Jun-26
               </p>
             </div>
           </div>

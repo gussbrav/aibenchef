@@ -50,7 +50,7 @@ const personas = [
     jobs: [
       "Monitoreo de la exposición del sistema en tiempo real",
       "Alertas cuando se aleja del promedio del sector",
-      "Trazabilidad hasta la fuente pública SBS",
+      "Trazabilidad hasta la fuente pública oficial",
     ],
     color: "amber",
   },

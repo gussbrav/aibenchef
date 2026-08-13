@@ -8,7 +8,7 @@ import { DemoCTA } from "../_shared/demo-cta";
 export const metadata: Metadata = {
   title: "Demo — Informe Ejecutivo · Aibenchef",
   description:
-    "Vista pública del Informe Ejecutivo de Aibenchef con data real SBS de la Banca Múltiple peruana al cierre Jun 2026.",
+    "Vista pública del Informe Ejecutivo de Aibenchef con data pública de la Banca Múltiple peruana al cierre Jun 2026.",
 };
 
 // =============================================================================
@@ -45,7 +45,7 @@ const secciones: Seccion[] = [
       { label: "Crec. Cartera YoY (%)", valores: [10.93, 8.42, 6.17, 5.88, 12.15], format: "pct", signo: 1 },
       { label: "Cartera MYPE / Total (%)", valores: [18.03, 15.44, 12.20, 13.85, 27.31], format: "pct", signo: 0 },
       { label: "Crédito Prom. por Cliente (Miles S/)", valores: [30.6, 44.8, 53.0, 49.7, 47.5], format: "moneda_miles", signo: 0 },
-      { label: "% Créditos Atrasados", info: "Cartera Atrasada / Cartera Bruta (criterio SBS oficial)", valores: [2.73, 3.51, 4.21, 4.02, 4.87], format: "pct", signo: -1 },
+      { label: "% Créditos Atrasados", info: "Cartera Atrasada / Cartera Bruta (criterio regulatorio oficial)", valores: [2.73, 3.51, 4.21, 4.02, 4.87], format: "pct", signo: -1 },
       { label: "% Mora Global (sin V/C)", info: "(Atrasada + Refinanciada + Castigos 12m) / Cartera Bruta", valores: [5.55, 6.42, 7.83, 7.11, 9.43], format: "pct", signo: -1 },
       { label: "% Mora Global (con V/C)", info: "Incluye venta de cartera 12m estimada", valores: [8.94, 10.11, 12.44, 11.28, 14.72], format: "pct", signo: -1 },
       { label: "Cobertura CAR (%)", info: "Provisiones / Cartera de Alto Riesgo", valores: [127.94, 118.44, 108.22, 112.51, 101.09], format: "pct", signo: 1 },
@@ -122,7 +122,7 @@ export default function DemoInformePage() {
           { label: "Cierre", value: "Jun 2026", fijo: true },
           { label: "Entidad propia", value: "BCP", fijo: true },
           { label: "Peer group", value: "BBVA · Interbank · Scotiabank · Pichincha", fijo: true },
-          { label: "Fuente", value: "SBS Perú" },
+          { label: "Fuente", value: "Pública oficial" },
         ]}
       />
 
@@ -206,7 +206,7 @@ export default function DemoInformePage() {
 
             <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500">
               <span>
-                Fuente: Superintendencia de Banca, Seguros y AFP (SBS Perú) · Data pública procesada por Aibenchef
+                Fuente pública oficial · Data procesada por Aibenchef
               </span>
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
@@ -227,7 +227,7 @@ export default function DemoInformePage() {
       <DemoCTA
         titulo="Genera este cuadro para TU peer group en 30 segundos"
         features={[
-          "Elige cualquier entidad SBS como tu 'entidad propia'",
+          "Elige cualquier entidad regulada como tu 'entidad propia'",
           "Configura peer group ilimitado (2-10 entidades)",
           "Cambia el cierre a cualquier mes desde 2010",
           "Filtra por consolidado o solo doméstico",
