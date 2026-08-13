@@ -1076,9 +1076,9 @@ function HistoricoTable({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-100 border-b border-slate-200">
+          <thead className="bg-slate-900 border-b border-slate-800 text-white">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-700 min-w-[240px] sticky left-0 bg-slate-100 z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-white min-w-[240px] sticky left-0 bg-slate-900 z-10">
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
@@ -1113,14 +1113,14 @@ function HistoricoTable({
                       setDropTarget(null);
                     }}
                     className={cn(
-                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-700 min-w-[95px] whitespace-nowrap cursor-move select-none",
-                      "hover:bg-slate-200 transition-colors group",
+                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-white min-w-[95px] whitespace-nowrap cursor-move select-none",
+                      "hover:bg-slate-800 transition-colors group",
                       isDragging && "opacity-40",
-                      isDropTarget && "bg-brand-100 ring-2 ring-brand-500 ring-inset",
+                      isDropTarget && "bg-brand-800 ring-2 ring-brand-400 ring-inset",
                     )}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500" />
+                      <GripVertical className="w-3 h-3 text-slate-500 group-hover:text-slate-300" />
                       {label}
                     </div>
                   </th>
@@ -1573,9 +1573,9 @@ function TablaComparativaCierre({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-100 border-b border-slate-200 text-slate-700">
+          <thead className="bg-slate-900 border-b border-slate-800 text-white">
             <tr>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-100 z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[280px] text-white">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1609,11 +1609,12 @@ function TablaComparativaCierre({
                       setDropTargetEntidad(null);
                     }}
                     className={cn(
-                      "relative text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
-                      s.esPropio && "bg-brand-50 text-brand-900",
-                      !s.esPropio && "hover:bg-slate-200",
+                      "relative text-right px-3 py-2.5 text-[11px] uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors border-b-2",
+                      s.esPropio
+                        ? "bg-slate-800 text-brand-200 font-bold border-brand-400"
+                        : "text-white font-semibold border-transparent hover:bg-slate-800",
                       isDragging && "opacity-40",
-                      isDropTarget && "ring-2 ring-inset ring-brand-500 bg-brand-100",
+                      isDropTarget && "ring-2 ring-inset ring-brand-400 bg-brand-800",
                     )}
                     style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar"

@@ -710,8 +710,10 @@ function SeccionCuadroResumen({
                 {competidores.map((c) => (
                   <th
                     key={c}
-                    className={`px-4 py-3 text-right font-semibold text-xs uppercase tracking-wider ${
-                      c === clientePropio ? "bg-blue-600" : ""
+                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider border-b-2 ${
+                      c === clientePropio
+                        ? "bg-slate-800 text-brand-200 font-bold border-brand-400"
+                        : "font-semibold border-transparent"
                     }`}
                   >
                     {c}
@@ -847,8 +849,10 @@ function SeccionPuntoEquilibrio({
                 {competidores.map((c) => (
                   <th
                     key={c}
-                    className={`px-4 py-3 text-right font-semibold text-xs uppercase tracking-wider ${
-                      c === clientePropio ? "bg-blue-600" : ""
+                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider border-b-2 ${
+                      c === clientePropio
+                        ? "bg-slate-800 text-brand-200 font-bold border-brand-400"
+                        : "font-semibold border-transparent"
                     }`}
                   >
                     {c}
