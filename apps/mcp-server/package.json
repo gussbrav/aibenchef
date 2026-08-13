@@ -1,0 +1,41 @@
+{
+  "name": "@aibenchef/mcp",
+  "version": "0.1.0",
+  "description": "MCP server para acceder a la data pública del sistema financiero peruano desde Claude Desktop / Claude Code / Cursor.",
+  "type": "module",
+  "bin": {
+    "aibenchef-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "aibenchef",
+    "sbs",
+    "peru",
+    "banca",
+    "sistema-financiero"
+  ],
+  "author": "Azoramind",
+  "license": "MIT"
+}
