@@ -109,7 +109,12 @@ async function getInformeDataCached(opts: CacheableInformeOpts) {
     () => getInformeData(opts),
     ["informe:data", key],
     {
-      revalidate: 1800,
+      // TTL 4h (antes 30min). Los datos SBS cambian con la ingesta mensual
+      // — no hay razon para revalidar cada 30min. Los tags de abajo
+      // invalidan cuando cambia el periodo o el cliente, lo cual cubre el
+      // caso legitimo. Beneficio: menos cache misses de 5-15s en usuarios
+      // que vuelven en el mismo dia.
+      revalidate: 4 * 3600,
       tags: [
         "informe",
         `informe:periodo:${opts.periodo}`,

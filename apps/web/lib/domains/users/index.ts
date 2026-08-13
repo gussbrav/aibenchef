@@ -9,6 +9,7 @@
  * (auth.api.changePassword) — no replicamos eso aqui.
  */
 
+import { cache } from "react";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
@@ -70,12 +71,16 @@ export async function getUser(userId: string): Promise<User> {
   return mapRow(rows[0]!);
 }
 
-export async function isAdmin(userId: string): Promise<boolean> {
+// React.cache dedupe: el layout y varias pages (informe, PE, DuPont,
+// eeff, tableros, analisis, publicaciones) llaman isAdmin en el mismo
+// request. Sin cache: N roundtrips DB (100-500ms cada uno). Con cache:
+// 1 solo roundtrip por request. Scope de dedupe = request (correcto).
+export const isAdmin = cache(async (userId: string): Promise<boolean> => {
   const rows = await db.execute<{ role: string }>(
     sql`SELECT role FROM auth.users WHERE id = ${userId} LIMIT 1`,
   );
   return rows[0]?.role === "admin";
-}
+});
 
 export async function requireAdmin(userId: string): Promise<void> {
   if (!(await isAdmin(userId))) {
