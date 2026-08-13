@@ -29,7 +29,7 @@ const filas: Fila[] = [
     excel: { estado: "yes", texto: "$0 pero 40h/mes analista" },
     consultora: { estado: "no", texto: "$3,000-8,000 por informe" },
     terminal: { estado: "no", texto: "~$2,000/usuario" },
-    aibenchef: { estado: "yes", texto: "Desde $49" },
+    aibenchef: { estado: "yes", texto: "Gratis · Pro $149/mes" },
   },
   {
     atributo: "Cobertura banca peruana",
