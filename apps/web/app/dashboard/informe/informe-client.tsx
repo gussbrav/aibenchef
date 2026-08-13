@@ -696,7 +696,7 @@ function SeccionCuadroResumen({
   return (
     <section>
       <div className="flex items-end justify-between gap-4 flex-wrap mb-1">
-        <h2 className="text-xl font-bold inline-block px-4 py-2 rounded bg-brand-700 text-white">
+        <h2 className="text-xl font-bold inline-block px-4 py-2 rounded bg-brand-500 text-white">
           Cuadro Resumen
         </h2>
         <PerfLegend />
@@ -704,7 +704,7 @@ function SeccionCuadroResumen({
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-brand-700 text-white">
+            <thead className="bg-brand-500 text-white">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider min-w-[260px]" />
                 {competidores.map((c) => (
@@ -841,7 +841,7 @@ function SeccionPuntoEquilibrio({
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-brand-700 text-white">
+            <thead className="bg-brand-500 text-white">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider min-w-[260px]">
                   Componente
