@@ -19,6 +19,7 @@ import type {
   Cliente,
   Competidor,
   EntidadDisponible,
+  HistoricoEntidadSerie,
   InformeData,
   Kpi,
   KpiValor,
@@ -1231,6 +1232,13 @@ export async function getInformeData(opts: {
    * buildCompetidores.
    */
   maxPeers?: number;
+  /**
+   * V167: ventana historica maxima en meses (Free = 24). Undefined = sin
+   * cap. Cuando esta seteada, filtramos post-hoc las series historicas
+   * para que solo contengan puntos dentro de la ventana permitida
+   * respecto a opts.periodo.
+   */
+  maxHistoricoMeses?: number;
 }): Promise<InformeData> {
   // PERF: Fase 1 — 3 queries INDEPENDIENTES en paralelo (antes eran seriales).
   //   getClienteBySlug: siempre.
@@ -1482,18 +1490,29 @@ export async function getInformeData(opts: {
   // Cartera bruta MM S/ — ya viene del Promise.all gigante.
   const carteraBrutaHistorico = buildHistoricoFromValueMap(carteraBrutaMap, competidores);
 
-  return {
-    cliente,
-    periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
-    periodoComparativo: { codigo: periodoPrev, label: periodoLabel(periodoPrev) },
-    periodoDicPrev: { codigo: periodoDicPrev, label: periodoLabel(periodoDicPrev) },
-    competidores,
-    cuadroResumen,
-    puntoEquilibrio,
-    margenNetoHistorico,
-    margenNetoBubble: bubble,
-    margenNetoWaterfall: waterfall,
-    margenNetoWaterfallVsDic: waterfallVsDic,
+  // V167: enforcement de ventana historica por plan. Aplicamos post-hoc
+  // porque las queries subyacentes traen la serie completa disponible.
+  // Filtramos cada serie[].serie a los puntos dentro del rango permitido
+  // y recomputamos valorBase / valorActual / variacionTotal.
+  const capSerie = (s: HistoricoEntidadSerie, earliest: number): HistoricoEntidadSerie => {
+    const puntosDentro = s.serie.filter((p) => p.periodo >= earliest);
+    if (puntosDentro.length === s.serie.length) return s;
+    if (puntosDentro.length === 0) {
+      return { ...s, serie: [], valorBase: null, variacionTotal: null };
+    }
+    const nuevoBase = puntosDentro[0]?.valor ?? null;
+    const ultimo = puntosDentro[puntosDentro.length - 1]?.valor ?? null;
+    return {
+      ...s,
+      serie: puntosDentro,
+      valorBase: nuevoBase,
+      valorActual: ultimo,
+      variacionTotal:
+        nuevoBase == null || ultimo == null ? null : ultimo - nuevoBase,
+    };
+  };
+
+  let capped = {
     oficinasHistorico,
     personalHistorico,
     clientesHistorico,
@@ -1516,6 +1535,56 @@ export async function getInformeData(opts: {
     carteraAtrasadaHistorico,
     carHistorico,
     carteraBrutaHistorico,
+  };
+  if (typeof opts.maxHistoricoMeses === "number") {
+    // earliestPeriodo = opts.periodo - maxHistoricoMeses meses (YYYYMM math).
+    const anio = Math.floor(opts.periodo / 100);
+    const mes = opts.periodo % 100;
+    const totalMesInicio = anio * 12 + (mes - 1) - opts.maxHistoricoMeses + 1;
+    const earliestAnio = Math.floor(totalMesInicio / 12);
+    const earliestMes = (totalMesInicio % 12) + 1;
+    const earliestPeriodo = earliestAnio * 100 + earliestMes;
+    const cap = (arr: HistoricoEntidadSerie[]): HistoricoEntidadSerie[] =>
+      arr.map((s) => capSerie(s, earliestPeriodo));
+    capped = {
+      oficinasHistorico: cap(capped.oficinasHistorico),
+      personalHistorico: cap(capped.personalHistorico),
+      clientesHistorico: cap(capped.clientesHistorico),
+      rendimientoCarteraHistorico: cap(capped.rendimientoCarteraHistorico),
+      costoFondeoHistorico: cap(capped.costoFondeoHistorico),
+      costoProvisionesHistorico: cap(capped.costoProvisionesHistorico),
+      eficienciaHistorico: cap(capped.eficienciaHistorico),
+      gastosPersonalHistorico: cap(capped.gastosPersonalHistorico),
+      gastosGeneralesHistorico: cap(capped.gastosGeneralesHistorico),
+      utilidadNetaHistorico: cap(capped.utilidadNetaHistorico),
+      roeHistorico: cap(capped.roeHistorico),
+      roaHistorico: cap(capped.roaHistorico),
+      ingresosFinancierosHistorico: cap(capped.ingresosFinancierosHistorico),
+      gastosFinancierosHistorico: cap(capped.gastosFinancierosHistorico),
+      margenFinancieroBrutoHistorico: cap(capped.margenFinancieroBrutoHistorico),
+      margenFinancieroNetoHistorico: cap(capped.margenFinancieroNetoHistorico),
+      moraGlobalHistorico: cap(capped.moraGlobalHistorico),
+      moraGlobalVcHistorico: cap(capped.moraGlobalVcHistorico),
+      coberturaCarHistorico: cap(capped.coberturaCarHistorico),
+      carteraAtrasadaHistorico: cap(capped.carteraAtrasadaHistorico),
+      carHistorico: cap(capped.carHistorico),
+      carteraBrutaHistorico: cap(capped.carteraBrutaHistorico),
+    };
+  }
+
+  return {
+    cliente,
+    periodo: { codigo: opts.periodo, label: periodoLabel(opts.periodo) },
+    periodoComparativo: { codigo: periodoPrev, label: periodoLabel(periodoPrev) },
+    periodoDicPrev: { codigo: periodoDicPrev, label: periodoLabel(periodoDicPrev) },
+    competidores,
+    cuadroResumen,
+    puntoEquilibrio,
+    margenNetoHistorico,
+    margenNetoBubble: bubble,
+    margenNetoWaterfall: waterfall,
+    margenNetoWaterfallVsDic: waterfallVsDic,
+    ...capped,
     comentarios: {
       margen_neto_bubble: "",
       margen_neto_waterfall: "",

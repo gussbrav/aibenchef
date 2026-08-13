@@ -83,6 +83,8 @@ type CacheableInformeOpts = {
   colorsOverride: Map<string, string> | null;
   /** Limite de plan comercial (V167). undefined = admin o sin gating. */
   maxPeers?: number;
+  /** V167: ventana historica maxima en meses. undefined = sin cap. */
+  maxHistoricoMeses?: number;
 };
 
 async function getInformeDataCached(opts: CacheableInformeOpts) {
@@ -101,6 +103,7 @@ async function getInformeDataCached(opts: CacheableInformeOpts) {
     cs: opts.consolidar,
     co: opts.colorsOverride ? [...opts.colorsOverride.entries()].sort() : null,
     mp: opts.maxPeers ?? null,
+    mh: opts.maxHistoricoMeses ?? null,
   });
   return unstable_cache(
     () => getInformeData(opts),
@@ -173,6 +176,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   // undefined = sin limite (admin o sin sesion — este ultimo caso raro
   // porque el layout ya redirect a /login).
   let maxPeers: number | undefined;
+  let maxHistoricoMeses: number | undefined;
   let planLimited = false;
   let insightsAllowed = true;
   if (session) {
@@ -181,6 +185,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       const plan = await getUserPlan(session.user.id);
       const limits = PLAN_LIMITS[plan];
       maxPeers = limits.maxPeers;
+      maxHistoricoMeses = limits.maxHistoricoMeses;
       insightsAllowed = limits.insightsAI;
     }
   }
@@ -249,6 +254,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
         consolidar,
         colorsOverride,
         maxPeers,
+        maxHistoricoMeses,
       }),
       cachedListPeriodos(),
       cachedListEntidades(),

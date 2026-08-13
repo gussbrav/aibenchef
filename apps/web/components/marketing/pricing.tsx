@@ -37,7 +37,8 @@ const plans = [
       "Publicaciones con IA para LinkedIn (20/mes)",
       "Estados Financieros históricos y análisis dinámico",
       "Insights AI en el dashboard",
-      "Exportar a PDF + Excel",
+      "Exportar Benchmark a PDF (impresión)",
+      "Exportar tabla Análisis a Excel",
     ],
     cta: "Empezar prueba",
     highlighted: true,
@@ -45,13 +46,13 @@ const plans = [
   {
     name: "Business",
     price: 399,
-    description: "Para gerencias y consultoras que necesitan TODA la data.",
+    description: "Para gerencias y consultoras que necesitan más volumen.",
     features: [
       "Todo lo de Pro sin límites",
       "Publicaciones con IA ilimitadas",
-      "API REST + autenticación JWT",
-      "SLA + soporte dedicado",
-      "White-label disponible",
+      "Colores del peer group personalizados",
+      "Múltiples usuarios por organización",
+      "Soporte prioritario por email",
     ],
     cta: "Hablemos",
     highlighted: false,
@@ -126,9 +127,9 @@ export function Pricing() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
-          ¿Necesitás algo distinto? White-label, on-premise, integraciones a medida —{" "}
+          ¿Necesitas API pública, white-label, on-premise, SLA con firma o integración a medida?{" "}
           <Link href={"/solicitar-acceso?plan=enterprise" as never} className="text-brand-600 hover:underline font-medium">
-            hablemos del plan Enterprise
+            Hablemos del plan Enterprise
           </Link>
           .
         </p>

@@ -173,7 +173,7 @@ export function UpgradeModal({
                 "Publicaciones AI (20/mes)",
                 "Estados Financieros y Análisis",
                 "Insights AI en el dashboard",
-                "Export PDF + Excel",
+                "PDF Benchmark + Excel Análisis",
               ]}
               highlighted
               ctaHref="/#planes"
@@ -181,13 +181,13 @@ export function UpgradeModal({
             <PlanCard
               nombre="Business"
               precio="$399"
-              descripcion="Máximo alcance"
+              descripcion="Más volumen"
               features={[
                 "Todo Pro sin límites",
-                "API REST + JWT",
-                "Publicaciones ilimitadas",
-                "SLA + soporte dedicado",
-                "White-label disponible",
+                "Publicaciones AI ilimitadas",
+                "Colores personalizados",
+                "Múltiples usuarios",
+                "Soporte prioritario",
               ]}
               ctaHref="/solicitar-acceso?plan=business"
             />

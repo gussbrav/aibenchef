@@ -82,8 +82,13 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     exportPDF: true,
     exportExcel: true,
     colorsPersistidos: true,
-    apiAccess: true,
-    slaEnterprise: true,
+    // API publica + SLA + white-label: banderas RESERVADAS para el plan
+    // Enterprise (custom via /solicitar-acceso). Business estandar no las
+    // incluye — no hay endpoint publico con JWT ni firma de SLA. Cuando
+    // se implementen, se activaran aca por-organizacion (no por-plan
+    // global) via un feature-flag adicional.
+    apiAccess: false,
+    slaEnterprise: false,
   },
 };
 

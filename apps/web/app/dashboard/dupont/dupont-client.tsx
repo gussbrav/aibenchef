@@ -415,6 +415,7 @@ export function DupontClient({
         data={dataConColores}
         rowsIndex={rowsIndex}
         narrativaIA={narrativaIA}
+        insightsAllowed={insightsAllowed}
       />
 
       {/* ============ SECCION 2 — ROA descomposicion ============ */}
@@ -436,6 +437,7 @@ export function DupontClient({
         data={dataConColores}
         rowsIndex={rowsIndex}
         narrativaIA={narrativaIA}
+        insightsAllowed={insightsAllowed}
       />
 
       {/* ============ SECCION 3 — Margen Op Neto descomposicion ============ */}
@@ -459,6 +461,7 @@ export function DupontClient({
         data={dataConColores}
         rowsIndex={rowsIndex}
         narrativaIA={narrativaIA}
+        insightsAllowed={insightsAllowed}
       />
 
       {/* ============ SECCION 4 — Margen Financiero Bruto descomposicion ============ */}
@@ -480,6 +483,7 @@ export function DupontClient({
         data={dataConColores}
         rowsIndex={rowsIndex}
         narrativaIA={narrativaIA}
+        insightsAllowed={insightsAllowed}
       />
 
       {/* Footer nota metodologica */}
@@ -995,6 +999,7 @@ function SeccionDupont({
   data,
   rowsIndex,
   narrativaIA,
+  insightsAllowed = true,
 }: {
   numero: number;
   seccionKey: "roe" | "roa" | "mon" | "mfb";
@@ -1005,6 +1010,7 @@ function SeccionDupont({
   data: DupontData;
   rowsIndex: Map<string, DupontRow>;
   narrativaIA: NarrativaState;
+  insightsAllowed?: boolean;
 }) {
   // Fallback deterministico — se usa si:
   //   - la IA aun no cargo (status=loading)
@@ -1052,6 +1058,7 @@ function SeccionDupont({
         narrativa={narrativa}
         status={narrativaIA.status}
         usarIA={usarIA}
+        insightsAllowed={insightsAllowed}
       />
 
       {/* Charts FULL WIDTH — principal arriba, subs abajo en grid mas denso */}
@@ -1107,10 +1114,13 @@ function NarrativaBanner({
   narrativa,
   status,
   usarIA,
+  insightsAllowed = true,
 }: {
   narrativa: string[];
   status: "loading" | "ok" | "fallback";
   usarIA: boolean;
+  /** V167: false en plan Free — mostrar chip "Sube a Pro para insights IA". */
+  insightsAllowed?: boolean;
 }) {
   // Estado open persistente. Default true (mostrar la primera vez).
   const [open, setOpen] = useState<boolean>(() => {
@@ -1152,6 +1162,17 @@ function NarrativaBanner({
             <Wand2 className="w-2.5 h-2.5" />
             IA
           </span>
+        )}
+        {!insightsAllowed && (
+          <Link
+            href={"/#planes" as never}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-100 text-brand-700 hover:bg-brand-200"
+            title="Insights AI están disponibles en el plan Pro"
+          >
+            <Wand2 className="w-2.5 h-2.5" />
+            IA en Pro
+          </Link>
         )}
         {!open && (
           <span className="text-[10px] text-slate-400 ml-auto italic">
