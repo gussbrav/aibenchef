@@ -19,6 +19,7 @@ import {
   toIso,
   ValidationError,
 } from "@/lib/domains/shared";
+import type { UserPlan } from "@/lib/plans";
 
 export type UserRole = "admin" | "usuario";
 export type UserStatus = "active" | "suspended" | "invited";
@@ -37,6 +38,10 @@ export type User = {
    * fallback global. Se puede cambiar desde Settings > Mi perfil.
    */
   defaultClienteSlug: string | null;
+  /** Plan comercial (V167 + V168). Ver lib/plans.ts. */
+  plan: UserPlan;
+  /** Verificacion academica automatica via email .edu.pe (V168). */
+  academicVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,6 +57,10 @@ function mapRow(r: Record<string, unknown>): User {
     status: (r.status as UserStatus) ?? "active",
     invitedBy: (r.invited_by as string | null) ?? null,
     defaultClienteSlug: (r.default_cliente_slug as string | null) ?? null,
+    plan: ((r.plan as string) ?? "free") as UserPlan,
+    academicVerifiedAt: r.academic_verified_at
+      ? toIso(r.academic_verified_at)
+      : null,
     createdAt: toIso(r.created_at),
     updatedAt: toIso(r.updated_at),
   };
@@ -61,7 +70,8 @@ export async function getUser(userId: string): Promise<User> {
   const rows = await db.execute<Record<string, unknown>>(
     sql`
       SELECT id, email, name, email_verified, image, role, status,
-             invited_by, default_cliente_slug, created_at, updated_at
+             invited_by, default_cliente_slug, plan, academic_verified_at,
+             created_at, updated_at
       FROM auth.users
       WHERE id = ${userId}
       LIMIT 1

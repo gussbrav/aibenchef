@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   History,
+  Key,
   MailPlus,
   Settings,
   Sliders,
@@ -13,8 +14,10 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
+import { PLAN_LIMITS, type UserPlan } from "@/lib/plans";
 
 import { AiProvidersSection } from "./ai-providers-section";
+import { ApiKeysSection } from "./api-keys-section";
 import { AuditSection } from "./audit-section";
 import { DebugSection } from "./debug-section";
 import { InvitationsSection } from "./invitations-section";
@@ -24,6 +27,7 @@ import { UsersSection } from "./users-section";
 
 type Tab =
   | "perfil"
+  | "api-keys"
   | "ai"
   | "usuarios"
   | "invitaciones"
@@ -31,7 +35,7 @@ type Tab =
   | "auditoria"
   | "debug";
 
-type Me = { id: string; role: "admin" | "usuario" };
+type Me = { id: string; role: "admin" | "usuario"; plan?: UserPlan };
 
 export function SettingsClient() {
   const [tab, setTab] = useState<Tab>("perfil");
@@ -46,8 +50,20 @@ export function SettingsClient() {
       .catch(() => {});
   }, []);
 
-  const tabs: Array<{ id: Tab; label: string; icon: typeof UserIcon; adminOnly?: boolean }> = [
+  const isAdmin = me?.role === "admin";
+  // V168: API keys visible solo si el plan tiene apiAccess=true (o admin).
+  const apiAccessAllowed =
+    isAdmin || (me?.plan ? PLAN_LIMITS[me.plan].apiAccess : false);
+
+  const tabs: Array<{
+    id: Tab;
+    label: string;
+    icon: typeof UserIcon;
+    adminOnly?: boolean;
+    hidden?: boolean;
+  }> = [
     { id: "perfil", label: "Mi perfil", icon: UserIcon },
+    { id: "api-keys", label: "API keys", icon: Key, hidden: !apiAccessAllowed },
     { id: "ai", label: "Proveedores AI", icon: Sparkles, adminOnly: true },
     { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
     { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
@@ -55,8 +71,6 @@ export function SettingsClient() {
     { id: "auditoria", label: "Auditoria", icon: History, adminOnly: true },
     { id: "debug", label: "Diagnostico", icon: Wrench, adminOnly: true },
   ];
-
-  const isAdmin = me?.role === "admin";
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -67,9 +81,10 @@ export function SettingsClient() {
         </h1>
       </header>
 
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
         {tabs.map((t) => {
           if (t.adminOnly && !isAdmin) return null;
+          if (t.hidden) return null;
           const Icon = t.icon;
           const active = tab === t.id;
           return (
@@ -78,7 +93,7 @@ export function SettingsClient() {
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "px-4 h-10 text-sm font-medium inline-flex items-center gap-2 border-b-2 transition-colors",
+                "px-4 h-10 text-sm font-medium inline-flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap",
                 active
                   ? "border-brand-600 text-slate-900"
                   : "border-transparent text-slate-600 hover:text-slate-900",
@@ -93,13 +108,14 @@ export function SettingsClient() {
 
       <div>
         {tab === "perfil" && <ProfileSection />}
+        {tab === "api-keys" && apiAccessAllowed && <ApiKeysSection />}
         {tab === "ai" && isAdmin && <AiProvidersSection />}
         {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
         {tab === "invitaciones" && isAdmin && <InvitationsSection />}
         {tab === "sistema" && isAdmin && <SystemSettingsSection />}
         {tab === "auditoria" && isAdmin && <AuditSection />}
         {tab === "debug" && isAdmin && <DebugSection />}
-        {tab !== "perfil" && !isAdmin && (
+        {tab !== "perfil" && tab !== "api-keys" && !isAdmin && (
           <div className="p-6 bg-slate-50 border border-slate-200 rounded text-sm text-slate-600 text-center">
             Esta seccion es solo para administradores.
           </div>
