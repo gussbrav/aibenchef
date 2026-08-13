@@ -1611,7 +1611,7 @@ function TablaComparativaCierre({
                     className={cn(
                       "relative text-right px-3 py-2.5 text-[11px] uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors border-b-2",
                       s.esPropio
-                        ? "bg-amber-400 text-slate-900 font-bold border-amber-500"
+                        ? "bg-white text-brand-700 font-bold border-amber-400"
                         : "text-brand-50 font-semibold border-transparent hover:bg-brand-600 hover:text-white",
                       isDragging && "opacity-40",
                       isDropTarget && "ring-2 ring-inset ring-brand-300 bg-brand-800",
