@@ -43,14 +43,14 @@ export default async function DashboardLayout({
     <div className="min-h-screen bg-slate-50">
       {/* Signature progress bar — se anima en cada navegacion interna */}
       <TopProgressBar />
-      <header className="sticky top-0 z-40 w-full bg-slate-900 border-b border-slate-800 text-white">
+      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 border-b border-slate-200">
         <Container size="full">
           <div className="flex h-14 items-center justify-between gap-4">
             <Link href="/dashboard" className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold text-xs">
                 A
               </div>
-              <span className="font-bold text-white text-sm">Aibenchef</span>
+              <span className="font-bold text-slate-900 text-sm">Aibenchef</span>
             </Link>
 
             <nav className="hidden md:flex items-center gap-5 lg:gap-6 text-[13px] flex-1 justify-center min-w-0 whitespace-nowrap">

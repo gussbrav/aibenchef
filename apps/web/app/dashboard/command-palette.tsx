@@ -327,14 +327,14 @@ export function CommandPaletteTrigger() {
         window.dispatchEvent(event);
       }}
       className={cn(
-        "hidden sm:inline-flex items-center gap-2 px-2.5 h-8 bg-slate-800/60 hover:bg-slate-700/70 rounded-md text-xs text-slate-300 hover:text-white border border-slate-700 transition",
-        open && "bg-slate-700",
+        "hidden sm:inline-flex items-center gap-2 px-2.5 h-8 bg-slate-100 hover:bg-slate-200 rounded-md text-xs text-slate-600 border border-slate-200 transition",
+        open && "bg-slate-200",
       )}
       aria-label="Abrir buscador"
     >
       <Search className="w-3.5 h-3.5" />
       <span>Buscar</span>
-      <kbd className="font-mono text-[10px] bg-slate-900 border border-slate-700 text-slate-300 px-1 py-0.5 rounded">
+      <kbd className="font-mono text-[10px] bg-white border border-slate-200 px-1 py-0.5 rounded">
         Ctrl K
       </kbd>
     </button>

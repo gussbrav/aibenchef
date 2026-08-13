@@ -29,8 +29,8 @@ export function NavLink({ href, label, exact = false }: NavLinkProps) {
       className={cn(
         "relative h-14 inline-flex items-center transition-colors",
         isActive
-          ? "text-white font-semibold"
-          : "text-slate-300 hover:text-white",
+          ? "text-slate-900 font-semibold"
+          : "text-slate-600 hover:text-slate-900",
       )}
       aria-current={isActive ? "page" : undefined}
     >
@@ -38,7 +38,7 @@ export function NavLink({ href, label, exact = false }: NavLinkProps) {
       {isActive && (
         <span
           aria-hidden
-          className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-400 rounded-full"
+          className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-600 rounded-full"
         />
       )}
     </Link>

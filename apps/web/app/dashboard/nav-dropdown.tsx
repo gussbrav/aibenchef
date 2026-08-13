@@ -56,8 +56,8 @@ export function NavDropdown({ label, items }: { label: string; items: NavDropdow
         className={cn(
           "h-14 inline-flex items-center gap-1 transition-colors",
           isActive
-            ? "text-white font-semibold"
-            : "text-slate-300 hover:text-white",
+            ? "text-slate-900 font-semibold"
+            : "text-slate-600 hover:text-slate-900",
         )}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -67,7 +67,7 @@ export function NavDropdown({ label, items }: { label: string; items: NavDropdow
         {isActive && (
           <span
             aria-hidden
-            className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-400 rounded-full"
+            className="absolute inset-x-0 -bottom-px h-0.5 bg-brand-600 rounded-full"
           />
         )}
       </button>
