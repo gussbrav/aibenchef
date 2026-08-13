@@ -89,7 +89,7 @@ export function WelcomeBanner({
             Bienvenido{primerNombre ? `, ${primerNombre}` : ""} a Aibenchef
           </h2>
           <p className="text-sm text-slate-600 mt-0.5">
-            Todo lo que necesitas para analizar la banca peruana, en un solo lugar.
+            Todo lo que necesitas para analizar el sistema financiero peruano, en un solo lugar.
           </p>
         </div>
       </div>
@@ -118,11 +118,9 @@ export function WelcomeBanner({
           color="sky"
         />
 
-        {/* Pro/Business ven las features avanzadas. Free ve un tile con
-            invitación a subir de plan. */}
-        {plan === "free" ? (
-          <UpgradeTile />
-        ) : (
+        {/* Publicaciones AI: solo Pro/Business/admin. Academic + Free
+            ven un tile con invitación a subir de plan. */}
+        {plan === "pro" || plan === "business" || admin ? (
           <Tile
             href="/dashboard/publicaciones"
             icon={FileText}
@@ -130,6 +128,8 @@ export function WelcomeBanner({
             desc="Artículos LinkedIn con IA"
             color="violet"
           />
+        ) : (
+          <UpgradeTile />
         )}
 
         {(admin || plan !== "free") && (

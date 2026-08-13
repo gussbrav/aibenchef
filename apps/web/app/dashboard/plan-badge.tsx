@@ -17,23 +17,31 @@ import { Sparkles, X } from "lucide-react";
 
 import type { UserPlan } from "@/lib/plans";
 
+// Colores adaptados al header slate-900 del dashboard (V168).
+// Fondos semi-transparentes + texto claro para contraste sobre oscuro.
 const COLORS: Record<UserPlan, { bg: string; text: string; border: string; ring: string }> = {
   free: {
-    bg: "bg-slate-100",
-    text: "text-slate-700",
-    border: "border-slate-200",
-    ring: "hover:ring-brand-200",
+    bg: "bg-slate-700/60",
+    text: "text-slate-200",
+    border: "border-slate-600",
+    ring: "hover:ring-brand-400/40",
+  },
+  academic: {
+    bg: "bg-sky-500/20",
+    text: "text-sky-200",
+    border: "border-sky-400/40",
+    ring: "",
   },
   pro: {
-    bg: "bg-brand-50",
-    text: "text-brand-800",
-    border: "border-brand-200",
+    bg: "bg-brand-500/25",
+    text: "text-brand-100",
+    border: "border-brand-400/50",
     ring: "",
   },
   business: {
-    bg: "bg-emerald-50",
-    text: "text-emerald-800",
-    border: "border-emerald-200",
+    bg: "bg-emerald-500/25",
+    text: "text-emerald-100",
+    border: "border-emerald-400/50",
     ring: "",
   },
 };
@@ -80,7 +88,13 @@ export function PlanBadge({
         <span
           className={`hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full ${c.bg} ${c.text} border ${c.border} text-[11px] font-semibold uppercase tracking-wider`}
         >
-          {plan === "pro" ? "Pro" : "Business"}
+          {plan === "pro"
+            ? "Pro"
+            : plan === "business"
+              ? "Business"
+              : plan === "academic"
+                ? "Académico"
+                : plan}
         </span>
       )}
 
@@ -212,6 +226,20 @@ export function UpgradeModal({
               ]}
               ctaHref="/solicitar-acceso?plan=business"
             />
+          </div>
+        </div>
+
+        {/* Nota academica — visible solo cuando el user está en Free
+            (asumimos que ya no aplica para academic/pro/business que
+            usualmente no ven el modal). */}
+        <div className="px-6 pb-4 -mt-2">
+          <div className="rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-[12px] text-sky-900 flex items-start gap-2">
+            <span className="text-sky-600 font-bold">🎓</span>
+            <span>
+              <strong>¿Eres tesista o estudiante?</strong> Con tu email
+              institucional peruano (<span className="font-mono text-[11px]">*.edu.pe</span>)
+              accedes al Plan Académico a $9/mes con verificación automática.
+            </span>
           </div>
         </div>
 

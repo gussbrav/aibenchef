@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { Check, GraduationCap, ArrowRight } from "lucide-react";
 import { Container, Section, SectionHeading, Card, Button } from "@/components/ui";
 
 /**
@@ -37,8 +37,8 @@ const plans = [
       "Publicaciones con IA para LinkedIn (20/mes)",
       "Estados Financieros históricos y análisis dinámico",
       "Insights AI en el dashboard",
-      "Exportar Benchmark a PDF (impresión)",
-      "Exportar tabla Análisis a Excel",
+      "Exportar Benchmark a PDF + tabla a Excel",
+      "API pública + MCP para Claude Desktop",
     ],
     cta: "Empezar prueba",
     highlighted: true,
@@ -50,6 +50,7 @@ const plans = [
     features: [
       "Todo lo de Pro sin límites",
       "Publicaciones con IA ilimitadas",
+      "API pública con rate limits ampliados",
       "Colores del peer group personalizados",
       "Múltiples usuarios por organización",
       "Soporte prioritario por email",
@@ -126,8 +127,62 @@ export function Pricing() {
             </Card>
           ))}
         </div>
+
+        {/* Plan Académico — card destacada para tesistas/estudiantes.
+            Target audience distinto (universitarios peruanos) que amerita
+            separarlo del grid principal en vez de mezclarlo. */}
+        <div className="mt-10 max-w-4xl mx-auto">
+          <Card
+            variant="elevated"
+            className="p-6 md:p-8 border-2 border-sky-200 bg-gradient-to-br from-sky-50 via-white to-white"
+          >
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                <GraduationCap className="w-7 h-7 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <h3 className="text-xl font-bold text-slate-900">
+                    Plan Académico
+                  </h3>
+                  <span className="text-2xl font-bold text-slate-900">$9<span className="text-sm text-slate-500 font-normal">/mes</span></span>
+                </div>
+                <p className="text-sm text-slate-600 mt-1.5">
+                  Para tesistas y estudiantes con email institucional peruano
+                  (<span className="font-mono text-xs bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded">*.edu.pe</span>).
+                  Verificación automática al registrarte.
+                </p>
+                <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+                  {[
+                    "5 años de histórico",
+                    "Hasta 5 competidores",
+                    "Benchmark, PE, DuPont, EEFF",
+                    "Exportar a PDF + Excel",
+                    "API pública + MCP para Claude Desktop",
+                    "Sin publicaciones AI",
+                  ].map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm text-slate-700">
+                      <Check className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Link
+                href="/signup"
+                className="w-full md:w-auto flex-shrink-0"
+              >
+                <Button size="lg" variant="outline" className="!border-sky-500 !text-sky-700 hover:!bg-sky-50 w-full md:w-auto">
+                  Registrarme
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+
         <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
-          ¿Necesitas API pública, white-label, on-premise, SLA con firma o integración a medida?{" "}
+          ¿Necesitas white-label, on-premise, SLA con firma o integración a medida?{" "}
           <Link href={"/solicitar-acceso?plan=enterprise" as never} className="text-brand-600 hover:underline font-medium">
             Hablemos del plan Enterprise
           </Link>

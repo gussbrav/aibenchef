@@ -19,9 +19,14 @@
 // Types
 // ============================================================================
 
-export type UserPlan = "free" | "pro" | "business";
+export type UserPlan = "free" | "academic" | "pro" | "business";
 
-export const USER_PLANS: readonly UserPlan[] = ["free", "pro", "business"] as const;
+export const USER_PLANS: readonly UserPlan[] = [
+  "free",
+  "academic",
+  "pro",
+  "business",
+] as const;
 
 export type PlanLimits = {
   /** Numero maximo de entidades en el peer group (excluye la entidad propia). */
@@ -63,6 +68,20 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     apiAccess: false,
     slaEnterprise: false,
   },
+  // V168: plan Academico — tesistas/estudiantes verificados con email
+  // institucional peruano (.edu.pe). Sin publicaciones AI (unit economics).
+  // Con API + MCP acceso para consumir data desde Claude Desktop / scripts.
+  academic: {
+    maxPeers: 5,
+    maxHistoricoMeses: 60,
+    publicacionesPorMes: 0,
+    insightsAI: false,
+    exportPDF: true,
+    exportExcel: true,
+    colorsPersistidos: true,
+    apiAccess: true,
+    slaEnterprise: false,
+  },
   pro: {
     maxPeers: 10,
     maxHistoricoMeses: 60,
@@ -71,7 +90,9 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     exportPDF: true,
     exportExcel: true,
     colorsPersistidos: true,
-    apiAccess: false,
+    // Pro tambien tiene API access (para clientes que quieran automatizar
+    // sus reportes mensuales). V168.
+    apiAccess: true,
     slaEnterprise: false,
   },
   business: {
@@ -82,12 +103,10 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     exportPDF: true,
     exportExcel: true,
     colorsPersistidos: true,
-    // API publica + SLA + white-label: banderas RESERVADAS para el plan
-    // Enterprise (custom via /solicitar-acceso). Business estandar no las
-    // incluye — no hay endpoint publico con JWT ni firma de SLA. Cuando
-    // se implementen, se activaran aca por-organizacion (no por-plan
-    // global) via un feature-flag adicional.
-    apiAccess: false,
+    apiAccess: true,
+    // SLA + soporte con firma: bandera reservada al plan Enterprise
+    // (custom via /solicitar-acceso). Business estandar tiene soporte
+    // prioritario por email pero no SLA firmado.
     slaEnterprise: false,
   },
 };
@@ -100,7 +119,7 @@ export const PLAN_META: Record<UserPlan, {
   labelCorto: string;
   precioMensualUsd: number;
   descripcion: string;
-  color: "slate" | "brand" | "emerald";
+  color: "slate" | "brand" | "emerald" | "sky";
 }> = {
   free: {
     label: "Free",
@@ -108,6 +127,13 @@ export const PLAN_META: Record<UserPlan, {
     precioMensualUsd: 0,
     descripcion: "Para explorar la plataforma con limites suaves. Siempre gratis.",
     color: "slate",
+  },
+  academic: {
+    label: "Académico",
+    labelCorto: "Académico",
+    precioMensualUsd: 9,
+    descripcion: "Para tesistas y estudiantes con email institucional peruano (.edu.pe).",
+    color: "sky",
   },
   pro: {
     label: "Pro",
@@ -124,6 +150,17 @@ export const PLAN_META: Record<UserPlan, {
     color: "emerald",
   },
 };
+
+/**
+ * V168: helper para detectar email institucional peruano (.edu.pe).
+ * Usado en el flujo de signup para pre-mostrar el chip "Plan Académico
+ * detectado". La logica DEFINITIVA de asignar plan academic vive en el
+ * trigger de la DB (auth.detect_academic_email); esto es solo UX.
+ */
+export function isEmailAcademicoPeruano(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return /\.edu\.pe$/i.test(email.trim());
+}
 
 // Helpers
 // ============================================================================

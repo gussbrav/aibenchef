@@ -59,15 +59,17 @@ export default async function DashboardLayout({
               <NavLink href="/dashboard/punto-equilibrio" label="Punto Equilibrio" />
               <NavLink href="/dashboard/dupont" label="DuPont" />
 
-              {/* Menus solo para plan Pro+/Business (o admin). El plan Free
-                  arranca con lo esencial (Resumen + Benchmark + PE + DuPont)
-                  para no sentirse abrumado con opciones bloqueadas. La UI
-                  crece al subir de plan. Gate en pagina sigue vigente para
-                  defensa en profundidad. */}
+              {/* Menu gating por plan (V167 + V168):
+                  - free: solo Resumen + Benchmark + PE + DuPont
+                  - academic: agrega EEFF + Análisis (todo excepto Publicaciones)
+                  - pro/business: todo incluyendo Publicaciones AI
+                  Gate en cada page sigue vigente (defensa en profundidad). */}
+              {(admin || plan === "pro" || plan === "business") && (
+                <NavLink href="/dashboard/publicaciones" label="Publicaciones" />
+              )}
+
               {(admin || plan !== "free") && (
                 <>
-                  <NavLink href="/dashboard/publicaciones" label="Publicaciones" />
-
                   <NavDropdown
                     label="Estados Financieros"
                     items={[

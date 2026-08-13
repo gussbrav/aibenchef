@@ -29,17 +29,18 @@ export default async function PublicacionesPage() {
     redirect("/login");
   }
 
-  // Gate V167: Publicaciones AI es feature Pro/Business. Free ve el
-  // upgrade prompt. Admin bypass.
+  // Gate V167/V168: Publicaciones AI es feature Pro/Business. Free y
+  // Academic ven el upgrade prompt (unit economics no cierran a $9/mes
+  // dado el costo de tokens LLM). Admin bypass.
   const admin = await isAdmin(session.user.id).catch(() => false);
   if (!admin) {
     const plan = await getUserPlan(session.user.id);
-    if (plan === "free") {
+    if (plan !== "pro" && plan !== "business") {
       return (
         <PlanUpgradePage
           feature="Publicaciones"
           titulo="Publicaciones con IA para LinkedIn"
-          descripcion="Convierte cualquier análisis SBS en un artículo listo para publicar, con gráficos embebidos y narrativa profesional generada por IA."
+          descripcion="Convierte cualquier análisis del sistema financiero en un artículo listo para publicar, con gráficos embebidos y narrativa profesional generada por IA."
           bullets={[
             "6 temas: Benchmarking, Mora, Rentabilidad, DuPont, PE, Macro",
             "Gráficos SVG embebidos automáticamente en todos los artículos",

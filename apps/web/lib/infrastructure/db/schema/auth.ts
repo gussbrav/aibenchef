@@ -11,9 +11,13 @@ export const users = authSchema.table("users", {
   name: text("name"),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
-  // Plan comercial: 'free' (default) | 'pro' | 'business'.
-  // Ver apps/web/lib/plans.ts para limites y enforcement. V167.
+  // Plan comercial: 'free' | 'academic' | 'pro' | 'business'.
+  // Ver apps/web/lib/plans.ts para limites y enforcement.
+  // Academic se auto-asigna via trigger DB al detectar email .edu.pe (V168).
   plan: text("plan").notNull().default("free"),
+  // Timestamp de verificacion academica (V168). Se setea via trigger
+  // BEFORE INSERT cuando email termina en .edu.pe.
+  academicVerifiedAt: timestamp("academic_verified_at", { withTimezone: true }),
   // Timestamp del primer login exitoso con onboarding completado.
   // NULL = mostrar modal welcome. V167.
   onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
