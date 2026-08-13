@@ -712,7 +712,7 @@ function SeccionCuadroResumen({
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider border-b-2 ${
                       c === clientePropio
-                        ? "bg-brand-600 text-white font-bold border-brand-300"
+                        ? "bg-amber-400 text-slate-900 font-bold border-amber-500"
                         : "font-semibold border-transparent text-brand-50"
                     }`}
                   >
@@ -851,7 +851,7 @@ function SeccionPuntoEquilibrio({
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider border-b-2 ${
                       c === clientePropio
-                        ? "bg-brand-600 text-white font-bold border-brand-300"
+                        ? "bg-amber-400 text-slate-900 font-bold border-amber-500"
                         : "font-semibold border-transparent text-brand-50"
                     }`}
                   >
