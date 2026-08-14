@@ -862,12 +862,12 @@ function SeccionPuntoEquilibrio({
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
                       c === clientePropio
-                        ? "bg-brand-50 text-brand-800 font-bold border-b-2 border-brand-500"
-                        : "text-slate-600 font-semibold border-b-2 border-transparent"
+                        ? "bg-[#1a3355] text-white font-bold"
+                        : "text-slate-300 font-semibold"
                     }`}
                   >
                     {c === clientePropio && (
-                      <span className="inline-block w-2 h-2 rounded-full bg-brand-500 mr-2 align-middle shadow-sm shadow-brand-500/50" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-brand-400 mr-2 align-middle shadow-sm shadow-brand-400/60" />
                     )}
                     {c}
                   </th>
