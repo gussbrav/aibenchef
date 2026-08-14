@@ -1076,9 +1076,9 @@ function HistoricoTable({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-white border-b-2 border-slate-300">
+          <thead className="bg-slate-800 border-b-2 border-brand-400">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[240px] sticky left-0 bg-white z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[240px] sticky left-0 bg-slate-800 z-10">
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
@@ -1113,14 +1113,14 @@ function HistoricoTable({
                       setDropTarget(null);
                     }}
                     className={cn(
-                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[95px] whitespace-nowrap cursor-move select-none",
-                      "hover:bg-slate-200 hover:text-slate-800 transition-colors group",
+                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[95px] whitespace-nowrap cursor-move select-none",
+                      "hover:bg-slate-700 hover:text-white transition-colors group",
                       isDragging && "opacity-40",
-                      isDropTarget && "bg-brand-50 ring-1 ring-brand-300 ring-inset",
+                      isDropTarget && "bg-slate-700 ring-1 ring-brand-400 ring-inset",
                     )}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500" />
+                      <GripVertical className="w-3 h-3 text-slate-500 group-hover:text-slate-300" />
                       {label}
                     </div>
                   </th>
@@ -1575,7 +1575,7 @@ function TablaComparativaCierre({
         <table className="w-full text-sm">
           <thead className="bg-slate-50/60 border-b border-slate-200">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 sticky left-0 bg-white z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 sticky left-0 bg-slate-800 z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1609,12 +1609,12 @@ function TablaComparativaCierre({
                       setDropTargetEntidad(null);
                     }}
                     className={cn(
-                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors border-b-2",
+                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
                       s.esPropio
-                        ? "bg-brand-50 text-brand-800 font-bold border-brand-500"
-                        : "text-slate-600 font-semibold border-transparent hover:bg-slate-200 hover:text-slate-800",
+                        ? "bg-slate-700 text-white font-bold"
+                        : "text-slate-300 font-semibold hover:bg-slate-700 hover:text-white",
                       isDragging && "opacity-40",
-                      isDropTarget && "ring-1 ring-inset ring-brand-300 bg-brand-50",
+                      isDropTarget && "ring-1 ring-inset ring-brand-400 bg-slate-700",
                     )}
                     style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar"
@@ -1633,7 +1633,7 @@ function TablaComparativaCierre({
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         onDragStart={(e) => e.preventDefault()}
-                        className="w-3 h-3 rounded-full flex-shrink-0 cursor-pointer transition-transform hover:scale-125 ring-1 ring-slate-300 hover:ring-slate-600"
+                        className="w-3 h-3 rounded-full flex-shrink-0 cursor-pointer transition-transform hover:scale-125 ring-1 ring-slate-500 hover:ring-white"
                         style={{ backgroundColor: s.color }}
                         aria-label={`Personalizar color de ${s.entidad}`}
                         title="Click para personalizar color"

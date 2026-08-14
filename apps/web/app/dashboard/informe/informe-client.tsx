@@ -705,20 +705,20 @@ function SeccionCuadroResumen({
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-white border-b-2 border-slate-300">
+            <thead className="bg-slate-800 border-b-2 border-brand-400">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[260px]" />
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[260px]" />
                 {competidores.map((c) => (
                   <th
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
                       c === clientePropio
-                        ? "bg-brand-50 text-brand-800 font-bold border-b-2 border-brand-500"
-                        : "text-slate-600 font-semibold border-b-2 border-transparent"
+                        ? "bg-slate-700 text-white font-bold"
+                        : "text-slate-300 font-semibold"
                     }`}
                   >
                     {c === clientePropio && (
-                      <span className="inline-block w-2 h-2 rounded-full bg-brand-500 mr-2 align-middle shadow-sm shadow-brand-500/50" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-brand-400 mr-2 align-middle shadow-sm shadow-brand-400/60" />
                     )}
                     {c}
                   </th>
@@ -851,9 +851,9 @@ function SeccionPuntoEquilibrio({
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-white border-b-2 border-slate-300">
+            <thead className="bg-slate-800 border-b-2 border-brand-400">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 min-w-[260px]">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[260px]">
                   Componente
                 </th>
                 {competidores.map((c) => (
