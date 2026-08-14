@@ -62,7 +62,7 @@ export function Hero() {
             </Link>
           </div>
           <p className="text-sm text-slate-500">
-            Sin tarjeta, sin compromiso. Compará cualquier entidad contra sus pares en 30 segundos.
+            Sin tarjeta, sin compromiso. Compara cualquier entidad contra sus pares en 30 segundos.
           </p>
         </div>
 

@@ -63,14 +63,14 @@ export default async function NotebooksPage() {
             <FeatureTile
               icon={Share2}
               title="Compartible y reproducible"
-              description="Compartí el link interno con tu equipo. Mismo notebook, misma data, mismas conclusiones."
+              description="Comparte el link interno con tu equipo. Mismo notebook, misma data, mismas conclusiones."
               color="text-emerald-600"
             />
           </div>
           <Card variant="elevated" className="p-12 text-center">
             <NotebookText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-600 mb-4">
-              Creá tu primer notebook — partís de un template o empezás en blanco.
+              Crea tu primer notebook — partes de un template o empiezas en blanco.
             </p>
             <NewNotebookButton variant="cta" />
           </Card>

@@ -206,7 +206,7 @@ export default async function DiagnosticoPage() {
           <div>
             <p className="text-sm text-rose-700">ERROR: {d.vistaUltimoPeriodo.error}</p>
             <p className="text-xs text-amber-700 mt-2">
-              Si dice &quot;relation does not exist&quot;, V046/V047 todavía no se aplicaron. Esperá 2 min más al rebuild.
+              Si dice &quot;relation does not exist&quot;, V046/V047 todavía no se aplicaron. Espera 2 min más al rebuild.
             </p>
           </div>
         )}

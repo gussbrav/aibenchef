@@ -33,7 +33,7 @@ export default async function TablerosPage() {
           bullets={[
             "Layout drag-and-drop con widgets de KPI, línea, barra y tabla",
             "Data siempre fresca de la última publicación SBS",
-            "Compartís por URL — cualquiera puede consumir tu tablero",
+            "Compartes por URL — cualquiera puede consumir tu tablero",
             "Múltiples tableros por usuario, sin límite en Business",
           ]}
           planRequerido="Pro"

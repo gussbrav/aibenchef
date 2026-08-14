@@ -97,7 +97,7 @@ export default async function DashboardLayout({
                       {
                         href: "/dashboard/analisis",
                         label: "Análisis dinámico",
-                        description: "Compará entidades, períodos y métricas con tablas pivote sin escribir SQL",
+                        description: "Compara entidades, períodos y métricas con tablas pivote sin escribir SQL",
                       },
                       // Aiben ✨ IA: oculto temporalmente. La feature funciona pero
                       // esta pendiente estabilizar la calidad de las respuestas y
@@ -130,7 +130,7 @@ export default async function DashboardLayout({
                     {
                       href: "/dashboard/catalog",
                       label: "Catálogo de datos",
-                      description: "Explorá todas las tablas, vistas y modelos disponibles del data warehouse",
+                      description: "Explora todas las tablas, vistas y modelos disponibles del data warehouse",
                     },
                   ]}
                 />

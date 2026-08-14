@@ -66,7 +66,7 @@ export function Pricing() {
       <Container size="xl">
         <SectionHeading
           eyebrow="Planes"
-          title="Empezá gratis. Pagá cuando lo necesites."
+          title="Empieza gratis. Paga cuando lo necesites."
           description="Sin permanencia. Cancelas cuando quieras. Precios en USD, factura electrónica peruana."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
