@@ -159,7 +159,6 @@ export function Pricing() {
                     "Benchmark, PE, DuPont, EEFF",
                     "Exportar a PDF + Excel",
                     "API pública + MCP para Claude Desktop",
-                    "Sin publicaciones AI",
                   ].map((f) => (
                     <li key={f} className="flex items-start gap-2 text-sm text-slate-700">
                       <Check className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
