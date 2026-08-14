@@ -835,7 +835,8 @@ function SeccionPuntoEquilibrio({
 
   return (
     <section>
-      <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+      <h2 className="inline-flex items-center gap-2.5 text-sm font-bold uppercase tracking-[0.08em] text-slate-800 mb-3">
+        <span className="w-1 h-5 rounded-full bg-brand-500" />
         Punto de Equilibrio Anualizado
       </h2>
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
@@ -987,7 +988,7 @@ function SeccionMargenNetoBubble({
   if (data.length === 0) {
     return (
       <section>
-        <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+        <h2 className="inline-flex items-center gap-2.5 text-sm font-bold uppercase tracking-[0.08em] text-slate-800 mb-3"><span className="w-1 h-5 rounded-full bg-brand-500" />
           Analisis Margen Neto — {comparativoLabel}
         </h2>
         <EmptyBox titulo="Sin datos para el bubble chart" texto="Se requieren datos de Punto de Equilibrio del periodo actual y del mismo mes del año anterior." />
@@ -1036,7 +1037,7 @@ function SeccionMargenNetoBubble({
 
   return (
     <section>
-      <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+      <h2 className="inline-flex items-center gap-2.5 text-sm font-bold uppercase tracking-[0.08em] text-slate-800 mb-3"><span className="w-1 h-5 rounded-full bg-brand-500" />
         Analisis Margen Neto — {comparativoLabel}
       </h2>
       <div className="flex flex-col gap-4 mt-4">
@@ -1266,7 +1267,7 @@ function SeccionMargenNetoWaterfall({
   if (data.length === 0) {
     return (
       <section>
-        <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+        <h2 className="inline-flex items-center gap-2.5 text-sm font-bold uppercase tracking-[0.08em] text-slate-800 mb-3"><span className="w-1 h-5 rounded-full bg-brand-500" />
           Margen Neto — Desviaciones en bps
         </h2>
         <EmptyBox titulo="Sin datos para el waterfall" texto="Se requieren datos del Punto de Equilibrio para el período actual y el comparativo." />
@@ -1276,7 +1277,7 @@ function SeccionMargenNetoWaterfall({
 
   return (
     <section>
-      <h2 className="text-xl font-bold text-slate-900 mb-1 inline-block px-4 py-2 rounded bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+      <h2 className="inline-flex items-center gap-2.5 text-sm font-bold uppercase tracking-[0.08em] text-slate-800 mb-3"><span className="w-1 h-5 rounded-full bg-brand-500" />
         Margen Neto — Desviaciones en bps ({comparativoLabel})
       </h2>
       <p className="text-xs text-slate-500 mt-2 px-2">
