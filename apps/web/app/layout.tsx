@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { FloatingWhatsApp } from "@/components/marketing/floating-whatsapp";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://aibenchef.azoramind.com";
 
@@ -78,7 +79,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es-PE">
-      <body className="font-sans antialiased text-slate-900">{children}</body>
+      <body className="font-sans antialiased text-slate-900">
+        {children}
+        <FloatingWhatsApp />
+      </body>
     </html>
   );
 }
