@@ -705,7 +705,7 @@ function SeccionCuadroResumen({
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-800 border-b-2 border-brand-400">
+            <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[260px]" />
                 {competidores.map((c) => (
@@ -713,7 +713,7 @@ function SeccionCuadroResumen({
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
                       c === clientePropio
-                        ? "bg-slate-700 text-white font-bold"
+                        ? "bg-[#1a3355] text-white font-bold"
                         : "text-slate-300 font-semibold"
                     }`}
                   >
@@ -852,7 +852,7 @@ function SeccionPuntoEquilibrio({
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-800 border-b-2 border-brand-400">
+            <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[260px]">
                   Componente

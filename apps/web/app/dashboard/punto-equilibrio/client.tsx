@@ -1076,9 +1076,9 @@ function HistoricoTable({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 border-b-2 border-brand-400">
+          <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[240px] sticky left-0 bg-slate-800 z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[240px] sticky left-0 bg-[#0f1e3a] z-10">
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
@@ -1114,9 +1114,9 @@ function HistoricoTable({
                     }}
                     className={cn(
                       "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[95px] whitespace-nowrap cursor-move select-none",
-                      "hover:bg-slate-700 hover:text-white transition-colors group",
+                      "hover:bg-[#1a3355] hover:text-white transition-colors group",
                       isDragging && "opacity-40",
-                      isDropTarget && "bg-slate-700 ring-1 ring-brand-400 ring-inset",
+                      isDropTarget && "bg-[#1a3355] ring-1 ring-brand-400 ring-inset",
                     )}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -1575,7 +1575,7 @@ function TablaComparativaCierre({
         <table className="w-full text-sm">
           <thead className="bg-slate-50/60 border-b border-slate-200">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 sticky left-0 bg-slate-800 z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 sticky left-0 bg-[#0f1e3a] z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1611,10 +1611,10 @@ function TablaComparativaCierre({
                     className={cn(
                       "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
                       s.esPropio
-                        ? "bg-slate-700 text-white font-bold"
-                        : "text-slate-300 font-semibold hover:bg-slate-700 hover:text-white",
+                        ? "bg-[#1a3355] text-white font-bold"
+                        : "text-slate-300 font-semibold hover:bg-[#1a3355] hover:text-white",
                       isDragging && "opacity-40",
-                      isDropTarget && "ring-1 ring-inset ring-brand-400 bg-slate-700",
+                      isDropTarget && "ring-1 ring-inset ring-brand-400 bg-[#1a3355]",
                     )}
                     style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar"
