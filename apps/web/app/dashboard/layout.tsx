@@ -140,6 +140,7 @@ export default async function DashboardLayout({
                 <NavDropdown
                   label="Operaciones"
                   items={[
+                    { href: "/dashboard/admin/suscripciones", label: "Suscripciones", description: "MRR, planes, expiraciones y actividad de suscriptores" },
                     { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
                     { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad ingesta SBS" },
                     { href: "/dashboard/admin/data-quality", label: "Data Quality", description: "Completeness, freshness, cargas sospechosas" },

@@ -11,16 +11,22 @@ import {
   deleteUser,
   type UserRole,
   type UserStatus,
+  updateUserPlan,
   updateUserRole,
   updateUserStatus,
 } from "@/lib/domains/users";
 import { handleRoute, UnauthorizedError, ValidationError } from "@/lib/domains/shared";
+import { USER_PLANS, type UserPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
 const patchBody = z.object({
   role: z.enum(["admin", "usuario"]).optional(),
   status: z.enum(["active", "suspended", "invited"]).optional(),
+  plan: z.enum(USER_PLANS as unknown as [UserPlan, ...UserPlan[]]).optional(),
+  // ISO string o null. null = perpetuo (admin manual).
+  planExpiresAt: z.string().datetime().nullable().optional(),
+  planNotes: z.string().max(2000).nullable().optional(),
 });
 
 async function requireSession() {
@@ -54,6 +60,19 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       updated = await updateUserStatus(actorId, id, parsed.data.status as UserStatus);
       action = "user_status_change";
     }
+    if (parsed.data.plan) {
+      const opts: { expiresAt?: Date | null; notes?: string | null } = {};
+      if (parsed.data.planExpiresAt !== undefined) {
+        opts.expiresAt = parsed.data.planExpiresAt
+          ? new Date(parsed.data.planExpiresAt)
+          : null;
+      }
+      if (parsed.data.planNotes !== undefined) {
+        opts.notes = parsed.data.planNotes;
+      }
+      updated = await updateUserPlan(actorId, id, parsed.data.plan, opts);
+      action = "user_plan_change";
+    }
     if (!updated) {
       throw new ValidationError("Nada que actualizar", {});
     }
@@ -64,9 +83,14 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         ...ctxAudit,
         category: "admin",
         action,
-        severity: "warn", // cambios de rol/status son sensibles
+        severity: "warn", // cambios de rol/status/plan son sensibles
         resource: `user:${id}`,
-        metadata: { role: parsed.data.role, status: parsed.data.status },
+        metadata: {
+          role: parsed.data.role,
+          status: parsed.data.status,
+          plan: parsed.data.plan,
+          planExpiresAt: parsed.data.planExpiresAt,
+        },
       });
     }
 
