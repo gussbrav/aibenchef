@@ -54,12 +54,12 @@ export type PlanLimits = {
 
 export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   free: {
-    maxPeers: 2,
-    // 24 meses = ultimos 2 anios. Suficiente para benchmark contra
-    // pares recientes; historico profundo va en Pro (5 anios).
-    maxHistoricoMeses: 24,
-    // 0 = feature deshabilitada. Publicaciones AI son parte del valor Pro
-    // (no se ofrecen en Free). El menu se oculta y el endpoint devuelve 402.
+    // V171: tightened para fomentar upgrade. Free debe SENTIR el limite pero
+    // no ser inutil. Con 1 peer + 12m se puede hacer un benchmark real
+    // basico ("mi entidad vs 1 competidor" en el ultimo año), pero series
+    // temporales y peer group grande obligan a upgrade.
+    maxPeers: 1,
+    maxHistoricoMeses: 12,
     publicacionesPorMes: 0,
     insightsAI: false,
     exportPDF: false,

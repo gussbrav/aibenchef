@@ -40,7 +40,10 @@ fi
 #
 # Lista curada según SKILL.md — expandir si aparecen nuevos casos.
 # Case-insensitive (-i) para atrapar mayúsculas al inicio de frase.
-VOSEO_PATTERN='\b(vos|sos|elegí|escribí|ingresá|podés|tenés|dejás|hacé|marcá|usá|querés|volvé|actualizá|generá|copiá|guardá|creá|armá|refiná|probá|revisá|comentá|editá|configurá|agregá|quitá|abrí|cerrá|leé|explicá|contestá|entendés|sabés|conocés|preguntá|respondé|compará|empezá|pagá|explorá|esperá|andá|vení|mirá|hablá|sacá|traé|decí|contá|prestá|tomá|poné|olvidate|acordate|quedate|dale|sumate|entrá|salí|corré|subí|bajá|comprá|reintentá|solicitá|contactá|verificá|instalá|activá|invitá|conectate|partís|empezás|compartís|hacés|dejás|marcás|verás)\b'
+# Nota V171: removidos `contá` (colision con "contáctanos" tuteo) y
+# `contactá` (colision con "contáctanos"). Voseo real de esos verbos es
+# raro; falsos positivos rompian el flujo.
+VOSEO_PATTERN='\b(vos|sos|elegí|escribí|ingresá|podés|tenés|dejás|hacé|marcá|usá|querés|volvé|actualizá|generá|copiá|guardá|creá|armá|refiná|probá|revisá|comentá|editá|configurá|agregá|quitá|abrí|cerrá|leé|explicá|contestá|entendés|sabés|conocés|preguntá|respondé|compará|empezá|pagá|explorá|esperá|andá|vení|mirá|hablá|sacá|traé|decí|prestá|tomá|poné|olvidate|acordate|quedate|dale|sumate|entrá|salí|corré|subí|bajá|comprá|reintentá|solicitá|verificá|instalá|activá|invitá|conectate|partís|empezás|compartís|hacés|dejás|marcás|verás)\b'
 
 # Grep con line numbers + filename. Descartamos matches en comentarios
 # multi-línea de código Python/JS que pueden tener contexto legítimo

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Container } from "@/components/ui";
 import { DashboardMockup } from "./dashboard-mockup";
 
@@ -15,10 +15,10 @@ import { DashboardMockup } from "./dashboard-mockup";
  */
 
 const credibilidad = [
-  { valor: "50+", label: "entidades reguladas activas" },
-  { valor: "desde 2010", label: "histórico mensual" },
+  { valor: "52", label: "entidades reguladas activas" },
+  { valor: "16 años", label: "histórico oficial SBS" },
   { valor: "Automático", label: "actualización mensual" },
-  { valor: "100%", label: "auditable a nivel celda" },
+  { valor: "100%", label: "auditable celda a celda" },
 ];
 
 export function Hero() {
@@ -64,6 +64,23 @@ export function Hero() {
           <p className="text-sm text-slate-500">
             Sin tarjeta, sin compromiso. Compara cualquier entidad contra sus pares en 30 segundos.
           </p>
+
+          {/* Trust indicator: fuente + honestidad "en beta". La confianza
+              es LO UNICO que importa en fase 0 — sin credibilidad nadie
+              paga por datos, aun si son correctos. */}
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-slate-500 pt-1">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Fuente oficial <strong className="text-slate-700 font-semibold">SBS Perú</strong>
+            </span>
+            <span className="text-slate-300" aria-hidden>·</span>
+            <span>Extracción automática, sin sesgo comercial</span>
+            <span className="text-slate-300" aria-hidden>·</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span>En <strong className="text-slate-700 font-semibold">beta abierta</strong> con nuestros primeros usuarios</span>
+            </span>
+          </div>
         </div>
 
         {/* Franja de credibilidad */}

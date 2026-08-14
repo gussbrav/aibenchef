@@ -37,7 +37,10 @@ import {
   verifyApiKey,
   recordApiKeyUsage,
   countApiKeyRequestsLastMinute,
+  countApiKeyRequestsToday,
+  bumpApiKeyDailyUsage,
   rateLimitForPlan,
+  dailyRateLimitForPlan,
 } from "@/lib/domains/api-keys";
 import { logger } from "@/lib/domains/shared";
 
@@ -139,10 +142,33 @@ export async function withApiPublic<T>(
     );
   }
 
+  // V171: cap DIARIO. Aunque respetes 60/min, este cap evita scraping
+  // completo del universo SBS en pocos dias. Admin bypass.
+  const dailyLimit = dailyRateLimitForPlan(plan);
+  let usedToday = 0;
+  if (!isAdmin) {
+    try {
+      usedToday = await countApiKeyRequestsToday(key.apiKeyId);
+    } catch (err) {
+      log.error("countApiKeyRequestsToday failed", { err: String(err) });
+      usedToday = 0;
+    }
+    if (usedToday >= dailyLimit) {
+      return errorJson(
+        429,
+        "daily_limit_exceeded",
+        `Alcanzaste el cap diario de ${dailyLimit} requests para tu plan (${plan}). Se resetea a las 00:00 UTC. Considera upgradar el plan si necesitas mas volumen.`,
+        { plan, dailyLimit, usedToday },
+      );
+    }
+  }
+
   // Registrar el uso ANTES de correr el handler (para que un handler
   // lento no permita bypass del cap sirviendo mas requests en paralelo).
   try {
     await recordApiKeyUsage(key.apiKeyId);
+    // V171: tambien bump del contador diario en paralelo.
+    if (!isAdmin) await bumpApiKeyDailyUsage(key.apiKeyId);
   } catch (err) {
     log.error("recordApiKeyUsage failed", { err: String(err) });
     // Fail-open — el request sigue.
@@ -163,6 +189,12 @@ export async function withApiPublic<T>(
           "content-type": "application/json; charset=utf-8",
           "x-ratelimit-limit": String(limit),
           "x-ratelimit-remaining": String(Math.max(0, limit - used - 1)),
+          "x-ratelimit-daily-limit": String(dailyLimit),
+          "x-ratelimit-daily-remaining": String(
+            Math.max(0, dailyLimit - usedToday - 1),
+          ),
+          // V171: watermark — permite identificar origen si aparece leak.
+          "x-aibenchef-key": key.apiKeyId.slice(0, 8),
         },
       },
     );

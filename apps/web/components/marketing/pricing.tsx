@@ -1,193 +1,340 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Check, GraduationCap, ArrowRight } from "lucide-react";
+import { Check, GraduationCap, Sparkles, Info } from "lucide-react";
 import { Container, Section, SectionHeading, Card, Button } from "@/components/ui";
+import { cn } from "@/lib/utils/cn";
+
+import { ContratarPlanModal } from "./contratar-plan-modal";
 
 /**
- * Pricing publico — DEBE reflejar exactamente lo que enforcea el server
- * en apps/web/lib/plans.ts (PLAN_LIMITS). Si cambias limites aca sin
- * actualizar plans.ts, mentis al usuario. Si cambias plans.ts sin
- * actualizar aca, tenes UI desactualizada.
+ * Pricing publico — 3 tiers claros (Free / Pro / Business) + Academic
+ * como descuento automatico sobre Pro para emails .edu.pe verificados.
  *
- * Fuente de verdad: lib/plans.ts.
+ * Fuente de verdad de limites: lib/plans.ts (PLAN_LIMITS). Este archivo
+ * es SOLO copy visible al usuario. Si cambian los limites, actualizar
+ * ambos lugares.
+ *
+ * Toggle mensual/anual: el anual da 2 meses gratis (~17% off). Precios
+ * primarios en soles (mercado peruano) + equivalente USD como secondary.
+ *
+ * Deep-link para "empresa"/"persona natural" desde el modal de contratacion:
+ * simplifica el flujo de pago manual pre-Culqi.
  */
 
-const plans = [
+type Plan = {
+  id: "free" | "pro" | "business";
+  name: string;
+  descripcion: string;
+  precioMensualPen: number;
+  precioMensualUsd: number;
+  destacado: boolean;
+  ctaLabel: string;
+  ctaAction: "signup" | "modal" | "contact";
+  features: string[];
+  notaAcademica?: string;
+};
+
+const plans: Plan[] = [
   {
+    id: "free",
     name: "Free",
-    price: 0,
-    priceLabel: "Gratis",
-    description: "Para probar la plataforma con tu entidad y ver el valor real.",
+    descripcion: "Para probar la plataforma y ver el valor real antes de pagar.",
+    precioMensualPen: 0,
+    precioMensualUsd: 0,
+    destacado: false,
+    ctaLabel: "Empezar gratis",
+    ctaAction: "signup",
     features: [
-      "1 entidad propia",
-      "Hasta 2 competidores para comparar",
-      "Últimos 2 años de histórico",
-      "Benchmark ejecutivo (informe completo)",
-      "Punto de Equilibrio y DuPont",
+      "1 competidor para comparar",
+      "12 meses de histórico",
+      "Benchmark básico + Punto de Equilibrio + DuPont",
+      "Sin export ni API",
     ],
-    cta: "Empezar gratis",
-    highlighted: false,
   },
   {
+    id: "pro",
     name: "Pro",
-    price: 149,
-    description: "Para analistas que arman informes mensuales de verdad.",
+    descripcion: "Para analistas que arman informes mensuales de verdad.",
+    precioMensualPen: 149,
+    precioMensualUsd: 39,
+    destacado: true,
+    ctaLabel: "Contratar Pro",
+    ctaAction: "modal",
     features: [
       "Hasta 10 competidores por informe",
       "5 años de histórico completo",
-      "Publicaciones con IA para LinkedIn (20/mes)",
-      "Estados Financieros históricos y análisis dinámico",
+      "Estados Financieros + Análisis dinámico",
       "Insights AI en el dashboard",
-      "Exportar Benchmark a PDF + tabla a Excel",
+      "Publicaciones con IA (20/mes)",
+      "Exportar a PDF + Excel",
       "API pública + MCP para Claude Desktop",
     ],
-    cta: "Empezar prueba",
-    highlighted: true,
+    notaAcademica:
+      "Tesistas con email .edu.pe verificado: S/29/mes (80% off automático).",
   },
   {
+    id: "business",
     name: "Business",
-    price: 399,
-    description: "Para gerencias y consultoras que necesitan más volumen.",
+    descripcion: "Para consultoras, áreas de riesgo y gerencias.",
+    precioMensualPen: 1500,
+    precioMensualUsd: 399,
+    destacado: false,
+    ctaLabel: "Hablemos",
+    ctaAction: "contact",
     features: [
-      "Todo lo de Pro sin límites",
-      "Publicaciones con IA ilimitadas",
-      "API pública con rate limits ampliados",
+      "Todo Pro sin límites",
+      "Publicaciones AI ilimitadas",
+      "5 usuarios incluidos (adicionales S/200 c/u)",
+      "API con rate limit ampliado",
       "Colores del peer group personalizados",
-      "Múltiples usuarios por organización",
-      "Soporte prioritario por email",
+      "Soporte prioritario 24h SLA",
+      "Onboarding 1:1 y factura electrónica",
     ],
-    cta: "Hablemos",
-    highlighted: false,
   },
 ];
 
+const AHORRO_ANUAL_PCT = 0.17; // 2 meses gratis en anual (12/10 - 1)
+
+const fmtPen = (n: number): string =>
+  new Intl.NumberFormat("es-PE", {
+    style: "currency",
+    currency: "PEN",
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(n);
+
+const fmtUsd = (n: number): string => `$${n.toLocaleString("en-US")}`;
+
 export function Pricing() {
+  const [anual, setAnual] = useState(false);
+  const [modalPlan, setModalPlan] = useState<Plan | null>(null);
+
   return (
     <Section id="planes">
       <Container size="xl">
         <SectionHeading
           eyebrow="Planes"
           title="Empieza gratis. Paga cuando lo necesites."
-          description="Sin permanencia. Cancelas cuando quieras. Precios en USD, factura electrónica peruana."
+          description="Sin permanencia. Cancelas cuando quieras. Precios en soles con factura electrónica peruana."
         />
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {plans.map((plan) => (
-            <Card
-              key={plan.name}
-              variant={plan.highlighted ? "outlined" : "elevated"}
-              className="flex flex-col p-8"
-            >
-              {plan.highlighted && (
-                <p className="text-xs font-bold tracking-widest text-brand-600 uppercase mb-2">
-                  Más popular
-                </p>
+
+        {/* Toggle mensual / anual */}
+        <div className="mt-10 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setAnual(false)}
+            className={cn(
+              "px-4 h-9 text-sm font-medium rounded-full transition-colors",
+              !anual
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:text-slate-900",
+            )}
+            aria-pressed={!anual}
+          >
+            Mensual
+          </button>
+          <button
+            type="button"
+            onClick={() => setAnual(true)}
+            className={cn(
+              "px-4 h-9 text-sm font-medium rounded-full transition-colors inline-flex items-center gap-1.5",
+              anual
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:text-slate-900",
+            )}
+            aria-pressed={anual}
+          >
+            Anual
+            <span
+              className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider",
+                anual
+                  ? "bg-emerald-500 text-white"
+                  : "bg-emerald-100 text-emerald-800",
               )}
-              <h3 className="text-2xl font-bold text-slate-900">{plan.name}</h3>
-              <p className="text-sm text-slate-600 mt-2 min-h-[2.5rem]">
-                {plan.description}
-              </p>
-              <div className="mt-6 flex items-baseline gap-1">
-                {plan.price === 0 ? (
-                  <span className="text-5xl font-bold text-slate-900">
-                    {plan.priceLabel ?? "Gratis"}
-                  </span>
-                ) : (
-                  <>
-                    <span className="text-5xl font-bold text-slate-900">
-                      ${plan.price}
-                    </span>
-                    <span className="text-slate-500">/mes</span>
-                  </>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-1 min-h-[1rem]">
-                {plan.price === 0
-                  ? "Sin tarjeta de crédito. Siempre gratis."
-                  : "USD. Facturación mensual. Factura electrónica peruana."}
-              </p>
-              <ul className="mt-8 space-y-3 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
-                    <Check className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link
-                href={plan.name === "Business" ? "/solicitar-acceso?plan=business" as never : "/signup"}
-                className="mt-8"
-              >
-                <Button
-                  fullWidth
-                  size="lg"
-                  variant={plan.highlighted ? "primary" : "outline"}
-                >
-                  {plan.cta}
-                </Button>
-              </Link>
-            </Card>
+            >
+              −17% · 2 meses gratis
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {plans.map((plan) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              anual={anual}
+              onContratar={() => setModalPlan(plan)}
+            />
           ))}
         </div>
 
-        {/* Plan Académico — card destacada para tesistas/estudiantes.
-            Target audience distinto (universitarios peruanos) que amerita
-            separarlo del grid principal en vez de mezclarlo. */}
-        <div className="mt-10 max-w-4xl mx-auto">
-          <Card
-            variant="elevated"
-            className="p-6 md:p-8 border-2 border-sky-200 bg-gradient-to-br from-sky-50 via-white to-white"
-          >
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                <GraduationCap className="w-7 h-7 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-3 flex-wrap">
-                  <h3 className="text-xl font-bold text-slate-900">
-                    Plan Académico
-                  </h3>
-                  <span className="text-2xl font-bold text-slate-900">$9<span className="text-sm text-slate-500 font-normal">/mes</span></span>
-                </div>
-                <p className="text-sm text-slate-600 mt-1.5">
-                  Para tesistas y estudiantes con email institucional peruano
-                  (<span className="font-mono text-xs bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded">*.edu.pe</span>).
-                  Verificación automática al registrarte.
-                </p>
-                <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
-                  {[
-                    "5 años de histórico",
-                    "Hasta 5 competidores",
-                    "Benchmark, PE, DuPont, EEFF",
-                    "Exportar a PDF + Excel",
-                    "API pública + MCP para Claude Desktop",
-                  ].map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-slate-700">
-                      <Check className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <Link
-                href="/signup"
-                className="w-full md:w-auto flex-shrink-0"
-              >
-                <Button size="lg" variant="outline" className="!border-sky-500 !text-sky-700 hover:!bg-sky-50 w-full md:w-auto">
-                  Registrarme
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        </div>
-
+        {/* Enterprise footer */}
         <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
-          ¿Necesitas white-label, on-premise, SLA con firma o integración a medida?{" "}
-          <Link href={"/solicitar-acceso?plan=enterprise" as never} className="text-brand-600 hover:underline font-medium">
+          ¿Necesitas white-label, on-premise, SLA con firma, single-tenant o
+          integración a medida?{" "}
+          <Link
+            href={"/solicitar-acceso?plan=enterprise" as never}
+            className="text-brand-600 hover:underline font-medium"
+          >
             Hablemos del plan Enterprise
           </Link>
           .
         </p>
       </Container>
+
+      {modalPlan && (
+        <ContratarPlanModal
+          plan={{
+            id: modalPlan.id,
+            name: modalPlan.name,
+            precioMensualPen: modalPlan.precioMensualPen,
+            precioMensualUsd: modalPlan.precioMensualUsd,
+          }}
+          anualDefault={anual}
+          onClose={() => setModalPlan(null)}
+        />
+      )}
     </Section>
+  );
+}
+
+// ============================================================================
+// PlanCard
+// ============================================================================
+
+function PlanCard({
+  plan,
+  anual,
+  onContratar,
+}: {
+  plan: Plan;
+  anual: boolean;
+  onContratar: () => void;
+}) {
+  const precioMostrarPen = anual
+    ? Math.round(plan.precioMensualPen * (1 - AHORRO_ANUAL_PCT))
+    : plan.precioMensualPen;
+  const precioMostrarUsd = anual
+    ? Math.round(plan.precioMensualUsd * (1 - AHORRO_ANUAL_PCT))
+    : plan.precioMensualUsd;
+  const cargoAnualPen = Math.round(precioMostrarPen * 12);
+
+  return (
+    <Card
+      variant={plan.destacado ? "outlined" : "elevated"}
+      className={cn(
+        "flex flex-col p-8 relative",
+        plan.destacado && "border-2 border-brand-500 shadow-lg",
+      )}
+    >
+      {plan.destacado && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-bold tracking-wider text-white bg-gradient-to-r from-brand-600 to-brand-500 rounded-full uppercase shadow">
+            <Sparkles className="w-3 h-3" />
+            Más popular
+          </span>
+        </div>
+      )}
+      <h3 className="text-2xl font-bold text-slate-900">{plan.name}</h3>
+      <p className="text-sm text-slate-600 mt-2 min-h-[2.5rem]">
+        {plan.descripcion}
+      </p>
+
+      <div className="mt-6">
+        {plan.precioMensualPen === 0 ? (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="text-5xl font-bold text-slate-900">Gratis</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 min-h-[1rem]">
+              Sin tarjeta de crédito. Siempre gratis.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="text-5xl font-bold text-slate-900 tabular-nums">
+                {fmtPen(precioMostrarPen)}
+              </span>
+              <span className="text-slate-500">/mes</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 tabular-nums">
+              ≈ {fmtUsd(precioMostrarUsd)}/mes ·{" "}
+              {anual ? (
+                <>
+                  {fmtPen(cargoAnualPen)} cobrado anualmente ·{" "}
+                  <span className="text-emerald-700 font-semibold">
+                    Ahorras {fmtPen(plan.precioMensualPen * 12 - cargoAnualPen)}
+                  </span>
+                </>
+              ) : (
+                <>Facturación mensual · factura electrónica</>
+              )}
+            </p>
+          </>
+        )}
+      </div>
+
+      <ul className="mt-8 space-y-3 flex-1">
+        {plan.features.map((f) => (
+          <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
+            <Check className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+
+      {plan.notaAcademica && (
+        <div className="mt-5 p-3 rounded-lg bg-sky-50 border border-sky-200 flex items-start gap-2">
+          <GraduationCap className="w-4 h-4 text-sky-700 flex-shrink-0 mt-0.5" />
+          <p className="text-[12px] text-sky-900 leading-relaxed">
+            <strong>Tesistas:</strong> con email <code className="font-mono text-[11px] bg-white/60 px-1 rounded">.edu.pe</code> verificado{" "}
+            <strong>S/29/mes</strong> (80% off automático al registrarte).
+          </p>
+        </div>
+      )}
+
+      <div className="mt-8">
+        {plan.ctaAction === "signup" && (
+          <Link href="/signup">
+            <Button
+              fullWidth
+              size="lg"
+              variant={plan.destacado ? "primary" : "outline"}
+            >
+              {plan.ctaLabel}
+            </Button>
+          </Link>
+        )}
+        {plan.ctaAction === "modal" && (
+          <Button
+            fullWidth
+            size="lg"
+            variant={plan.destacado ? "primary" : "outline"}
+            onClick={onContratar}
+          >
+            {plan.ctaLabel}
+          </Button>
+        )}
+        {plan.ctaAction === "contact" && (
+          <Button
+            fullWidth
+            size="lg"
+            variant={plan.destacado ? "primary" : "outline"}
+            onClick={onContratar}
+          >
+            {plan.ctaLabel}
+          </Button>
+        )}
+      </div>
+
+      <p className="text-[11px] text-slate-400 text-center mt-3 inline-flex items-center justify-center gap-1">
+        <Info className="w-3 h-3" />
+        Sin permanencia · cancelas cuando quieras
+      </p>
+    </Card>
   );
 }

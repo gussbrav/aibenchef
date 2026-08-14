@@ -1,8 +1,13 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { createAuthMiddleware, APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
 import { db } from "@/lib/infrastructure/db";
 import * as schema from "@/lib/infrastructure/db/schema";
+import {
+  checkAndLogSignupAttempt,
+  extractClientIp,
+} from "./signup-rate-limit";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -56,8 +61,28 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // refresh diario
   },
 
+  // V171: rate limit signup por IP (3/hora). Bloquea mass-signup attacks
+  // que buscarian crear 10k cuentas para bypasear el limite de 10 API keys.
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-up/email") return;
+      const ip = extractClientIp(ctx.headers ?? new Headers());
+      const email =
+        typeof ctx.body === "object" && ctx.body && "email" in ctx.body
+          ? String((ctx.body as { email?: unknown }).email ?? "")
+          : undefined;
+      const result = await checkAndLogSignupAttempt(ip, email);
+      if (!result.allowed) {
+        throw new APIError("TOO_MANY_REQUESTS", {
+          message:
+            "Demasiados intentos de registro desde tu red. Intenta nuevamente en 1 hora o escríbenos por WhatsApp.",
+        });
+      }
+    }),
+  },
+
   trustedOrigins: buildTrustedOrigins(),
-});
+} satisfies BetterAuthOptions);
 
 /**
  * Dominios permitidos para auth (cookies + CORS de Better Auth).

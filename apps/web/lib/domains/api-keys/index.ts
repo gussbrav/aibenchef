@@ -262,3 +262,54 @@ export function rateLimitForPlan(plan: string): number {
       return 30;
   }
 }
+
+/**
+ * Cap DIARIO por plan (V171). Complementa el rate limit por minuto: aunque
+ * el attacker respete 60/min, no puede pasar de este cap diario.
+ *
+ * Calculo de proteccion:
+ *   Universo SBS aprox: ~150k requests para descarga completa.
+ *   Academic 500/dia = 300 dias (10 meses) para full scrape → tiempo suficiente
+ *   para detectar patron anomalo y revocar key.
+ *   Pro 5000/dia = 30 dias — sigue siendo detectable.
+ *   Business 20000/dia = 7.5 dias — cliente enterprise legit no llega ni al 10%.
+ */
+export function dailyRateLimitForPlan(plan: string): number {
+  switch (plan) {
+    case "academic":
+      return 500;
+    case "pro":
+      return 5000;
+    case "business":
+      return 20000;
+    default:
+      return 100;
+  }
+}
+
+/** Cuenta requests de la key en el dia actual (V171). */
+export async function countApiKeyRequestsToday(apiKeyId: string): Promise<number> {
+  const [row] = await db.execute<{ n: number }>(sql`
+    SELECT COALESCE(request_count, 0)::int AS n
+      FROM auth.api_key_daily_usage
+     WHERE api_key_id = ${apiKeyId}::uuid
+       AND usage_date = CURRENT_DATE
+     LIMIT 1
+  `);
+  return row?.n ?? 0;
+}
+
+/**
+ * Bump del contador diario (V171). Usa UPSERT para ser atomico bajo
+ * concurrencia. Se llama junto con recordApiKeyUsage() (rolling minuto).
+ */
+export async function bumpApiKeyDailyUsage(apiKeyId: string): Promise<void> {
+  await db.execute(sql`
+    INSERT INTO auth.api_key_daily_usage (api_key_id, usage_date, request_count, first_at, last_at)
+    VALUES (${apiKeyId}::uuid, CURRENT_DATE, 1, now(), now())
+    ON CONFLICT (api_key_id, usage_date)
+    DO UPDATE SET
+      request_count = auth.api_key_daily_usage.request_count + 1,
+      last_at = now()
+  `);
+}
