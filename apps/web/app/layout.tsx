@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: "%s · Aibenchef",
   },
   description:
-    "Bancos, financieras, cajas y empresas de créditos — toda la data pública, limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+    "Bancos, financieras, cajas municipales, cajas rurales y empresas de créditos — los 5 grupos regulados por la SBS con toda su data pública limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
   keywords: [
     "banca peruana",
     "sistema financiero peruano",

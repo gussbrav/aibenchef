@@ -43,8 +43,9 @@ export function Hero() {
             </span>
           </h1>
           <p className="text-xl lg:text-2xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
-            Bancos, financieras, cajas y empresas de créditos — toda la data
-            pública, limpia, comparada y visualizada. Sin descargar Excels ni
+            Bancos, financieras, cajas municipales, cajas rurales y empresas
+            de créditos — los 5 grupos regulados por la SBS con toda su data
+            pública limpia, comparada y visualizada. Sin descargar Excels ni
             armar tablas dinámicas. Decisión lista en minutos, no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
@@ -61,7 +62,7 @@ export function Hero() {
             </Link>
           </div>
           <p className="text-sm text-slate-500">
-            Sin tarjeta, sin compromiso. Explora todo el sistema financiero peruano en minutos.
+            Sin tarjeta, sin compromiso. Compará cualquier entidad contra sus pares en 30 segundos.
           </p>
         </div>
 
