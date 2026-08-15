@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, GraduationCap, Sparkles, Info } from "lucide-react";
+import { ArrowRight, Check, GraduationCap, Sparkles, Info } from "lucide-react";
 import { Container, Section, SectionHeading, Card, Button } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 
@@ -33,7 +33,6 @@ type Plan = {
   ctaLabel: string;
   ctaAction: "signup" | "modal" | "contact";
   features: string[];
-  notaAcademica?: string;
 };
 
 const plans: Plan[] = [
@@ -47,7 +46,7 @@ const plans: Plan[] = [
     ctaLabel: "Empezar gratis",
     ctaAction: "signup",
     features: [
-      "1 competidor para comparar",
+      "Hasta 2 competidores para comparar",
       "12 meses de histórico",
       "Benchmark básico + Punto de Equilibrio + DuPont",
       "Sin export ni API",
@@ -71,8 +70,6 @@ const plans: Plan[] = [
       "Exportar a PDF + Excel",
       "API pública + MCP para Claude Desktop",
     ],
-    notaAcademica:
-      "Tesistas con email .edu.pe verificado: S/29/mes (80% off automático).",
   },
   {
     id: "business",
@@ -171,8 +168,44 @@ export function Pricing() {
           ))}
         </div>
 
+        {/* Academic — sub-card compacto (no ensucia el grid principal, pero
+            los tesistas lo ven claro y no piensan que Pro cuesta S/149). */}
+        <div className="mt-10 max-w-4xl mx-auto">
+          <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-white p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center gap-5">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  ¿Eres tesista con email <span className="font-mono text-xs bg-white border border-sky-200 px-1.5 py-0.5 rounded text-sky-800">.edu.pe</span>?
+                </h3>
+                <span className="text-lg font-bold text-slate-900 tabular-nums">
+                  S/29<span className="text-xs text-slate-500 font-normal">/mes</span>
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white uppercase tracking-wider">
+                  −80%
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Todo lo de Pro por menos que un almuerzo mensual. Verificación
+                automática al registrarte con tu email institucional peruano.
+              </p>
+            </div>
+            <Link
+              href="/signup"
+              className="w-full md:w-auto flex-shrink-0"
+            >
+              <Button size="md" variant="outline" className="!border-sky-500 !text-sky-700 hover:!bg-sky-50 w-full md:w-auto">
+                Empezar como tesista
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+
         {/* Enterprise footer */}
-        <p className="text-center text-sm text-slate-500 mt-12 max-w-2xl mx-auto">
+        <p className="text-center text-sm text-slate-500 mt-10 max-w-2xl mx-auto">
           ¿Necesitas white-label, on-premise, SLA con firma, single-tenant o
           integración a medida?{" "}
           <Link
@@ -286,16 +319,6 @@ function PlanCard({
           </li>
         ))}
       </ul>
-
-      {plan.notaAcademica && (
-        <div className="mt-5 p-3 rounded-lg bg-sky-50 border border-sky-200 flex items-start gap-2">
-          <GraduationCap className="w-4 h-4 text-sky-700 flex-shrink-0 mt-0.5" />
-          <p className="text-[12px] text-sky-900 leading-relaxed">
-            <strong>Tesistas:</strong> con email <code className="font-mono text-[11px] bg-white/60 px-1 rounded">.edu.pe</code> verificado{" "}
-            <strong>S/29/mes</strong> (80% off automático al registrarte).
-          </p>
-        </div>
-      )}
 
       <div className="mt-8">
         {plan.ctaAction === "signup" && (

@@ -54,11 +54,11 @@ export type PlanLimits = {
 
 export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   free: {
-    // V171: tightened para fomentar upgrade. Free debe SENTIR el limite pero
-    // no ser inutil. Con 1 peer + 12m se puede hacer un benchmark real
-    // basico ("mi entidad vs 1 competidor" en el ultimo año), pero series
-    // temporales y peer group grande obligan a upgrade.
-    maxPeers: 1,
+    // V171 (revisado): 2 peers + 12m — Free debe SENTIR el limite pero dar
+    // "aha moment" para conversion. 1 peer no basta para benchmark real
+    // (sesgo de N=1); 2 peers muestra "mi entidad vs 2 competidores del
+    // mismo grupo". 12m obliga upgrade para series temporales year-over-year.
+    maxPeers: 2,
     maxHistoricoMeses: 12,
     publicacionesPorMes: 0,
     insightsAI: false,
