@@ -257,18 +257,18 @@ export function SignupForm({ googleEnabled }: { googleEnabled: boolean }) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@empresa.com o tu@universidad.edu.pe"
               />
-              {/* V168: si detectamos email .edu.pe, mostrar chip promocional
-                  del Plan Academico. La logica DEFINITIVA la hace el trigger
-                  DB al INSERT — esto es solo UX de feedback inmediato. */}
+              {/* V172: si es email .edu.pe informamos que califica para
+                  descuento tesista al pagar Academic (S/29/mes vs S/149),
+                  pero NO auto-asignamos el plan (eso era regalar features).
+                  El descuento se aplica al momento de contratar via WhatsApp. */}
               {isEmailAcademicoPeruano(email) && (
                 <div className="mt-2 rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 flex items-start gap-2 text-[12px] text-sky-900">
                   <span className="text-sky-600 font-bold">🎓</span>
                   <span>
-                    <strong>Email institucional detectado.</strong> Al
-                    registrarte se activará el{" "}
-                    <strong>Plan Académico ($9/mes)</strong> con verificación
-                    automática — 5 años de histórico, hasta 5 competidores,
-                    API pública y MCP para Claude Desktop.
+                    <strong>Email institucional detectado.</strong> Tu cuenta
+                    empieza en el plan Free como todos. Cuando quieras contratar
+                    Pro, calificas por el <strong>descuento tesista: S/29/mes</strong>{" "}
+                    en lugar de S/149 (verificación automática al pagar).
                   </span>
                 </div>
               )}

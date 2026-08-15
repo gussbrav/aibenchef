@@ -68,9 +68,12 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     apiAccess: false,
     slaEnterprise: false,
   },
-  // V168: plan Academico — tesistas/estudiantes verificados con email
-  // institucional peruano (.edu.pe). Sin publicaciones AI (unit economics).
-  // Con API + MCP acceso para consumir data desde Claude Desktop / scripts.
+  // Plan Academico (S/29/mes = 80% off Pro) — solo para tesistas verificados
+  // con email .edu.pe de universidad whitelist. V172: YA NO se auto-asigna
+  // al signup (era regalar features). Requiere pago manual via WhatsApp;
+  // admin lo promueve desde /dashboard/admin/suscripciones tras confirmar
+  // voucher/transferencia. Features: sin publicaciones AI (unit economics),
+  // pero con API + MCP para consumir data desde Claude Desktop / scripts.
   academic: {
     maxPeers: 5,
     maxHistoricoMeses: 60,
@@ -152,10 +155,15 @@ export const PLAN_META: Record<UserPlan, {
 };
 
 /**
- * V168: helper para detectar email institucional peruano (.edu.pe).
- * Usado en el flujo de signup para pre-mostrar el chip "Plan Académico
- * detectado". La logica DEFINITIVA de asignar plan academic vive en el
- * trigger de la DB (auth.detect_academic_email); esto es solo UX.
+ * Helper para detectar email institucional peruano (.edu.pe).
+ *
+ * V172: NO auto-asigna Academic (eso era regalar features). Solo usado en
+ * el signup para mostrar chip "califica para descuento tesista S/29 al
+ * contratar Pro". La promocion real requiere pago manual (via WhatsApp)
+ * verificado por admin desde /dashboard/admin/suscripciones.
+ *
+ * El trigger DB (V172) marca `academic_verified_at` para users con email
+ * .edu.pe de universidad whitelist, pero el plan queda 'free' hasta pago.
  */
 export function isEmailAcademicoPeruano(email: string | null | undefined): boolean {
   if (!email) return false;
