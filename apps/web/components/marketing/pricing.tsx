@@ -29,6 +29,12 @@ type Plan = {
   descripcion: string;
   precioMensualPen: number;
   precioMensualUsd: number;
+  /**
+   * Precio "a medida" (custom quote). Cuando true, ignoramos los campos
+   * numericos y mostramos "A medida" en la card + skipeamos el ciclo de
+   * facturacion en el modal (va directo a "solicitud de cotizacion").
+   */
+  precioAcordar?: boolean;
   destacado: boolean;
   ctaLabel: string;
   ctaAction: "signup" | "modal" | "contact";
@@ -75,15 +81,19 @@ const plans: Plan[] = [
     id: "business",
     name: "Business",
     descripcion: "Para consultoras, áreas de riesgo y gerencias.",
-    precioMensualPen: 1500,
-    precioMensualUsd: 399,
+    // Precio abierto — cada engagement se cotiza segun necesidades reales
+    // (numero de usuarios, integraciones, SLA, on-premise, etc.). Modelo
+    // consultivo cerrar via WhatsApp/reunion.
+    precioMensualPen: 0,
+    precioMensualUsd: 0,
+    precioAcordar: true,
     destacado: false,
     ctaLabel: "Hablemos",
     ctaAction: "contact",
     features: [
       "Todo Pro sin límites",
       "Publicaciones AI ilimitadas",
-      "5 usuarios incluidos (adicionales S/200 c/u)",
+      "Multi-usuario según necesidades",
       "API con rate limit ampliado",
       "Colores del peer group personalizados",
       "Soporte prioritario 24h SLA",
@@ -196,6 +206,7 @@ export function Pricing() {
             name: modalPlan.name,
             precioMensualPen: modalPlan.precioMensualPen,
             precioMensualUsd: modalPlan.precioMensualUsd,
+            precioAcordar: modalPlan.precioAcordar,
           }}
           anualDefault={anual}
           onClose={() => setModalPlan(null)}
@@ -248,7 +259,16 @@ function PlanCard({
       </p>
 
       <div className="mt-6">
-        {plan.precioMensualPen === 0 ? (
+        {plan.precioAcordar ? (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="text-5xl font-bold text-slate-900">A medida</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Cotización personalizada según usuarios, integraciones y SLA.
+            </p>
+          </>
+        ) : plan.precioMensualPen === 0 ? (
           <>
             <div className="flex items-baseline gap-1">
               <span className="text-5xl font-bold text-slate-900">Gratis</span>

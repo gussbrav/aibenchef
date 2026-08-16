@@ -39,6 +39,8 @@ type Plan = {
   name: string;
   precioMensualPen: number;
   precioMensualUsd: number;
+  /** Si true, Business con precio custom: skip ciclo/precio, va a cotizacion. */
+  precioAcordar?: boolean;
 };
 
 type TipoPersona = "natural" | "empresa";
@@ -63,14 +65,22 @@ export function ContratarPlanModal({
   anualDefault?: boolean;
   onClose: () => void;
 }) {
+  // Business (precioAcordar): flujo de solicitud de cotizacion. Sin ciclo,
+  // sin metodo de pago; solo datos de contacto + brief opcional. El precio
+  // se cierra en la conversacion posterior por WhatsApp.
+  const esCotizacion = plan.precioAcordar === true;
+
   const [step, setStep] = useState<1 | 2>(1);
-  const [tipoPersona, setTipoPersona] = useState<TipoPersona>("natural");
+  const [tipoPersona, setTipoPersona] = useState<TipoPersona>(
+    esCotizacion ? "empresa" : "natural",
+  );
   const [anual, setAnual] = useState<boolean>(anualDefault);
   const [metodo, setMetodo] = useState<MetodoPago>("transferencia");
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [ruc, setRuc] = useState("");
+  const [brief, setBrief] = useState(""); // solo cotizacion
   const [enviando, setEnviando] = useState(false);
 
   // Cerrar con Escape
@@ -97,17 +107,35 @@ export function ContratarPlanModal({
     return { mensualPen, mensualUsd, totalPen, totalUsd, ahorroPen };
   }, [plan, anual]);
 
-  const puedeAvanzar =
-    nombre.trim().length >= 3 &&
-    /^[^@]+@[^@]+\.[^@]+$/.test(email.trim()) &&
-    (tipoPersona === "natural" ||
-      (empresa.trim().length >= 3 && /^\d{11}$/.test(ruc.trim())));
+  const puedeAvanzar = esCotizacion
+    ? // Cotizacion: minimo nombre + email + (razon social + RUC si empresa).
+      // Brief es opcional. RUC solo obligatorio si tipoPersona=empresa.
+      nombre.trim().length >= 3 &&
+      /^[^@]+@[^@]+\.[^@]+$/.test(email.trim()) &&
+      (tipoPersona === "natural" ||
+        (empresa.trim().length >= 3 && /^\d{11}$/.test(ruc.trim())))
+    : nombre.trim().length >= 3 &&
+      /^[^@]+@[^@]+\.[^@]+$/.test(email.trim()) &&
+      (tipoPersona === "natural" ||
+        (empresa.trim().length >= 3 && /^\d{11}$/.test(ruc.trim())));
 
   const construirMensaje = (): string => {
     const nombreLabel = tipoPersona === "empresa" ? "Razón social" : "Nombre";
     const nombreValor = tipoPersona === "empresa" ? empresa.trim() : nombre.trim();
     const rucLine = tipoPersona === "empresa" ? `🏢 RUC: ${ruc.trim()}\n` : "";
     const contactoLine = tipoPersona === "empresa" ? `👤 Contacto: ${nombre.trim()}\n` : "";
+
+    // Cotizacion Business: mensaje simplificado sin precio/metodo.
+    if (esCotizacion) {
+      const briefLine = brief.trim() ? `\n📝 Necesidad: ${brief.trim()}\n` : "";
+      return `Hola, quiero una cotización de Aibenchef ${plan.name}.
+
+📄 ${nombreLabel}: ${nombreValor}
+${rucLine}${contactoLine}📧 Email: ${email.trim()}${briefLine}
+
+Quedo pendiente de la propuesta y siguiente paso.`;
+    }
+
     const periodoLabel = anual ? "anual" : "mensual";
     const totalLabel = anual
       ? `${fmtPen(precios.totalPen)} anual (equivale a ${fmtPen(precios.mensualPen)}/mes con -17% vs mensual)`
@@ -157,13 +185,15 @@ Quedo pendiente de las instrucciones de pago.`;
           <div>
             <p className="text-[11px] font-bold tracking-wider text-brand-700 uppercase inline-flex items-center gap-1">
               <Sparkles className="w-3 h-3" />
-              Contratar plan
+              {esCotizacion ? "Solicitar cotización" : "Contratar plan"}
             </p>
             <h2 id="contratar-title" className="text-2xl font-bold text-slate-900 mt-1">
               Aibenchef {plan.name}
             </h2>
             <p className="text-sm text-slate-600 mt-0.5">
-              Activación en menos de 24 h · Sin permanencia · Factura electrónica peruana
+              {esCotizacion
+                ? "Cotización personalizada · Respuesta en menos de 24 h · Sin permanencia"
+                : "Activación en menos de 24 h · Sin permanencia · Factura electrónica peruana"}
             </p>
           </div>
           <button
@@ -179,27 +209,29 @@ Quedo pendiente de las instrucciones de pago.`;
         {step === 1 && (
           <>
             <div className="p-6 space-y-5">
-              {/* Ciclo de facturación */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wider">
-                  Ciclo de facturación
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <SelectableTile
-                    active={!anual}
-                    onClick={() => setAnual(false)}
-                    title="Mensual"
-                    subtitle={fmtPen(plan.precioMensualPen) + "/mes"}
-                  />
-                  <SelectableTile
-                    active={anual}
-                    onClick={() => setAnual(true)}
-                    title="Anual"
-                    subtitle={fmtPen(Math.round(plan.precioMensualPen * (1 - AHORRO_ANUAL_PCT))) + "/mes"}
-                    badge="Ahorra 17%"
-                  />
+              {/* Ciclo de facturación (skip para cotizacion Business) */}
+              {!esCotizacion && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wider">
+                    Ciclo de facturación
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <SelectableTile
+                      active={!anual}
+                      onClick={() => setAnual(false)}
+                      title="Mensual"
+                      subtitle={fmtPen(plan.precioMensualPen) + "/mes"}
+                    />
+                    <SelectableTile
+                      active={anual}
+                      onClick={() => setAnual(true)}
+                      title="Anual"
+                      subtitle={fmtPen(Math.round(plan.precioMensualPen * (1 - AHORRO_ANUAL_PCT))) + "/mes"}
+                      badge="Ahorra 17%"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Tipo persona */}
               <div>
@@ -262,66 +294,104 @@ Quedo pendiente de las instrucciones de pago.`;
                 />
               </div>
 
-              {/* Método de pago */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wider">
-                  Método de pago
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <SelectableTile
-                    active={metodo === "yape"}
-                    onClick={() => setMetodo("yape")}
-                    icon={<CreditCard className="w-4 h-4" />}
-                    title="Yape / Plin"
-                    subtitle="Activación 1 h"
-                  />
-                  <SelectableTile
-                    active={metodo === "transferencia"}
-                    onClick={() => setMetodo("transferencia")}
-                    icon={<Landmark className="w-4 h-4" />}
-                    title="Transferencia"
-                    subtitle="BCP · IBK · BBVA"
-                  />
-                  <SelectableTile
-                    active={metodo === "paypal"}
-                    onClick={() => setMetodo("paypal")}
-                    icon={<CreditCard className="w-4 h-4" />}
-                    title="PayPal"
-                    subtitle="USD internacional"
-                  />
+              {/* Método de pago (skip para cotizacion) */}
+              {!esCotizacion && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2 uppercase tracking-wider">
+                    Método de pago
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <SelectableTile
+                      active={metodo === "yape"}
+                      onClick={() => setMetodo("yape")}
+                      icon={<CreditCard className="w-4 h-4" />}
+                      title="Yape / Plin"
+                      subtitle="Activación 1 h"
+                    />
+                    <SelectableTile
+                      active={metodo === "transferencia"}
+                      onClick={() => setMetodo("transferencia")}
+                      icon={<Landmark className="w-4 h-4" />}
+                      title="Transferencia"
+                      subtitle="BCP · IBK · BBVA"
+                    />
+                    <SelectableTile
+                      active={metodo === "paypal"}
+                      onClick={() => setMetodo("paypal")}
+                      icon={<CreditCard className="w-4 h-4" />}
+                      title="PayPal"
+                      subtitle="USD internacional"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-2 inline-flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    Pagos con tarjeta (Visa/Mastercard) próximamente vía Culqi.
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2 inline-flex items-center gap-1">
-                  <FileText className="w-3 h-3" />
-                  Pagos con tarjeta (Visa/Mastercard) próximamente vía Culqi.
-                </p>
-              </div>
+              )}
 
-              {/* Resumen */}
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Total a pagar
-                </p>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-3xl font-bold text-slate-900 tabular-nums">
-                    {fmtPen(precios.totalPen)}
-                  </span>
-                  <span className="text-sm text-slate-500 tabular-nums">
-                    ≈ {fmtUsd(precios.totalUsd)}
-                  </span>
+              {/* Brief opcional (solo cotizacion Business) */}
+              {esCotizacion && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Cuéntanos brevemente qué necesitas{" "}
+                    <span className="text-slate-400 font-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={brief}
+                    onChange={(e) => setBrief(e.target.value.slice(0, 500))}
+                    rows={3}
+                    placeholder="Ej: 8 analistas · integración con Power BI · SLA con firma · reporte trimestral automatizado"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none resize-none"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Cuanto más específico, más precisa la cotización.
+                  </p>
                 </div>
-                <p className="text-xs text-slate-600 mt-1">
-                  {anual ? (
-                    <>
-                      Facturado anualmente ·{" "}
-                      <span className="text-emerald-700 font-semibold">
-                        Ahorras {fmtPen(precios.ahorroPen)} vs mensual
-                      </span>
-                    </>
-                  ) : (
-                    <>Facturado mensualmente · IGV incluido</>
-                  )}
-                </p>
-              </div>
+              )}
+
+              {/* Resumen (solo planes con precio fijo) */}
+              {!esCotizacion && (
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Total a pagar
+                  </p>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-3xl font-bold text-slate-900 tabular-nums">
+                      {fmtPen(precios.totalPen)}
+                    </span>
+                    <span className="text-sm text-slate-500 tabular-nums">
+                      ≈ {fmtUsd(precios.totalUsd)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    {anual ? (
+                      <>
+                        Facturado anualmente ·{" "}
+                        <span className="text-emerald-700 font-semibold">
+                          Ahorras {fmtPen(precios.ahorroPen)} vs mensual
+                        </span>
+                      </>
+                    ) : (
+                      <>Facturado mensualmente · IGV incluido</>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {/* Nota cotización */}
+              {esCotizacion && (
+                <div className="p-4 rounded-lg bg-brand-50 border border-brand-200 flex items-start gap-3">
+                  <Sparkles className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-slate-700 leading-relaxed">
+                    <strong className="text-slate-900">Precio a medida.</strong> Cada
+                    engagement Business se cotiza según cantidad de usuarios,
+                    integraciones (Power BI, Excel, Sheets), nivel de SLA y
+                    onboarding requerido. Respuesta con propuesta detallada en
+                    menos de 24 h hábiles.
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-2">
@@ -345,7 +415,7 @@ Quedo pendiente de las instrucciones de pago.`;
                   </>
                 ) : (
                   <>
-                    Confirmar por WhatsApp
+                    {esCotizacion ? "Solicitar cotización" : "Confirmar por WhatsApp"}
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -361,31 +431,48 @@ Quedo pendiente de las instrucciones de pago.`;
                 <Check className="w-8 h-8 text-emerald-600" strokeWidth={3} />
               </div>
               <h3 className="text-xl font-bold text-slate-900 mt-4">
-                Solicitud enviada
+                {esCotizacion ? "Solicitud de cotización enviada" : "Solicitud enviada"}
               </h3>
               <p className="text-sm text-slate-600 mt-2 max-w-md mx-auto leading-relaxed">
-                Te acabamos de abrir WhatsApp con tu resumen pre-cargado. En cuanto lo mandes,
-                te respondemos en menos de 1 hora con los datos bancarios exactos y activamos
-                tu plan en menos de 24 horas.
+                {esCotizacion
+                  ? "Te acabamos de abrir WhatsApp con tu solicitud. Te respondemos en menos de 24 h hábiles con una propuesta detallada según tus necesidades."
+                  : "Te acabamos de abrir WhatsApp con tu resumen pre-cargado. En cuanto lo mandes, te respondemos en menos de 1 hora con los datos bancarios exactos y activamos tu plan en menos de 24 horas."}
               </p>
               <div className="mt-6 p-4 rounded-lg bg-slate-50 border border-slate-200 text-left space-y-2 max-w-md mx-auto">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   Próximos pasos
                 </p>
-                <ul className="text-sm text-slate-700 space-y-1.5">
-                  <li className="flex items-start gap-2">
-                    <span className="text-brand-600 font-bold">1.</span>
-                    Envíanos el mensaje pre-cargado en WhatsApp.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-brand-600 font-bold">2.</span>
-                    Te enviamos los datos bancarios y el link de pago si aplica.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-brand-600 font-bold">3.</span>
-                    Mandas el voucher y activamos tu plan + factura en menos de 24 h.
-                  </li>
-                </ul>
+                {esCotizacion ? (
+                  <ul className="text-sm text-slate-700 space-y-1.5">
+                    <li className="flex items-start gap-2">
+                      <span className="text-brand-600 font-bold">1.</span>
+                      Envíanos el mensaje pre-cargado en WhatsApp.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-brand-600 font-bold">2.</span>
+                      Agendamos una llamada de 20 min para entender el alcance.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-brand-600 font-bold">3.</span>
+                      Recibes propuesta detallada con precio + condiciones en menos de 24 h.
+                    </li>
+                  </ul>
+                ) : (
+                  <ul className="text-sm text-slate-700 space-y-1.5">
+                    <li className="flex items-start gap-2">
+                      <span className="text-brand-600 font-bold">1.</span>
+                      Envíanos el mensaje pre-cargado en WhatsApp.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-brand-600 font-bold">2.</span>
+                      Te enviamos los datos bancarios y el link de pago si aplica.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-brand-600 font-bold">3.</span>
+                      Mandas el voucher y activamos tu plan + factura en menos de 24 h.
+                    </li>
+                  </ul>
+                )}
               </div>
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-center">
