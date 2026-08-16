@@ -301,7 +301,7 @@ export function SuscripcionesClient({ initialStats }: { initialStats: Stats }) {
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
+            <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
               <tr>
                 <Th>Usuario</Th>
                 <Th>Plan</Th>
@@ -467,7 +467,7 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   return (
     <th
       className={cn(
-        "text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-300",
+        "text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-900",
         className,
       )}
     >

@@ -1076,9 +1076,9 @@ function HistoricoTable({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
+          <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[240px] sticky left-0 bg-[#0f1e3a] z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[240px] sticky left-0 bg-[#FFC000] z-10">
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
@@ -1113,14 +1113,14 @@ function HistoricoTable({
                       setDropTarget(null);
                     }}
                     className={cn(
-                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[95px] whitespace-nowrap cursor-move select-none",
-                      "hover:bg-[#1a3355] hover:text-white transition-colors group",
+                      "text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[95px] whitespace-nowrap cursor-move select-none",
+                      "hover:bg-slate-900 hover:text-[#FFC000] transition-colors group",
                       isDragging && "opacity-40",
-                      isDropTarget && "bg-[#1a3355] ring-1 ring-brand-400 ring-inset",
+                      isDropTarget && "bg-slate-900 text-[#FFC000] ring-1 ring-[#FFC000] ring-inset",
                     )}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      <GripVertical className="w-3 h-3 text-slate-500 group-hover:text-slate-300" />
+                      <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
                       {label}
                     </div>
                   </th>
@@ -1573,9 +1573,9 @@ function TablaComparativaCierre({
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50/60 border-b border-slate-200">
+          <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-300 sticky left-0 bg-[#0f1e3a] z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 sticky left-0 bg-[#FFC000] z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1611,16 +1611,16 @@ function TablaComparativaCierre({
                     className={cn(
                       "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
                       s.esPropio
-                        ? "bg-[#1a3355] text-white font-bold"
-                        : "text-slate-300 font-semibold hover:bg-[#1a3355] hover:text-white",
+                        ? "bg-slate-900 text-[#FFC000] font-bold"
+                        : "text-slate-900 font-semibold hover:bg-slate-900 hover:text-[#FFC000]",
                       isDragging && "opacity-40",
-                      isDropTarget && "ring-1 ring-inset ring-brand-400 bg-[#1a3355]",
+                      isDropTarget && "ring-1 ring-inset ring-slate-900 bg-slate-900 text-[#FFC000]",
                     )}
                     style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar"
                   >
                     <div className="flex items-center justify-end gap-1.5">
-                      <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500" />
+                      <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
                       <button
                         ref={(el) => {
                           colorTriggerRefs.current[s.entidad] = el;

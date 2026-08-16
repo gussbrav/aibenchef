@@ -705,20 +705,20 @@ function SeccionCuadroResumen({
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
+            <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[260px]" />
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[260px]" />
                 {competidores.map((c) => (
                   <th
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
                       c === clientePropio
-                        ? "bg-[#1a3355] text-white font-bold"
-                        : "text-slate-300 font-semibold"
+                        ? "bg-slate-900 text-[#FFC000] font-bold"
+                        : "text-slate-900 font-semibold hover:bg-slate-900/10"
                     }`}
                   >
                     {c === clientePropio && (
-                      <span className="inline-block w-2 h-2 rounded-full bg-brand-400 mr-2 align-middle shadow-sm shadow-brand-400/60" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-[#FFC000] mr-2 align-middle shadow-sm shadow-[#FFC000]/60" />
                     )}
                     {c}
                   </th>
@@ -852,9 +852,9 @@ function SeccionPuntoEquilibrio({
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#0f1e3a] border-b-2 border-brand-400">
+            <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-300 min-w-[260px]">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[260px]">
                   Componente
                 </th>
                 {competidores.map((c) => (
@@ -862,12 +862,12 @@ function SeccionPuntoEquilibrio({
                     key={c}
                     className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
                       c === clientePropio
-                        ? "bg-[#1a3355] text-white font-bold"
-                        : "text-slate-300 font-semibold"
+                        ? "bg-slate-900 text-[#FFC000] font-bold"
+                        : "text-slate-900 font-semibold hover:bg-slate-900/10"
                     }`}
                   >
                     {c === clientePropio && (
-                      <span className="inline-block w-2 h-2 rounded-full bg-brand-400 mr-2 align-middle shadow-sm shadow-brand-400/60" />
+                      <span className="inline-block w-2 h-2 rounded-full bg-[#FFC000] mr-2 align-middle shadow-sm shadow-[#FFC000]/60" />
                     )}
                     {c}
                   </th>
