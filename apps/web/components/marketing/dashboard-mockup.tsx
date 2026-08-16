@@ -123,7 +123,7 @@ export function DashboardMockup() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-900 text-white">
+              <tr className="bg-[#FFC000] text-slate-900 border-b-2 border-slate-900/30">
                 <th className="px-4 py-2.5 text-left text-[11px] font-semibold tracking-wider uppercase">
                   Cuadro Resumen
                 </th>
@@ -131,7 +131,9 @@ export function DashboardMockup() {
                   <th
                     key={e}
                     className={`px-4 py-2.5 text-right text-[11px] font-semibold tracking-wider ${
-                      i === ENTIDAD_PROPIA_IDX ? "bg-brand-700" : ""
+                      i === ENTIDAD_PROPIA_IDX
+                        ? "bg-slate-900 text-[#FFC000] font-bold"
+                        : "text-slate-900"
                     }`}
                   >
                     {e}
@@ -161,7 +163,7 @@ export function DashboardMockup() {
                         {f.valores.map((v, i) => {
                           const esPropio = i === ENTIDAD_PROPIA_IDX;
                           const cellStyle = esPropio
-                            ? "bg-brand-50 text-brand-900 font-semibold"
+                            ? "bg-amber-50 text-slate-900 font-semibold"
                             : tierStyle[tiers[i]!];
                           return (
                             <td
