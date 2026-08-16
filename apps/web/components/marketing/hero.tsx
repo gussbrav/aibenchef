@@ -16,7 +16,7 @@ import { DashboardMockup } from "./dashboard-mockup";
 
 const credibilidad = [
   { valor: "52", label: "entidades reguladas activas" },
-  { valor: "16 años", label: "histórico oficial SBS" },
+  { valor: "16 años", label: "histórico oficial mensual" },
   { valor: "Automático", label: "actualización mensual" },
   { valor: "100%", label: "auditable celda a celda" },
 ];
@@ -44,9 +44,10 @@ export function Hero() {
           </h1>
           <p className="text-xl lg:text-2xl text-slate-600 leading-relaxed max-w-3xl mx-auto">
             Bancos, financieras, cajas municipales, cajas rurales y empresas
-            de créditos — los 5 grupos regulados por la SBS con toda su data
-            pública limpia, comparada y visualizada. Sin descargar Excels ni
-            armar tablas dinámicas. Decisión lista en minutos, no semanas.
+            de créditos — los 5 grupos regulados del sistema financiero
+            peruano, con sus números ya limpios, comparados y visualizados.
+            Sin descargar Excels ni armar tablas dinámicas. Decisión lista
+            en minutos, no semanas.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
             <Link href="/signup">
@@ -71,10 +72,10 @@ export function Hero() {
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-slate-500 pt-1">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              Fuente oficial <strong className="text-slate-700 font-semibold">SBS Perú</strong>
+              Basado en <strong className="text-slate-700 font-semibold">fuentes públicas oficiales</strong>
             </span>
             <span className="text-slate-300" aria-hidden>·</span>
-            <span>Extracción automática, sin sesgo comercial</span>
+            <span>Análisis independiente, sin sesgo comercial</span>
             <span className="text-slate-300" aria-hidden>·</span>
             <span className="inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
@@ -102,7 +103,7 @@ export function Hero() {
           <DashboardMockup />
           <p className="text-center text-xs text-slate-500 mt-4 italic">
             Vista previa del Cuadro Resumen — Banca Múltiple peruana al cierre Jun 2026.
-            Data pública oficial procesada automáticamente.
+            Análisis generado a partir de fuentes públicas oficiales.
           </p>
         </div>
       </Container>

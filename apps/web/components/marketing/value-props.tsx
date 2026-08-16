@@ -34,8 +34,8 @@ export function ValueProps() {
       <Container size="xl">
         <SectionHeading
           eyebrow="Por qué Aibenchef"
-          title="Decisiones más rápidas con la misma data pública"
-          description="La información está publicada gratis por el regulador. Usarla toma días por mes. Resolvemos eso."
+          title="Decisiones más rápidas sobre las mismas fuentes oficiales"
+          description="La información está publicada gratis por el regulador. Convertirla en análisis comparables toma días por mes. Eso es lo que resolvemos."
         />
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-6">
           {valueProps.map(({ icon: Icon, title, description }) => (

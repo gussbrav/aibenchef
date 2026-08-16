@@ -9,7 +9,7 @@ import { SignupForm } from "./signup-form";
 export const metadata: Metadata = {
   title: "Crear cuenta gratis · Aibenchef",
   description:
-    "Empieza gratis con Aibenchef en menos de un minuto. Sin tarjeta, sin compromiso. Acceso al benchmarking financiero SBS Perú.",
+    "Empieza gratis con Aibenchef en menos de un minuto. Sin tarjeta, sin compromiso. Análisis y comparaciones del sistema financiero peruano en un solo lugar.",
 };
 
 // SignupForm usa useSearchParams() para leer ?token=... del invitation flow.
@@ -87,7 +87,7 @@ export default function SignupPage() {
                 <span className="text-sm text-slate-500">Siempre gratis</span>
               </div>
               <ul className="space-y-2.5 text-[13.5px] text-slate-700">
-                <FeatureLi>Data pública SBS actualizada mensualmente</FeatureLi>
+                <FeatureLi>Análisis actualizado con cada nueva publicación oficial</FeatureLi>
                 <FeatureLi>1 entidad propia a elección</FeatureLi>
                 <FeatureLi>2 competidores en peer group</FeatureLi>
                 <FeatureLi>Cuadro Resumen, DuPont y Punto de Equilibrio</FeatureLi>
@@ -110,7 +110,7 @@ export default function SignupPage() {
               </div>
               <ul className="space-y-2.5 text-[13.5px] text-slate-200">
                 <li>
-                  <strong className="text-white">52 entidades</strong> activas SBS al cierre actual
+                  <strong className="text-white">52 entidades</strong> reguladas activas al cierre actual
                 </li>
                 <li>
                   <strong className="text-white">100+ entidades</strong> con histórico desde 2010 (incluye fusiones y renombres)

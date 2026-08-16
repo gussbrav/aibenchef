@@ -8,7 +8,7 @@ import { DemoCTA } from "../_shared/demo-cta";
 export const metadata: Metadata = {
   title: "Demo — Informe Ejecutivo · Aibenchef",
   description:
-    "Vista pública del Informe Ejecutivo de Aibenchef con data pública de la Banca Múltiple peruana al cierre Jun 2026.",
+    "Vista pública del Informe Ejecutivo de Aibenchef sobre la Banca Múltiple peruana al cierre Jun 2026.",
 };
 
 // =============================================================================

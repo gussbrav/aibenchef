@@ -32,7 +32,7 @@ export default async function TablerosPage() {
           descripcion="Combina KPIs, gráficos y tablas en dashboards que presentas directo al directorio, sin abrir Power BI ni armarlos de cero cada mes."
           bullets={[
             "Layout drag-and-drop con widgets de KPI, línea, barra y tabla",
-            "Data siempre fresca de la última publicación SBS",
+            "Data siempre fresca del último cierre oficial",
             "Compartes por URL — cualquiera puede consumir tu tablero",
             "Múltiples tableros por usuario, sin límite en Business",
           ]}
@@ -50,8 +50,8 @@ export default async function TablerosPage() {
         icon={LayoutDashboard}
         iconBg="from-blue-500 to-cyan-600"
         title="Tableros ejecutivos"
-        tagline="Dashboards profesionales que presentás directo al directorio — sin Power BI, sin Excel, sin armar todo de cero cada mes"
-        description="Combiná KPIs, gráficos de tendencia y tablas comparativas en un layout drag-and-drop. Cada tablero se actualiza automáticamente con la última data SBS."
+        tagline="Dashboards profesionales que presentas directo al directorio — sin Power BI, sin Excel, sin armar todo de cero cada mes"
+        description="Combina KPIs, gráficos de tendencia y tablas comparativas en un layout drag-and-drop. Cada tablero se actualiza automáticamente con el último cierre oficial."
         stats={
           tableros.length > 0
             ? [

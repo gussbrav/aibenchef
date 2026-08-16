@@ -264,7 +264,7 @@ export function ModuleShowcase() {
         <SectionHeading
           eyebrow="Explora los módulos"
           title="Cuatro herramientas, un solo cierre"
-          description="Todos los módulos comparten la misma data pública, peer group y período. Cambias el cierre en un lugar y todo se actualiza."
+          description="Todos los módulos comparten la misma fuente oficial, peer group y período. Cambias el cierre en un lugar y todo se actualiza."
         />
         <div className="mt-16 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {modulos.map(({ icon: Icon, tag, title, description, features, Mockup, href }) => (

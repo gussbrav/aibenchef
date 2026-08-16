@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Aibenchef · Inteligencia financiera SBS Peru";
+export const alt = "Aibenchef · Inteligencia del sistema financiero peruano";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -70,7 +70,7 @@ export default async function OpenGraphImage() {
           lineHeight: 1.3,
         }}
       >
-        Toda la data publica de la SBS, limpia y lista para decidir.
+        Análisis y comparaciones del sistema financiero peruano, listos para decidir.
       </p>
 
       <div

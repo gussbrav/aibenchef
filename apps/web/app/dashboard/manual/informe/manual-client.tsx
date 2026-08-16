@@ -136,7 +136,7 @@ export function ManualInformeClient() {
           <ol className="manual-numbered">
             <li><strong>Tu columna</strong> es la primera después del label. Mírala contra las otras 4.</li>
             <li>Busca diferencias grandes — si tu mora es 6% y las demás 4%, ahí hay tema.</li>
-            <li>Si algún número aparece como <span className="manual-mono">"—"</span>, es que la SBS aún no publicó ese dato del mes.</li>
+            <li>Si algún número aparece como <span className="manual-mono">"—"</span>, es que aún no se publicó ese dato del mes.</li>
           </ol>
           <Tip>
             No te quedes solo con el Cuadro Resumen — abajo hay <strong>análisis de Margen Neto</strong> y
@@ -176,7 +176,7 @@ export function ManualInformeClient() {
           </ol>
           <Warning>
             El análisis es de apoyo. No reemplaza tu criterio ni constituye recomendación de inversión.
-            Siempre verifica las cifras contra la fuente SBS original.
+            Siempre verifica las cifras contra la fuente oficial original.
           </Warning>
         </StepSection>
 
@@ -203,13 +203,13 @@ export function ManualInformeClient() {
           <h2 className="manual-h2">Preguntas rápidas</h2>
 
           <FaqItem q="¿La data está actualizada?">
-            Sí. El sistema descarga los archivos SBS <strong>3 veces al día</strong> automáticamente. Si SBS
-            publicó algo nuevo, aparece dentro de las 8 horas siguientes.
+            Sí. El sistema descarga los archivos oficiales <strong>3 veces al día</strong> automáticamente.
+            Si el regulador publicó algo nuevo, aparece dentro de las 8 horas siguientes.
           </FaqItem>
 
           <FaqItem q="¿Por qué algunos números aparecen en '—'?">
-            SBS publica los archivos con retraso variable (mora, cobertura CAR, etc. suelen aparecer días
-            después del cierre principal). Cuando SBS los publique, van a aparecer automáticamente.
+            El regulador publica los archivos con retraso variable (mora, cobertura CAR, etc. suelen aparecer
+            días después del cierre principal). Cuando se publiquen, van a aparecer automáticamente.
           </FaqItem>
 
           <FaqItem q="¿Puedo cambiar mi peer group?">
@@ -231,7 +231,7 @@ export function ManualInformeClient() {
           </p>
           <dl className="manual-glossary">
             <dt>Peer group</dt>
-            <dd>Grupo de 5 entidades contra las que se compara la tuya. Una por tipo SBS.</dd>
+            <dd>Grupo de 5 entidades contra las que se compara la tuya. Una por cada grupo regulatorio.</dd>
 
             <dt>Mora</dt>
             <dd>% de la cartera de créditos que está impaga.</dd>

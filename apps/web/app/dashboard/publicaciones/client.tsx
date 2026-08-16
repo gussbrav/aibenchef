@@ -123,8 +123,8 @@ export function PublicacionesClient({
           </h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
             Artículos long-form con voz de analista senior, construidos a partir
-            de tu data de benchmarking SBS. Genera el draft, refina el tono, y
-            publica en LinkedIn en un click.
+            de tu benchmarking del sistema financiero. Genera el draft, refina el
+            tono, y publica en LinkedIn en un click.
           </p>
         </div>
         {vista.kind === "lista" && (
@@ -586,9 +586,9 @@ function WizardVista({
       )}
 
       {/* Ventana temporal — solo si tema es visual (mora o rentabilidad).
-          El default (24 meses / 5 años) matchea el estandar SBS pero el
-          user puede escoger otra antiguedad para historicos mas cortos
-          o mas largos. */}
+          El default (24 meses / 5 años) matchea el estandar del regulador
+          pero el user puede escoger otra antiguedad para historicos mas
+          cortos o mas largos. */}
       {tema === "mora_visual" && (
         <div>
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1 flex items-center gap-1">
@@ -602,7 +602,7 @@ function WizardVista({
           >
             <option value={12}>12 meses — 1 año</option>
             <option value={18}>18 meses — 1.5 años</option>
-            <option value={24}>24 meses — 2 años (estándar SBS)</option>
+            <option value={24}>24 meses — 2 años (estándar del regulador)</option>
             <option value={36}>36 meses — 3 años</option>
             <option value={48}>48 meses — 4 años</option>
             <option value={60}>60 meses — 5 años (histórico completo)</option>

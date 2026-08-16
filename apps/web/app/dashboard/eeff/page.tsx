@@ -39,7 +39,7 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
           <PlanUpgradePage
             feature="Estados Financieros"
             titulo="Estados Financieros históricos"
-            descripcion="Balance General y Estado de Resultados de cualquier entidad regulada por la SBS, con evolución mes a mes y comparativas contra pares."
+            descripcion="Balance General y Estado de Resultados de cualquier entidad regulada del sistema financiero, con evolución mes a mes y comparativas contra pares."
             bullets={[
               "Balance General y ER mensual por entidad y moneda",
               "ER anualizado con tendencia de últimos 12 meses móviles",
@@ -86,8 +86,8 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
         icon={FileText}
         iconBg="from-sky-500 to-indigo-600"
         title="Estados Financieros mensuales"
-        tagline="Balance General + Estado de Resultados de cualquier entidad SBS, con histórico completo desde 2009 y ratios calculados al instante"
-        description="Cambiá de entidad o moneda y ves todo recalculado — ROA, ROE, mora, eficiencia, evolución mensual y anual. Lo que antes tardaba días bajando archivos sueltos y haciendo cálculos manuales."
+        tagline="Balance General + Estado de Resultados de cualquier entidad regulada del sistema financiero peruano, con histórico completo desde 2009 y ratios calculados al instante"
+        description="Cambia de entidad o moneda y ves todo recalculado — ROA, ROE, mora, eficiencia, evolución mensual y anual. Lo que antes tardaba días bajando archivos sueltos y haciendo cálculos manuales."
         stats={
           actual
             ? [

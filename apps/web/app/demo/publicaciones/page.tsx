@@ -8,7 +8,7 @@ import { DemoCTA } from "../_shared/demo-cta";
 export const metadata: Metadata = {
   title: "Demo — Publicaciones AI · Aibenchef",
   description:
-    "Vista pública del módulo Publicaciones: artículos long-form con gráficos SVG embebidos generados por AI a partir de data pública del sistema financiero peruano.",
+    "Vista pública del módulo Publicaciones: artículos long-form con gráficos SVG embebidos generados por AI sobre el análisis del sistema financiero peruano.",
 };
 
 // =============================================================================

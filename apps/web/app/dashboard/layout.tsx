@@ -125,7 +125,7 @@ export default async function DashboardLayout({
                     {
                       href: "/dashboard/sql",
                       label: "SQL Workbench",
-                      description: "Consulta directa a la base de datos SBS con SQL completo (avanzado)",
+                      description: "Consulta directa a la base de datos analítica con SQL completo (avanzado)",
                     },
                     {
                       href: "/dashboard/catalog",
@@ -142,9 +142,9 @@ export default async function DashboardLayout({
                   items={[
                     { href: "/dashboard/admin/suscripciones", label: "Suscripciones", description: "MRR, planes, expiraciones y actividad de suscriptores" },
                     { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
-                    { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad ingesta SBS" },
+                    { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad de ingesta desde fuentes oficiales" },
                     { href: "/dashboard/admin/data-quality", label: "Data Quality", description: "Completeness, freshness, cargas sospechosas" },
-                    { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados SBS" },
+                    { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados desde fuentes oficiales" },
                     { href: "/dashboard/admin/renombres", label: "Maestra", description: "Renombres y entidades" },
                     { href: "/dashboard/admin/eeff-inspector", label: "EEFF Inspector", description: "Validar extracción cuenta-por-cuenta" },
                     { href: "/dashboard/admin/inspector-topicos", label: "Inspector Tópicos", description: "Vista raw oficinas/personal/clientes/etc." },

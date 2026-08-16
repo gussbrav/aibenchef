@@ -490,8 +490,8 @@ export function DupontClient({
       <div className="text-[11px] text-slate-500 px-2 pb-6">
         <strong>Metodología:</strong> ratios TTM (<em>Trailing Twelve Months</em>
         {" "}— últimos 12 meses móviles, incluye estacionalidad completa) sobre
-        activo promedio de los últimos 12 meses. Fuente: Superintendencia de
-        Banca, Seguros y AFP (SBS Perú). Convención de signos: los gastos se
+        activo promedio de los últimos 12 meses. Fuente: regulador peruano del
+        sistema financiero. Convención de signos: los gastos se
         muestran con signo negativo para que se sumen algebraicamente con los
         ingresos y respeten el árbol DuPont clásico (ROE = ROA × Apalancamiento;
         ROA = MON + Otros + Impuestos; etc.).
@@ -1089,7 +1089,7 @@ function SeccionDupont({
       {/* Footer sutil — expandimos siglas para que un lector no financiero
           entienda sin necesidad de tooltip. Reportado 2026-08-10. */}
       <div className="px-5 py-2 border-t border-slate-100 text-[10px] text-slate-500">
-        Base: Activo Promedio de los últimos 12 meses · Fuente: SBS Perú ·
+        Base: Activo Promedio de los últimos 12 meses · Fuente: regulador peruano ·
         Valores anualizados TTM (<em>Trailing Twelve Months</em> — últimos 12 meses móviles)
       </div>
     </section>

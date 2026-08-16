@@ -648,7 +648,7 @@ export function InformeClient({
       {/* ============ FOOTER (solo pantalla) ============ */}
       <footer className="border-t border-slate-200 pt-4 pb-8 text-center screen-only">
         <p className="text-xs text-slate-500">
-          Fuente: SBS · Benchmark generado por Aibenchef · {new Date().toLocaleDateString("es-PE", { dateStyle: "long" })}
+          Fuente: regulador peruano · Benchmark generado por Aibenchef · {new Date().toLocaleDateString("es-PE", { dateStyle: "long" })}
         </p>
         <p className="text-[10px] text-slate-400 mt-1">
           Los KPIs marcados como "—" requieren datasets adicionales (Oficinas, Personal, Clientes, Mora) aun no ingeridos. Ver docs/ROADMAP.md Fase 1.

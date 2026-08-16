@@ -26,8 +26,8 @@ const faqs = [
     a: "Aún no. Consumo programático (REST) está reservado al plan Enterprise por acuerdo caso a caso. Contáctanos si lo necesitas.",
   },
   {
-    q: "¿Y si quiero data de mi propia entidad para combinar?",
-    a: "El plan Enterprise permite cargar tus propios datos al lado de la data pública. Ideal para benchmarking interno vs el sistema.",
+    q: "¿Y si quiero combinar data interna con lo público?",
+    a: "El plan Enterprise permite cargar tus propios datos al lado de las fuentes oficiales. Ideal para benchmarking interno vs el sistema.",
   },
   {
     q: "¿Puedo cancelar en cualquier momento?",

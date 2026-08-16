@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: "%s · Aibenchef",
   },
   description:
-    "Bancos, financieras, cajas municipales, cajas rurales y empresas de créditos — los 5 grupos regulados por la SBS con toda su data pública limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+    "Bancos, financieras, cajas municipales, cajas rurales y empresas de créditos — análisis y comparaciones de los 5 grupos regulados del sistema financiero peruano. Decisiones en minutos, no semanas.",
   keywords: [
     "banca peruana",
     "sistema financiero peruano",
@@ -30,9 +30,9 @@ export const metadata: Metadata = {
     locale: "es_PE",
     url: appUrl,
     siteName: "Aibenchef",
-    title: "Aibenchef · Inteligencia financiera SBS Perú",
+    title: "Aibenchef · Inteligencia del sistema financiero peruano",
     description:
-      "Toda la data pública de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+      "Análisis y comparaciones del sistema financiero peruano — limpio, listo y auditable. Decisiones en minutos, no semanas.",
     images: [
       {
         url: "/og.png",
@@ -44,9 +44,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Aibenchef · Inteligencia financiera SBS Perú",
+    title: "Aibenchef · Inteligencia del sistema financiero peruano",
     description:
-      "Toda la data pública de la SBS limpia, comparada y visualizada. Decisiones en minutos, no semanas.",
+      "Análisis y comparaciones del sistema financiero peruano — limpio, listo y auditable. Decisiones en minutos, no semanas.",
     images: ["/og.png"],
   },
   icons: {
