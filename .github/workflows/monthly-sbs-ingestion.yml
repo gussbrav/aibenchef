@@ -3,28 +3,49 @@ name: Monthly SBS ingestion
 # =========================================================================
 # Ingesta mensual de datos SBS a produccion.
 #
-# TIMING (V2, 2026-08-15):
-#   La SBS publica cada periodo entre el dia 30 y el dia 45 del mes siguiente
-#   al cierre. Ejemplo: cierre 202607 (Julio 2026) se publica entre 2026-08-30
-#   y 2026-09-15. Antes el cron corria dia 15 y 100% de las corridas fallaban
-#   con 404 (SBS aun no habia publicado). Ahora:
+# ESTADO ACTUAL (2026-08-15):
+#   Cron programado DESACTIVADO. La ingesta se dispara MANUALMENTE desde
+#   la UI de GitHub Actions (workflow_dispatch) o desde la laptop del
+#   maintainer con `uv run aibenchef scrape --periodo XXXXXX`.
 #
-#     - Cron diario del dia 28 al dia 20 del mes siguiente (rango de retry)
-#     - Pre-flight check: si SBS aun no publico → exit success (nothing to do)
-#     - Concurrency lock: nunca dos corridas simultaneas
-#     - Verify DATABASE_URL antes de correr → mensaje claro si falta secret
+#   Rationale:
+#     - Fase early sin clientes pagando: freshness "mensual manual" es
+#       aceptable (Gustavo/Juan Jose corren la ingesta cuando SBS publica).
+#     - Correr en GitHub Actions requiere exponer Postgres al internet
+#       (firewall, Cloudflare Tunnel o self-hosted runner). Trade-off no
+#       vale hoy: agrega superficie de ataque + tiempo de setup a cambio
+#       de ahorrar 5 min/mes.
+#     - El workflow queda dispatch-only para poder correrlo ad-hoc desde
+#       la UI de GitHub cuando el maintainer no tenga acceso a laptop.
 #
-# TRIGGERS:
-#   - schedule: cada dia entre 28 y 20 del mes siguiente (rango de publicacion)
-#   - workflow_dispatch: manual con opcion de forzar periodo especifico
+# COMO RE-ACTIVAR EL CRON (cuando llegue el momento):
+#   1. Setear secret DATABASE_URL_PROD con conexion TCP publica al Postgres.
+#      Ver opciones de conectividad abajo.
+#   2. Descomentar el bloque `schedule` mas abajo.
+#   3. Commit + push. El proximo dia 28 corre solo.
+#
+# OPCIONES DE CONECTIVIDAD (para cuando se re-active):
+#   a) Firewall abierto a rango de IPs GitHub Actions (https://api.github.com/meta)
+#      - Costo: $0 · Seguridad: baja · Setup: 5 min
+#   b) Cloudflare Tunnel dedicado
+#      - Costo: $0 · Seguridad: alta · Setup: 30 min
+#   c) Self-hosted runner en el mismo Hetzner
+#      - Costo: $0 · Seguridad: maxima · Setup: 1-2 horas
+#   Recomendacion cuando llegue el momento: (b).
+#
+# TIMING SBS:
+#   La SBS publica el cierre de cada mes entre los dias 30 y 45 del mes
+#   siguiente. Ejemplo: cierre 202607 (Julio) publica entre 2026-08-30 y
+#   2026-09-15. El cron (cuando este activo) hace pre-flight check para
+#   evitar 404s antes de tiempo.
 # =========================================================================
 
 on:
-  schedule:
-    # Corre diario entre dia 28 del mes y dia 20 del mes siguiente, a las
-    # 06:00 UTC = 01:00 Peru. Cada corrida hace pre-flight check y solo
-    # procesa si SBS ya publico. Cron unico con dias explicitos.
-    - cron: "0 6 28-31,1-20 * *"
+  # schedule:
+  #   # DESACTIVADO 2026-08-15 — re-activar cuando la ingesta necesite ser
+  #   # automatica (post-launch con clientes pagando). Ver header del archivo
+  #   # para el checklist de re-activacion.
+  #   - cron: "0 6 28-31,1-20 * *"
   workflow_dispatch:
     inputs:
       periodo:
