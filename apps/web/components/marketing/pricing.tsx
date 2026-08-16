@@ -4,23 +4,28 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, Info, Sparkles } from "lucide-react";
 import { Container, Section, SectionHeading, Card, Button } from "@/components/ui";
-import { cn } from "@/lib/utils/cn";
 
 import { ContratarPlanModal } from "./contratar-plan-modal";
 
 /**
- * Pricing publico — 3 tiers claros (Free / Pro / Business) + Academic
- * como descuento automatico sobre Pro para emails .edu.pe verificados.
+ * Pricing publico — modelo simplificado 2 tiers (2026-08-15):
+ *   - Free: pull marketing / lead generation
+ *   - Business (A medida): monetizacion via cotizacion consultiva
  *
- * Fuente de verdad de limites: lib/plans.ts (PLAN_LIMITS). Este archivo
- * es SOLO copy visible al usuario. Si cambian los limites, actualizar
- * ambos lugares.
+ * Pro fue removido temporalmente porque:
+ *   - El equipo no tiene bandwidth para servir self-serve SaaS Pro
+ *     hasta tener product-market fit claro.
+ *   - Business "A medida" cubre todos los casos pagados de momento:
+ *     cada engagement se cotiza segun necesidades reales.
+ *   - Simplifica la decision del comprador (1 opcion clara vs 3 tiers).
  *
- * Toggle mensual/anual: el anual da 2 meses gratis (~17% off). Precios
- * primarios en soles (mercado peruano) + equivalente USD como secondary.
+ * Cuando se re-active Pro, restaurar el objeto en `plans` (esta guardado
+ * como comentario abajo) + re-agregar toggle mensual/anual.
  *
- * Deep-link para "empresa"/"persona natural" desde el modal de contratacion:
- * simplifica el flujo de pago manual pre-Culqi.
+ * Academic (S/29 con .edu.pe verificado) sigue vigente en codigo pero no
+ * se anuncia — se aplica manualmente al pagar via cotizacion (V172).
+ *
+ * Fuente de verdad de limites: lib/plans.ts (PLAN_LIMITS).
  */
 
 type Plan = {
@@ -45,7 +50,7 @@ const plans: Plan[] = [
   {
     id: "free",
     name: "Free",
-    descripcion: "Para probar la plataforma y ver el valor real antes de pagar.",
+    descripcion: "Explora la plataforma con tu entidad. Sin tarjeta, siempre gratis.",
     precioMensualPen: 0,
     precioMensualUsd: 0,
     destacado: false,
@@ -54,68 +59,48 @@ const plans: Plan[] = [
     features: [
       "Hasta 2 competidores para comparar",
       "12 meses de histórico",
-      "Benchmark básico + Punto de Equilibrio + DuPont",
+      "Benchmark + Punto de Equilibrio + DuPont",
       "Sin export ni API",
     ],
   },
-  {
-    id: "pro",
-    name: "Pro",
-    descripcion: "Para analistas que arman informes mensuales de verdad.",
-    precioMensualPen: 149,
-    precioMensualUsd: 39,
-    destacado: true,
-    ctaLabel: "Contratar Pro",
-    ctaAction: "modal",
-    features: [
-      "Hasta 10 competidores por informe",
-      "5 años de histórico completo",
-      "Estados Financieros + Análisis dinámico",
-      "Insights AI en el dashboard",
-      "Publicaciones con IA (20/mes)",
-      "Exportar a PDF + Excel",
-      "API pública + MCP para Claude Desktop",
-    ],
-  },
+  // Pro tier removido temporalmente 2026-08-15. Ver header del archivo.
+  // Cuando se re-active, restaurar:
+  // {
+  //   id: "pro", name: "Pro",
+  //   descripcion: "Para analistas que arman informes mensuales de verdad.",
+  //   precioMensualPen: 149, precioMensualUsd: 39,
+  //   destacado: true, ctaLabel: "Contratar Pro", ctaAction: "modal",
+  //   features: ["Hasta 10 competidores por informe", "5 años de histórico completo",
+  //     "Estados Financieros + Análisis dinámico", "Insights AI en el dashboard",
+  //     "Publicaciones con IA (20/mes)", "Exportar a PDF + Excel",
+  //     "API pública + MCP para Claude Desktop"],
+  // },
   {
     id: "business",
     name: "Business",
-    descripcion: "Para consultoras, áreas de riesgo y gerencias.",
-    // Precio abierto — cada engagement se cotiza segun necesidades reales
-    // (numero de usuarios, integraciones, SLA, on-premise, etc.). Modelo
-    // consultivo cerrar via WhatsApp/reunion.
+    descripcion:
+      "Para consultoras, áreas de riesgo y gerencias que necesitan análisis a medida.",
     precioMensualPen: 0,
     precioMensualUsd: 0,
     precioAcordar: true,
-    destacado: false,
-    ctaLabel: "Hablemos",
+    destacado: true,
+    ctaLabel: "Solicitar cotización",
     ctaAction: "contact",
     features: [
-      "Todo Pro sin límites",
-      "Publicaciones AI ilimitadas",
+      "Benchmark completo con peer group ilimitado",
+      "Histórico completo (16+ años desde 2010)",
+      "Estados Financieros + Análisis dinámico",
+      "Insights AI + Publicaciones IA ilimitadas",
+      "Exportar a PDF + Excel",
+      "API pública + MCP para Claude Desktop",
       "Multi-usuario según necesidades",
-      "API con rate limit ampliado",
-      "Colores del peer group personalizados",
-      "Soporte prioritario 24h SLA",
-      "Onboarding 1:1 y factura electrónica",
+      "Onboarding 1:1 + soporte prioritario",
+      "Factura electrónica peruana",
     ],
   },
 ];
 
-const AHORRO_ANUAL_PCT = 0.17; // 2 meses gratis en anual (12/10 - 1)
-
-const fmtPen = (n: number): string =>
-  new Intl.NumberFormat("es-PE", {
-    style: "currency",
-    currency: "PEN",
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(n);
-
-const fmtUsd = (n: number): string => `$${n.toLocaleString("en-US")}`;
-
 export function Pricing() {
-  const [anual, setAnual] = useState(false);
   const [modalPlan, setModalPlan] = useState<Plan | null>(null);
 
   return (
@@ -123,56 +108,15 @@ export function Pricing() {
       <Container size="xl">
         <SectionHeading
           eyebrow="Planes"
-          title="Empieza gratis. Paga cuando lo necesites."
-          description="Sin permanencia. Cancelas cuando quieras. Precios en soles con factura electrónica peruana."
+          title="Empieza gratis. Escala con nosotros cuando lo necesites."
+          description="Explora la herramienta sin costo. Cuando tu equipo necesite análisis serio, armamos una propuesta a medida."
         />
 
-        {/* Toggle mensual / anual */}
-        <div className="mt-10 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={() => setAnual(false)}
-            className={cn(
-              "px-4 h-9 text-sm font-medium rounded-full transition-colors",
-              !anual
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:text-slate-900",
-            )}
-            aria-pressed={!anual}
-          >
-            Mensual
-          </button>
-          <button
-            type="button"
-            onClick={() => setAnual(true)}
-            className={cn(
-              "px-4 h-9 text-sm font-medium rounded-full transition-colors inline-flex items-center gap-1.5",
-              anual
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:text-slate-900",
-            )}
-            aria-pressed={anual}
-          >
-            Anual
-            <span
-              className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider",
-                anual
-                  ? "bg-emerald-500 text-white"
-                  : "bg-emerald-100 text-emerald-800",
-              )}
-            >
-              −17% · 2 meses gratis
-            </span>
-          </button>
-        </div>
-
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {plans.map((plan) => (
             <PlanCard
               key={plan.id}
               plan={plan}
-              anual={anual}
               onContratar={() => setModalPlan(plan)}
             />
           ))}
@@ -180,10 +124,8 @@ export function Pricing() {
 
         {/* Nota: el sub-card "Tesistas con .edu.pe → S/29/mes" fue removido
             del landing publico. El descuento sigue vigente y se aplica
-            AUTOMATICAMENTE al signup si el email es de una universidad
-            peruana verificada (whitelist V171). Rationale: no ensuciar el
-            pricing con multiples opciones, dejar que el tesista descubra
-            el descuento en el signup como efecto sorpresa. */}
+            manualmente al momento del pago (whitelist V171 + V172).
+            Rationale: no ensuciar el pricing con multiples opciones. */}
 
         {/* Enterprise footer */}
         <p className="text-center text-sm text-slate-500 mt-10 max-w-2xl mx-auto">
@@ -208,7 +150,6 @@ export function Pricing() {
             precioMensualUsd: modalPlan.precioMensualUsd,
             precioAcordar: modalPlan.precioAcordar,
           }}
-          anualDefault={anual}
           onClose={() => setModalPlan(null)}
         />
       )}
@@ -222,34 +163,25 @@ export function Pricing() {
 
 function PlanCard({
   plan,
-  anual,
   onContratar,
 }: {
   plan: Plan;
-  anual: boolean;
   onContratar: () => void;
 }) {
-  const precioMostrarPen = anual
-    ? Math.round(plan.precioMensualPen * (1 - AHORRO_ANUAL_PCT))
-    : plan.precioMensualPen;
-  const precioMostrarUsd = anual
-    ? Math.round(plan.precioMensualUsd * (1 - AHORRO_ANUAL_PCT))
-    : plan.precioMensualUsd;
-  const cargoAnualPen = Math.round(precioMostrarPen * 12);
-
   return (
     <Card
       variant={plan.destacado ? "outlined" : "elevated"}
-      className={cn(
-        "flex flex-col p-8 relative",
-        plan.destacado && "border-2 border-brand-500 shadow-lg",
-      )}
+      className={
+        plan.destacado
+          ? "flex flex-col p-8 relative border-2 border-brand-500 shadow-lg"
+          : "flex flex-col p-8 relative"
+      }
     >
       {plan.destacado && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-bold tracking-wider text-white bg-gradient-to-r from-brand-600 to-brand-500 rounded-full uppercase shadow">
             <Sparkles className="w-3 h-3" />
-            Más popular
+            Recomendado
           </span>
         </div>
       )}
@@ -268,35 +200,13 @@ function PlanCard({
               Cotización personalizada según usuarios, integraciones y SLA.
             </p>
           </>
-        ) : plan.precioMensualPen === 0 ? (
+        ) : (
           <>
             <div className="flex items-baseline gap-1">
               <span className="text-5xl font-bold text-slate-900">Gratis</span>
             </div>
             <p className="text-xs text-slate-500 mt-1 min-h-[1rem]">
               Sin tarjeta de crédito. Siempre gratis.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-1">
-              <span className="text-5xl font-bold text-slate-900 tabular-nums">
-                {fmtPen(precioMostrarPen)}
-              </span>
-              <span className="text-slate-500">/mes</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 tabular-nums">
-              ≈ {fmtUsd(precioMostrarUsd)}/mes ·{" "}
-              {anual ? (
-                <>
-                  {fmtPen(cargoAnualPen)} cobrado anualmente ·{" "}
-                  <span className="text-emerald-700 font-semibold">
-                    Ahorras {fmtPen(plan.precioMensualPen * 12 - cargoAnualPen)}
-                  </span>
-                </>
-              ) : (
-                <>Facturación mensual · factura electrónica</>
-              )}
             </p>
           </>
         )}
