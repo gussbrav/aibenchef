@@ -1,16 +1,54 @@
 name: Monthly SBS ingestion
 
-# Corre el dia 15 de cada mes a las 06:00 UTC = 01:00 Peru.
-# La SBS publica el cierre del mes anterior tipicamente entre dias 30-45,
-# asi que el dia 15 es seguro para datos del mes anterior.
+# =========================================================================
+# Ingesta mensual de datos SBS a produccion.
+#
+# TIMING (V2, 2026-08-15):
+#   La SBS publica cada periodo entre el dia 30 y el dia 45 del mes siguiente
+#   al cierre. Ejemplo: cierre 202607 (Julio 2026) se publica entre 2026-08-30
+#   y 2026-09-15. Antes el cron corria dia 15 y 100% de las corridas fallaban
+#   con 404 (SBS aun no habia publicado). Ahora:
+#
+#     - Cron diario del dia 28 al dia 20 del mes siguiente (rango de retry)
+#     - Pre-flight check: si SBS aun no publico → exit success (nothing to do)
+#     - Concurrency lock: nunca dos corridas simultaneas
+#     - Verify DATABASE_URL antes de correr → mensaje claro si falta secret
+#
+# TRIGGERS:
+#   - schedule: cada dia entre 28 y 20 del mes siguiente (rango de publicacion)
+#   - workflow_dispatch: manual con opcion de forzar periodo especifico
+# =========================================================================
+
 on:
   schedule:
-    - cron: "0 6 15 * *"
+    # Corre diario entre dia 28 del mes y dia 20 del mes siguiente, a las
+    # 06:00 UTC = 01:00 Peru. Cada corrida hace pre-flight check y solo
+    # procesa si SBS ya publico. Cron unico con dias explicitos.
+    - cron: "0 6 28-31,1-20 * *"
   workflow_dispatch:
     inputs:
       periodo:
-        description: "Periodo YYYYMM a procesar (vacio = mes anterior)"
+        description: "Periodo YYYYMM a procesar (vacio = ultimo mes cerrado)"
         required: false
+      force:
+        description: "Forzar corrida aun si el periodo ya se ingesto"
+        required: false
+        type: boolean
+        default: false
+
+# Concurrency lock: nunca correr dos ingestas simultaneas para el mismo
+# workflow. Si llega una nueva mientras una anterior sigue corriendo, se
+# encola (no cancel — queremos que ambas terminen si vienen de dias distintos).
+concurrency:
+  group: monthly-sbs-ingestion
+  cancel-in-progress: false
+
+# Permissions minimas necesarias:
+#   - contents: read → checkout del repo
+#   - issues: write → crear/comentar issues en falla real
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   ingest:
@@ -25,47 +63,158 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --frozen
 
-      - name: Scrape SBS
+      # -------------------------------------------------------------------
+      # Pre-flight 1: DATABASE_URL debe estar seteado y ser TCP (no socket)
+      # -------------------------------------------------------------------
+      - name: Verify DATABASE_URL is configured
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
-          PERIODO: ${{ github.event.inputs.periodo }}
-        run: uv run aibenchef scrape --periodo "${PERIODO:-}"
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Secret DATABASE_URL_PROD no esta configurado en el repo."
+            echo "::error::Configuralo con: gh secret set DATABASE_URL_PROD --body \"postgresql://user:pass@HOST:5432/aibenchef?sslmode=require\""
+            echo "::error::HOST debe ser IP publica de Hetzner o dominio accesible desde GitHub Actions (no localhost)."
+            exit 1
+          fi
+          # Verifica que no sea un socket-only URL (postgresql:///dbname sin @host)
+          if [[ ! "$DATABASE_URL" =~ @[^/]+:[0-9]+/ ]]; then
+            echo "::error::DATABASE_URL_PROD parece no incluir HOST:PORT (formato TCP)."
+            echo "::error::Actual: ${DATABASE_URL:0:30}... (redacted)"
+            echo "::error::Debe ser: postgresql://user:pass@HOST:5432/aibenchef"
+            exit 1
+          fi
+          echo "OK - DATABASE_URL configurado ($(echo "$DATABASE_URL" | sed 's|:[^@]*@|:***@|'))"
+
+      # -------------------------------------------------------------------
+      # Pre-flight 2: determinar periodo objetivo (ultimo mes cerrado o input)
+      # -------------------------------------------------------------------
+      - name: Determine target periodo
+        id: periodo
+        run: |
+          if [ -n "${{ github.event.inputs.periodo }}" ]; then
+            PERIODO="${{ github.event.inputs.periodo }}"
+          else
+            # Ultimo mes cerrado = mes anterior al actual
+            PERIODO=$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y%m)
+          fi
+          echo "periodo=$PERIODO" >> "$GITHUB_OUTPUT"
+          echo "Periodo objetivo: $PERIODO"
+
+      # -------------------------------------------------------------------
+      # Pre-flight 3: SBS ya publico este periodo? (evita 404 masivos)
+      # -------------------------------------------------------------------
+      # Probamos con el archivo canonico de EEFF banca multiple. Si esta
+      # publicado, muy probablemente el resto tambien lo esta (SBS publica
+      # los grupos en lote). Si no, exit success con mensaje claro.
+      - name: Check if SBS published this periodo
+        id: sbs_check
+        run: |
+          PERIODO="${{ steps.periodo.outputs.periodo }}"
+          ANIO="${PERIODO:0:4}"
+          MES_NUM="${PERIODO:4:2}"
+          # Map mes numerico → nombre en castellano (patron SBS)
+          case "$MES_NUM" in
+            01) NOMBRE="Enero"; ABR="en" ;;
+            02) NOMBRE="Febrero"; ABR="fe" ;;
+            03) NOMBRE="Marzo"; ABR="mr" ;;
+            04) NOMBRE="Abril"; ABR="ab" ;;
+            05) NOMBRE="Mayo"; ABR="my" ;;
+            06) NOMBRE="Junio"; ABR="jn" ;;
+            07) NOMBRE="Julio"; ABR="jl" ;;
+            08) NOMBRE="Agosto"; ABR="ag" ;;
+            09) NOMBRE="Setiembre"; ABR="st" ;;
+            10) NOMBRE="Octubre"; ABR="oc" ;;
+            11) NOMBRE="Noviembre"; ABR="nv" ;;
+            12) NOMBRE="Diciembre"; ABR="dc" ;;
+          esac
+          URL="https://intranet2.sbs.gob.pe/estadistica/financiera/${ANIO}/${NOMBRE}/B-2201-${ABR}${ANIO}.xls"
+          echo "Probing SBS: $URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -I "$URL" --max-time 30 || echo "000")
+          echo "SBS response: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "SBS publico ${PERIODO}. Procesando..."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SBS aun no ha publicado ${PERIODO} (HTTP $STATUS). Reintentando manana."
+          fi
+
+      # -------------------------------------------------------------------
+      # Steps de ingesta reales — solo corren si SBS publico o si es force manual
+      # -------------------------------------------------------------------
+      - name: Scrape SBS
+        if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+          PERIODO: ${{ steps.periodo.outputs.periodo }}
+        run: uv run aibenchef scrape --periodo "$PERIODO"
 
       - name: Storage scan -> raw.archivos_descargados
+        if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
         run: uv run aibenchef storage scan
 
       - name: Import .xls mensuales -> raw.eeff_observacion
+        if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
         run: uv run aibenchef import monthly-eeff ./local-data/raw
 
       - name: Normalize entidades
+        if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
         run: uv run aibenchef catalog normalize-entidades
 
       - name: Refresh MVs marts
+        if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
         run: uv run aibenchef db refresh-mvs --concurrently
 
-      # dbt esta deshabilitado hasta que se reconcilien los sources (ver
-      # docs/audits/04-transformacion.md). El unico modelo apunta a raw.eeff
-      # que no existe; la tabla real es raw.eeff_observacion. Mientras tanto
-      # las MVs se mantienen por SQL via aibenchef db refresh-mvs.
-      # - name: dbt run + test
-      #   env:
-      #     DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
-      #   run: |
-      #     uv run dbt run --project-dir dbt --profiles-dir dbt
-      #     uv run dbt test --project-dir dbt --profiles-dir dbt
-
-      - name: Notify Slack on failure
-        if: failure()
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_INGESTION }}
-          SLACK_COLOR: danger
-          SLACK_MESSAGE: "Ingesta SBS fallida para periodo ${{ github.event.inputs.periodo || 'mes anterior' }}"
+      # -------------------------------------------------------------------
+      # Notificacion de falla — issue en GitHub con dedupe (mas confiable que
+      # Slack + no depende de secrets externos).
+      # -------------------------------------------------------------------
+      # Solo crea issue si es una falla REAL (SBS ya publico pero algo rompio),
+      # NO si es "SBS aun no publico" (que es normal y no requiere accion).
+      # Deduplica por titulo para no spamear si el problema se repite.
+      - name: Create GitHub issue on real failure
+        if: >
+          failure() &&
+          steps.sbs_check.outputs.published == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const periodo = '${{ steps.periodo.outputs.periodo }}';
+            const title = `Ingesta SBS fallida: ${periodo}`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            // Dedupe: si ya hay un issue abierto con este titulo, comentamos
+            // en lugar de crear uno nuevo (evita spam si falla en varios reintentos).
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'ingest',
+            });
+            const dup = existing.data.find(i => i.title === title);
+            if (dup) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: dup.number,
+                body: `Reintento fallido ${new Date().toISOString()} — ${runUrl}`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: `El workflow de ingesta mensual fallo para el periodo **${periodo}**.\n\n` +
+                      `SBS ya habia publicado los archivos (pre-flight OK), asi que la falla ` +
+                      `es en la ingesta interna. Revisar logs:\n\n${runUrl}\n\n` +
+                      `Reintentar manualmente:\n\`\`\`\ngh workflow run "Monthly SBS ingestion" -f periodo=${periodo}\n\`\`\``,
+                labels: ['bug', 'ingest', 'auto-created'],
+              });
+            }
