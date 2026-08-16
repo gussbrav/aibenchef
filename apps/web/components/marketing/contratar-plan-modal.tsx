@@ -17,18 +17,29 @@ import {
 import { cn } from "@/lib/utils/cn";
 
 /**
- * Modal profesional para contratar un plan pagado en fase manual (pre-Culqi).
+ * Modal profesional para contratar un plan (fase manual, pre-Culqi).
  *
- * Recolecta datos minimos para emitir la factura + confirma metodo de pago,
- * luego abre WhatsApp con el mensaje pre-formateado listo para que Gustavo
- * responda con los datos bancarios y active el plan.
+ * ESTADO ACTUAL (2026-08-15):
+ *   Solo Business (`precioAcordar=true`) dispara este modal desde el
+ *   pricing publico. El flujo es "Solicitar cotizacion" — captura datos +
+ *   brief opcional + abre WhatsApp con mensaje pre-formateado.
  *
- * Diseño premium (referencia Stripe/Linear checkout):
- *   - Progresion 2 pasos: datos -> resumen y WhatsApp
+ *   Sin embargo el modal MANTIENE toda la logica de checkout con precio
+ *   fijo (toggle mensual/anual, selector Yape/Transferencia/PayPal,
+ *   calculo de "Total a pagar") — activa cuando `precioAcordar` es false.
+ *   Esa rama HOY es dead code porque Pro (unico plan con precio fijo que
+ *   usaba el modal) fue removido temporalmente del pricing.
+ *
+ *   Decision consciente: NO borrar la rama de checkout — cuando Pro
+ *   resurja, restore es 3 lineas en pricing.tsx sin tocar este modal.
+ *   Ver pricing.tsx header para el checklist de re-activacion.
+ *
+ * Diseño (referencia Stripe/Linear checkout):
+ *   - Progresion 2 pasos: datos → confirmacion y proximos pasos
  *   - Toggle persona/empresa (empresa muestra RUC + razon social)
- *   - Toggle mensual/anual con calculo de ahorro real
- *   - 3 metodos de pago principales (Yape/Plin · Transferencia · PayPal)
- *   - Mensaje final claro sobre timeframe (activacion 24h) + cancelacion
+ *   - Toggle mensual/anual con calculo de ahorro 17% [dormido]
+ *   - 3 metodos de pago: Yape/Plin · Transferencia · PayPal [dormido]
+ *   - Cotizacion Business: brief opcional + WhatsApp con "Solicito cotizacion"
  */
 
 const AHORRO_ANUAL_PCT = 0.17;
