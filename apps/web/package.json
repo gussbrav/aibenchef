@@ -13,7 +13,9 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "regen-hero": "tsx scripts/regen-hero-mockup.ts",
+    "regen-hero:dry": "tsx scripts/regen-hero-mockup.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -52,6 +54,7 @@
     "drizzle-kit": "^0.30.0",
     "postcss": "^8.5.0",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.0",
     "vitest": "^2.1.8"
   }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Container } from "@/components/ui";
-import { DashboardMockup } from "./dashboard-mockup";
+import { DashboardMockup, MOCKUP_META } from "./dashboard-mockup";
 
 /**
  * Hero del landing publico. Estructura:
@@ -99,8 +99,9 @@ export function Hero() {
         <div className="mt-16 max-w-6xl mx-auto">
           <DashboardMockup />
           <p className="text-center text-xs text-slate-500 mt-4 italic">
-            Vista previa del Cuadro Resumen — Banca Múltiple peruana al cierre Jun 2026.
-            Análisis generado a partir de fuentes públicas oficiales.
+            Vista previa del Cuadro Resumen — {MOCKUP_META.grupoSbs} peruana al cierre{" "}
+            {MOCKUP_META.periodoLabel}. Análisis generado a partir de fuentes
+            públicas oficiales.
           </p>
         </div>
       </Container>

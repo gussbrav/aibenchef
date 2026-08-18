@@ -1,0 +1,20 @@
+{
+  "$schema": "./dashboard-mockup-data.schema.json",
+  "generatedAt": "2026-08-18T22:00:00.000Z",
+  "generatedBy": "manual (seed inicial pre-script)",
+  "periodo": 202606,
+  "periodoLabel": "Jun 2026",
+  "grupoSbs": "Banca Múltiple",
+  "propiaIdx": 0,
+  "entidades": ["BCP", "BBVA", "Interbank", "Scotiabank", "Pichincha"],
+  "filas": [
+    { "label": "Cartera Bruta (MM S/)", "seccion": "cartera", "valores": [132228, 89451, 55240, 60128, 12580], "format": "moneda_mm", "signo": 1 },
+    { "label": "Crec. Cartera YoY", "seccion": "cartera", "valores": [10.93, 8.42, 6.17, 5.88, 12.15], "format": "pct", "signo": 1 },
+    { "label": "% Créditos Atrasados", "seccion": "calidad", "valores": [2.73, 3.51, 4.21, 4.02, 4.87], "format": "pct", "signo": -1 },
+    { "label": "% Mora Global (sin V/C)", "seccion": "calidad", "valores": [5.55, 6.42, 7.83, 7.11, 9.43], "format": "pct", "signo": -1 },
+    { "label": "Cobertura CAR (%)", "seccion": "calidad", "valores": [127.94, 118.44, 108.22, 112.51, 101.09], "format": "pct", "signo": 1 },
+    { "label": "Utilidad Neta (MM S/)", "seccion": "rentabilidad", "valores": [7008, 3245, 1782, 1911, 72], "format": "moneda_mm_utilidad", "signo": 1 },
+    { "label": "% ROE", "seccion": "rentabilidad", "valores": [27.18, 22.44, 18.90, 20.15, 15.79], "format": "pct", "signo": 1 },
+    { "label": "% ROA", "seccion": "rentabilidad", "valores": [3.44, 2.81, 2.11, 2.35, 2.50], "format": "pct", "signo": 1 }
+  ]
+}
