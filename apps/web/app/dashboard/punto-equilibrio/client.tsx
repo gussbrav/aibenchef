@@ -1677,10 +1677,27 @@ function TablaComparativaCierre({
         )}
       </header>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm [table-layout:fixed]">
+          {/*
+            colgroup con widths explicitos para que el column resize funcione:
+            HTML tables con table-layout:auto ignoran `width` en <th> cuando el
+            content min-width es mayor (whitespace-nowrap fuerza width del texto
+            del header). Con table-layout:fixed, los <col> widths son
+            AUTORITATIVOS — el user puede achicar libremente y el texto se
+            trunca con overflow-hidden.
+          */}
+          <colgroup>
+            <col style={{ width: "280px" }} />
+            {effectiveSeries.map((s) => (
+              <col
+                key={s.entidad}
+                style={{ width: `${columnWidths[s.entidad] ?? COL_DEFAULT_WIDTH}px` }}
+              />
+            ))}
+          </colgroup>
           <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 sticky left-0 bg-[#FFC000] z-10 min-w-[280px]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 sticky left-0 bg-[#FFC000] z-10">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1714,24 +1731,16 @@ function TablaComparativaCierre({
                       setDropTargetEntidad(null);
                     }}
                     className={cn(
-                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider whitespace-nowrap cursor-move select-none group transition-colors",
-                      // Fallback min-w cuando NO hay width persistido. Cuando el user
-                      // resizea, se aplica width inline y el min-w cede.
-                      columnWidths[s.entidad] ? "" : "min-w-[130px]",
+                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider whitespace-nowrap overflow-hidden cursor-move select-none group transition-colors",
                       // bg-[#FFC000] EXPLICITO en peer cells: el inline `style` con
                       // boxShadow crea nuevo layer y el bg del <thead> deja de cascadear.
-                      // Sin este bg explicito, BBVA/otros aparecen en blanco cuando
-                      // s.color es claro (no cubre visualmente por el shadow inset 3px).
                       s.esPropio
                         ? "bg-slate-900 text-[#FFC000] font-bold"
                         : "bg-[#FFC000] text-slate-900 font-semibold hover:bg-slate-900 hover:text-[#FFC000]",
                       isDragging && "opacity-40",
                       isDropTarget && "ring-1 ring-inset ring-slate-900 !bg-slate-900 text-[#FFC000]",
                     )}
-                    style={{
-                      boxShadow: `inset 0 -3px 0 0 ${s.color}`,
-                      width: columnWidths[s.entidad] ? `${columnWidths[s.entidad]}px` : undefined,
-                    }}
+                    style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
                     title="Arrastra para reordenar · doble-click en el borde derecho para reset ancho"
                   >
                     <div className="flex items-center justify-end gap-1.5">
@@ -1864,7 +1873,7 @@ function TablaComparativaCierre({
                         <td
                           key={s.entidad}
                           className={cn(
-                            "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap",
+                            "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap overflow-hidden",
                             isBold && "font-bold text-slate-900 bg-slate-50",
                             isHighlight && "font-bold text-slate-900 bg-brand-50",
                             !isBold && !isHighlight && s.esPropio && "bg-brand-50/50",
@@ -1872,11 +1881,6 @@ function TablaComparativaCierre({
                             isSub && v != null && v < 0 && "text-rose-700",
                             v == null && "text-slate-400 italic",
                           )}
-                          style={
-                            columnWidths[s.entidad]
-                              ? { width: `${columnWidths[s.entidad]}px` }
-                              : undefined
-                          }
                         >
                           {fmtPct(v)}
                         </td>
@@ -1908,18 +1912,13 @@ function TablaComparativaCierre({
                           <td
                             key={s.entidad}
                             className={cn(
-                              "text-right px-3 py-1 font-mono tabular-nums whitespace-nowrap text-[11.5px]",
+                              "text-right px-3 py-1 font-mono tabular-nums whitespace-nowrap overflow-hidden text-[11.5px]",
                               s.esPropio && "bg-brand-50/30",
                               v != null && v < 0 && "text-rose-500/80",
                               v != null && v > 0 && "text-slate-500",
                               v != null && v === 0 && "text-slate-300",
                               v == null && "text-slate-300 italic",
                             )}
-                            style={
-                              columnWidths[s.entidad]
-                                ? { width: `${columnWidths[s.entidad]}px` }
-                                : undefined
-                            }
                           >
                             {fmtPct(v)}
                           </td>
