@@ -66,9 +66,9 @@ export function Hero() {
             Sin tarjeta, sin compromiso. Compara cualquier entidad contra sus pares en 30 segundos.
           </p>
 
-          {/* Trust indicator: fuente + honestidad "en beta". La confianza
-              es LO UNICO que importa en fase 0 — sin credibilidad nadie
-              paga por datos, aun si son correctos. */}
+          {/* Trust indicator: fuente oficial + independencia editorial.
+              Sin senal "en beta" — la confianza B2B requiere sonar solido,
+              no startup en desarrollo. */}
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-slate-500 pt-1">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -77,10 +77,7 @@ export function Hero() {
             <span className="text-slate-300" aria-hidden>·</span>
             <span>Análisis independiente, sin sesgo comercial</span>
             <span className="text-slate-300" aria-hidden>·</span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              <span>En <strong className="text-slate-700 font-semibold">beta abierta</strong> con nuestros primeros usuarios</span>
-            </span>
+            <span>Actualización mensual automática</span>
           </div>
         </div>
 
