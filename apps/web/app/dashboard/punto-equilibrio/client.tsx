@@ -14,7 +14,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
-  BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, MoveHorizontal, Palette, RotateCcw, TrendingUp, Users, X,
+  BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, Palette, RotateCcw, TrendingUp, Users, X,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -1355,12 +1355,6 @@ const METRICA_HIGHER_IS_BETTER: Record<MetricaKey, boolean> = {
 
 const LS_COMP_ENTIDAD_ORDER = "pe-comparativo-entidad-order-v1";
 const LS_COMP_COLOR_OVERRIDES = "pe-comparativo-color-overrides-v1";
-const LS_COMP_COL_WIDTHS = "pe-comparativo-col-widths-v1";
-
-// Limites de resize (px). Debajo se ve mal, arriba desperdicia espacio.
-const COL_MIN_WIDTH = 90;
-const COL_MAX_WIDTH = 320;
-const COL_DEFAULT_WIDTH = 130;
 
 function TablaComparativaCierre({
   series,
@@ -1391,13 +1385,6 @@ function TablaComparativaCierre({
   const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
   const colorTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  // Ancho de columna por entidad (px, persistido) — estilo Excel.
-  // El user arrastra el borde derecho del header para ajustar. Doble-click reset.
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const [resizing, setResizing] = useState<
-    { entidad: string; startX: number; startWidth: number } | null
-  >(null);
-
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_EXPANDED_ROWS);
@@ -1417,21 +1404,6 @@ function TablaComparativaCierre({
         const obj = JSON.parse(colRaw);
         if (obj && typeof obj === "object" && !Array.isArray(obj)) {
           setColorOverrides(obj as Record<string, string>);
-        }
-      }
-      const widthsRaw = localStorage.getItem(LS_COMP_COL_WIDTHS);
-      if (widthsRaw) {
-        const obj = JSON.parse(widthsRaw);
-        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-          // Sanitiza: solo numeros dentro del rango permitido.
-          const clean: Record<string, number> = {};
-          for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-            const n = Number(v);
-            if (Number.isFinite(n) && n >= COL_MIN_WIDTH && n <= COL_MAX_WIDTH) {
-              clean[k] = Math.round(n);
-            }
-          }
-          setColumnWidths(clean);
         }
       }
     } catch {
@@ -1455,66 +1427,6 @@ function TablaComparativaCierre({
       /* ignore */
     }
   }, [colorOverrides]);
-
-  // Persistir widths (debounced implicito via re-render — el resize dispara
-  // muchos updates, pero JSON.stringify de un objeto <10 keys es trivial).
-  useEffect(() => {
-    try {
-      if (Object.keys(columnWidths).length === 0) {
-        localStorage.removeItem(LS_COMP_COL_WIDTHS);
-      } else {
-        localStorage.setItem(LS_COMP_COL_WIDTHS, JSON.stringify(columnWidths));
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [columnWidths]);
-
-  // Handler global de mousemove/mouseup mientras esta resizeando.
-  // Se re-suscribe solo cuando cambia el objeto `resizing` (i.e. al empezar/terminar).
-  useEffect(() => {
-    if (!resizing) return;
-    const onMove = (e: MouseEvent) => {
-      const delta = e.clientX - resizing.startX;
-      const nextWidth = Math.min(
-        COL_MAX_WIDTH,
-        Math.max(COL_MIN_WIDTH, resizing.startWidth + delta),
-      );
-      setColumnWidths((prev) => ({ ...prev, [resizing.entidad]: nextWidth }));
-    };
-    const onUp = () => setResizing(null);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    // Prevenir seleccion de texto mientras arrastra
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-  }, [resizing]);
-
-  const startResize = (entidad: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setResizing({
-      entidad,
-      startX: e.clientX,
-      startWidth: columnWidths[entidad] ?? COL_DEFAULT_WIDTH,
-    });
-  };
-
-  const resetColumnWidth = (entidad: string) => {
-    setColumnWidths((prev) => {
-      const next = { ...prev };
-      delete next[entidad];
-      return next;
-    });
-  };
-
-  const resetAllColumnWidths = () => setColumnWidths({});
 
   const setEntidadColor = (entidad: string, hex: string | null) => {
     setColorOverrides((prev) => {
@@ -1629,16 +1541,12 @@ function TablaComparativaCierre({
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Arrastra el ícono <GripVertical className="w-3 h-3 inline text-slate-400" /> del
-            encabezado para reordenar. Arrastra el <MoveHorizontal className="w-3 h-3 inline text-slate-400" /> borde
-            derecho de cada columna para ajustar el ancho (doble-click para reset).
-            Click en el <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" /> para
+            encabezado para reordenar. Click en el <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" /> para
             personalizar el color. Click en la flecha <ChevronRight className="w-3 h-3 inline text-slate-400" /> para
             desplegar el detalle por cuenta oficial.
           </p>
         </div>
-        {(Object.keys(colorOverrides).length > 0 ||
-          isCustomOrder ||
-          Object.keys(columnWidths).length > 0) && (
+        {(Object.keys(colorOverrides).length > 0 || isCustomOrder) && (
           <div className="flex items-center gap-1 flex-shrink-0">
             {Object.keys(colorOverrides).length > 0 && (
               <button
@@ -1662,42 +1570,14 @@ function TablaComparativaCierre({
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
             )}
-            {Object.keys(columnWidths).length > 0 && (
-              <button
-                type="button"
-                onClick={resetAllColumnWidths}
-                className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
-                title="Restablecer anchos de columnas al default"
-                aria-label="Restablecer anchos de columnas"
-              >
-                <MoveHorizontal className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
         )}
       </header>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm [table-layout:fixed]">
-          {/*
-            colgroup con widths explicitos para que el column resize funcione:
-            HTML tables con table-layout:auto ignoran `width` en <th> cuando el
-            content min-width es mayor (whitespace-nowrap fuerza width del texto
-            del header). Con table-layout:fixed, los <col> widths son
-            AUTORITATIVOS — el user puede achicar libremente y el texto se
-            trunca con overflow-hidden.
-          */}
-          <colgroup>
-            <col style={{ width: "280px" }} />
-            {effectiveSeries.map((s) => (
-              <col
-                key={s.entidad}
-                style={{ width: `${columnWidths[s.entidad] ?? COL_DEFAULT_WIDTH}px` }}
-              />
-            ))}
-          </colgroup>
+        <table className="w-full text-sm">
           <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
             <tr>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 sticky left-0 bg-[#FFC000] z-10">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-900 sticky left-0 bg-[#FFC000] z-10 min-w-[280px]">
                 Componente
               </th>
               {effectiveSeries.map((s) => {
@@ -1731,7 +1611,7 @@ function TablaComparativaCierre({
                       setDropTargetEntidad(null);
                     }}
                     className={cn(
-                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider whitespace-nowrap overflow-hidden cursor-move select-none group transition-colors",
+                      "relative text-right px-3 py-2.5 text-xs uppercase tracking-wider min-w-[130px] whitespace-nowrap cursor-move select-none group transition-colors",
                       // bg-[#FFC000] EXPLICITO en peer cells: el inline `style` con
                       // boxShadow crea nuevo layer y el bg del <thead> deja de cascadear.
                       s.esPropio
@@ -1741,7 +1621,7 @@ function TablaComparativaCierre({
                       isDropTarget && "ring-1 ring-inset ring-slate-900 !bg-slate-900 text-[#FFC000]",
                     )}
                     style={{ boxShadow: `inset 0 -3px 0 0 ${s.color}` }}
-                    title="Arrastra para reordenar · doble-click en el borde derecho para reset ancho"
+                    title="Arrastra para reordenar"
                   >
                     <div className="flex items-center justify-end gap-1.5">
                       <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
@@ -1764,33 +1644,6 @@ function TablaComparativaCierre({
                       />
                       {s.entidad}
                     </div>
-                    {/* Handle de resize: barra visible SIEMPRE (divider fino
-                        gris) que en hover se ilumina brand-500 + engrosa a
-                        3px. Con centro dot indicator para mostrar affordance.
-                        Drag → resize, double-click → reset a auto. */}
-                    <span
-                      role="separator"
-                      aria-orientation="vertical"
-                      aria-label={`Redimensionar columna ${s.entidad}`}
-                      onMouseDown={(e) => startResize(s.entidad, e)}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        resetColumnWidth(s.entidad);
-                      }}
-                      draggable={false}
-                      onDragStart={(e) => e.preventDefault()}
-                      className={cn(
-                        "absolute top-0 right-0 h-full w-2 cursor-col-resize select-none z-10",
-                        "flex items-center justify-center",
-                        // Divider visible siempre — barra vertical 1px al centro
-                        "before:content-[''] before:absolute before:top-1/4 before:bottom-1/4 before:right-[3px] before:w-px before:bg-slate-900/40",
-                        // Hover intensifica: fondo brand + barra mas gruesa
-                        "hover:bg-brand-500/30 hover:before:w-[3px] hover:before:bg-brand-700 hover:before:top-0 hover:before:bottom-0",
-                        resizing?.entidad === s.entidad &&
-                          "!bg-brand-500/50 before:!w-[3px] before:!bg-brand-700 before:!top-0 before:!bottom-0",
-                      )}
-                      title="Arrastra para ajustar ancho · doble-click para reset"
-                    />
                   </th>
                 );
               })}
@@ -1873,7 +1726,7 @@ function TablaComparativaCierre({
                         <td
                           key={s.entidad}
                           className={cn(
-                            "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap overflow-hidden",
+                            "text-right px-3 py-2 font-mono tabular-nums whitespace-nowrap",
                             isBold && "font-bold text-slate-900 bg-slate-50",
                             isHighlight && "font-bold text-slate-900 bg-brand-50",
                             !isBold && !isHighlight && s.esPropio && "bg-brand-50/50",
@@ -1912,7 +1765,7 @@ function TablaComparativaCierre({
                           <td
                             key={s.entidad}
                             className={cn(
-                              "text-right px-3 py-1 font-mono tabular-nums whitespace-nowrap overflow-hidden text-[11.5px]",
+                              "text-right px-3 py-1 font-mono tabular-nums whitespace-nowrap text-[11.5px]",
                               s.esPropio && "bg-brand-50/30",
                               v != null && v < 0 && "text-rose-500/80",
                               v != null && v > 0 && "text-slate-500",
