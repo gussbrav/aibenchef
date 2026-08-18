@@ -1755,9 +1755,10 @@ function TablaComparativaCierre({
                       />
                       {s.entidad}
                     </div>
-                    {/* Handle de resize: barra invisible de 6px en el borde
-                        derecho. Hover muestra franja azul. Drag ajusta el
-                        ancho. Double-click resetea a auto. */}
+                    {/* Handle de resize: barra visible SIEMPRE (divider fino
+                        gris) que en hover se ilumina brand-500 + engrosa a
+                        3px. Con centro dot indicator para mostrar affordance.
+                        Drag → resize, double-click → reset a auto. */}
                     <span
                       role="separator"
                       aria-orientation="vertical"
@@ -1770,9 +1771,14 @@ function TablaComparativaCierre({
                       draggable={false}
                       onDragStart={(e) => e.preventDefault()}
                       className={cn(
-                        "absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none z-10",
-                        "hover:bg-brand-500/70 active:bg-brand-600",
-                        resizing?.entidad === s.entidad && "bg-brand-600",
+                        "absolute top-0 right-0 h-full w-2 cursor-col-resize select-none z-10",
+                        "flex items-center justify-center",
+                        // Divider visible siempre — barra vertical 1px al centro
+                        "before:content-[''] before:absolute before:top-1/4 before:bottom-1/4 before:right-[3px] before:w-px before:bg-slate-900/40",
+                        // Hover intensifica: fondo brand + barra mas gruesa
+                        "hover:bg-brand-500/30 hover:before:w-[3px] hover:before:bg-brand-700 hover:before:top-0 hover:before:bottom-0",
+                        resizing?.entidad === s.entidad &&
+                          "!bg-brand-500/50 before:!w-[3px] before:!bg-brand-700 before:!top-0 before:!bottom-0",
                       )}
                       title="Arrastra para ajustar ancho · doble-click para reset"
                     />
