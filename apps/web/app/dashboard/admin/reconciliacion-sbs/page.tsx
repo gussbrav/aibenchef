@@ -34,11 +34,30 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ReconciliacionSbsPage() {
-  const [summary, divergences, pending] = await Promise.all([
+  // Defensivo: si una de las 3 vistas gov.* no existe todavia (V177 aun
+  // no aplico o esta a mitad), no tumbamos toda la pagina. Cada bloque
+  // muestra su empty state y logueamos el error real al server console.
+  const [summaryResult, divergencesResult, pendingResult] = await Promise.allSettled([
     getAccuracySummary(),
     getRecentDivergences(50),
     getPendingSbs(50),
   ]);
+  const summary = summaryResult.status === "fulfilled" ? summaryResult.value : [];
+  const divergences = divergencesResult.status === "fulfilled" ? divergencesResult.value : [];
+  const pending = pendingResult.status === "fulfilled" ? pendingResult.value : [];
+  const errores: string[] = [];
+  if (summaryResult.status === "rejected") {
+    errores.push(`accuracy summary: ${String(summaryResult.reason?.message ?? summaryResult.reason)}`);
+    console.error("[reconciliacion-sbs] getAccuracySummary failed:", summaryResult.reason);
+  }
+  if (divergencesResult.status === "rejected") {
+    errores.push(`divergencias: ${String(divergencesResult.reason?.message ?? divergencesResult.reason)}`);
+    console.error("[reconciliacion-sbs] getRecentDivergences failed:", divergencesResult.reason);
+  }
+  if (pendingResult.status === "rejected") {
+    errores.push(`pendientes: ${String(pendingResult.reason?.message ?? pendingResult.reason)}`);
+    console.error("[reconciliacion-sbs] getPendingSbs failed:", pendingResult.reason);
+  }
 
   return (
     <Container size="xl" className="space-y-8 px-4 lg:px-6 py-6">
@@ -61,6 +80,22 @@ export default async function ReconciliacionSbsPage() {
             pnpm --filter web reconcile-ratios
           </code>
         </p>
+        {errores.length > 0 && (
+          <div className="mt-3 rounded-md bg-rose-50 border border-rose-200 p-3 text-xs text-rose-900 space-y-1">
+            <p className="font-semibold">
+              {errores.length} query(s) fallaron al cargar esta página:
+            </p>
+            <ul className="list-disc pl-5 font-mono text-[11px] leading-relaxed">
+              {errores.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-rose-800 mt-2">
+              Causa más probable: la migration V177 no aplicó completa. Revisá
+              logs del container web al startup buscando <code>[migrator] applying V177</code>.
+            </p>
+          </div>
+        )}
       </header>
 
       {/* ============ Semáforo ============ */}
