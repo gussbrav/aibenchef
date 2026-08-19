@@ -95,8 +95,7 @@ export default function SignupPage() {
                   Durante los 14 días
                 </p>
                 <ul className="space-y-2 text-[13px] text-slate-700">
-                  <FeatureLi>Hasta 10 competidores para comparar</FeatureLi>
-                  <FeatureLi>5 años de histórico completo</FeatureLi>
+                  <FeatureLi>2 competidores + 12 meses de histórico</FeatureLi>
                   <FeatureLi>Estados Financieros + Análisis dinámico</FeatureLi>
                   <FeatureLi>Insights AI en el dashboard</FeatureLi>
                   <FeatureLi>3 publicaciones AI para probar</FeatureLi>
@@ -108,13 +107,13 @@ export default function SignupPage() {
                   Después: Free permanente
                 </p>
                 <ul className="space-y-1.5 text-[12.5px] text-slate-600">
-                  <FeatureLi>Benchmark básico + PE + DuPont</FeatureLi>
-                  <FeatureLi>2 competidores + 12 meses de histórico</FeatureLi>
+                  <FeatureLi>Mismos 2 competidores + 12 meses</FeatureLi>
+                  <FeatureLi>Benchmark + Punto de Equilibrio + DuPont</FeatureLi>
                 </ul>
               </div>
               <p className="text-[11px] text-slate-500 pt-3 border-t border-slate-100">
-                Cuando quieras más volumen, integraciones o soporte prioritario,
-                hablamos de Business a medida.
+                Cuando tu equipo necesite análisis a medida o consultoría
+                especializada, hablamos de un engagement Business.
               </p>
             </div>
 

@@ -69,20 +69,19 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     apiAccess: false,
     slaEnterprise: false,
   },
-  // V173: trial de 14 dias post-signup. Da la EXPERIENCIA del producto pero
-  // NO las rutas de extraccion masiva — la data procesada es el activo
-  // principal, no la regalamos por 14 dias:
-  //   - Excel export: OFF (con Excel bajan todo el peer group a spreadsheet)
-  //   - API publica: OFF (con API scrapean via script)
-  //   - MCP Claude Desktop: usa apiAccess=false → tambien OFF
-  //   - PDF export: ON (unico export permitido — natural para presentar,
-  //     pero con "prueba" watermark por evolucion futura)
-  //   - Publicaciones AI: 3 total durante el trial (unit economics LLM)
-  //   - Insights AI: ON (server-side, no bulk extraction)
+  // V173 (revisado 2026-08-18): trial de 14 dias post-signup. Da la
+  // EXPERIENCIA de las features premium pero MANTIENE los limites cuantitativos
+  // de Free (2 peers, 12 meses). Rationales de este diseno:
+  //   - La data procesada es el activo principal → no la regalamos por 14 dias
+  //   - Excel/API/MCP OFF: bulk extraction protegida
+  //   - PDF ON, Insights AI ON, Publicaciones AI (3): "wow moment" cualitativo
+  //   - maxPeers=2 / historico=12m: mismo ceiling que Free → el trial NO se
+  //     "siente distinto en volumen"; se siente distinto en INTELIGENCIA (IA)
+  //   - Rationale comercial: quien necesita mas peers/historico paga Business
   // Cuando expira → downgrade automatico a free (cron/script).
   trial: {
-    maxPeers: 10,
-    maxHistoricoMeses: 60,
+    maxPeers: 2,
+    maxHistoricoMeses: 12,
     publicacionesPorMes: 3,
     insightsAI: true,
     exportPDF: true,

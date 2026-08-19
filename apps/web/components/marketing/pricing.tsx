@@ -58,8 +58,8 @@ const plans: Plan[] = [
     ctaLabel: "Empezar gratis",
     ctaAction: "signup",
     features: [
-      "🎁 14 días de prueba con acceso completo (10 peers, 5 años, insights, PDF)",
-      "Después: 2 competidores + 12 meses de histórico",
+      "2 competidores + 12 meses de histórico",
+      "🎁 14 días con insights AI + PDF + 3 publicaciones AI",
       "Benchmark + Punto de Equilibrio + DuPont siempre gratis",
       "Sin tarjeta ni auto-cargo",
     ],
@@ -80,7 +80,7 @@ const plans: Plan[] = [
     id: "business",
     name: "Business",
     descripcion:
-      "Para consultoras, áreas de riesgo y gerencias que necesitan análisis a medida.",
+      "Consultoría financiera especializada en el sistema financiero peruano.",
     precioMensualPen: 0,
     precioMensualUsd: 0,
     precioAcordar: true,
@@ -88,14 +88,14 @@ const plans: Plan[] = [
     ctaLabel: "Solicitar cotización",
     ctaAction: "contact",
     features: [
-      "Benchmark completo con peer group ilimitado",
-      "Histórico completo (16+ años desde 2010)",
-      "Estados Financieros + Análisis dinámico",
-      "Insights AI + Publicaciones IA ilimitadas",
-      "Exportar a PDF + Excel",
-      "API pública + MCP para Claude Desktop",
-      "Multi-usuario según necesidades",
-      "Onboarding 1:1 + soporte prioritario",
+      "Análisis a medida por analistas financieros senior",
+      "Diagnósticos ejecutivos con recomendaciones accionables",
+      "Reportes customizados según el nivel de detalle que requieras",
+      "Comparativas contra el peer group que definamos con tu equipo",
+      "Contenido editorial listo para directorio, prensa o clientes",
+      "Sesiones 1:1 de trabajo + capacitación al equipo",
+      "Acceso a las herramientas de la plataforma durante el engagement",
+      "Integración con tus flujos internos según el proyecto",
       "Factura electrónica peruana",
     ],
   },
@@ -198,7 +198,7 @@ function PlanCard({
               <span className="text-5xl font-bold text-slate-900">A medida</span>
             </div>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Cotización personalizada según usuarios, integraciones y SLA.
+              Cotización personalizada según el alcance del engagement.
             </p>
           </>
         ) : (
