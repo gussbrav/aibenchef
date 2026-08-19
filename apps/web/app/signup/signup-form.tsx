@@ -7,7 +7,6 @@ import { AlertCircle, ArrowRight, Loader2, Sparkles } from "lucide-react";
 
 import { Button, Input, PasswordInput } from "@/components/ui";
 import { authClient } from "@/lib/auth/client";
-import { isEmailAcademicoPeruano } from "@/lib/plans";
 
 /**
  * SignupForm — 2 modos:
@@ -255,23 +254,12 @@ export function SignupForm({ googleEnabled }: { googleEnabled: boolean }) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@empresa.com o tu@universidad.edu.pe"
+                placeholder="tu@empresa.com"
               />
-              {/* V172: si es email .edu.pe informamos que califica para
-                  descuento tesista al pagar Academic (S/29/mes vs S/149),
-                  pero NO auto-asignamos el plan (eso era regalar features).
-                  El descuento se aplica al momento de contratar via WhatsApp. */}
-              {isEmailAcademicoPeruano(email) && (
-                <div className="mt-2 rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 flex items-start gap-2 text-[12px] text-sky-900">
-                  <span className="text-sky-600 font-bold">🎓</span>
-                  <span>
-                    <strong>Email institucional detectado.</strong> Tu cuenta
-                    empieza en el plan Free como todos. Cuando quieras contratar
-                    Pro, calificas por el <strong>descuento tesista: S/29/mes</strong>{" "}
-                    en lugar de S/149 (verificación automática al pagar).
-                  </span>
-                </div>
-              )}
+              {/* V174: eliminado el chip "email institucional detectado".
+                  Todos los signups van al mismo trial 14d. Sin sorpresas,
+                  sin ramificaciones. Si en el futuro se re-introduce
+                  descuento academic, se re-activa este bloque. */}
             </>
           )}
         </div>
