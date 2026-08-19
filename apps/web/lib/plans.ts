@@ -19,10 +19,11 @@
 // Types
 // ============================================================================
 
-export type UserPlan = "free" | "academic" | "pro" | "business";
+export type UserPlan = "free" | "trial" | "academic" | "pro" | "business";
 
 export const USER_PLANS: readonly UserPlan[] = [
   "free",
+  "trial",
   "academic",
   "pro",
   "business",
@@ -65,6 +66,28 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     exportPDF: false,
     exportExcel: false,
     colorsPersistidos: false,
+    apiAccess: false,
+    slaEnterprise: false,
+  },
+  // V173: trial de 14 dias post-signup. Da la EXPERIENCIA del producto pero
+  // NO las rutas de extraccion masiva — la data procesada es el activo
+  // principal, no la regalamos por 14 dias:
+  //   - Excel export: OFF (con Excel bajan todo el peer group a spreadsheet)
+  //   - API publica: OFF (con API scrapean via script)
+  //   - MCP Claude Desktop: usa apiAccess=false → tambien OFF
+  //   - PDF export: ON (unico export permitido — natural para presentar,
+  //     pero con "prueba" watermark por evolucion futura)
+  //   - Publicaciones AI: 3 total durante el trial (unit economics LLM)
+  //   - Insights AI: ON (server-side, no bulk extraction)
+  // Cuando expira → downgrade automatico a free (cron/script).
+  trial: {
+    maxPeers: 10,
+    maxHistoricoMeses: 60,
+    publicacionesPorMes: 3,
+    insightsAI: true,
+    exportPDF: true,
+    exportExcel: false,
+    colorsPersistidos: true,
     apiAccess: false,
     slaEnterprise: false,
   },
@@ -122,7 +145,7 @@ export const PLAN_META: Record<UserPlan, {
   labelCorto: string;
   precioMensualUsd: number;
   descripcion: string;
-  color: "slate" | "brand" | "emerald" | "sky";
+  color: "slate" | "brand" | "emerald" | "sky" | "amber";
 }> = {
   free: {
     label: "Free",
@@ -130,6 +153,13 @@ export const PLAN_META: Record<UserPlan, {
     precioMensualUsd: 0,
     descripcion: "Para explorar la plataforma con limites suaves. Siempre gratis.",
     color: "slate",
+  },
+  trial: {
+    label: "Prueba 14 días",
+    labelCorto: "Prueba",
+    precioMensualUsd: 0,
+    descripcion: "Experiencia completa de la plataforma por 14 dias tras el signup. Sin tarjeta.",
+    color: "amber",
   },
   academic: {
     label: "Académico",
@@ -176,6 +206,23 @@ export function isEmailAcademicoPeruano(email: string | null | undefined): boole
 /** Devuelve los limites del plan indicado. Fallback: free. */
 export function limitsForPlan(plan: UserPlan | null | undefined): PlanLimits {
   return PLAN_LIMITS[plan ?? "free"];
+}
+
+/**
+ * V173: dias restantes del trial. Devuelve null si no aplica (no es trial
+ * o falta el timestamp). Redondea hacia arriba (12h restantes = 1 dia).
+ * Consumer tipico: badge en header, banner ≤3 dias.
+ */
+export function trialDaysRemaining(
+  plan: UserPlan | null | undefined,
+  planExpiresAtIso: string | null | undefined,
+): number | null {
+  if (plan !== "trial" || !planExpiresAtIso) return null;
+  const expiresAt = new Date(planExpiresAtIso).getTime();
+  const now = Date.now();
+  const diffMs = expiresAt - now;
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
 /**

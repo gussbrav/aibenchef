@@ -312,6 +312,9 @@ export type UserStats = {
 
 const PLAN_MRR_USD: Record<UserPlan, number> = {
   free: 0,
+  // Trial: cero MRR (es gratis 14 dias). Los que convierten a pagado
+  // aparecen en academic/pro/business — asi el trial no infla el numero.
+  trial: 0,
   academic: 9,
   pro: 149,
   business: 399,
@@ -325,6 +328,7 @@ export async function getUserStats(): Promise<UserStats> {
       SELECT
         COUNT(*)::int                                             AS total,
         COUNT(*) FILTER (WHERE plan = 'free')::int                AS n_free,
+        COUNT(*) FILTER (WHERE plan = 'trial')::int               AS n_trial,
         COUNT(*) FILTER (WHERE plan = 'academic')::int            AS n_academic,
         COUNT(*) FILTER (WHERE plan = 'pro')::int                 AS n_pro,
         COUNT(*) FILTER (WHERE plan = 'business')::int            AS n_business,
@@ -352,6 +356,7 @@ export async function getUserStats(): Promise<UserStats> {
   const r = rows[0]!;
   const byPlan: Record<UserPlan, number> = {
     free: Number(r.n_free ?? 0),
+    trial: Number(r.n_trial ?? 0),
     academic: Number(r.n_academic ?? 0),
     pro: Number(r.n_pro ?? 0),
     business: Number(r.n_business ?? 0),

@@ -15,7 +15,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "regen-hero": "tsx scripts/regen-hero-mockup.ts",
-    "regen-hero:dry": "tsx scripts/regen-hero-mockup.ts --dry-run"
+    "regen-hero:dry": "tsx scripts/regen-hero-mockup.ts --dry-run",
+    "expire-trials": "tsx scripts/expire-trials.ts",
+    "expire-trials:dry": "tsx scripts/expire-trials.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

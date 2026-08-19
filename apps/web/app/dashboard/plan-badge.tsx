@@ -15,7 +15,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
 
-import type { UserPlan } from "@/lib/plans";
+import { trialDaysRemaining, type UserPlan } from "@/lib/plans";
 
 // Colores del chip sobre header claro (bg-white/85). Tonos suaves.
 const COLORS: Record<UserPlan, { bg: string; text: string; border: string; ring: string }> = {
@@ -24,6 +24,12 @@ const COLORS: Record<UserPlan, { bg: string; text: string; border: string; ring:
     text: "text-slate-700",
     border: "border-slate-200",
     ring: "hover:ring-brand-200",
+  },
+  trial: {
+    bg: "bg-amber-50",
+    text: "text-amber-900",
+    border: "border-amber-300",
+    ring: "hover:ring-amber-200",
   },
   academic: {
     bg: "bg-sky-50",
@@ -47,14 +53,18 @@ const COLORS: Record<UserPlan, { bg: string; text: string; border: string; ring:
 
 export function PlanBadge({
   plan,
+  planExpiresAtIso = null,
   admin = false,
 }: {
   plan: UserPlan;
+  /** V173: para calcular dias restantes del trial. Null si plan no expira. */
+  planExpiresAtIso?: string | null;
   /** V167: los admins ven un chip 'Admin' distintivo, no el chip de plan
    *  comercial (que confunde porque su rol no depende del plan). */
   admin?: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const trialDays = trialDaysRemaining(plan, planExpiresAtIso);
 
   // Admin toma prioridad sobre el plan comercial.
   if (admin) {
@@ -69,6 +79,33 @@ export function PlanBadge({
   }
 
   const c = COLORS[plan];
+
+  // Trial: clickeable + muestra dias restantes con urgencia visual si ≤3
+  if (plan === "trial" && trialDays !== null) {
+    const urgent = trialDays <= 3;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className={`hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[11px] font-semibold uppercase tracking-wider transition-all hover:ring-2 ${
+            urgent
+              ? "bg-rose-50 text-rose-900 border-rose-300 hover:ring-rose-200 animate-pulse"
+              : `${c.bg} ${c.text} ${c.border} ${c.ring}`
+          }`}
+          title={`Tu prueba expira ${trialDays === 0 ? "hoy" : `en ${trialDays} día${trialDays === 1 ? "" : "s"}`}. Click para ver opciones para continuar.`}
+        >
+          <span aria-hidden>🎁</span>
+          Prueba
+          <span className="text-[10px] font-normal opacity-80">
+            · {trialDays === 0 ? "expira hoy" : `${trialDays} día${trialDays === 1 ? "" : "s"}`}
+          </span>
+        </button>
+        {modalOpen && <UpgradeModal onClose={() => setModalOpen(false)} />}
+      </>
+    );
+  }
+
   const isFree = plan === "free";
 
   return (
@@ -78,10 +115,10 @@ export function PlanBadge({
           type="button"
           onClick={() => setModalOpen(true)}
           className={`hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full ${c.bg} ${c.text} border ${c.border} hover:ring-2 ${c.ring} text-[11px] font-semibold uppercase tracking-wider transition-all`}
-          title="Sube a Pro para desbloquear más funcionalidades"
+          title="Ver opciones para desbloquear más funcionalidades"
         >
           Plan Free
-          <span className="text-[10px] font-normal opacity-70">· Subir</span>
+          <span className="text-[10px] font-normal opacity-70">· Ver planes</span>
         </button>
       ) : (
         <span

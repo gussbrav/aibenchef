@@ -78,25 +78,43 @@ export default function SignupPage() {
 
           {/* Columna derecha: trust panel */}
           <aside className="lg:sticky lg:top-8 space-y-5">
-            {/* Que incluye el plan Free */}
+            {/* Que incluye el signup (trial + free permanente) */}
             <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-6 space-y-4">
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] uppercase tracking-wider font-bold border border-emerald-200">
-                  Plan Free
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 text-[10px] uppercase tracking-wider font-bold border border-amber-300">
+                  🎁 14 días de prueba
                 </span>
-                <span className="text-sm text-slate-500">Siempre gratis</span>
+                <span className="text-sm text-slate-500">Sin tarjeta</span>
               </div>
-              <ul className="space-y-2.5 text-[13.5px] text-slate-700">
-                <FeatureLi>Análisis actualizado con cada nueva publicación oficial</FeatureLi>
-                <FeatureLi>1 entidad propia a elección</FeatureLi>
-                <FeatureLi>2 competidores en peer group</FeatureLi>
-                <FeatureLi>Cuadro Resumen, DuPont y Punto de Equilibrio</FeatureLi>
-                <FeatureLi>1 publicación con AI por mes</FeatureLi>
-                <FeatureLi>Cierre actual + 12 meses de histórico</FeatureLi>
-              </ul>
+              <p className="text-[12px] text-slate-600 leading-relaxed -mt-1">
+                Al registrarte accedes a la experiencia completa por 14 días.
+                Después continúas con el plan Free permanente.
+              </p>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Durante los 14 días
+                </p>
+                <ul className="space-y-2 text-[13px] text-slate-700">
+                  <FeatureLi>Hasta 10 competidores para comparar</FeatureLi>
+                  <FeatureLi>5 años de histórico completo</FeatureLi>
+                  <FeatureLi>Estados Financieros + Análisis dinámico</FeatureLi>
+                  <FeatureLi>Insights AI en el dashboard</FeatureLi>
+                  <FeatureLi>3 publicaciones AI para probar</FeatureLi>
+                  <FeatureLi>Exportar a PDF</FeatureLi>
+                </ul>
+              </div>
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Después: Free permanente
+                </p>
+                <ul className="space-y-1.5 text-[12.5px] text-slate-600">
+                  <FeatureLi>Benchmark básico + PE + DuPont</FeatureLi>
+                  <FeatureLi>2 competidores + 12 meses de histórico</FeatureLi>
+                </ul>
+              </div>
               <p className="text-[11px] text-slate-500 pt-3 border-t border-slate-100">
-                Si necesitas más entidades, peers, exportar a PDF o publicaciones ilimitadas,
-                puedes subir a Pro cuando quieras.
+                Cuando quieras más volumen, integraciones o soporte prioritario,
+                hablamos de Business a medida.
               </p>
             </div>
 

@@ -2,6 +2,7 @@ import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { createAuthMiddleware, APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
+import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 import * as schema from "@/lib/infrastructure/db/schema";
 import {
@@ -79,6 +80,25 @@ export const auth = betterAuth({
         });
       }
     }),
+  },
+
+  // V173: trial de 14 dias al signup (patron SaaS estandar). Se llama al
+  // AFTER de create user — el trigger DB V172 ya marco academic_verified_at
+  // si aplica. La funcion SQL start_trial() decide internamente si el user
+  // califica (skipea academicos verificados). Fail-open: si falla, el user
+  // queda en plan='free' default y podemos promoverlo manualmente.
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          try {
+            await db.execute(sql`SELECT auth.start_trial(${user.id}::uuid)`);
+          } catch {
+            // Fail-open — user ya existe en 'free', trial fallo no bloquea signup.
+          }
+        },
+      },
+    },
   },
 
   trustedOrigins: buildTrustedOrigins(),

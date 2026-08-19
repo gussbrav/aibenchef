@@ -102,6 +102,7 @@ const fmtDaysToExpiry = (iso: string | null): { text: string; urgent: boolean } 
 
 const planColorClasses: Record<UserPlan, string> = {
   free: "bg-slate-100 text-slate-700 border border-slate-200",
+  trial: "bg-amber-100 text-amber-900 border border-amber-300",
   academic: "bg-sky-100 text-sky-800 border border-sky-200",
   pro: "bg-brand-100 text-brand-800 border border-brand-200",
   business: "bg-emerald-100 text-emerald-800 border border-emerald-200",

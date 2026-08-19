@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
+import { getServerSession, getUserPlanContext } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
 import { Container, ConfirmModalProvider } from "@/components/ui";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
@@ -32,7 +32,7 @@ export default async function DashboardLayout({
   // propio gate isAdmin() + redirect (defensa en profundidad). Modificar
   // el bundle client-side no burla el gate de la pagina.
   const admin = await isAdmin(session.user.id).catch(() => false);
-  const plan = await getUserPlan(session.user.id);
+  const { plan, planExpiresAtIso } = await getUserPlanContext(session.user.id);
 
   // NOTA: el gate por status='suspended' se movio del layout a /api/me y a
   // los endpoints sensibles. El layout no debe hacer queries adicionales
@@ -155,7 +155,7 @@ export default async function DashboardLayout({
             </nav>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              <PlanBadge plan={plan} admin={admin} />
+              <PlanBadge plan={plan} planExpiresAtIso={planExpiresAtIso} admin={admin} />
               <CommandPaletteTrigger />
               <DashboardUserMenu name={session.user.name} email={session.user.email} />
             </div>

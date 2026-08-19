@@ -50,17 +50,18 @@ const plans: Plan[] = [
   {
     id: "free",
     name: "Free",
-    descripcion: "Explora la plataforma con tu entidad. Sin tarjeta, siempre gratis.",
+    descripcion:
+      "Empieza con 14 días de acceso a todas las features. Después continúas Free permanente. Sin tarjeta.",
     precioMensualPen: 0,
     precioMensualUsd: 0,
     destacado: false,
     ctaLabel: "Empezar gratis",
     ctaAction: "signup",
     features: [
-      "Hasta 2 competidores para comparar",
-      "12 meses de histórico",
-      "Benchmark + Punto de Equilibrio + DuPont",
-      "Sin export ni API",
+      "🎁 14 días de prueba con acceso completo (10 peers, 5 años, insights, PDF)",
+      "Después: 2 competidores + 12 meses de histórico",
+      "Benchmark + Punto de Equilibrio + DuPont siempre gratis",
+      "Sin tarjeta ni auto-cargo",
     ],
   },
   // Pro tier removido temporalmente 2026-08-15. Ver header del archivo.

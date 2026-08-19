@@ -68,9 +68,11 @@ export async function requireAdminSession(): Promise<SessionUser> {
 }
 
 /**
- * Devuelve el plan comercial del user (free/pro/business). Deduplica por
- * request via React.cache. Fallback a 'free' si el user no existe o el
- * campo esta null (deberia no pasar pero es defensivo).
+ * Devuelve el plan comercial del user. Deduplica por request via
+ * React.cache. Fallback a 'free' si el user no existe.
+ *
+ * V173 fix: incluir 'trial' y 'academic'. Antes retornaba 'free' para
+ * academic (bug — el enforcement estaba bien, pero UI se confundia).
  */
 export const getUserPlan = cache(async (userId: string): Promise<UserPlan> => {
   try {
@@ -78,12 +80,59 @@ export const getUserPlan = cache(async (userId: string): Promise<UserPlan> => {
       SELECT plan FROM auth.users WHERE id = ${userId}::uuid LIMIT 1
     `);
     const p = rows[0]?.plan;
-    if (p === "pro" || p === "business" || p === "free") return p;
+    if (
+      p === "trial" ||
+      p === "pro" ||
+      p === "business" ||
+      p === "free" ||
+      p === "academic"
+    ) {
+      return p;
+    }
   } catch {
     /* fallback silencioso a free */
   }
   return "free";
 });
+
+/**
+ * V173: devuelve el plan + expiration para el trial badge / banner.
+ * Una sola query (deduplicada por request). planExpiresAtIso es null si
+ * el plan no expira (free, planes perpetuos hechos por admin).
+ */
+export const getUserPlanContext = cache(
+  async (
+    userId: string,
+  ): Promise<{ plan: UserPlan; planExpiresAtIso: string | null }> => {
+    try {
+      const rows = await db.execute<{
+        plan: string | null;
+        plan_expires_at: string | null;
+      }>(sql`
+        SELECT plan, plan_expires_at::text AS plan_expires_at
+          FROM auth.users
+         WHERE id = ${userId}::uuid
+         LIMIT 1
+      `);
+      const p = rows[0]?.plan;
+      if (
+        p === "trial" ||
+        p === "pro" ||
+        p === "business" ||
+        p === "free" ||
+        p === "academic"
+      ) {
+        return {
+          plan: p,
+          planExpiresAtIso: rows[0]?.plan_expires_at ?? null,
+        };
+      }
+    } catch {
+      /* fallback silencioso */
+    }
+    return { plan: "free", planExpiresAtIso: null };
+  },
+);
 
 /**
  * Lee el flag onboarded_at para saber si mostrar el modal welcome.
