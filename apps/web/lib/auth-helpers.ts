@@ -23,7 +23,7 @@ import { sql } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/infrastructure/db";
-import type { UserPlan } from "@/lib/plans";
+import { earliestPeriodoForWindow, limitsForPlan, type UserPlan } from "@/lib/plans";
 
 import { UnauthorizedError, ForbiddenError } from "@/lib/domains/shared/errors";
 
@@ -133,6 +133,67 @@ export const getUserPlanContext = cache(
     return { plan: "free", planExpiresAtIso: null };
   },
 );
+
+/**
+ * V174: computa la ventana historica permitida para el user en base a su
+ * plan. Devuelve null si es admin o el plan no tiene cap (>=999 meses).
+ *
+ * Uso en endpoints EEFF: pasar como hasta el ultimo periodo publicado
+ * o el pedido por el user; se retorna el earliest permitido para clamp.
+ *
+ * Nota: `role` puede pasarse pre-cargado (ej. desde requireSession) para
+ * evitar un segundo query. Si viene undefined, hace el lookup a auth.users.
+ */
+export async function getPlanHistoricoBoundary(
+  userId: string,
+  hastaPeriodo: number,
+  role?: string | null,
+): Promise<number | null> {
+  const isAdmin =
+    (role ?? null) === "admin" ||
+    (role === undefined ? await isAdminByUserId(userId) : false);
+  if (isAdmin) return null;
+  const plan = await getUserPlan(userId);
+  const limits = limitsForPlan(plan);
+  if (limits.maxHistoricoMeses >= 999) return null;
+  return earliestPeriodoForWindow(hastaPeriodo, limits.maxHistoricoMeses);
+}
+
+/**
+ * Lookup barato del rol (no dedupeado — la duplicacion se resuelve por
+ * cache en isAdmin() de domains/users cuando esta disponible). Se
+ * mantiene local para evitar ciclo de import.
+ */
+async function isAdminByUserId(userId: string): Promise<boolean> {
+  try {
+    const rows = await db.execute<{ role: string | null }>(sql`
+      SELECT role FROM auth.users WHERE id = ${userId}::uuid LIMIT 1
+    `);
+    return rows[0]?.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Guard para endpoints EEFF que reciben UN periodo (balance, ER acumulado).
+ * Tira ForbiddenError si el periodo pedido es anterior a la ventana del plan.
+ */
+export async function assertPeriodoWithinPlanWindow(
+  userId: string,
+  requestedPeriodo: number,
+  hastaPeriodo: number,
+  role?: string | null,
+): Promise<void> {
+  const earliest = await getPlanHistoricoBoundary(userId, hastaPeriodo, role);
+  if (earliest === null) return;
+  if (requestedPeriodo < earliest) {
+    throw new ForbiddenError(
+      `Tu plan permite consultar hasta ${limitsForPlan(await getUserPlan(userId)).maxHistoricoMeses} meses de historico. Sube de plan para ver periodos anteriores.`,
+      { code: "PLAN_LIMIT_HISTORICO", earliest, requested: requestedPeriodo },
+    );
+  }
+}
 
 /**
  * Lee el flag onboarded_at para saber si mostrar el modal welcome.

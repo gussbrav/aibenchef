@@ -9,14 +9,14 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/lib/infrastructure/db";
-import { requireSession } from "@/lib/auth-helpers";
+import { getPlanHistoricoBoundary, requireSession } from "@/lib/auth-helpers";
 import { handleRoute } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   return handleRoute(async () => {
-    await requireSession();
+    const user = await requireSession();
 
     const [entRows, perRows] = await Promise.all([
       db.execute<{ nomb_correg: string; tipo_entidad: string }>(sql`
@@ -44,12 +44,23 @@ export async function GET() {
       `),
     ]);
 
+    let periodos = perRows.map((r) => Number(r.periodo));
+    // Clip por plan: usa el ultimo periodo publicado como "hoy" y devuelve
+    // solo los periodos dentro de la ventana permitida (trial/free = 12m).
+    if (periodos.length > 0) {
+      const latest = periodos[0]!;
+      const earliest = await getPlanHistoricoBoundary(user.id, latest, user.role);
+      if (earliest !== null) {
+        periodos = periodos.filter((p) => p >= earliest);
+      }
+    }
+
     return {
       entidades: entRows.map((r) => ({
         nombCorreg: String(r.nomb_correg),
         tipoEntidad: String(r.tipo_entidad),
       })),
-      periodos: perRows.map((r) => Number(r.periodo)),
+      periodos,
     };
   });
 }

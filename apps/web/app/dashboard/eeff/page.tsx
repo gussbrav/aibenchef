@@ -4,6 +4,7 @@ import { Card, Container, PageHero } from "@/components/ui";
 import { getRatios, getRatiosLatest, listEntidades } from "@/lib/domains/analytics";
 import type { Moneda, RatioEeff } from "@/lib/domains/analytics";
 import { getServerSession, getUserPlan } from "@/lib/auth-helpers";
+import { PLAN_LIMITS } from "@/lib/plans";
 import { isAdmin } from "@/lib/domains/users";
 import { PlanUpgradePage } from "@/components/plan-upgrade-page";
 import { EntidadSelector } from "./entidad-selector";
@@ -28,7 +29,10 @@ interface PageProps {
 export default async function EeffDashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
 
-  // Gate V167: Estados Financieros historicos completos son Pro+.
+  // Gate V167 + V174: EEFF es Pro+ (Free = paywall). Trial y Academic
+  // acceden PERO con la ventana historica capada segun su plan
+  // (trial=12m). Admin sin limite.
+  let maxHistoricoMeses: number | undefined;
   const session = await getServerSession().catch(() => null);
   if (session) {
     const admin = await isAdmin(session.user.id).catch(() => false);
@@ -51,6 +55,8 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
           />
         );
       }
+      const limit = PLAN_LIMITS[plan].maxHistoricoMeses;
+      if (limit < 999) maxHistoricoMeses = limit;
     }
   }
 
@@ -154,9 +160,9 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
                 Evolución de ratios
               </h2>
               <p className="text-sm text-slate-500 mb-6">
-                Últimos {Math.min(historia.length, 36)} meses · ROA, ROE y Mora en %
+                Últimos {Math.min(historia.length, maxHistoricoMeses ?? 36)} meses · ROA, ROE y Mora en %
               </p>
-              <TrendChart data={historia.slice(-36)} />
+              <TrendChart data={historia.slice(-(maxHistoricoMeses ?? 36))} />
             </Card>
           </section>
 
@@ -164,7 +170,7 @@ export default async function EeffDashboardPage({ searchParams }: PageProps) {
             <h2 className="text-lg font-semibold text-slate-900 mb-4">
               Histórico mensual
             </h2>
-            <HistoricTable rows={historia.slice(-24).reverse()} />
+            <HistoricTable rows={historia.slice(-Math.min(24, maxHistoricoMeses ?? 24)).reverse()} />
           </section>
         </>
       )}

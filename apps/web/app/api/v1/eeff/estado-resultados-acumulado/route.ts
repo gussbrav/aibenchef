@@ -10,7 +10,8 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getEstadoResultadosAcumulado } from "@/lib/domains/er-acumulado";
-import { requireSession } from "@/lib/auth-helpers";
+import { getUltimoPeriodoPublicable } from "@/lib/domains/informe/queries";
+import { assertPeriodoWithinPlanWindow, requireSession } from "@/lib/auth-helpers";
 import { handleRoute, ValidationError } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ const querySchema = z.object({
 
 export async function GET(req: NextRequest) {
   return handleRoute(async () => {
-    await requireSession();
+    const user = await requireSession();
     const url = new URL(req.url);
     const parsed = querySchema.safeParse({
       entidad: url.searchParams.get("entidad"),
@@ -35,6 +36,14 @@ export async function GET(req: NextRequest) {
         issues: parsed.error.flatten().fieldErrors,
       });
     }
+    // Ceiling de la ventana = ultimo periodo publicable.
+    const latest = (await getUltimoPeriodoPublicable()) ?? parsed.data.periodo;
+    await assertPeriodoWithinPlanWindow(
+      user.id,
+      parsed.data.periodo,
+      latest,
+      user.role,
+    );
     return getEstadoResultadosAcumulado(parsed.data);
   });
 }
