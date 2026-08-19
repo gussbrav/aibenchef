@@ -265,20 +265,6 @@ export function UpgradeModal({
           </div>
         </div>
 
-        {/* Nota academica — visible solo cuando el user está en Free
-            (asumimos que ya no aplica para academic/pro/business que
-            usualmente no ven el modal). */}
-        <div className="px-6 pb-4 -mt-2">
-          <div className="rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-[12px] text-sky-900 flex items-start gap-2">
-            <span className="text-sky-600 font-bold">🎓</span>
-            <span>
-              <strong>¿Eres tesista o estudiante?</strong> Con tu email
-              institucional peruano (<span className="font-mono text-[11px]">*.edu.pe</span>)
-              accedes al Plan Académico a $9/mes con verificación automática.
-            </span>
-          </div>
-        </div>
-
         {/* Footer */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
           <p className="text-[11px] text-slate-500">

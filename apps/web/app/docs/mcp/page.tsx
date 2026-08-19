@@ -5,7 +5,7 @@ import { Sparkles, Terminal, Zap } from "lucide-react";
 export const metadata: Metadata = {
   title: "MCP para Claude Desktop",
   description:
-    "Consultá la data del sistema financiero peruano directamente desde Claude Desktop con el MCP server de Aibenchef. Ideal para tesistas y analistas.",
+    "Consulta el sistema financiero peruano directamente desde Claude Desktop con el MCP server de Aibenchef. Ideal para analistas y equipos técnicos.",
 };
 
 export default function DocsMcpPage() {
@@ -21,7 +21,7 @@ export default function DocsMcpPage() {
       <div className="not-prose mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
         <Feature icon={Sparkles} title="Nativo" desc="Claude entiende los datos financieros automáticamente." />
         <Feature icon={Terminal} title="Setup 2 minutos" desc="Instalas el server + pegas tu API key." />
-        <Feature icon={Zap} title="Gratis para tesistas" desc="Plan Académico $9/mes con verificación .edu.pe." />
+        <Feature icon={Zap} title="Acceso via Business" desc="API + MCP incluidos al contratar Business a medida." />
       </div>
 
       <h2>¿Qué es MCP?</h2>
@@ -117,7 +117,7 @@ export default function DocsMcpPage() {
         </tbody>
       </table>
 
-      <h2>Ejemplos para tesistas</h2>
+      <h2>Ejemplos de uso</h2>
 
       <div className="not-prose space-y-3 my-6">
         <PromptCard
@@ -163,12 +163,12 @@ export default function DocsMcpPage() {
       </details>
 
       <details>
-        <summary>¿Qué pasa si mi tesista/estudiante no tiene tarjeta?</summary>
+        <summary>¿Cómo obtengo API key para el MCP?</summary>
         <p>
-          El plan Free ($0) también permite consultar via API/MCP para
-          endpoints básicos con límites bajos. Para volumen decente ($9/mes)
-          conviene el plan Académico con verificación por email institucional
-          <code>.edu.pe</code> — no requiere tarjeta ni papeleo.
+          Al registrarte recibes 14 días de prueba con acceso al dashboard
+          (sin API). El acceso via API/MCP está incluido al contratar
+          Business (cotización a medida). Contáctanos por WhatsApp para
+          armar tu propuesta según volumen y usuarios.
         </p>
       </details>
 

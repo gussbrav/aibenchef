@@ -34,15 +34,16 @@ export default function DocsApiPage() {
       </p>
 
       <h2>Rate limits</h2>
+      <p>
+        El acceso a la API está incluido en el plan <strong>Business</strong>{" "}
+        (cotización a medida). Límites según acuerdo del engagement:
+      </p>
       <ul>
         <li>
-          <strong>Académico ($9/mes)</strong>: 60 requests / minuto por API key
+          <strong>Business estándar</strong>: 600 requests / minuto por API key
         </li>
         <li>
-          <strong>Pro ($149/mes)</strong>: 300 req/min
-        </li>
-        <li>
-          <strong>Business ($399/mes)</strong>: 600 req/min
+          <strong>Business enterprise</strong>: límites custom según volumen
         </li>
       </ul>
       <p>
@@ -138,18 +139,18 @@ export default function DocsApiPage() {
 
       <h2>Enforcement de plan</h2>
       <p>
-        Los caps del plan se aplican server-side incluso desde la API:
+        Los caps del engagement se aplican server-side incluso desde la API:
       </p>
       <ul>
         <li>
           <strong>Peer group</strong>: <code>/benchmarks?entidades=X,Y,Z,...</code>{" "}
-          se trunca al <code>maxPeers</code> del plan (Académico 5, Pro 10, Business
-          999). El response incluye <code>meta.planLimited=true</code> si
+          se trunca al <code>maxPeers</code> acordado en el contrato Business.
+          El response incluye <code>meta.planLimited=true</code> si
           hubo truncamiento.
         </li>
         <li>
           <strong>Ventana histórica</strong>: en <code>/kpis</code> y{" "}
-          <code>/eeff</code>, si pediste un periodo fuera del rango de tu plan,
+          <code>/eeff</code>, si pediste un periodo fuera del rango del engagement,
           el server clampea (KPIs) o devuelve 422 (EEFF).
         </li>
       </ul>
@@ -169,15 +170,16 @@ export default function DocsApiPage() {
           Aún no. La API es HTTP/JSON simple, cualquier cliente HTTP funciona.
           El{" "}
           <Link href={"/docs/mcp" as never}>MCP server para Claude Desktop</Link>{" "}
-          es el "SDK" recomendado para tesistas.
+          es el "SDK" recomendado para equipos técnicos que consuman desde Claude.
         </p>
       </details>
       <details>
-        <summary>¿Aparece la API en Free?</summary>
+        <summary>¿Aparece la API en Free o en la prueba de 14 días?</summary>
         <p>
-          No. El plan Free no incluye API pública (evita abuso). El plan
-          Académico ($9/mes con verificación .edu.pe) sí la incluye con 60
-          req/min — pensado para tesistas.
+          No. Free y la prueba dan acceso al dashboard pero no a la API
+          (protege el activo — la API permitiría bulk extraction). El
+          acceso a la API se incluye al contratar Business (cotización
+          a medida). Contáctanos por WhatsApp para armar tu propuesta.
         </p>
       </details>
     </article>

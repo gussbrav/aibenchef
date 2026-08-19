@@ -91,12 +91,12 @@ export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     apiAccess: false,
     slaEnterprise: false,
   },
-  // Plan Academico (S/29/mes = 80% off Pro) — solo para tesistas verificados
-  // con email .edu.pe de universidad whitelist. V172: YA NO se auto-asigna
-  // al signup (era regalar features). Requiere pago manual via WhatsApp;
-  // admin lo promueve desde /dashboard/admin/suscripciones tras confirmar
-  // voucher/transferencia. Features: sin publicaciones AI (unit economics),
-  // pero con API + MCP para consumir data desde Claude Desktop / scripts.
+  // Plan Academico (S/29/mes) — DORMIDO desde V174 (2026-08-18): decision
+  // comercial de tratar a todos los signups iguales (trial 14d + free
+  // permanente). Sin excepciones por email .edu.pe. Se conserva la
+  // definicion por si en el futuro se re-introduce descuento academic
+  // manual (admin puede promover desde /dashboard/admin/suscripciones).
+  // Features: sin publicaciones AI, con API + MCP.
   academic: {
     maxPeers: 5,
     maxHistoricoMeses: 60,
@@ -187,13 +187,14 @@ export const PLAN_META: Record<UserPlan, {
 /**
  * Helper para detectar email institucional peruano (.edu.pe).
  *
- * V172: NO auto-asigna Academic (eso era regalar features). Solo usado en
- * el signup para mostrar chip "califica para descuento tesista S/29 al
- * contratar Pro". La promocion real requiere pago manual (via WhatsApp)
- * verificado por admin desde /dashboard/admin/suscripciones.
+ * V174 (2026-08-18): NO se usa en la UI. Decision comercial: todos los
+ * signups reciben el mismo trato (trial 14d + free permanente). Este
+ * helper se conserva por si en el futuro se re-introduce logica basada
+ * en el dominio del email.
  *
- * El trigger DB (V172) marca `academic_verified_at` para users con email
- * .edu.pe de universidad whitelist, pero el plan queda 'free' hasta pago.
+ * El trigger DB (V172, sigue activo) marca `academic_verified_at` como
+ * flag informativo — util para admin ver quien es tesista real al
+ * decidir un descuento manual, pero NO gate ningun feature.
  */
 export function isEmailAcademicoPeruano(email: string | null | undefined): boolean {
   if (!email) return false;
