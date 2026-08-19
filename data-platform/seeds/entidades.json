@@ -10,7 +10,7 @@
   {"codigo_sbs": "2009", "nombre": "Banco Falabella", "nombre_corto": "Falabella", "grupo": "banca_multiple"},
   {"codigo_sbs": "2010", "nombre": "Banco Ripley", "nombre_corto": "Ripley", "grupo": "banca_multiple"},
   {"codigo_sbs": "2011", "nombre": "Banco Santander Peru", "nombre_corto": "Santander", "grupo": "banca_multiple"},
-  {"codigo_sbs": "2012", "nombre": "Banco de Comercio", "nombre_corto": "Comercio", "grupo": "banca_multiple"},
+  {"codigo_sbs": "2012", "nombre": "Bancom", "nombre_corto": "Bancom", "grupo": "banca_multiple"},
   {"codigo_sbs": "2013", "nombre": "Banco ICBC Peru", "nombre_corto": "ICBC", "grupo": "banca_multiple"},
   {"codigo_sbs": "2014", "nombre": "Citibank del Peru", "nombre_corto": "Citibank", "grupo": "banca_multiple"},
 
