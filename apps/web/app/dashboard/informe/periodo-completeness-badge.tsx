@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CheckCircle2, XCircle, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle, X } from "lucide-react";
 
 import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
 
@@ -57,12 +57,19 @@ const GAP = 8;
 
 export function PeriodoCompletenessBadge({
   status,
+  isAdmin = false,
 }: {
   status: PeriodoCompletenessStatus | null;
+  /** V178: cuando true, muestra boton "Verificar de nuevo con SBS" que
+   *  encola sync_job del periodo actual. Solo util para admins — para
+   *  usuarios normales el flujo automatico (script diario) resuelve. */
+  isAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const [recheckMsg, setRecheckMsg] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -128,6 +135,35 @@ export function PeriodoCompletenessBadge({
       document.removeEventListener("keydown", onEsc);
     };
   }, [open, updateCoords]);
+
+  const doRecheck = useCallback(async () => {
+    if (!status || rechecking) return;
+    setRechecking(true);
+    setRecheckMsg(null);
+    try {
+      const res = await fetch(
+        `/api/v1/admin/recheck-stale?periodo=${status.periodo}`,
+        { method: "POST" },
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        setRecheckMsg(json?.error?.message ?? `Error HTTP ${res.status}`);
+        return;
+      }
+      const data = json?.data ?? json;
+      if (data.encolados > 0) {
+        setRecheckMsg(
+          `Encolado. El worker re-verifica el periodo en 1-5 min. Job ID: ${data.jobIds?.[0] ?? "?"}`,
+        );
+      } else {
+        setRecheckMsg("Ya hay un job en cola para este periodo. Esperá que termine.");
+      }
+    } catch (e) {
+      setRecheckMsg(e instanceof Error ? e.message : "Error de red");
+    } finally {
+      setRechecking(false);
+    }
+  }, [status, rechecking]);
 
   if (!status) return null;
 
@@ -229,6 +265,33 @@ export function PeriodoCompletenessBadge({
               )}
             </div>
 
+            {isAdmin && (status.topicos_parciales.length > 0 || status.topicos_faltantes.length > 0) && (
+              <div className="px-3 py-2 border-t border-slate-200 bg-white space-y-2">
+                <button
+                  type="button"
+                  onClick={doRecheck}
+                  disabled={rechecking}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded bg-slate-900 text-white text-[11px] font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {rechecking ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Encolando…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3 h-3" />
+                      Verificar de nuevo con SBS
+                    </>
+                  )}
+                </button>
+                {recheckMsg && (
+                  <p className="text-[10px] text-slate-600 leading-relaxed">
+                    {recheckMsg}
+                  </p>
+                )}
+              </div>
+            )}
             <footer className="px-3 py-2 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 leading-relaxed">
               SBS publica los estados financieros primero. Los reportes
               secundarios pueden tardar 2-4 semanas mas. El informe muestra

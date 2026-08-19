@@ -184,9 +184,10 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   let maxHistoricoMeses: number | undefined;
   let planLimited = false;
   let insightsAllowed = true;
+  let userIsAdmin = false;
   if (session) {
-    const admin = await isAdmin(session.user.id).catch(() => false);
-    if (!admin) {
+    userIsAdmin = await isAdmin(session.user.id).catch(() => false);
+    if (!userIsAdmin) {
       const plan = await getUserPlan(session.user.id);
       const limits = PLAN_LIMITS[plan];
       maxPeers = limits.maxPeers;
@@ -300,6 +301,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       planLimited={planLimited}
       planMaxPeers={maxPeers}
       insightsAllowed={insightsAllowed}
+      isAdmin={userIsAdmin}
     />
   );
 }

@@ -25,8 +25,9 @@ import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/infrastructure/db";
 import { requireSession } from "@/lib/auth-helpers";
+import { isAdmin } from "@/lib/domains/users";
 import { extractAuditContext, recordAuditEvent } from "@/lib/domains/governance";
-import { handleRoute } from "@/lib/domains/shared";
+import { ForbiddenError, handleRoute, ValidationError } from "@/lib/domains/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -152,21 +153,38 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
     const session = await requireSession();
-    const rows = await fetchStaleRows();
-
-    if (rows.length === 0) {
-      return {
-        ok: true,
-        encolados: 0,
-        skipeados: 0,
-        mensaje: "No hay archivos stale — nada que hacer.",
-      };
+    if (!(await isAdmin(session.id))) {
+      throw new ForbiddenError("Solo admins pueden encolar re-descargas", {});
     }
 
-    // Agrupar por periodo (dedup) y encolar 1 sync_job por periodo con
-    // force_redownload=true. El worker (aibenchef-data container) toma
-    // los jobs en su proximo ciclo y re-baja los archivos.
-    const periodos = Array.from(new Set(rows.map((r) => r.periodo))).sort((a, b) => b - a);
+    // V178: si se especifica ?periodo=YYYYMM, se re-verifica ese periodo
+    // en particular (aunque no este "stale" oficialmente). Sirve para el
+    // boton "Verificar de nuevo con SBS" del popover del badge — el admin
+    // puede desatascar un periodo apenas ve que SBS ya publico, sin
+    // esperar los 37 dias del stale threshold.
+    const url = new URL(req.url);
+    const periodoParam = url.searchParams.get("periodo");
+    let periodos: number[];
+    let staleRows: StaleRow[] = [];
+
+    if (periodoParam) {
+      const p = Number.parseInt(periodoParam, 10);
+      if (!Number.isFinite(p) || p < 200001 || p > 210012) {
+        throw new ValidationError("periodo invalido (YYYYMM)", {});
+      }
+      periodos = [p];
+    } else {
+      staleRows = await fetchStaleRows();
+      if (staleRows.length === 0) {
+        return {
+          ok: true,
+          encolados: 0,
+          skipeados: 0,
+          mensaje: "No hay archivos stale — nada que hacer.",
+        };
+      }
+      periodos = Array.from(new Set(staleRows.map((r) => r.periodo))).sort((a, b) => b - a);
+    }
 
     let encolados = 0;
     let skipeados = 0;
@@ -209,7 +227,7 @@ export async function POST(req: NextRequest) {
       resource: `sync_jobs:${jobIds.join(",")}`,
       metadata: {
         periodos,
-        totalArchivosStale: rows.length,
+        totalArchivosStale: staleRows.length,
         encolados,
         skipeados,
         jobIds,
@@ -222,7 +240,7 @@ export async function POST(req: NextRequest) {
       skipeados,
       jobIds,
       periodos,
-      totalArchivosStale: rows.length,
+      totalArchivosStale: staleRows.length,
       mensaje:
         encolados > 0
           ? `${encolados} sync jobs encolados con force_redownload=true. El worker (aibenchef-data) los procesa en los próximos minutos.`

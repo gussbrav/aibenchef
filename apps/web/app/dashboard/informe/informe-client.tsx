@@ -245,6 +245,7 @@ export function InformeClient({
   planLimited = false,
   planMaxPeers,
   insightsAllowed = true,
+  isAdmin = false,
 }: {
   data: InformeData;
   periodosDisponibles: number[];
@@ -256,6 +257,9 @@ export function InformeClient({
   planMaxPeers?: number;
   /** V167: false para plan Free — oculta el panel de insights AI. */
   insightsAllowed?: boolean;
+  /** V178: si es admin, el badge de completeness muestra boton "Verificar
+   *  de nuevo con SBS" para encolar sync_job del periodo activo. */
+  isAdmin?: boolean;
 }) {
   const {
     cliente,
@@ -481,7 +485,7 @@ export function InformeClient({
             <h1 className="text-3xl font-bold mb-1">{cliente.nombre}</h1>
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-lg opacity-90">Cierre {periodo.label}</p>
-              <PeriodoCompletenessBadge status={completenessStatus} />
+              <PeriodoCompletenessBadge status={completenessStatus} isAdmin={isAdmin} />
             </div>
             <div className="flex items-center gap-2 mt-4 flex-wrap">
               <span className="text-xs uppercase opacity-75">Comparativa:</span>
