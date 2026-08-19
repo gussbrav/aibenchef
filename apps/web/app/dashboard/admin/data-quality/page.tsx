@@ -47,11 +47,20 @@ export default async function DataQualityPage() {
 
   return (
     <div className="space-y-8 px-4 lg:px-6">
-      <header className="space-y-1">
+      <header className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Data Quality</h1>
         <p className="text-slate-600 text-sm">
           Salud del pipeline SBS → marts → dashboards. Detecta archivos faltantes, cargas
           truncadas y MVs stale antes de que impacten al usuario final.
+        </p>
+        <p className="text-xs text-slate-500">
+          Para QA de metodología de ratios (nuestro cálculo vs valor oficial SBS), ver{" "}
+          <Link
+            href={"/dashboard/admin/reconciliacion-sbs" as never}
+            className="text-brand-600 hover:underline font-medium"
+          >
+            Reconciliación SBS →
+          </Link>
         </p>
       </header>
 

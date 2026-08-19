@@ -16,8 +16,14 @@
     "db:studio": "drizzle-kit studio",
     "regen-hero": "tsx scripts/regen-hero-mockup.ts",
     "regen-hero:dry": "tsx scripts/regen-hero-mockup.ts --dry-run",
-    "expire-trials": "tsx scripts/expire-trials.ts",
-    "expire-trials:dry": "tsx scripts/expire-trials.ts --dry-run"
+    "expire-plans": "tsx scripts/expire-plans.ts",
+    "expire-plans:dry": "tsx scripts/expire-plans.ts --dry-run",
+    "expire-trials": "tsx scripts/expire-plans.ts --only-trial",
+    "expire-trials:dry": "tsx scripts/expire-plans.ts --only-trial --dry-run",
+    "reconcile-ratios": "tsx scripts/reconcile-ratios.ts",
+    "reconcile-ratios:dry": "tsx scripts/reconcile-ratios.ts --dry-run",
+    "reverify-sbs": "tsx scripts/reverify-sbs.ts",
+    "reverify-sbs:dry": "tsx scripts/reverify-sbs.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

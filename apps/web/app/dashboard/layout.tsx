@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSession, getUserPlanContext } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
+import { getUnresolvedDivergenceCount } from "@/lib/domains/ratio-reconciliation";
 import { Container, ConfirmModalProvider } from "@/components/ui";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { DashboardUserMenu } from "./user-menu";
@@ -33,6 +34,13 @@ export default async function DashboardLayout({
   // el bundle client-side no burla el gate de la pagina.
   const admin = await isAdmin(session.user.id).catch(() => false);
   const { plan, planExpiresAtIso } = await getUserPlanContext(session.user.id);
+
+  // Counter para badge sidebar admin: divergencias no resueltas (severidad
+  // alto/critico) del ultimo periodo reconciliado. Fail-open a 0 si la
+  // tabla aun no existe (deploy sin V177 aplicado).
+  const divergenceCount = admin
+    ? await getUnresolvedDivergenceCount().catch(() => 0)
+    : 0;
 
   // NOTA: el gate por status='suspended' se movio del layout a /api/me y a
   // los endpoints sensibles. El layout no debe hacer queries adicionales
@@ -138,12 +146,25 @@ export default async function DashboardLayout({
 
               {admin && (
                 <NavDropdown
-                  label="Operaciones"
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      Operaciones
+                      {divergenceCount > 0 && (
+                        <span
+                          className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold"
+                          title={`${divergenceCount} divergencias SBS sin resolver`}
+                        >
+                          {divergenceCount > 99 ? "99+" : divergenceCount}
+                        </span>
+                      )}
+                    </span>
+                  }
                   items={[
                     { href: "/dashboard/admin/suscripciones", label: "Suscripciones", description: "MRR, planes, expiraciones y actividad de suscriptores" },
                     { href: "/dashboard/admin/access-requests", label: "Solicitudes de acceso", description: "Triage de leads de la waitlist con aprobación 1-click" },
                     { href: "/dashboard/admin/pipeline", label: "Pipeline", description: "Observabilidad de ingesta desde fuentes oficiales" },
                     { href: "/dashboard/admin/data-quality", label: "Data Quality", description: "Completeness, freshness, cargas sospechosas" },
+                    { href: "/dashboard/admin/reconciliacion-sbs", label: "Reconciliación SBS", description: "QA de nuestros ratios (ROA/ROE/Mora) vs valores oficiales publicados", badge: divergenceCount },
                     { href: "/dashboard/admin/archivos", label: "Archivos", description: "Archivos descargados desde fuentes oficiales" },
                     { href: "/dashboard/admin/renombres", label: "Maestra", description: "Renombres y entidades" },
                     { href: "/dashboard/admin/eeff-inspector", label: "EEFF Inspector", description: "Validar extracción cuenta-por-cuenta" },

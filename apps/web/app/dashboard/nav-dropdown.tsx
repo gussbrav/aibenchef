@@ -12,14 +12,26 @@ export type NavDropdownItem = {
   label: string;
   /** Texto pequeño descriptivo opcional (visible solo en el dropdown). */
   description?: string;
+  /** Contador opcional (ej. divergencias sin resolver). Se muestra como
+   *  pill rojo. Cero u omitido = sin badge. */
+  badge?: number;
 };
 
 /**
  * NavDropdown — agrupa varios items de navegacion en un menu colapsable.
  * Se marca activo si el pathname matchea cualquiera de los hrefs hijos.
  * Cierra al click afuera o al cambiar de ruta.
+ *
+ * El label puede ser un React node para permitir agregar badges/iconos
+ * al lado del texto (ej. counter agregado de todos los items).
  */
-export function NavDropdown({ label, items }: { label: string; items: NavDropdownItem[] }) {
+export function NavDropdown({
+  label,
+  items,
+}: {
+  label: React.ReactNode;
+  items: NavDropdownItem[];
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -95,7 +107,14 @@ export function NavDropdown({ label, items }: { label: string; items: NavDropdow
                     : "text-slate-700 hover:bg-slate-50",
                 )}
               >
-                <div className="font-medium">{it.label}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium flex-1">{it.label}</span>
+                  {it.badge != null && it.badge > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
+                      {it.badge > 99 ? "99+" : it.badge}
+                    </span>
+                  )}
+                </div>
                 {it.description && (
                   <div className="text-[11px] text-slate-500 mt-0.5 leading-snug whitespace-normal break-words">
                     {it.description}
