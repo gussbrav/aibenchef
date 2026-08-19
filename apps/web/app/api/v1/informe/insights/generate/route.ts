@@ -22,8 +22,9 @@
 
 import type { NextRequest } from "next/server";
 
-import { requireSession } from "@/lib/auth-helpers";
-import { handleRoute, ValidationError, RateLimitError, ConflictError } from "@/lib/domains/shared";
+import { getUserPlan, requireSession } from "@/lib/auth-helpers";
+import { ForbiddenError, handleRoute, ValidationError, RateLimitError, ConflictError } from "@/lib/domains/shared";
+import { limitsForPlan } from "@/lib/plans";
 import {
   generateInsight,
   InsightsError,
@@ -37,6 +38,20 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
     const session = await requireSession();
+
+    // Gate por plan (V175): Free NO puede generar analisis del experto —
+    // es la propuesta de valor pagada. Admin bypass via role. Trial/Pro/
+    // Business tienen insightsAI=true en PLAN_LIMITS.
+    if (session.role !== "admin") {
+      const plan = await getUserPlan(session.id);
+      if (!limitsForPlan(plan).insightsAI) {
+        throw new ForbiddenError(
+          "Tu plan actual no incluye el análisis del experto financiero. Sube a Business o inicia una prueba para desbloquearlo.",
+          { code: "PLAN_LIMIT_INSIGHTS", plan },
+        );
+      }
+    }
+
     const body = (await req.json()) as Partial<GenerateInsightInput>;
 
     // Validacion

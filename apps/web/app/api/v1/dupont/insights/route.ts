@@ -27,7 +27,10 @@
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
+import { getUserPlan } from "@/lib/auth-helpers";
+import { limitsForPlan } from "@/lib/plans";
 import {
+  ForbiddenError,
   handleRoute,
   UnauthorizedError,
   ValidationError,
@@ -287,6 +290,20 @@ export async function POST(req: Request) {
   return handleRoute(async () => {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) throw new UnauthorizedError("Sesion requerida", {});
+
+    // Gate por plan (V175): Free NO tiene analisis del experto (insightsAI
+    // en PLAN_LIMITS). Admin bypass. Fallback silencioso (mismo shape que
+    // "sin provider") para que el cliente caiga a narrativa determ.
+    const role = (session.user as { role?: string | null }).role ?? null;
+    if (role !== "admin") {
+      const plan = await getUserPlan(session.user.id);
+      if (!limitsForPlan(plan).insightsAI) {
+        throw new ForbiddenError(
+          "Tu plan actual no incluye el análisis del experto financiero. Sube a Business o inicia una prueba para desbloquearlo.",
+          { code: "PLAN_LIMIT_INSIGHTS", plan },
+        );
+      }
+    }
 
     const body = (await req.json().catch(() => null)) as { data?: DupontData } | null;
     if (!body?.data || !Array.isArray(body.data.entidades) || !Array.isArray(body.data.filas)) {

@@ -10,8 +10,9 @@
 
 import type { NextRequest } from "next/server";
 
-import { requireSession } from "@/lib/auth-helpers";
+import { getUserPlan, requireSession } from "@/lib/auth-helpers";
 import { handleRoute, ValidationError } from "@/lib/domains/shared";
+import { limitsForPlan } from "@/lib/plans";
 import {
   getCachedInsight,
   getCurrentPromptVersion,
@@ -23,7 +24,18 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   return handleRoute(async () => {
-    await requireSession();
+    const session = await requireSession();
+    // Gate por plan (V175): defense-in-depth para que Free no lea insights
+    // cacheados de otros usuarios. Retorna { insight: null } silenciosamente
+    // — mismo shape que un cache miss, la UI ya oculta el panel por
+    // `insightsAllowed`, aca solo evitamos leak si algun cliente terco pega
+    // la URL.
+    if (session.role !== "admin") {
+      const plan = await getUserPlan(session.id);
+      if (!limitsForPlan(plan).insightsAI) {
+        return { insight: null };
+      }
+    }
     const url = new URL(req.url);
     const periodoStr = url.searchParams.get("periodo");
     const seccion = url.searchParams.get("seccion");
