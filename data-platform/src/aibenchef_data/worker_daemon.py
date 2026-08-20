@@ -229,12 +229,12 @@ def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:
                 """
                 SELECT COUNT(*) FROM pg_stat_activity
                 WHERE state = 'active'
-                  AND (query LIKE '%REFRESH MATERIALIZED VIEW%'
-                       OR query LIKE '%refresh_all_derived%'
-                       OR query LIKE '%refresh_all_marts%')
-                  AND query_start > NOW() - INTERVAL '%s minutes'
-                """
-                % MV_REFRESH_ZOMBIE_MIN
+                  AND (query LIKE '%%REFRESH MATERIALIZED VIEW%%'
+                       OR query LIKE '%%refresh_all_derived%%'
+                       OR query LIKE '%%refresh_all_marts%%')
+                  AND query_start > NOW() - (%s || ' minutes')::interval
+                """,
+                (MV_REFRESH_ZOMBIE_MIN,),
             )
             row = cur.fetchone()
             n_refresh_running = row[0] if row else 0
