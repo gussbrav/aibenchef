@@ -52,6 +52,11 @@ RECONNECT_MAX_SEC = 60.0
 # pre-V161-fix). 6h es conservador — el SLA mas estricto de MVs es 24h.
 MV_STALE_CHECK_INTERVAL_SEC = 30 * 60  # 30 min
 MV_STALE_THRESHOLD_HOURS = 6
+MV_REFRESH_ZOMBIE_MIN = 60
+"""Si un REFRESH MATERIALIZED VIEW lleva mas de este umbral, es zombie
+(worker crash mid-refresh, conexion cortada, kill -9). El watchdog lo
+ignora asi puede arrancar uno nuevo. Un REFRESH real de mv_eeff_*
+tarda 5-15 min con CONCURRENTLY; 60 min es cap seguro."""
 
 
 def _run_work_jobs(reason: str) -> None:
@@ -214,6 +219,12 @@ def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:
             # Ademas: si ya hay un REFRESH corriendo, NO disparamos otro.
             # Previene el deadlock reportado 2026-08-11 donde 2 refresh
             # simultaneos bloquearon 21 queries del dashboard 18+ min.
+            #
+            # Fix 2026-08-19: agregar timeout a la deteccion. Si un REFRESH
+            # lleva mas de MV_REFRESH_ZOMBIE_MIN (60 min), es zombie
+            # (worker crash mid-refresh, conexion cortada, etc). El
+            # `state='active'` puede persistir aunque el backend este muerto.
+            # Ignorar zombies asi el watchdog no se bloquea eternamente.
             cur.execute(
                 """
                 SELECT COUNT(*) FROM pg_stat_activity
@@ -221,7 +232,9 @@ def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:
                   AND (query LIKE '%REFRESH MATERIALIZED VIEW%'
                        OR query LIKE '%refresh_all_derived%'
                        OR query LIKE '%refresh_all_marts%')
+                  AND query_start > NOW() - INTERVAL '%s minutes'
                 """
+                % MV_REFRESH_ZOMBIE_MIN
             )
             row = cur.fetchone()
             n_refresh_running = row[0] if row else 0
@@ -273,10 +286,64 @@ def _refresh_stale_mvs_if_needed(conn: psycopg.Connection) -> None:
         log.error("worker.mv_refresh_exception", error=str(e))
 
 
+RUNNING_ORPHAN_THRESHOLD_MIN = 30
+"""Un sync_job en status='running' hace mas de este umbral es zombie
+(worker crash mid-job, kill -9, container reap). Se marca como failed
+al startup para no bloquear la cola indefinidamente. Incidente
+2026-08-19: 4 jobs quedaron running desde 06:00 hasta que se resetearon
+a mano, y ademas hacian que el watchdog MV skipeara refresh por
+`n_running=1` fantasma."""
+
+
+def _reap_orphan_running_jobs(conn: psycopg.Connection) -> None:
+    """Marca como failed los sync_jobs en status='running' cuya started_at
+    (o requested_at) sea mas antigua que RUNNING_ORPHAN_THRESHOLD_MIN.
+
+    Sin esta funcion, un crash del worker deja los jobs eternamente en
+    running: el worker nuevo al startup ignora los 'running' (solo mira
+    'pending'), y el watchdog MV cuenta ese refresh zombie como si
+    estuviera activo y no arranca uno nuevo.
+
+    Fix idempotente: si no hay huerfanos, no hace nada. Log estructurado
+    con los ids para trazabilidad.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE admin.sync_jobs
+               SET status = 'failed',
+                   error_mensaje = COALESCE(error_mensaje, '') ||
+                       E'\\n[orphan_reap] worker startup detected stale running > %s min',
+                   completed_at = NOW()
+             WHERE status = 'running'
+               AND COALESCE(started_at, requested_at) < NOW() - (%s || ' minutes')::interval
+            RETURNING id, periodo_desde, triggered_by,
+                      EXTRACT(EPOCH FROM (NOW() - COALESCE(started_at, requested_at)))::int AS aged_sec
+            """,
+            (RUNNING_ORPHAN_THRESHOLD_MIN, RUNNING_ORPHAN_THRESHOLD_MIN),
+        )
+        rows = cur.fetchall()
+        conn.commit()
+    if rows:
+        log.warning(
+            "worker.recovery_reap_orphans",
+            n=len(rows),
+            threshold_min=RUNNING_ORPHAN_THRESHOLD_MIN,
+            ids=[r[0] for r in rows[:10]],
+            max_aged_sec=max((r[3] for r in rows), default=0),
+        )
+    else:
+        log.debug("worker.recovery_reap_none", threshold_min=RUNNING_ORPHAN_THRESHOLD_MIN)
+
+
 def _recover_pending_jobs(conn: psycopg.Connection) -> None:
     """Startup recovery: procesa jobs pending que quedaron de antes del
     startup del daemon (crash previo, restart, primera vez que corre).
+
+    Antes de procesar pending, reapea running huerfanos (V179 fix
+    2026-08-19) para que no queden zombies bloqueando el watchdog MV.
     """
+    _reap_orphan_running_jobs(conn)
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM admin.sync_jobs WHERE status = 'pending'")
         row = cur.fetchone()
