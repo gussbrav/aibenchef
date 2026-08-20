@@ -237,9 +237,9 @@ export function PrintFooter({
       <h2 className="print-closure-title">Notas metodologicas</h2>
       <ul className="print-closure-notes">
         <li>
-          Fuente unica: Superintendencia de Banca, Seguros y AFP (SBS Peru). Los estados financieros
-          se toman en su version publicada mensualmente por la SBS y estan sujetos a revisiones
-          posteriores del regulador.
+          Datos derivados de reportes publicos publicados por la Superintendencia de Banca, Seguros y
+          AFP del Peru (SBS) al amparo de la Ley N° 26702. Los estados financieros se toman en su
+          version publicada mensualmente por la SBS y estan sujetos a revisiones posteriores del regulador.
         </li>
         <li>
           Indicadores anualizados se calculan sobre los últimos 12 meses móviles. Ratios de rentabilidad
@@ -256,6 +256,16 @@ export function PrintFooter({
           fuente oficial SBS.
         </li>
       </ul>
+
+      <div className="print-closure-disclaimer">
+        <strong>Aibenchef es un servicio independiente de analisis financiero,
+        no representa ni esta afiliado a la SBS.</strong> El valor que entregamos consiste
+        en la capa analitica, metodologica y de consultoria aplicada sobre informacion
+        publica. En caso de discrepancia entre nuestro calculo y el valor oficial SBS,
+        prevalece la publicacion oficial de SBS. Documentacion completa en{" "}
+        <span className="print-closure-disclaimer-url">aibenchef.azoramind.com/fuentes-y-metodologia</span>.
+      </div>
+
       <div className="print-closure-sign">
         <div>
           <strong>{clienteNombre}</strong>

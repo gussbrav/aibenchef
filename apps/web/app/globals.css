@@ -546,6 +546,23 @@ body {
     color: #334155;
     margin-bottom: 2mm;
   }
+  .print-closure-disclaimer {
+    font-size: 7.5pt;
+    line-height: 1.5;
+    color: #475569;
+    padding: 3mm 4mm;
+    margin: 0 0 6mm;
+    border-left: 2pt solid #94a3b8;
+    background: #f8fafc;
+  }
+  .print-closure-disclaimer strong {
+    color: #1e293b;
+  }
+  .print-closure-disclaimer-url {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 7pt;
+    color: #334155;
+  }
   .print-closure-sign {
     display: flex;
     justify-content: space-between;

@@ -41,13 +41,39 @@ export function Footer() {
                     Privacidad
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    href={"/fuentes-y-metodologia" as never}
+                    className="hover:text-white transition-colors"
+                  >
+                    Fuentes y metodología
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
         </div>
-        <div className="mt-12 pt-8 border-t border-slate-800 flex justify-between text-xs">
-          <p>© {new Date().getFullYear()} Aibenchef. Todos los derechos reservados.</p>
-          <p>Hecho por <span className="text-white">Azoramind</span></p>
+        <div className="mt-12 pt-8 border-t border-slate-800 space-y-4 text-xs">
+          <p className="text-[11px] leading-relaxed max-w-4xl text-slate-500">
+            Datos derivados de reportes públicos publicados por la Superintendencia
+            de Banca, Seguros y AFP del Perú (SBS) al amparo de la Ley N° 26702.
+            Aibenchef es un servicio independiente de análisis financiero,{" "}
+            <strong className="text-slate-400">
+              no representa ni está afiliado a la SBS
+            </strong>
+            . Ver{" "}
+            <Link
+              href={"/fuentes-y-metodologia" as never}
+              className="underline hover:text-slate-300"
+            >
+              Fuentes y metodología
+            </Link>{" "}
+            para detalle del origen y las transformaciones aplicadas.
+          </p>
+          <div className="flex justify-between flex-wrap gap-4">
+            <p>© {new Date().getFullYear()} Aibenchef. Todos los derechos reservados.</p>
+            <p>Hecho por <span className="text-white">Azoramind</span></p>
+          </div>
         </div>
       </Container>
     </footer>
