@@ -57,3 +57,10 @@ data-platform/local-data/
 
 # Docker volumes
 infrastructure/docker/volumes/
+
+# Windows artifacts (redireccion accidental a NUL desde PowerShell)
+NUL
+
+# Claude Code / local IDE runtime state
+.claude/scheduled_tasks.lock
+.claude/local/

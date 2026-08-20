@@ -1,0 +1,13 @@
+# aibenchef reverify-sbs — cron cada 6 horas
+#
+# Encola sync_jobs para archivos SBS 'no_publicado_sbs' vencidos.
+# Ver aibenchef-reverify-sbs.sh para detalle.
+#
+# Instalacion:
+#   sudo cp aibenchef-reverify-sbs      /etc/cron.d/
+#   sudo cp aibenchef-reverify-sbs.sh   /usr/local/bin/
+#   sudo chmod +x /usr/local/bin/aibenchef-reverify-sbs.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+15 */6 * * * root /usr/local/bin/aibenchef-reverify-sbs.sh

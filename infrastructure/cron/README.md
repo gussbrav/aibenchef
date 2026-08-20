@@ -10,20 +10,32 @@ Sincronización automática diaria de archivos SBS — scrape + import + quality
 | `aibenchef-daily` (cron) | `/etc/cron.d/aibenchef-daily` | Schedule 06:00, 14:00, 22:00 Lima (= 11, 19, 03 UTC) |
 | **`aibenchef-work-jobs.sh`** | `/usr/local/bin/aibenchef-work-jobs.sh` | **Script liviano: solo procesa la cola de sync_jobs pending. Corre cada 5 min** |
 | **`aibenchef-work-jobs`** (cron) | `/etc/cron.d/aibenchef-work-jobs` | **Schedule `*/5 * * * *` — reduce la latencia "user encola desde UI → worker procesa" de 8h a 5 min max** |
+| `aibenchef-expire-plans.sh` | `/usr/local/bin/aibenchef-expire-plans.sh` | **Downgrade auto de trials + planes pagados vencidos. `auth.expire_trials()` + `auth.expire_paid_plans()`** |
+| `aibenchef-expire-plans` (cron) | `/etc/cron.d/aibenchef-expire-plans` | Schedule `0 4 * * *` (04:00 UTC = 23:00 Lima). Corre diario |
+| `aibenchef-reconcile-ratios.sh` | `/usr/local/bin/aibenchef-reconcile-ratios.sh` | **QA de metodologia: compara ROA/ROE/Mora nuestros vs SBS oficial (`gov.reconcile_ratios`)** |
+| `aibenchef-reconcile-ratios` (cron) | `/etc/cron.d/aibenchef-reconcile-ratios` | Schedule `30 3 * * *` (03:30 UTC). Corre diario post-medianoche |
+| `aibenchef-reverify-sbs.sh` | `/usr/local/bin/aibenchef-reverify-sbs.sh` | **Encola sync_jobs para archivos SBS marcados 'no_publicado_sbs' vencidos (V178 `v_no_publicados_reverificables`)** |
+| `aibenchef-reverify-sbs` (cron) | `/etc/cron.d/aibenchef-reverify-sbs` | Schedule `15 */6 * * *` (cada 6h). Cap 20 jobs/corrida |
 | `aibenchef` (logrotate) | `/etc/logrotate.d/aibenchef` | Rotación mensual de logs, retiene 12 meses |
-| Logs | `/var/log/aibenchef/{daily-sync,work-jobs}-YYYY-MM-DD.log` | Output completo por script |
+| Logs | `/var/log/aibenchef/{daily-sync,work-jobs,expire-plans,reconcile-ratios,reverify-sbs}-YYYY-MM-DD.log` | Output completo por script |
 
 ## Instalación en el servidor EasyPanel
 
 ```bash
 # 1. Copiar scripts a /usr/local/bin/
-sudo cp aibenchef-daily-sync.sh    /usr/local/bin/
-sudo cp aibenchef-work-jobs.sh     /usr/local/bin/
+sudo cp aibenchef-daily-sync.sh        /usr/local/bin/
+sudo cp aibenchef-work-jobs.sh         /usr/local/bin/
+sudo cp aibenchef-expire-plans.sh      /usr/local/bin/
+sudo cp aibenchef-reconcile-ratios.sh  /usr/local/bin/
+sudo cp aibenchef-reverify-sbs.sh      /usr/local/bin/
 sudo chmod +x /usr/local/bin/aibenchef-*.sh
 
-# 2. Instalar los 2 crons
-sudo cp aibenchef-daily            /etc/cron.d/
-sudo cp aibenchef-work-jobs        /etc/cron.d/
+# 2. Instalar los 5 crons
+sudo cp aibenchef-daily                /etc/cron.d/
+sudo cp aibenchef-work-jobs            /etc/cron.d/
+sudo cp aibenchef-expire-plans         /etc/cron.d/
+sudo cp aibenchef-reconcile-ratios     /etc/cron.d/
+sudo cp aibenchef-reverify-sbs         /etc/cron.d/
 # Reload cron (no siempre necesario pero seguro)
 sudo systemctl reload cron 2>/dev/null || sudo service cron reload
 

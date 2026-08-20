@@ -1,0 +1,13 @@
+# aibenchef expire-plans — cron DIARIO 04:00 UTC (23:00 Lima)
+#
+# Downgrade automatico de trials + planes pagados vencidos.
+# Ver aibenchef-expire-plans.sh para detalle.
+#
+# Instalacion (host de EasyPanel):
+#   sudo cp aibenchef-expire-plans      /etc/cron.d/
+#   sudo cp aibenchef-expire-plans.sh   /usr/local/bin/
+#   sudo chmod +x /usr/local/bin/aibenchef-expire-plans.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 4 * * * root /usr/local/bin/aibenchef-expire-plans.sh

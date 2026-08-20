@@ -1,0 +1,13 @@
+# aibenchef reconcile-ratios — cron DIARIO 03:30 UTC (22:30 Lima)
+#
+# QA de nuestros ratios vs SBS oficial. Popula gov.ratio_reconciliation.
+# Ver aibenchef-reconcile-ratios.sh para detalle.
+#
+# Instalacion:
+#   sudo cp aibenchef-reconcile-ratios      /etc/cron.d/
+#   sudo cp aibenchef-reconcile-ratios.sh   /usr/local/bin/
+#   sudo chmod +x /usr/local/bin/aibenchef-reconcile-ratios.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 3 * * * root /usr/local/bin/aibenchef-reconcile-ratios.sh
