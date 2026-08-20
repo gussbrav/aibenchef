@@ -134,25 +134,23 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------
--- 6. REFRESH MATERIALIZED VIEWs afectadas.
---    Non-concurrent porque esta migration corre en despliegue (no
---    runtime). Se envuelve cada refresh en un sub-bloque para que un
---    fallo puntual no aborte el resto.
+-- 6. REFRESH MATERIALIZED VIEW — REMOVIDO 2026-08-19
+--
+-- El bloque original hacia REFRESH MATERIALIZED VIEW (sin CONCURRENTLY)
+-- sobre TODAS las MVs de marts. Con MVs stale de dias/semanas cada
+-- REFRESH tomaba varios minutos, y como REFRESH sin CONCURRENTLY toma
+-- ACCESS EXCLUSIVE LOCK bloqueando todo read/write en la MV, el health
+-- check del container fallaba, EasyPanel restartaba el container, se
+-- generaba OTRA sesion migrator queriendo aplicar V175, lock wait
+-- cascade, deadlock operativo (visto 2026-08-19: 7 V175 concurrentes
+-- + 16 sesiones bloqueadas).
+--
+-- Fix: no hacer REFRESH aca. El watchdog de MVs (V137, corre cada 30
+-- min) refresca las MVs stale sin bloquear reads porque usa
+-- REFRESH CONCURRENTLY (require UNIQUE INDEX que las MVs ya tienen).
+-- O admin puede disparar refresh manual desde /admin/data-quality.
+--
+-- Consecuencia: al aplicar V175, las MVs quedan con la data VIEJA
+-- (todavia dicen "Banco de Comercio" en nomb_correg materializado).
+-- El watchdog las trae al dia en <30 min. Aceptable — no bloquea startup.
 -- ----------------------------------------------------------------
-DO $$
-DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN
-        SELECT schemaname, matviewname
-          FROM pg_matviews
-         WHERE schemaname = 'marts'
-    LOOP
-        BEGIN
-            EXECUTE format('REFRESH MATERIALIZED VIEW %I.%I', r.schemaname, r.matviewname);
-            RAISE NOTICE 'V175: refreshed %.%', r.schemaname, r.matviewname;
-        EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'V175: skip refresh %.%: %', r.schemaname, r.matviewname, SQLERRM;
-        END;
-    END LOOP;
-END $$;
