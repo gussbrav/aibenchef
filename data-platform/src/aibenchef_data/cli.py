@@ -224,13 +224,26 @@ def storage_scan(root: str, dry_run: bool) -> None:
             # muestra `no_publicado_sbs` aunque el archivo este fisicamente
             # presente — exactamente el caso real de abril 2026.
             # Estados terminales (`procesado`, `error`, `omitido`) NO se tocan.
+            #
+            # Fix bug 2026-08-21 (SBS republica archivos): cuando SBS re-publica
+            # un .xls con el mismo nombre (ej. C-1301-jn2026.xls actualizado con
+            # filas nuevas), el path_local no cambia asi que caiamos en este UPDATE
+            # y solo actualizabamos tamanio/formato — el import no lo re-tomaba.
+            # Consecuencia real: en Jun 2026 SBS agrego las filas "Cartera Atrasada
+            # Ajustada" a los reportes CMAC/CRAC/EDPYME dias despues, nuestro DB
+            # nunca las capturo. Ahora: si tamanio cambia (SBS republico) y estaba
+            # 'procesado', se marca 'descargado' de nuevo para re-import automatico.
             update_sql = """
                 UPDATE raw.archivos_descargados
                 SET tamanio_bytes = %s,
                     formato = %s,
                     actualizado_en = now(),
                     status = CASE
+                        -- Caso 1: archivo antes marcado no_publicado y ahora tiene contenido valido
                         WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN 'descargado'
+                        -- Caso 2: archivo procesado pero tamanio cambio (SBS republico)
+                        WHEN status IN ('procesado','sospechoso') AND tamanio_bytes IS NOT NULL
+                             AND tamanio_bytes <> %s AND %s >= 2000 THEN 'descargado'
                         ELSE status
                     END,
                     error_mensaje = CASE
@@ -239,9 +252,10 @@ def storage_scan(root: str, dry_run: bool) -> None:
                     END
                 WHERE path_local = %s
             """
-            # Re-armar tuplas con el size duplicado para los CASE WHEN.
+            # Re-armar tuplas con el size repetido para todos los CASE WHEN placeholders.
             update_rows_expanded = [
-                (size, fmt, size, size, path_str) for (size, fmt, path_str) in updated_rows
+                (size, fmt, size, size, size, size, path_str)
+                for (size, fmt, path_str) in updated_rows
             ]
             for batch in _chunked(update_rows_expanded, BATCH):
                 with conn.cursor() as cur:
