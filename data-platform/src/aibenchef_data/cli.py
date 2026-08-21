@@ -140,8 +140,11 @@ def storage_scan(root: str, dry_run: bool) -> None:
 
     with psycopg.connect(url, connect_timeout=10) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT path_local FROM raw.archivos_descargados")
-            existing_paths = {row[0] for row in cur.fetchall()}
+            # 2026-08-21: cambio de set a dict path->tamanio_bytes para poder
+            # detectar cambio de tamanio (SBS republica archivos) y recalcular
+            # md5 solo cuando corresponde.
+            cur.execute("SELECT path_local, tamanio_bytes FROM raw.archivos_descargados")
+            existing_paths = {row[0]: row[1] for row in cur.fetchall()}
 
         for f in files:
             rel = str(f.relative_to(root_path)).replace("\\", "/")
@@ -171,8 +174,19 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 continue
 
             if path_str in existing_paths:
-                # Update ligero (sin re-MD5)
-                updated_rows.append((size, fmt, path_str))
+                # Update: recalcular MD5 SOLO si el tamanio cambio (barato:
+                # comparar size antes de re-leer archivo). Sin MD5 fresco, el
+                # UPDATE de status='descargado' se dispara pero md5_hash queda
+                # stale — se pierde trazabilidad de "cuando cambio el archivo".
+                # Lecciones aprendidas 2026-08-21 (SBS republica archivos).
+                prev_size = existing_paths.get(path_str)
+                if prev_size is not None and prev_size != size:
+                    with open(f, "rb") as fh:
+                        md5 = hashlib.md5(fh.read()).hexdigest()
+                    updated_rows.append((size, fmt, md5, path_str))
+                else:
+                    # Sin cambio de tamanio: skip MD5 (evita re-leer todo el fs).
+                    updated_rows.append((size, fmt, None, path_str))
             else:
                 # MD5 solo para los nuevos
                 with open(f, "rb") as fh:
@@ -237,6 +251,7 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 UPDATE raw.archivos_descargados
                 SET tamanio_bytes = %s,
                     formato = %s,
+                    md5_hash = COALESCE(%s, md5_hash),
                     actualizado_en = now(),
                     status = CASE
                         -- Caso 1: archivo antes marcado no_publicado y ahora tiene contenido valido
@@ -252,10 +267,11 @@ def storage_scan(root: str, dry_run: bool) -> None:
                     END
                 WHERE path_local = %s
             """
-            # Re-armar tuplas con el size repetido para todos los CASE WHEN placeholders.
+            # Placeholders en orden: size, fmt, md5 (NULL si no cambio),
+            # size (case1), size,size (case2), size (case1 msg), path_str.
             update_rows_expanded = [
-                (size, fmt, size, size, size, size, path_str)
-                for (size, fmt, path_str) in updated_rows
+                (size, fmt, md5, size, size, size, size, path_str)
+                for (size, fmt, md5, path_str) in updated_rows
             ]
             for batch in _chunked(update_rows_expanded, BATCH):
                 with conn.cursor() as cur:

@@ -51,6 +51,18 @@ echo ""
 echo "[3/5] Work pending jobs (scrape + import)..."
 docker exec "$CID" aibenchef sbs work-jobs --max-jobs 10 2>&1 | tee -a "$LOG_FILE"
 
+# Post-download scan: detecta cambios de tamanio en archivos existentes
+# (SBS republica archivos con el mismo nombre agregando filas dias
+# despues). Sin este paso, los archivos actualizados quedan como
+# 'procesado' y no se re-importan. Fix Lecciones Aprendidas 2026-08-21.
+# El scan recalcula md5 solo cuando tamanio cambio (barato) y marca
+# status='descargado' para que el proximo work-jobs los re-procese.
+echo ""
+echo "[3b/5] Scan post-download (detecta republicaciones SBS)..."
+docker exec "$CID" aibenchef sbs scan 2>&1 | tail -20 | tee -a "$LOG_FILE" || true
+# Si scan detecto cambios, corre otro round de work-jobs para re-importar
+docker exec "$CID" aibenchef sbs work-jobs --max-jobs 10 2>&1 | tail -20 | tee -a "$LOG_FILE" || true
+
 # Dump del contenido de los .xls nuevos a raw.archivo_contenido (visor Grid
 # del Inspector de Tópicos). --skip-existing solo procesa archivos que aún no
 # tienen contenido dumpeado, así no re-procesa los ~9700 ya hechos.
