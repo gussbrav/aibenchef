@@ -29,15 +29,15 @@ const filas: Fila[] = [
     excel: { estado: "yes", texto: "$0 pero 40h/mes analista" },
     consultora: { estado: "no", texto: "$3,000-8,000 por informe" },
     terminal: { estado: "no", texto: "~$2,000/usuario" },
-    aibenchef: { estado: "yes", texto: "Gratis · Pro $149/mes" },
+    aibenchef: { estado: "yes", texto: "Free permanente · Business a medida" },
   },
   {
-    atributo: "Cobertura banca peruana",
-    detalle: "50+ entidades reguladas activas, todos los grupos",
+    atributo: "Cobertura sistema financiero peruano",
+    detalle: "Bancos, financieras, CMAC, CRAC y edpymes reguladas por SBS",
     excel: { estado: "yes", texto: "Solo lo que descargas" },
     consultora: { estado: "partial", texto: "El scope contratado" },
     terminal: { estado: "no", texto: "Cobertura global, sin foco local" },
-    aibenchef: { estado: "yes", texto: "50+ entidades activas, 11 tópicos" },
+    aibenchef: { estado: "yes", texto: "52 entidades activas, 11 tópicos" },
   },
   {
     atributo: "Actualización automática",
@@ -75,7 +75,7 @@ const filas: Fila[] = [
     excel: { estado: "no", texto: "Copy-paste + Photoshop" },
     consultora: { estado: "no", texto: "Escribe tú" },
     terminal: { estado: "no", texto: "No aplica" },
-    aibenchef: { estado: "yes", texto: "Sí, artículos con AI" },
+    aibenchef: { estado: "yes", texto: "Sí, publicaciones con IA" },
   },
 ];
 
@@ -92,7 +92,7 @@ export function Comparison() {
         <SectionHeading
           eyebrow="Alternativas"
           title="Cómo se compara Aibenchef con lo que ya usas"
-          description="No decimos que somos los mejores en todo. Somos los mejores en una cosa: benchmarking de la banca peruana, ejecutable en minutos."
+          description="No decimos que somos los mejores en todo. Somos los mejores en una cosa: análisis del sistema financiero peruano, ejecutable en minutos."
         />
         <div className="mt-16 overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse">
