@@ -20,6 +20,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 import { getProviderForCliente, LlmProviderError } from "@/lib/domains/llm-vault";
 import { promptBenchmarkingSectorial } from "./prompts/benchmarking-sectorial";
+import { promptCalidadCartera } from "./prompts/calidad-cartera";
 import { promptCoyunturaMacro } from "./prompts/coyuntura-macro";
 import { promptDupontRentabilidad } from "./prompts/dupont-rentabilidad";
 import { promptEvolucionPeSegmento } from "./prompts/evolucion-pe-segmento";
@@ -41,6 +42,7 @@ import type {
 
 const PROMPT_REGISTRY: Record<PublicacionTema, PublicacionPromptTemplate> = {
   benchmarking_sectorial: promptBenchmarkingSectorial,
+  calidad_cartera: promptCalidadCartera,
   coyuntura_macro: promptCoyunturaMacro,
   dupont_rentabilidad: promptDupontRentabilidad,
   evolucion_pe_segmento: promptEvolucionPeSegmento,

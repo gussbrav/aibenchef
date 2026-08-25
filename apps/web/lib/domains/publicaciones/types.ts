@@ -9,6 +9,7 @@
 
 export type PublicacionTema =
   | "benchmarking_sectorial"
+  | "calidad_cartera"
   | "coyuntura_macro"
   | "dupont_rentabilidad"
   | "evolucion_pe_segmento"
@@ -17,6 +18,7 @@ export type PublicacionTema =
 
 export const PUBLICACION_TEMAS: PublicacionTema[] = [
   "benchmarking_sectorial",
+  "calidad_cartera",
   "coyuntura_macro",
   "dupont_rentabilidad",
   "evolucion_pe_segmento",

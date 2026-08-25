@@ -13,7 +13,7 @@ import "server-only";
 
 import { getPuntoEquilibrioSeries } from "@/lib/domains/punto-equilibrio";
 import { getAnalisisDupont } from "@/lib/domains/dupont";
-import { pickColorEstable } from "@/lib/domains/informe/queries";
+import { getCalidadCartera, pickColorEstable } from "@/lib/domains/informe/queries";
 import { PublicacionesError } from "./service";
 import type { PublicacionChart, PublicacionTema } from "./types";
 import {
@@ -542,6 +542,38 @@ export async function buildContextoForTema(
     ];
 
     return { contexto: { entidades: entidadesCtx }, charts: chartsDupont };
+  }
+
+  // ==========================================================================
+  // Tema: calidad_cartera — matriz 2x2 CAR Ajustada vs Cobertura Provisiones
+  // Fuente: reporte prudencial mensual SBS (columnas car_ajustada +
+  // provisiones_sobre_atrasados en marts.v_indicadores_ancho). Sin chart
+  // (charts:false en meta) — el prompt genera tabla markdown inline.
+  // ==========================================================================
+  if (tema === "calidad_cartera") {
+    const entidadesConPropia = Array.from(
+      new Set([...input.peerGroup, input.entidadPropia]),
+    );
+    const puntos = await getCalidadCartera(input.periodo, entidadesConPropia);
+
+    if (puntos.length === 0) {
+      throw new PublicacionesError(
+        "SBS aun no publica la Cartera de Alto Riesgo Ajustada para este periodo y peer group. Este indicador suele salir 2-4 semanas despues del cierre.",
+        "parse_error",
+      );
+    }
+
+    return {
+      contexto: {
+        entidadPropia: input.entidadPropia,
+        entidades: puntos.map((p) => ({
+          entidad: p.nombCorreg,
+          carAjustada: p.carAjustada,
+          cobertura: p.cobertura,
+        })),
+      },
+      charts: [],
+    };
   }
 
   throw new PublicacionesError(

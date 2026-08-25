@@ -7,6 +7,7 @@
  */
 
 import { promptBenchmarkingSectorial } from "./prompts/benchmarking-sectorial";
+import { promptCalidadCartera } from "./prompts/calidad-cartera";
 import { promptCoyunturaMacro } from "./prompts/coyuntura-macro";
 import { promptDupontRentabilidad } from "./prompts/dupont-rentabilidad";
 import { promptEvolucionPeSegmento } from "./prompts/evolucion-pe-segmento";
@@ -59,5 +60,12 @@ export const PUBLICACION_TEMAS_META: Record<
       "Historia del Punto de Equilibrio en los ultimos cierres: quien mejoro y quien esta bajo presion. Incluye line chart de evolucion.",
     hashtagsDefault: promptEvolucionPeSegmento.hashtagsDefault,
     charts: true,
+  },
+  calidad_cartera: {
+    label: "Calidad de Cartera (CAR Ajustada)",
+    descripcion:
+      "Ranking oficial SBS de riesgo real: Cartera de Alto Riesgo Ajustada vs Cobertura de Provisiones. Matriz 2x2 por cuadrante — quien es seguro, fragil, sobre-cubierto u optimista.",
+    hashtagsDefault: promptCalidadCartera.hashtagsDefault,
+    charts: false,
   },
 };

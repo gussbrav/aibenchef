@@ -184,6 +184,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   let maxHistoricoMeses: number | undefined;
   let planLimited = false;
   let insightsAllowed = true;
+  let publicacionesAllowed = true;
   let userIsAdmin = false;
   if (session) {
     userIsAdmin = await isAdmin(session.user.id).catch(() => false);
@@ -193,6 +194,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       maxPeers = limits.maxPeers;
       maxHistoricoMeses = limits.maxHistoricoMeses;
       insightsAllowed = limits.insightsAI;
+      publicacionesAllowed = limits.publicacionesPorMes > 0;
     }
   }
 
@@ -301,6 +303,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
       planLimited={planLimited}
       planMaxPeers={maxPeers}
       insightsAllowed={insightsAllowed}
+      publicacionesAllowed={publicacionesAllowed}
       isAdmin={userIsAdmin}
     />
   );

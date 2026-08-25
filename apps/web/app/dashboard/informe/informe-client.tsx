@@ -80,6 +80,10 @@ const PeriodoCompletenessBadge = dynamic(
   () => import("./periodo-completeness-badge").then((m) => m.PeriodoCompletenessBadge),
   { ssr: false, loading: () => null },
 );
+const SeccionCalidadCartera = dynamic(
+  () => import("./calidad-cartera-section").then((m) => m.SeccionCalidadCartera),
+  { ssr: false, loading: () => null },
+);
 const ReportInsights = dynamic(
   () => import("./report-insights").then((m) => m.ReportInsights),
   { loading: () => null },
@@ -245,6 +249,7 @@ export function InformeClient({
   planLimited = false,
   planMaxPeers,
   insightsAllowed = true,
+  publicacionesAllowed = false,
   isAdmin = false,
 }: {
   data: InformeData;
@@ -257,6 +262,10 @@ export function InformeClient({
   planMaxPeers?: number;
   /** V167: false para plan Free — oculta el panel de insights AI. */
   insightsAllowed?: boolean;
+  /** Publicaciones IA: true si el plan tiene publicacionesPorMes > 0
+   *  (Trial=3, Pro=20, Business=999). Free = false. Usado en secciones
+   *  con boton "Generar publicacion IA" para gate cliente-side. */
+  publicacionesAllowed?: boolean;
   /** V178: si es admin, el badge de completeness muestra boton "Verificar
    *  de nuevo con SBS" para encolar sync_job del periodo activo. */
   isAdmin?: boolean;
@@ -608,6 +617,17 @@ export function InformeClient({
         periodoLabelYoY={periodoComparativo.label}
         periodoLabelVsDic={periodoDicPrev.label}
         insightsAllowed={insightsAllowed}
+      />
+
+      {/* ============ CALIDAD DE CARTERA — BUBBLE 2x2 riesgo vs cobertura ============ */}
+      <SeccionCalidadCartera
+        data={data.calidadCartera}
+        competidores={competidores}
+        clienteSlug={cliente.slug}
+        entidadPropia={cliente.entidadPropia}
+        periodo={periodo.codigo}
+        periodoLabel={periodoLabel}
+        publicacionesAllowed={publicacionesAllowed}
       />
 
       {/* ============ WATERFALL vs mismo mes año previo ============ */}

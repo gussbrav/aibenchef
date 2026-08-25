@@ -188,6 +188,26 @@ export type InformeData = {
   carteraBrutaHistorico: HistoricoEntidadSerie[];
   comentarios: Record<string, string>;
   cobertura: CoberturaDatos;
+  /**
+   * Bubble chart de calidad de cartera del peer group actual: CAR ajustada
+   * (eje X, menor = mejor) vs Cobertura de provisiones (eje Y, mayor =
+   * mejor). Data cruda oficial SBS del reporte prudencial mensual.
+   *
+   * Cuadrante ideal: abajo-derecha (bajo riesgo + alta cobertura).
+   * Cuadrante fragil: arriba-izquierda (alto riesgo + baja cobertura).
+   *
+   * NULL entries se filtran client-side (SBS puede tardar en publicar).
+   */
+  calidadCartera: CalidadCarteraPoint[];
+};
+
+export type CalidadCarteraPoint = {
+  /** Nombre canonico de la entidad (match con Competidor.nombCorreg). */
+  nombCorreg: string;
+  /** Cartera de Alto Riesgo Ajustada (%). Menor es mejor. */
+  carAjustada: number;
+  /** Provisiones / Cartera atrasada (%). Mayor es mejor. */
+  cobertura: number;
 };
 
 export type EntidadDisponible = {

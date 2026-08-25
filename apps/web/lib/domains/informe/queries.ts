@@ -1373,6 +1373,7 @@ export async function getInformeData(opts: {
     moraConsolidado,
     cobCarMap,
     carteraBrutaMap,
+    calidadCartera,
   ] = await Promise.all([
     getPuntoEquilibrioForPeriodo(opts.periodo, entidadesNombs, consolidar),
     getPuntoEquilibrioForPeriodo(periodoPrev, entidadesNombs, consolidar),
@@ -1402,6 +1403,7 @@ export async function getInformeData(opts: {
     HISTORICO_ENABLED
       ? getHistoricoFromMartView({ view: "marts.v_cartera_balance_historica", field: "cartera_bruta / 1000", entidades: entidadesNombs, periodoActual: opts.periodo })
       : Promise.resolve(emptyMap as Map<string, Array<{ periodo: number; valor: number | null }>>),
+    getCalidadCartera(opts.periodo, entidadesNombs),
   ]);
   const moraMap = moraConsolidado.mora;
   const moraVcMap = moraConsolidado.moraVc;
@@ -1590,6 +1592,7 @@ export async function getInformeData(opts: {
       margen_neto_waterfall: "",
     },
     cobertura,
+    calidadCartera,
   };
 }
 
@@ -1704,6 +1707,52 @@ export async function getUltimoPeriodoPublicable(): Promise<number | null> {
       return p == null ? null : Number(p);
     },
     null,
+  );
+}
+
+/**
+ * Calidad de cartera del peer group para el bubble chart del informe.
+ * Retorna CAR ajustada (eje X) + Cobertura provisiones/atrasada (eje Y)
+ * por cada entidad del peer group que tenga los 2 valores publicados.
+ *
+ * Fuente: marts.v_indicadores_ancho (canonizada — mismo nomb_correg
+ * que los otros queries del informe, entonces el join con competidores
+ * es directo).
+ *
+ * Data disponible desde Ene 2026 para todos los grupos (bancos,
+ * financieras, cmac, crac, edpymes). SBS a veces publica con lag,
+ * por eso filtramos NOT NULL en ambas metricas.
+ */
+export async function getCalidadCartera(
+  periodo: number,
+  entidades: string[],
+): Promise<import("./types").CalidadCarteraPoint[]> {
+  return safeQuery(
+    "getCalidadCartera",
+    async () => {
+      if (entidades.length === 0) return [];
+      const rows = await db.execute<{
+        nomb_correg: string;
+        car_ajustada: string | null;
+        cobertura: string | null;
+      }>(sql`
+        SELECT nomb_correg,
+               MAX(car_ajustada)::text                 AS car_ajustada,
+               MAX(provisiones_sobre_atrasados)::text  AS cobertura
+          FROM marts.v_indicadores_ancho
+         WHERE periodo = ${periodo}
+           AND nomb_correg = ANY(${entidades}::text[])
+           AND car_ajustada IS NOT NULL
+           AND provisiones_sobre_atrasados IS NOT NULL
+         GROUP BY nomb_correg
+      `);
+      return rows.map((r) => ({
+        nombCorreg: r.nomb_correg,
+        carAjustada: Number(r.car_ajustada),
+        cobertura: Number(r.cobertura),
+      }));
+    },
+    [],
   );
 }
 
