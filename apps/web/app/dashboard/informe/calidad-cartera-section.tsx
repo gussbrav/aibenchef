@@ -279,45 +279,50 @@ export function SeccionCalidadCartera({
         </p>
       </div>
 
-      {/* Botón Generar publicación IA */}
-      <div className="mt-4 flex items-center justify-between gap-3 flex-wrap no-print">
-        {publicacionesAllowed ? (
-          <>
-            <p className="text-xs text-slate-500 max-w-lg">
-              La IA genera un artículo tipo LinkedIn con el ranking, análisis del
-              cuadrante ganador y contexto — listo para publicar.
+      {/* Publicación IA — mismo estilo visual que "Analisis del experto" (report-insights.tsx) */}
+      <div className="mt-4 rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 print-avoid-break no-print">
+        <header className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-brand-700" />
+            <h3 className="text-sm font-semibold text-slate-900">Publicación IA</h3>
+          </div>
+        </header>
+          {publicacionesAllowed ? (
+            <div className="text-center py-4">
+              <p className="text-xs text-slate-500 mb-3">
+                Genera un artículo tipo LinkedIn automático basado en los datos de esta sección.
+              </p>
+              <button
+                type="button"
+                onClick={generarPublicacion}
+                disabled={generando}
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-brand-700 hover:bg-brand-800 text-white text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generando ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Generar publicación con IA
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 text-center py-4">
+              💡 Inicia tu prueba de 14 días para desbloquear publicaciones IA
+              que convierten este análisis en un artículo listo para LinkedIn.
             </p>
-            <button
-              type="button"
-              onClick={generarPublicacion}
-              disabled={generando}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generando ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generando…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Generar publicación IA
-                </>
-              )}
-            </button>
-          </>
-        ) : (
-          <p className="text-xs text-slate-500 max-w-2xl">
-            💡 Inicia tu prueba de 14 días para desbloquear publicaciones IA que
-            convierten este análisis en un artículo listo para LinkedIn.
-          </p>
-        )}
+          )}
+          {errorMsg && (
+            <p className="mt-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1.5 text-center">
+              {errorMsg}
+            </p>
+          )}
       </div>
-      {errorMsg && (
-        <p className="mt-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1.5">
-          {errorMsg}
-        </p>
-      )}
     </section>
   );
 }
