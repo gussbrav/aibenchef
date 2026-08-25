@@ -1731,6 +1731,14 @@ export async function getCalidadCartera(
     "getCalidadCartera",
     async () => {
       if (entidades.length === 0) return [];
+      // Pattern del proyecto: construir el ARRAY[...] textualmente con sql.join
+      // en vez de pasar el JS array como parametro. El driver postgres.js
+      // serializa string[] como record en algunos casos y explota con
+      // "cannot cast type record to text[]" (bug reportado 2026-08-25).
+      const entArr = sql`ARRAY[${sql.join(
+        entidades.map((e) => sql`${e}`),
+        sql`, `,
+      )}]::text[]`;
       const rows = await db.execute<{
         nomb_correg: string;
         car_ajustada: string | null;
@@ -1741,7 +1749,7 @@ export async function getCalidadCartera(
                MAX(provisiones_sobre_atrasados)::text  AS cobertura
           FROM marts.v_indicadores_ancho
          WHERE periodo = ${periodo}
-           AND nomb_correg = ANY(${entidades}::text[])
+           AND nomb_correg = ANY(${entArr})
            AND car_ajustada IS NOT NULL
            AND provisiones_sobre_atrasados IS NOT NULL
          GROUP BY nomb_correg
