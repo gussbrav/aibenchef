@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SeccionCalidadCartera — bubble chart 2x2 riesgo vs cobertura.
+ * SeccionCalidadCartera — bubble chart 2x2 riesgo vs cobertura + tabla lateral.
  *
  * X: Cartera de Alto Riesgo Ajustada (menor = mejor calidad crediticia)
  * Y: Provisiones / Cartera atrasada (mayor = mejor colchon)
@@ -11,8 +11,15 @@
  * bancos, financieras, cajas municipales, cajas rurales y edpymes —
  * SBS publica el mismo indicador para todos los grupos.
  *
- * Sin lineas de referencia (mediana del sistema) por decision de producto:
- * el bubble mismo comunica el ranking relativo dentro del peer group.
+ * Diseno: split view chart + tabla lateral (2026-08-27 rediseño).
+ *   - Chart: cuadrantes coloreados + burbujas grandes con # de ranking
+ *     dentro. Sin pills flotantes (colisionaban cuando dos entidades
+ *     caian cerca del cruce de medianas — bug reportado con Caja
+ *     Arequipa vs Financiera Confianza).
+ *   - Tabla lateral: # ranking (color-coded), labelCorto completo,
+ *     badge de cuadrante, CAR% y Cobertura%. Fila propia con highlight
+ *     brand-50. En print/mobile la tabla baja debajo del chart.
+ *   - Cross-ref: el # dentro de cada burbuja == # de fila en la tabla.
  *
  * Boton "Generar publicacion IA" reutiliza el pipeline de
  * /api/v1/publicaciones/generate con tema='calidad_cartera'. Gate por
@@ -171,9 +178,9 @@ export function SeccionCalidadCartera({
       <p className="text-sm text-slate-500 mb-4 mt-3">
         Peer group al {periodoLabel} sobre matriz 2×2 con cuadrantes
         coloreados. Las líneas grises punteadas marcan la <em>mediana del peer
-        group</em> (no del sistema completo). Cada burbuja lleva su
-        <strong className="text-slate-700"> ranking de calidad</strong>{" "}
-        (1 = menor riesgo). Datos oficiales SBS.
+        group</em> (no del sistema completo). Cada burbuja lleva un{" "}
+        <strong className="text-slate-700">número de ranking</strong> que
+        matchea la tabla lateral (1 = menor riesgo). Datos oficiales SBS.
       </p>
 
       {/* Leyenda de cuadrantes — clave visual para leer el chart */}
@@ -201,9 +208,11 @@ export function SeccionCalidadCartera({
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_300px] print:grid-cols-1">
+        <div>
         <div style={{ width: "100%", height: 440 }}>
           <ResponsiveContainer>
-            <ScatterChart margin={{ top: 40, right: 55, bottom: 55, left: 70 }}>
+            <ScatterChart margin={{ top: 20, right: 40, bottom: 55, left: 60 }}>
               {/* ============ ZONAS DE CUADRANTE (fondo sutil) ============
                   Recharts renderiza en orden — poner ANTES del grid + puntos
                   para que quede detras. Con eje X invertido:
@@ -301,14 +310,9 @@ export function SeccionCalidadCartera({
                 }) => {
                   const { cx, cy, payload } = props;
                   if (cx == null || cy == null || !payload) return <g />;
-                  const r = payload.esPropia ? 13 : 10;
-                  const labelText = payload.label;
-                  // Ancho del pill mas generoso: 6.8px por char + padding 16
-                  // para evitar truncado tipo "Caja Ar" (bug reportado
-                  // 2026-08-25 con Caja Arequipa de 13 chars).
-                  const pillW = labelText.length * 6.8 + 16;
-                  const pillH = 18;
-                  const labelY = cy - r - 12;
+                  // Burbujas mas grandes ahora que no hay pill flotante que
+                  // compita por el espacio vertical (radio +4 vs version previa).
+                  const r = payload.esPropia ? 17 : 14;
                   const cuadColor = CUADRANTE_META[payload.cuadrante].color;
                   return (
                     <g>
@@ -316,7 +320,7 @@ export function SeccionCalidadCartera({
                         <circle
                           cx={cx}
                           cy={cy}
-                          r={r + 5}
+                          r={r + 6}
                           fill="none"
                           stroke={payload.color}
                           strokeWidth={2}
@@ -328,7 +332,7 @@ export function SeccionCalidadCartera({
                       <circle
                         cx={cx}
                         cy={cy}
-                        r={r + 3}
+                        r={r + 4}
                         fill={cuadColor}
                         fillOpacity={0.2}
                       />
@@ -337,43 +341,26 @@ export function SeccionCalidadCartera({
                         cy={cy}
                         r={r}
                         fill={payload.color}
-                        fillOpacity={0.9}
+                        fillOpacity={0.92}
                         stroke="#fff"
-                        strokeWidth={2}
-                        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.2))" }}
+                        strokeWidth={2.5}
+                        style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))" }}
                       />
-                      {/* Numero de ranking dentro de la burbuja */}
+                      {/* Numero de ranking dentro de la burbuja — cross-ref
+                          con tabla lateral. Font tabular para alineacion. */}
                       <text
                         x={cx}
-                        y={cy + 3}
+                        y={cy + 4}
                         textAnchor="middle"
-                        className="text-[10px] font-bold"
+                        className="font-bold"
                         fill="#fff"
-                        style={{ pointerEvents: "none" }}
+                        style={{
+                          pointerEvents: "none",
+                          fontSize: 13,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
                       >
                         {payload.rank}
-                      </text>
-                      <rect
-                        x={cx - pillW / 2}
-                        y={labelY - pillH + 4}
-                        width={pillW}
-                        height={pillH}
-                        rx={pillH / 2}
-                        ry={pillH / 2}
-                        fill="#ffffff"
-                        fillOpacity={0.95}
-                        stroke={payload.color}
-                        strokeWidth={1.2}
-                        strokeOpacity={0.5}
-                      />
-                      <text
-                        x={cx}
-                        y={labelY}
-                        textAnchor="middle"
-                        className="text-[10px] font-semibold"
-                        fill="#0f172a"
-                      >
-                        {labelText}
                       </text>
                     </g>
                   );
@@ -387,6 +374,98 @@ export function SeccionCalidadCartera({
           Superintendencia de Banca, Seguros y AFP (SBS) — reporte prudencial{" "}
           {periodoLabel}.
         </p>
+        </div>
+
+        {/* ============ TABLA LATERAL DE RANKING ============
+            Reemplaza los pills flotantes (que colisionaban) por una tabla
+            leible con nombres completos, valores y badge de cuadrante.
+            El # de cada fila matchea el # dentro de la burbuja del chart. */}
+        <div className="md:border-l md:border-slate-100 md:pl-6 print:border-l-0 print:pl-0 print:border-t print:border-slate-200 print:pt-4 print:mt-2">
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600 mb-3">
+            Ranking por calidad
+          </h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                  <th className="text-left font-semibold py-1.5 pr-2 w-6">#</th>
+                  <th className="text-left font-semibold py-1.5 pr-2">Entidad</th>
+                  <th className="text-right font-semibold py-1.5 pl-1 pr-1">CAR</th>
+                  <th className="text-right font-semibold py-1.5 pl-1">Cob.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...scatterData]
+                  .sort((a, b) => a.rank - b.rank)
+                  .map((d) => {
+                    const meta = CUADRANTE_META[d.cuadrante];
+                    return (
+                      <tr
+                        key={d.label}
+                        className={`border-b border-slate-50 ${d.esPropia ? "bg-brand-50/60" : ""}`}
+                      >
+                        <td className="py-2 pr-2 align-top">
+                          <span
+                            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
+                            style={{
+                              backgroundColor: d.color,
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {d.rank}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-2 align-top">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`truncate ${d.esPropia ? "font-bold text-brand-800" : "font-semibold text-slate-800"}`}
+                              title={d.label}
+                            >
+                              {d.label}
+                            </span>
+                            {d.esPropia && (
+                              <span className="text-brand-700 text-[10px] font-bold">
+                                ★
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span
+                              className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: meta.color }}
+                            />
+                            <span
+                              className="text-[10px] font-medium"
+                              style={{ color: meta.color }}
+                            >
+                              {meta.label}
+                            </span>
+                          </div>
+                        </td>
+                        <td
+                          className="py-2 pl-1 pr-1 text-right font-mono text-slate-800 align-top"
+                          style={{ fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {d.x.toFixed(2)}%
+                        </td>
+                        <td
+                          className="py-2 pl-1 text-right font-mono text-slate-800 align-top"
+                          style={{ fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {d.y.toFixed(1)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 leading-snug">
+            El número dentro de cada burbuja corresponde a su posición en esta
+            tabla. Ordenado por menor CAR ajustada (mejor calidad crediticia).
+          </p>
+        </div>
+        </div>
       </div>
 
       {/* Publicación IA — mismo estilo visual que "Analisis del experto" (report-insights.tsx) */}
