@@ -717,6 +717,38 @@ function SeccionCuadroResumen({
     }));
   }, [data]);
 
+  // Despega el sticky ANTES de que el header de Punto Equilibrio entre
+  // al viewport, para evitar el momento donde se ven dos barras amarillas
+  // simultaneas. Sentinel invisible al final de la seccion + scroll
+  // listener con rAF throttle (barato, no crashea browser). Threshold
+  // 150px = ~100px antes del despegue natural del sticky (que ocurre
+  // en card_bottom < 106px), suficiente para eliminar el overlap sin
+  // arrancar el sticky demasiado temprano.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [unstuck, setUnstuck] = useState(false);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    let raf = 0;
+    const check = () => {
+      const rect = sentinel.getBoundingClientRect();
+      setUnstuck(rect.top < 150);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        check();
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    check();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   return (
     <section>
       <div className="flex items-end justify-between gap-4 flex-wrap mb-3">
@@ -740,8 +772,11 @@ function SeccionCuadroResumen({
             {/* sticky top-14 = 56px offset del navbar del dashboard
                 (h-14 sticky z-40). z-20 queda debajo del navbar (z-40)
                 pero por encima de las filas de tbody. shadow al bottom
-                para separacion visual cuando esta "pegado". */}
-            <thead className="sticky top-14 z-20 bg-[#FFC000] border-b-2 border-slate-900/30 shadow-md">
+                para separacion visual cuando esta "pegado".
+                unstuck toggle (via sentinel) despega el sticky antes de
+                que Punto Equilibrio entre al viewport — evita el momento
+                donde se ven dos headers amarillos a la vez. */}
+            <thead className={`z-20 bg-[#FFC000] border-b-2 border-slate-900/30 ${unstuck ? "" : "sticky top-14 shadow-md"}`}>
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[260px]" />
                 {competidores.map((c) => (
@@ -768,6 +803,10 @@ function SeccionCuadroResumen({
             </tbody>
           </table>
       </div>
+      {/* Sentinel invisible: cuando su top cae por debajo de 150px del
+          viewport top, el useEffect de arriba despega el sticky del thead
+          para dejarle el lugar al header amarillo de Punto Equilibrio. */}
+      <div ref={sentinelRef} aria-hidden className="h-px w-full" />
     </section>
   );
 }
