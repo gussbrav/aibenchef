@@ -726,10 +726,18 @@ function SeccionCuadroResumen({
         </h2>
         <PerfLegend />
       </div>
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-4">
+      {/* overflow-clip (no overflow-hidden) preserva rounded-lg al mismo
+          tiempo que NO crea scroll container — condicion necesaria para
+          que position:sticky del thead funcione con el scroll del document
+          (no del container). Requiere Chrome 90+/FF 81+/Safari 16+. */}
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-clip mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
+            {/* sticky top-14 = 56px offset del navbar del dashboard
+                (h-14 sticky z-40). z-20 queda debajo del navbar (z-40)
+                pero por encima de las filas de tbody. shadow al bottom
+                para separacion visual cuando esta "pegado". */}
+            <thead className="sticky top-14 z-20 bg-[#FFC000] border-b-2 border-slate-900/30 shadow-md">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[260px]" />
                 {competidores.map((c) => (
