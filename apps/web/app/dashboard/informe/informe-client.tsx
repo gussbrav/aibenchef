@@ -768,7 +768,17 @@ function SeccionCuadroResumen({
           preservado (overflow-clip respeta border-radius sin crear
           scroll container). Chrome 90+/FF 81+/Safari 16+. */}
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-clip mt-4">
-          <table className="w-full text-sm">
+          {/* table-fixed + colgroup: anchos identicos a los de la tabla de
+              Punto de Equilibrio (300px primera col + resto en partes
+              iguales) para que las dos tablas del informe se vean
+              alineadas visualmente al scrollear. */}
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col style={{ width: "300px" }} />
+              {competidores.map((c) => (
+                <col key={c} />
+              ))}
+            </colgroup>
             {/* sticky top-14 = 56px offset del navbar del dashboard
                 (h-14 sticky z-40). z-20 queda debajo del navbar (z-40)
                 pero por encima de las filas de tbody. shadow al bottom
@@ -778,15 +788,16 @@ function SeccionCuadroResumen({
                 donde se ven dos headers amarillos a la vez. */}
             <thead className={`z-20 bg-[#FFC000] border-b-2 border-slate-900/30 ${unstuck ? "" : "sticky top-14 shadow-md"}`}>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[260px]" />
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900" />
                 {competidores.map((c) => (
                   <th
                     key={c}
-                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
+                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider truncate transition-colors ${
                       c === clientePropio
                         ? "bg-slate-900 text-[#FFC000] font-bold"
                         : "text-slate-900 font-semibold hover:bg-slate-900/10"
                     }`}
+                    title={c}
                   >
                     {c === clientePropio && (
                       <span className="inline-block w-2 h-2 rounded-full bg-[#FFC000] mr-2 align-middle shadow-sm shadow-[#FFC000]/60" />
@@ -925,20 +936,30 @@ function SeccionPuntoEquilibrio({
           </div>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          {/* table-fixed + colgroup identico al de Cuadro Resumen para
+              que las columnas se alineen visualmente entre ambas
+              tablas del informe. */}
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col style={{ width: "300px" }} />
+              {competidores.map((c) => (
+                <col key={c} />
+              ))}
+            </colgroup>
             <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900 min-w-[260px]">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-900">
                   Componente
                 </th>
                 {competidores.map((c) => (
                   <th
                     key={c}
-                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap transition-colors ${
+                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider truncate transition-colors ${
                       c === clientePropio
                         ? "bg-slate-900 text-[#FFC000] font-bold"
                         : "text-slate-900 font-semibold hover:bg-slate-900/10"
                     }`}
+                    title={c}
                   >
                     {c === clientePropio && (
                       <span className="inline-block w-2 h-2 rounded-full bg-[#FFC000] mr-2 align-middle shadow-sm shadow-[#FFC000]/60" />
