@@ -726,12 +726,16 @@ function SeccionCuadroResumen({
         </h2>
         <PerfLegend />
       </div>
-      {/* overflow-clip (no overflow-hidden) preserva rounded-lg al mismo
-          tiempo que NO crea scroll container — condicion necesaria para
-          que position:sticky del thead funcione con el scroll del document
-          (no del container). Requiere Chrome 90+/FF 81+/Safari 16+. */}
+      {/* CRITICAL: no metemos ningun div con overflow-x-auto entre este
+          wrapper y el <thead sticky>. Un scroll container intermedio
+          hace que sticky calcule el offset desde el TOP del container
+          (no del viewport), dejando 56px vacios arriba del thead.
+          overflow-clip aca clipa horizontal si el peer group es muy
+          ancho — trade-off aceptado a favor de que el sticky funcione
+          correctamente contra el scroll del document. Rounded-lg
+          preservado (overflow-clip respeta border-radius sin crear
+          scroll container). Chrome 90+/FF 81+/Safari 16+. */}
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-clip mt-4">
-        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             {/* sticky top-14 = 56px offset del navbar del dashboard
                 (h-14 sticky z-40). z-20 queda debajo del navbar (z-40)
@@ -763,7 +767,6 @@ function SeccionCuadroResumen({
               ))}
             </tbody>
           </table>
-        </div>
       </div>
     </section>
   );
