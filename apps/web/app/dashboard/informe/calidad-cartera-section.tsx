@@ -208,8 +208,8 @@ export function SeccionCalidadCartera({
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
-        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_300px] print:grid-cols-1">
-        <div>
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_320px] print:grid-cols-1">
+        <div className="min-w-0">
         <div style={{ width: "100%", height: 440 }}>
           <ResponsiveContainer>
             <ScatterChart margin={{ top: 20, right: 40, bottom: 55, left: 60 }}>
@@ -380,86 +380,94 @@ export function SeccionCalidadCartera({
             Reemplaza los pills flotantes (que colisionaban) por una tabla
             leible con nombres completos, valores y badge de cuadrante.
             El # de cada fila matchea el # dentro de la burbuja del chart. */}
-        <div className="md:border-l md:border-slate-100 md:pl-6 print:border-l-0 print:pl-0 print:border-t print:border-slate-200 print:pt-4 print:mt-2">
+        <div className="min-w-0 md:border-l md:border-slate-100 md:pl-6 print:border-l-0 print:pl-0 print:border-t print:border-slate-200 print:pt-4 print:mt-2">
           <h4 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600 mb-3">
             Ranking por calidad
           </h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                  <th className="text-left font-semibold py-1.5 pr-2 w-6">#</th>
-                  <th className="text-left font-semibold py-1.5 pr-2">Entidad</th>
-                  <th className="text-right font-semibold py-1.5 pl-1 pr-1">CAR</th>
-                  <th className="text-right font-semibold py-1.5 pl-1">Cob.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...scatterData]
-                  .sort((a, b) => a.rank - b.rank)
-                  .map((d) => {
-                    const meta = CUADRANTE_META[d.cuadrante];
-                    return (
-                      <tr
-                        key={d.label}
-                        className={`border-b border-slate-50 ${d.esPropia ? "bg-brand-50/60" : ""}`}
-                      >
-                        <td className="py-2 pr-2 align-top">
+          {/* table-fixed + colgroup: anchos explicitos evitan que el td
+              de entidad haga overflow horizontal cuando el nombre es
+              largo (BCP, Financiera Confianza). Combinado con truncate
+              + min-w-0 en el td, el nombre se corta con ellipsis. */}
+          <table className="w-full text-xs table-fixed">
+            <colgroup>
+              <col style={{ width: 32 }} />
+              <col />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 56 }} />
+            </colgroup>
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                <th className="text-left font-semibold py-1.5 pr-1">#</th>
+                <th className="text-left font-semibold py-1.5 pr-1">Entidad</th>
+                <th className="text-right font-semibold py-1.5 px-1">CAR</th>
+                <th className="text-right font-semibold py-1.5 pl-1">Cob.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...scatterData]
+                .sort((a, b) => a.rank - b.rank)
+                .map((d) => {
+                  const meta = CUADRANTE_META[d.cuadrante];
+                  return (
+                    <tr
+                      key={d.label}
+                      className={`border-b border-slate-50 ${d.esPropia ? "bg-brand-50/60" : ""}`}
+                    >
+                      <td className="py-2 pr-1 align-top">
+                        <span
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
+                          style={{
+                            backgroundColor: d.color,
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {d.rank}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-1 align-top min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span
-                            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
-                            style={{
-                              backgroundColor: d.color,
-                              fontVariantNumeric: "tabular-nums",
-                            }}
+                            className={`truncate min-w-0 ${d.esPropia ? "font-bold text-brand-800" : "font-semibold text-slate-800"}`}
+                            title={d.label}
                           >
-                            {d.rank}
+                            {d.label}
                           </span>
-                        </td>
-                        <td className="py-2 pr-2 align-top">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`truncate ${d.esPropia ? "font-bold text-brand-800" : "font-semibold text-slate-800"}`}
-                              title={d.label}
-                            >
-                              {d.label}
+                          {d.esPropia && (
+                            <span className="text-brand-700 text-[10px] font-bold flex-shrink-0">
+                              ★
                             </span>
-                            {d.esPropia && (
-                              <span className="text-brand-700 text-[10px] font-bold">
-                                ★
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span
-                              className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: meta.color }}
-                            />
-                            <span
-                              className="text-[10px] font-medium"
-                              style={{ color: meta.color }}
-                            >
-                              {meta.label}
-                            </span>
-                          </div>
-                        </td>
-                        <td
-                          className="py-2 pl-1 pr-1 text-right font-mono text-slate-800 align-top"
-                          style={{ fontVariantNumeric: "tabular-nums" }}
-                        >
-                          {d.x.toFixed(2)}%
-                        </td>
-                        <td
-                          className="py-2 pl-1 text-right font-mono text-slate-800 align-top"
-                          style={{ fontVariantNumeric: "tabular-nums" }}
-                        >
-                          {d.y.toFixed(1)}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                          <span
+                            className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: meta.color }}
+                          />
+                          <span
+                            className="text-[10px] font-medium truncate"
+                            style={{ color: meta.color }}
+                          >
+                            {meta.label}
+                          </span>
+                        </div>
+                      </td>
+                      <td
+                        className="py-2 px-1 text-right font-mono text-[11px] text-slate-800 align-top"
+                        style={{ fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {d.x.toFixed(1)}%
+                      </td>
+                      <td
+                        className="py-2 pl-1 text-right font-mono text-[11px] text-slate-800 align-top"
+                        style={{ fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {d.y.toFixed(0)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
           <p className="text-[10px] text-slate-400 mt-2 leading-snug">
             El número dentro de cada burbuja corresponde a su posición en esta
             tabla. Ordenado por menor CAR ajustada (mejor calidad crediticia).
