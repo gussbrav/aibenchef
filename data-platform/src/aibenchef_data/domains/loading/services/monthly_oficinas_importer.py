@@ -68,9 +68,9 @@ def _extract_periodo_from_filename(path: Path) -> tuple[int, str] | None:
     anio = int(m.group(2))
     if not (2000 <= anio <= 2050):
         return None
-    eom = (
-        datetime(anio + 1, 1, 1) if mes == 12 else datetime(anio, mes + 1, 1)
-    ) - timedelta(days=1)
+    eom = (datetime(anio + 1, 1, 1) if mes == 12 else datetime(anio, mes + 1, 1)) - timedelta(
+        days=1
+    )
     return (anio * 100 + mes, eom.strftime("%Y-%m-%d"))
 
 
@@ -375,10 +375,14 @@ class MonthlyOficinasImporter:
                 f"SBS publico contenido equivocado en este slot. "
                 f"Se usa el periodo del filename como fuente de verdad."
             )
-            log.warning("monthly_oficinas.fecha_discrepante", path=str(path), **{
-                "periodo_excel": periodo,
-                "periodo_filename": fecha_filename[0],
-            })
+            log.warning(
+                "monthly_oficinas.fecha_discrepante",
+                path=str(path),
+                **{
+                    "periodo_excel": periodo,
+                    "periodo_filename": fecha_filename[0],
+                },
+            )
             warnings.append(msg)
             periodo, fecha_iso = fecha_filename
 
