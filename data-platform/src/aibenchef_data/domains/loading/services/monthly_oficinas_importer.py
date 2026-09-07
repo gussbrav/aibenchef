@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 import time
 import unicodedata
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import psycopg
@@ -40,6 +41,37 @@ from aibenchef_data.domains.shared import ValidationError, get_logger
 from ..entities.import_result import ImportResult
 
 log = get_logger(__name__)
+
+
+_MES_ABREV_SBS = {
+    "en": 1, "fe": 2, "ma": 3, "ab": 4, "my": 5, "jn": 6,
+    "jl": 7, "ag": 8, "se": 9, "oc": 10, "no": 11, "di": 12,
+}  # fmt: skip
+
+
+def _extract_periodo_from_filename(path: Path) -> tuple[int, str] | None:
+    """Extrae (periodo YYYYMM, fecha_iso fin de mes) del nombre del archivo.
+
+    Soporta el patron SBS: B-XXXX-MMaaaa.xls donde MM es la abreviatura de mes
+    (jl=julio, fe=febrero, etc.) y aaaa es el anio de 4 digitos.
+
+    Fuente de verdad: el filename es el slot canonico de publicacion SBS.
+    Si discrepa con el header interno del Excel, el filename prevalece (R17).
+    """
+    name = path.stem.lower()
+    m = re.search(r"-([a-z]{2})(\d{4})$", name)
+    if not m:
+        return None
+    mes = _MES_ABREV_SBS.get(m.group(1))
+    if not mes:
+        return None
+    anio = int(m.group(2))
+    if not (2000 <= anio <= 2050):
+        return None
+    eom = (
+        datetime(anio + 1, 1, 1) if mes == 12 else datetime(anio, mes + 1, 1)
+    ) - timedelta(days=1)
+    return (anio * 100 + mes, eom.strftime("%Y-%m-%d"))
 
 
 _TIPO_ENTIDAD_BY_FOLDER = {
@@ -331,6 +363,25 @@ class MonthlyOficinasImporter:
             raise ValidationError(f"No pude extraer fecha de {path}")
         periodo, fecha_iso = fecha_info
 
+        # R17: validar que la fecha del Excel coincide con el filename.
+        # SBS puede publicar el contenido equivocado en un slot (ej. datos de
+        # junio en el archivo B-3241-jl2026.xls). El filename es la fuente
+        # de verdad: si difieren, usar el periodo del filename y loggear warning.
+        warnings: list[str] = []
+        fecha_filename = _extract_periodo_from_filename(path)
+        if fecha_filename is not None and fecha_filename[0] != periodo:
+            msg = (
+                f"Fecha Excel ({periodo}) discrepa del filename ({fecha_filename[0]}). "
+                f"SBS publico contenido equivocado en este slot. "
+                f"Se usa el periodo del filename como fuente de verdad."
+            )
+            log.warning("monthly_oficinas.fecha_discrepante", path=str(path), **{
+                "periodo_excel": periodo,
+                "periodo_filename": fecha_filename[0],
+            })
+            warnings.append(msg)
+            periodo, fecha_iso = fecha_filename
+
         layout = _detect_column_layout(sheet)
         if layout is None:
             raise ValidationError(
@@ -443,6 +494,7 @@ class MonthlyOficinasImporter:
                 rows_skipped=skipped,
                 duration_seconds=time.perf_counter() - start,
                 errors=tuple(errors),
+                warnings=tuple(warnings),
             )
 
         insert_sql = """
@@ -491,4 +543,5 @@ class MonthlyOficinasImporter:
             rows_skipped=skipped,
             duration_seconds=time.perf_counter() - start,
             errors=tuple(errors),
+            warnings=tuple(warnings),
         )

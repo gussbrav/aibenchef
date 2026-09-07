@@ -331,12 +331,49 @@ el grafo de renombres.
 
 ---
 
+## R17. La fecha del Excel puede discrepar del filename — el filename prevalece
+
+**Bug**: SBS publicó en el slot `B-3241-jl2026.xls` (julio 2026) el contenido
+del archivo de **junio 2026** — el header interno decía `"Al 30 de Junio de 2026"`.
+El importer leía la fecha del Excel → almacenaba los datos bajo `periodo=202606`.
+Resultado: `raw.creditos_depositos_oficina` no tenía filas para `202607` de
+financieras → N de agencias = null para todas las financieras en julio 2026.
+
+**Causa raíz**: SBS comete errores de copia-pega en el header del Excel al publicar.
+El filename (que forma parte de la URL de publicación) es la **fuente de verdad
+canónica**.
+
+**Regla**: cualquier importer que pueda extraer el periodo tanto del Excel como del
+filename debe **comparar ambos**. Si difieren:
+
+1. Loggear un warning estructurado con ambos periodos.
+2. **Usar el periodo del filename** para el campo `periodo` al insertar en DB.
+3. Retornar el warning en `ImportResult.warnings` para que `_import_file_with_audit`
+   marque el archivo como `sospechoso` con reason explícita en `error_mensaje`.
+4. El admin puede ver el warning en la UI de archivos sospechosos y, si SBS corrige
+   el archivo, re-encolar con `force_redownload=true`.
+
+**Implementado en**: `monthly_oficinas_importer.py` (función `_extract_periodo_from_filename`
++ comparación al inicio de `import_file`).
+
+**Verificación**: correr el import en el archivo afectado post-fix. Debe mostrar:
+```
+monthly_oficinas.fecha_discrepante  periodo_excel=202606 periodo_filename=202607
+```
+Y el archivo queda en estado `sospechoso` con mensaje claro en `error_mensaje`.
+
+**Patrón a extender**: si en el futuro se agrega `_extract_fecha_from_filename` al
+`MonthlyOficinasGridImporter`, aplicar la misma lógica de comparación.
+
+---
+
 ## Checklist para parsers nuevos (futuros tópicos)
 
 - [ ] Auto-detecta sheet name (no hardcoded)
 - [ ] Auto-detecta header_row buscando palabra clave en primeras 10 filas
 - [ ] Matching de headers tolerante a tildes corruptas (`_strip_accents` + substring)
 - [ ] Detección de fecha soporta 4 formatos (datetime / ISO string / DD/MM/YYYY / serial)
+- [ ] Si extrae fecha del Excel Y del filename, compararlas y preferir filename si difieren (R17)
 - [ ] Forward-fill implementado para columnas agrupadoras (si aplica)
 - [ ] Detecta tipo_entidad del path (con fallback al nombre del archivo)
 - [ ] Skip filas "Total general" / "Total" / sin clave única

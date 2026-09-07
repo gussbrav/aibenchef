@@ -2529,6 +2529,9 @@ async def _import_file_with_audit(
         if result.errors:
             log.metadata["errors"] = [str(e)[:200] for e in result.errors[:5]]
             log.metadata["n_errors"] = len(result.errors)
+        result_warnings = getattr(result, "warnings", ())
+        if result_warnings:
+            log.metadata["warnings"] = [str(w)[:300] for w in result_warnings]
 
         # G1: marca archivo como procesado solo si NO hubo errores parciales
         # (si los hay, queda en 'error' para inspección humana).
@@ -2537,6 +2540,9 @@ async def _import_file_with_audit(
         # estado a 'sospechoso'. Cierra el gap del incidente C-4103-my2026:
         # archivo SBS truncado que carga sin excepcion, marcado 'procesado'
         # invisible, dejando el peer group entero en "—".
+        # G1.6 (R17): si el importer emitio warnings (ej. fecha Excel discrepante
+        # del filename), marcar como 'sospechoso' aunque detect_partial_ingest
+        # no haya disparado — el warning ya contiene la razon explicita.
         if archivo_id is not None:
             try:
                 async with connection() as conn_mark:
@@ -2554,27 +2560,41 @@ async def _import_file_with_audit(
                             filas_insertadas=result.rows_inserted,
                         )
                         await conn_mark.commit()
-                        check = await check_partial_ingest(conn_mark, archivo_id=archivo_id)
-                        if check is not None:
-                            log.metadata["partial_ingest_check"] = check
-                        if check and check.get("ok") is False:
-                            reason = check.get("reason", "unknown")
-                            ratio = check.get("ratio")
-                            rows_prom = check.get("rows_promedio")
-                            msg = (
-                                f"Carga sospechosa (reason={reason}, "
-                                f"rows={result.rows_inserted} vs prom={rows_prom}, "
-                                f"ratio={ratio}). Re-encolar con "
-                                f"force_redownload=true si SBS ya publico corregido."
-                            )
+
+                        # G1.6: warnings del importer tienen precedencia — marcar
+                        # sospechoso directamente sin esperar detect_partial_ingest.
+                        if result_warnings:
+                            warn_msg = "; ".join(result_warnings)
                             log.metadata["marked_sospechoso"] = True
                             await mark_archivo_sospechoso(
                                 conn_mark,
                                 archivo_id=archivo_id,
                                 filas_insertadas=result.rows_inserted,
-                                error_mensaje=msg,
+                                error_mensaje=warn_msg,
                             )
                             await conn_mark.commit()
+                        else:
+                            check = await check_partial_ingest(conn_mark, archivo_id=archivo_id)
+                            if check is not None:
+                                log.metadata["partial_ingest_check"] = check
+                            if check and check.get("ok") is False:
+                                reason = check.get("reason", "unknown")
+                                ratio = check.get("ratio")
+                                rows_prom = check.get("rows_promedio")
+                                msg = (
+                                    f"Carga sospechosa (reason={reason}, "
+                                    f"rows={result.rows_inserted} vs prom={rows_prom}, "
+                                    f"ratio={ratio}). Re-encolar con "
+                                    f"force_redownload=true si SBS ya publico corregido."
+                                )
+                                log.metadata["marked_sospechoso"] = True
+                                await mark_archivo_sospechoso(
+                                    conn_mark,
+                                    archivo_id=archivo_id,
+                                    filas_insertadas=result.rows_inserted,
+                                    error_mensaje=msg,
+                                )
+                                await conn_mark.commit()
             except Exception:
                 # Best-effort. Si el UPDATE falla no es razón para fallar el import.
                 pass

@@ -14,6 +14,10 @@ class ImportResult:
     rows_skipped: int = 0
     duration_seconds: float = 0.0
     errors: tuple[str, ...] = field(default_factory=tuple)
+    # Advertencias no fatales (ej. fecha Excel discrepante del filename).
+    # El caller (_import_file_with_audit) las propaga a carga_log.metadata
+    # y puede marcar el archivo como 'sospechoso' con la razon explicita.
+    warnings: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def succeeded(self) -> bool:
