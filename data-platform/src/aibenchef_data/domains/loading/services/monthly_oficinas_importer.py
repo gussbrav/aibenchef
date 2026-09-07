@@ -363,17 +363,22 @@ class MonthlyOficinasImporter:
             raise ValidationError(f"No pude extraer fecha de {path}")
         periodo, fecha_iso = fecha_info
 
-        # R17: validar que la fecha del Excel coincide con el filename.
-        # SBS puede publicar el contenido equivocado en un slot (ej. datos de
-        # junio en el archivo B-3241-jl2026.xls). El filename es la fuente
-        # de verdad: si difieren, usar el periodo del filename y loggear warning.
+        # R17: detectar cuando la fecha del Excel discrepa del filename.
+        # SBS puede publicar el contenido de un mes en el slot de otro (ej.
+        # datos de junio en B-3241-jl2026.xls). En ese caso los datos se
+        # almacenan bajo el periodo real del Excel (el contenido manda), y el
+        # archivo queda marcado como sospechoso para revision humana.
+        # NO se sobreescribe el periodo — mostrar null en julio es mas honesto
+        # que mostrar data de junio etiquetada como julio.
         warnings: list[str] = []
         fecha_filename = _extract_periodo_from_filename(path)
         if fecha_filename is not None and fecha_filename[0] != periodo:
             msg = (
                 f"Fecha Excel ({periodo}) discrepa del filename ({fecha_filename[0]}). "
-                f"SBS publico contenido equivocado en este slot. "
-                f"Se usa el periodo del filename como fuente de verdad."
+                f"SBS publico contenido del periodo {periodo} en el slot {fecha_filename[0]}. "
+                f"Datos almacenados bajo {periodo} (periodo real del contenido). "
+                f"El informe mostrara null para {fecha_filename[0]} hasta que SBS "
+                f"publique el archivo correcto."
             )
             log.warning(
                 "monthly_oficinas.fecha_discrepante",
@@ -384,7 +389,6 @@ class MonthlyOficinasImporter:
                 },
             )
             warnings.append(msg)
-            periodo, fecha_iso = fecha_filename
 
         layout = _detect_column_layout(sheet)
         if layout is None:

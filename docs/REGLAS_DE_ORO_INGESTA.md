@@ -347,11 +347,18 @@ canónica**.
 filename debe **comparar ambos**. Si difieren:
 
 1. Loggear un warning estructurado con ambos periodos.
-2. **Usar el periodo del filename** para el campo `periodo` al insertar en DB.
+2. **Mantener el periodo del Excel** (el contenido manda). Los datos se almacenan
+   bajo el periodo real de su contenido. El slot del filename queda vacío → el
+   informe muestra `—` para ese mes, que es **honesto**: no hay data de ese periodo.
 3. Retornar el warning en `ImportResult.warnings` para que `_import_file_with_audit`
    marque el archivo como `sospechoso` con reason explícita en `error_mensaje`.
-4. El admin puede ver el warning en la UI de archivos sospechosos y, si SBS corrige
-   el archivo, re-encolar con `force_redownload=true`.
+4. El admin puede ver el warning y esperar que SBS republique el archivo correcto.
+   Cuando lo haga, re-encolar con `force_redownload=true`.
+
+**Por qué NO usar el filename como fuente de verdad para el periodo de almacenamiento**:
+mostrar data de junio etiquetada como julio en el informe es más dañino que mostrar
+null — engaña al analista. El null visible + el flag sospechoso dispara la revisión
+humana correcta.
 
 **Implementado en**: `monthly_oficinas_importer.py` (función `_extract_periodo_from_filename`
 + comparación al inicio de `import_file`).
