@@ -121,3 +121,30 @@ COMMENT ON MATERIALIZED VIEW marts.mv_indicadores_ancho IS
     'fila por (periodo, tipo_entidad, entidad). Evita duplicados downstream '
     'en v_indicadores_ancho. Refrescar con REFRESH MATERIALIZED VIEW '
     'CONCURRENTLY marts.mv_indicadores_ancho tras cada import mensual.';
+
+-- Recrear las vistas bajadas por el CASCADE del DROP anterior.
+-- IMPORTANTE: este bloque debe ir siempre al final de cualquier migracion
+-- que haga DROP MATERIALIZED VIEW ... CASCADE sobre mv_indicadores_ancho.
+CREATE OR REPLACE VIEW marts.v_indicadores_ancho AS
+SELECT
+    a.periodo, a.fecha_cierre, a.tipo_entidad,
+    a.entidad AS entidad_raw,
+    COALESCE(em.nomb_correg_canonico, a.entidad) AS nomb_correg,
+    a.ratio_capital_global, a.pasivo_total_sobre_capital_reservas,
+    a.mora_atrasados_sobre_directos, a.mora_mayor_90_dias,
+    a.mora_mn, a.mora_me, a.provisiones_sobre_atrasados,
+    a.car_sobre_directos, a.cartera_atrasada_ajustada, a.car_ajustada,
+    a.gastos_admin_sobre_creditos, a.gastos_op_sobre_margen_financiero,
+    a.ingresos_fin_sobre_activo_productivo, a.creditos_por_empleado_miles,
+    a.creditos_por_oficina_miles, a.depositos_sobre_creditos,
+    a.roe_sbs, a.roa_sbs, a.ratio_liquidez_mn, a.ratio_liquidez_me,
+    a.adeudos_sobre_pasivo_total
+FROM marts.mv_indicadores_ancho a
+LEFT JOIN LATERAL (
+    SELECT em2.nomb_correg_canonico
+    FROM dw.entidad_nombre en
+    JOIN dw.entidad_maestra em2 ON em2.id = en.entidad_id
+    WHERE LOWER(en.nombre) = LOWER(a.entidad)
+    ORDER BY CASE en.tipo WHEN 'canonico' THEN 0 WHEN 'razon_social' THEN 1 WHEN 'alias' THEN 2 WHEN 'historico' THEN 3 ELSE 9 END
+    LIMIT 1
+) em ON true;
