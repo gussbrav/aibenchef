@@ -15,7 +15,7 @@ export interface ArchivoDescargado {
   tamanioBytes: number;
   md5Hash: string | null;
   formato: string | null;
-  status: "descargado" | "procesando" | "procesado" | "error" | "omitido";
+  status: "descargado" | "procesando" | "procesado" | "sospechoso" | "error" | "omitido";
   filasInsertadas: number | null;
   errorMensaje: string | null;
   procesadoEn: string | null;

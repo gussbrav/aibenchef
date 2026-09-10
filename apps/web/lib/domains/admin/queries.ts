@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 import type { ArchivoDescargado, ArchivosFilter, ArchivosStats } from "./types";
 
-const STATUS_VALIDOS = new Set(["descargado", "procesando", "procesado", "error", "omitido"]);
+const STATUS_VALIDOS = new Set(["descargado", "procesando", "procesado", "sospechoso", "error", "omitido"]);
 
 export async function listArchivos(opts: ArchivosFilter = {}): Promise<ArchivoDescargado[]> {
   const limit = opts.limit ?? 200;
@@ -139,6 +139,19 @@ export async function getArchivosMatriz(opts: { anioMin?: number; anioMax?: numb
     descargadoEn: (r.descargadoEn as string | null) ?? null,
     filasInsertadas: r.filasInsertadas != null ? Number(r.filasInsertadas) : null,
   }));
+}
+
+export async function markArchivoAsDescargado(id: string): Promise<boolean> {
+  const rows = await db.execute(sql`
+    UPDATE raw.archivos_descargados
+    SET status        = 'descargado',
+        error_mensaje = NULL,
+        actualizado_en = now()
+    WHERE id = ${id}
+      AND status = 'sospechoso'
+    RETURNING id
+  `);
+  return rows.length > 0;
 }
 
 function rowToArchivo(r: Record<string, unknown>): ArchivoDescargado {

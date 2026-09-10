@@ -143,8 +143,10 @@ def storage_scan(root: str, dry_run: bool) -> None:
             # 2026-08-21: cambio de set a dict path->tamanio_bytes para poder
             # detectar cambio de tamanio (SBS republica archivos) y recalcular
             # md5 solo cuando corresponde.
-            cur.execute("SELECT path_local, tamanio_bytes FROM raw.archivos_descargados")
-            existing_paths = {row[0]: row[1] for row in cur.fetchall()}
+            cur.execute(
+                "SELECT path_local, tamanio_bytes, status, md5_hash FROM raw.archivos_descargados"
+            )
+            existing_paths = {row[0]: (row[1], row[2], row[3]) for row in cur.fetchall()}
 
         for f in files:
             rel = str(f.relative_to(root_path)).replace("\\", "/")
@@ -179,13 +181,23 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 # UPDATE de status='descargado' se dispara pero md5_hash queda
                 # stale — se pierde trazabilidad de "cuando cambio el archivo".
                 # Lecciones aprendidas 2026-08-21 (SBS republica archivos).
-                prev_size = existing_paths.get(path_str)
+                #
+                # Excepcion: archivos sospechosos con mismo tamanio tambien
+                # se re-hashean (R17 — SBS puede corregir solo el header de
+                # fecha sin cambiar el tamanio del archivo).
+                prev_size, prev_status, _ = existing_paths[path_str]
                 if prev_size is not None and prev_size != size:
                     with open(f, "rb") as fh:
                         md5 = hashlib.md5(fh.read()).hexdigest()
                     updated_rows.append((size, fmt, md5, path_str))
+                elif prev_status == "sospechoso":
+                    # Mismo tamanio pero sospechoso: re-hashear para detectar
+                    # correcciones de SBS que solo cambian celdas internas.
+                    with open(f, "rb") as fh:
+                        md5 = hashlib.md5(fh.read()).hexdigest()
+                    updated_rows.append((size, fmt, md5, path_str))
                 else:
-                    # Sin cambio de tamanio: skip MD5 (evita re-leer todo el fs).
+                    # Sin cambio de tamanio y no sospechoso: skip MD5.
                     updated_rows.append((size, fmt, None, path_str))
             else:
                 # MD5 solo para los nuevos
@@ -256,21 +268,29 @@ def storage_scan(root: str, dry_run: bool) -> None:
                     status = CASE
                         -- Caso 1: archivo antes marcado no_publicado y ahora tiene contenido valido
                         WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN 'descargado'
-                        -- Caso 2: archivo procesado pero tamanio cambio (SBS republico)
+                        -- Caso 2: archivo procesado/sospechoso y tamanio cambio (SBS republico)
                         WHEN status IN ('procesado','sospechoso') AND tamanio_bytes IS NOT NULL
                              AND tamanio_bytes <> %s AND %s >= 2000 THEN 'descargado'
+                        -- Caso 3: sospechoso, mismo tamanio pero MD5 cambio (SBS corrigio header)
+                        WHEN status = 'sospechoso' AND %s IS NOT NULL
+                             AND md5_hash IS NOT NULL AND md5_hash <> %s THEN 'descargado'
                         ELSE status
                     END,
                     error_mensaje = CASE
                         WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN NULL
+                        WHEN status = 'sospechoso' AND %s IS NOT NULL
+                             AND md5_hash IS NOT NULL AND md5_hash <> %s THEN NULL
                         ELSE error_mensaje
                     END
                 WHERE path_local = %s
             """
-            # Placeholders en orden: size, fmt, md5 (NULL si no cambio),
-            # size (case1), size,size (case2), size (case1 msg), path_str.
+            # Placeholders en orden:
+            # SET: size, fmt, md5
+            # CASE status: size(c1), size(c2a), size(c2b), md5(c3a), md5(c3b)
+            # CASE error_mensaje: size(c1), md5(c3a), md5(c3b)
+            # WHERE: path_str
             update_rows_expanded = [
-                (size, fmt, md5, size, size, size, size, path_str)
+                (size, fmt, md5, size, size, size, md5, md5, size, md5, md5, path_str)
                 for (size, fmt, md5, path_str) in updated_rows
             ]
             for batch in _chunked(update_rows_expanded, BATCH):

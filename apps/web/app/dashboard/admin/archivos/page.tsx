@@ -130,6 +130,7 @@ const statusColors: Record<string, string> = {
   descargado: "text-slate-700 bg-slate-100",
   procesando: "text-amber-700 bg-amber-100",
   procesado: "text-emerald-700 bg-emerald-100",
+  sospechoso: "text-orange-700 bg-orange-100",
   error: "text-rose-700 bg-rose-100",
   omitido: "text-slate-500 bg-slate-50",
 };

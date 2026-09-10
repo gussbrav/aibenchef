@@ -2,11 +2,13 @@ import { Card } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import type { ArchivoDescargado } from "@/lib/domains/admin";
 import { formatNumberCompact } from "../../_lib/format";
+import { ReencolarButton } from "./reencolar-button";
 
 const statusBadge: Record<ArchivoDescargado["status"], string> = {
   descargado: "text-slate-700 bg-slate-100",
   procesando: "text-amber-700 bg-amber-100",
   procesado: "text-emerald-700 bg-emerald-100",
+  sospechoso: "text-orange-700 bg-orange-100",
   error: "text-rose-700 bg-rose-100",
   omitido: "text-slate-500 bg-slate-50",
 };
@@ -44,7 +46,13 @@ export function ArchivosTable({ archivos }: { archivos: ArchivoDescargado[] }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {archivos.map((a) => (
-              <tr key={a.id} className="hover:bg-slate-50">
+              <tr
+                key={a.id}
+                className={cn(
+                  "hover:bg-slate-50",
+                  a.status === "sospechoso" && "bg-orange-50/40",
+                )}
+              >
                 <td className="px-4 py-2.5 text-slate-900 whitespace-nowrap">
                   {MESES[a.mes - 1]} {a.anio}
                 </td>
@@ -68,6 +76,9 @@ export function ArchivosTable({ archivos }: { archivos: ArchivoDescargado[] }) {
                   >
                     {a.status}
                   </span>
+                  {a.status === "sospechoso" && (
+                    <ReencolarButton archivoId={a.id} />
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">
                   {a.filasInsertadas != null ? a.filasInsertadas.toLocaleString("es-PE") : "—"}
