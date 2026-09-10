@@ -158,12 +158,16 @@ export function SeccionCalidadCartera({
           peerGroup: competidores.map((c) => c.nombCorreg),
         }),
       });
+      if (!res.headers.get("content-type")?.includes("application/json")) {
+        setErrorMsg(`Error del servidor (${res.status}). Por favor intenta nuevamente.`);
+        return;
+      }
       const json = await res.json();
       if (!res.ok) {
         setErrorMsg(json?.error?.message ?? `HTTP ${res.status}`);
         return;
       }
-      const id = json?.data?.id ?? json?.id;
+      const id = json?.data?.publicacion?.id ?? json?.data?.id ?? json?.id;
       if (id) router.push(`/dashboard/publicaciones/${id}` as never);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Error de red");

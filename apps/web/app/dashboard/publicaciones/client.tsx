@@ -390,6 +390,10 @@ function WizardVista({
           aniosAtras: tema === "rentabilidad_visual" ? aniosAtras : undefined,
         }),
       });
+      if (!res.headers.get("content-type")?.includes("application/json")) {
+        setError(`Error del servidor (${res.status}). Por favor intenta nuevamente.`);
+        return;
+      }
       const json = await res.json();
       if (!res.ok) {
         const msg = json?.error?.message ?? json?.error ?? `HTTP ${res.status}`;
