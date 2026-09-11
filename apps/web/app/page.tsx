@@ -21,9 +21,9 @@ import { fetchMockupData } from "@/lib/domains/mockup-data";
  * JSON estatico pre-bakeado como fallback (el landing nunca queda vacio).
  */
 
-// Revalidar cada 24 horas — el Cuadro Resumen siempre muestra el ultimo
-// cierre publicado sin necesidad de hacer build nuevo ni correr scripts.
-export const revalidate = 86400;
+// Dinamico: fetchMockupData() necesita la DB que no esta disponible en
+// build time (Docker). SSR en cada request garantiza datos reales siempre.
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const mockupData = await fetchMockupData();
