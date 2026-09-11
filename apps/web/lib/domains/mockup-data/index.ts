@@ -97,6 +97,8 @@ export async function fetchMockupData(): Promise<MockupData> {
        WHERE periodo      = ${periodo}
          AND moneda       = 'TOTAL'
          AND tipo_entidad = 'BANCOS'
+         AND nomb_correg  NOT LIKE 'Total%'
+         AND nomb_correg  NOT LIKE '%con Sucursales en el Exterior%'
        ORDER BY COALESCE(cta_a4_1, 0) + COALESCE(cta_a4_2, 0) + COALESCE(cta_a4_3, 0) DESC
        LIMIT 5
     `);
