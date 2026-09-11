@@ -21,13 +21,14 @@ import type { MockupData } from "@/lib/domains/mockup-data";
 
 type FormatCelda = "moneda_mm" | "pct" | "moneda_mm_utilidad";
 type Seccion = "cartera" | "calidad" | "rentabilidad";
+type Signo = 1 | -1;
 
 type FilaJson = {
   label: string;
   seccion: Seccion;
   valores: number[];
   format: FormatCelda;
-  signo: 1 | -1;
+  signo: Signo;
 };
 
 // Fallback estatico — se usa cuando la prop `data` no se pasa (build time)
