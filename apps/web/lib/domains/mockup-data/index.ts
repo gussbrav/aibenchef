@@ -92,14 +92,16 @@ export async function fetchMockupData(): Promise<MockupData> {
 
     // 2. Top 5 bancos por cartera bruta (peer group del hero)
     const bancos = await db.execute<{ nomb_correg: string }>(sql`
-      SELECT nomb_correg
-        FROM marts.v_eeff_balance_ancho
-       WHERE periodo      = ${periodo}
-         AND moneda       = 'TOTAL'
-         AND tipo_entidad = 'BANCOS'
-         AND nomb_correg  NOT LIKE 'Total%'
-         AND nomb_correg  NOT LIKE '%con Sucursales en el Exterior%'
-       ORDER BY COALESCE(cta_a4_1, 0) + COALESCE(cta_a4_2, 0) + COALESCE(cta_a4_3, 0) DESC
+      SELECT b.nomb_correg
+        FROM marts.v_eeff_balance_ancho b
+       WHERE b.periodo      = ${periodo}
+         AND b.moneda       = 'TOTAL'
+         AND b.tipo_entidad = 'BANCOS'
+         AND EXISTS (
+           SELECT 1 FROM marts.v_mora_global_historica m
+            WHERE m.periodo = ${periodo} AND m.nomb_correg = b.nomb_correg
+         )
+       ORDER BY COALESCE(b.cta_a4_1, 0) + COALESCE(b.cta_a4_2, 0) + COALESCE(b.cta_a4_3, 0) DESC
        LIMIT 5
     `);
     const entidades = bancos.map((r) => r.nomb_correg);
@@ -257,8 +259,9 @@ export async function fetchMockupData(): Promise<MockupData> {
       },
     ];
 
-    // Validar: ninguna fila tiene TODOS los valores en 0
-    const valid = filas.every((f) => f.valores.some((v) => v !== 0));
+    // Validar: al menos la cartera bruta tiene datos reales
+    const carteraFila = filas.find((f) => f.label === "Cartera Bruta (MM S/)");
+    const valid = carteraFila?.valores.some((v) => v !== 0) ?? false;
     if (!valid) return STATIC_FALLBACK;
 
     return {

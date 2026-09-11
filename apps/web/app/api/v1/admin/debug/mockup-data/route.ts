@@ -45,16 +45,32 @@ export async function GET() {
 
   try {
     const r5 = await db.execute<{ nomb_correg: string }>(sql`
-      SELECT nomb_correg
-        FROM marts.v_eeff_balance_ancho
-       WHERE periodo = (SELECT MAX(periodo) FROM marts.v_eeff_balance_ancho)
-         AND moneda = 'TOTAL' AND tipo_entidad = 'BANCOS'
-       ORDER BY COALESCE(cta_a4_1,0)+COALESCE(cta_a4_2,0)+COALESCE(cta_a4_3,0) DESC
+      SELECT b.nomb_correg
+        FROM marts.v_eeff_balance_ancho b
+       WHERE b.periodo = (SELECT MAX(periodo) FROM marts.v_eeff_balance_ancho)
+         AND b.moneda = 'TOTAL' AND b.tipo_entidad = 'BANCOS'
+         AND EXISTS (
+           SELECT 1 FROM marts.v_mora_global_historica m
+            WHERE m.periodo = b.periodo AND m.nomb_correg = b.nomb_correg
+         )
+       ORDER BY COALESCE(b.cta_a4_1,0)+COALESCE(b.cta_a4_2,0)+COALESCE(b.cta_a4_3,0) DESC
        LIMIT 5
     `);
-    results["top5_bancos"] = r5.map((r) => r.nomb_correg);
+    results["top5_bancos_con_mora"] = r5.map((r) => r.nomb_correg);
   } catch (e) {
     results["top5_bancos_error"] = String(e);
+  }
+
+  try {
+    const r6 = await db.execute<{ nomb_correg: string; mora: string }>(sql`
+      SELECT nomb_correg, pct_mora_global::text AS mora
+        FROM marts.v_mora_global_historica
+       WHERE periodo = (SELECT MAX(periodo) FROM marts.v_eeff_balance_ancho)
+       LIMIT 10
+    `);
+    results["muestra_mora"] = r6.map((r) => ({ e: r.nomb_correg, mora: r.mora }));
+  } catch (e) {
+    results["muestra_mora_error"] = String(e);
   }
 
   return NextResponse.json(results, { status: 200 });
