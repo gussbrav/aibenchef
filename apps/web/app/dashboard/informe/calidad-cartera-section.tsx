@@ -491,7 +491,7 @@ export function SeccionCalidadCartera({
           {publicacionesAllowed ? (
             <div className="text-center py-4">
               <p className="text-xs text-slate-500 mb-3">
-                Genera un artículo tipo LinkedIn automático basado en los datos de esta sección.
+                Genera un artículo editorial automático basado en los datos de esta sección.
               </p>
               <button
                 type="button"
@@ -515,7 +515,7 @@ export function SeccionCalidadCartera({
           ) : (
             <p className="text-xs text-slate-500 text-center py-4">
               💡 Inicia tu prueba de 14 días para desbloquear publicaciones IA
-              que convierten este análisis en un artículo listo para LinkedIn.
+              que convierten este análisis en un artículo editorial listo para publicar.
             </p>
           )}
           {errorMsg && (

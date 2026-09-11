@@ -33,7 +33,7 @@ const productoItems = [
   {
     icon: FileText,
     title: "Publicaciones",
-    description: "Artículos con gráficos AI para LinkedIn",
+    description: "Artículos editoriales con gráficos AI",
     href: "/demo/publicaciones",
   },
 ];

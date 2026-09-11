@@ -124,7 +124,7 @@ export function PublicacionesClient({
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
             Artículos long-form con voz de analista senior, construidos a partir
             de tu benchmarking del sistema financiero. Genera el draft, refina el
-            tono, y publica en LinkedIn en un click.
+            tono, y publica en un click.
           </p>
         </div>
         {vista.kind === "lista" && (
@@ -863,7 +863,7 @@ function EditorVista({
             )}
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? "Copiado" : "Copiar para LinkedIn"}
+            {copied ? "Copiado" : "Copiar texto"}
           </button>
           {publicacion.charts.length > 0 && (
             <button
@@ -1197,7 +1197,7 @@ function ArticuloPreview({
                   type="button"
                   onClick={() => onDownloadChartPng(chart)}
                   className="flex-shrink-0 text-brand-700 hover:text-brand-800 font-medium inline-flex items-center gap-1"
-                  title="Descargar como PNG para subir a LinkedIn"
+                  title="Descargar gráfico como PNG"
                 >
                   ⬇ PNG
                 </button>

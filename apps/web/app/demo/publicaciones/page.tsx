@@ -102,7 +102,7 @@ export default function DemoPublicacionesPage() {
       <DemoHeader
         icon={FileText}
         tag="Publicaciones · Artículos con gráficos AI"
-        titulo="Análisis long-form listos para LinkedIn"
+        titulo="Análisis long-form listos para publicar"
         descripcion="Artículos editoriales long-form generados con AI desde tu data real. Cada uno incluye 1-2 gráficos SVG embebidos, tono periodístico financiero peruano, cifras exactas y hashtags optimizados."
         chips={[
           { label: "Tema", value: "Mora visual", fijo: true },
@@ -132,7 +132,7 @@ export default function DemoPublicacionesPage() {
                 title="Requiere cuenta"
               >
                 <Copy className="w-3 h-3" />
-                Copiar para LinkedIn
+                Copiar texto
               </button>
               <button
                 type="button"
@@ -226,9 +226,9 @@ export default function DemoPublicacionesPage() {
           "6 temas: Mora, Rentabilidad, Benchmarking, Coyuntura, DuPont, Evolución PE",
           "Gráficos SVG embebidos (line + bar charts, no PNG)",
           "Tono editorial peruano · 400-800 palabras",
-          "Hashtags optimizados para LinkedIn",
+          "Hashtags optimizados",
           "Copiar como texto plano o descargar HTML autocontenido",
-          "Cada chart descargable como PNG 1200×675 para subir a LinkedIn",
+          "Cada chart descargable como PNG 1200×675",
         ]}
       />
     </>

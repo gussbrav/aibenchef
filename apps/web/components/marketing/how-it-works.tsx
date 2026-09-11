@@ -17,7 +17,7 @@ const steps = [
     n: "03",
     title: "Publicas o exportas",
     description:
-      "Generas artículos con IA listos para LinkedIn en menos de un minuto, o exportas a PDF/Excel cuando activas el plan Pro.",
+      "Generas artículos editoriales con IA en menos de un minuto, o exportas a PDF/Excel cuando activas el plan Pro.",
   },
 ];
 

@@ -70,7 +70,7 @@ const filas: Fila[] = [
     aibenchef: { estado: "yes", texto: "Sí, peer group configurable" },
   },
   {
-    atributo: "Publicable en LinkedIn",
+    atributo: "Artículo editorial listo",
     detalle: "Con gráficos + prosa editorial lista",
     excel: { estado: "no", texto: "Copy-paste + Photoshop" },
     consultora: { estado: "no", texto: "Escribe tú" },

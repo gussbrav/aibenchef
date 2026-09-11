@@ -18,7 +18,7 @@ import { PublicacionesClient } from "./client";
 export const metadata: Metadata = {
   title: "Publicaciones",
   description:
-    "Genera articulos long-form estilo editorial para publicar en LinkedIn.",
+    "Genera articulos long-form estilo editorial para publicar.",
 };
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export default async function PublicacionesPage() {
       return (
         <PlanUpgradePage
           feature="Publicaciones"
-          titulo="Publicaciones con IA para LinkedIn"
+          titulo="Publicaciones con IA"
           descripcion="Convierte cualquier análisis del sistema financiero en un artículo listo para publicar, con gráficos embebidos y narrativa profesional generada por IA."
           bullets={[
             "6 temas: Benchmarking, Mora, Rentabilidad, DuPont, PE, Macro",

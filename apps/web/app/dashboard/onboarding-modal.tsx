@@ -73,7 +73,7 @@ const SLIDES: Slide[] = [
     colorText: "text-white",
     titulo: "Publicaciones con IA (Pro)",
     descripcion:
-      "En el plan Pro generas un articulo listo para LinkedIn en menos de un minuto. Tema, entidad, peer group — y la IA arma la narrativa con los numeros correctos.",
+      "En el plan Pro generas un articulo editorial en menos de un minuto. Tema, entidad, peer group — y la IA arma la narrativa con los numeros correctos.",
     bullets: [
       "6 temas: Benchmarking, Mora, Rentabilidad, DuPont, PE, Macro",
       "Graficos SVG embebidos en TODOS los articulos",

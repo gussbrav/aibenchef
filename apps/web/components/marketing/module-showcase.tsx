@@ -456,7 +456,7 @@ const modulos = [
     tag: "Publicaciones",
     title: "Artículos con gráficos AI",
     description:
-      "Análisis editorial long-form con headline periodístico, chart embebido y pull-quote — listo para publicar en LinkedIn.",
+      "Análisis editorial long-form con headline periodístico, chart embebido y pull-quote — listo para publicar.",
     features: ["Headline editorial", "Chart SVG + pull-quote", "Descarga HTML + PNG"],
     Mockup: PublicacionesMockup,
     href: "/demo/publicaciones",

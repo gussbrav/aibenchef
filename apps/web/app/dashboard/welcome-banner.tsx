@@ -125,7 +125,7 @@ export function WelcomeBanner({
             href="/dashboard/publicaciones"
             icon={FileText}
             label="Publicaciones AI"
-            desc="Artículos LinkedIn con IA"
+            desc="Artículos editoriales con IA"
             color="violet"
           />
         ) : (
