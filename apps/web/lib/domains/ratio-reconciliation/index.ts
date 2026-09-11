@@ -18,15 +18,9 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
 
-export type Indicador = "roa" | "roe" | "mora_atrasados_directos";
-
-export type Severidad = "ok" | "leve" | "alto" | "critico" | "excluida";
-
-export const INDICADOR_LABELS: Record<Indicador, string> = {
-  roa: "ROA",
-  roe: "ROE",
-  mora_atrasados_directos: "Mora (Créditos Atrasados / Directos)",
-};
+export type { Indicador, Severidad, DivergenceRow } from "./meta";
+export { INDICADOR_LABELS } from "./meta";
+import type { Indicador, Severidad, DivergenceRow } from "./meta";
 
 export const INDICADOR_FORMULAS: Record<Indicador, { nuestro: string; sbs: string }> = {
   roa: {
@@ -50,22 +44,6 @@ export type AccuracySummaryRow = {
   accuracyPct: number | null;
   avgAbsDeltaBps: number | null;
   maxAbsDeltaBps: number | null;
-};
-
-export type DivergenceRow = {
-  periodo: number;
-  nombCorreg: string;
-  indicador: Indicador;
-  derivedValue: number;
-  sbsValue: number;
-  deltaBps: number;
-  absDeltaBps: number;
-  severidad: Severidad;
-  sbsSeenAt: string | null;
-  lastReconciledAt: string;
-  notas: string | null;
-  excluida: boolean;
-  motivoExclusion: string | null;
 };
 
 export type PendingRow = {

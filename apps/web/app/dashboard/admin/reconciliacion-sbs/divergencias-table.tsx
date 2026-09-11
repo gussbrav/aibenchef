@@ -9,7 +9,7 @@ import {
   INDICADOR_LABELS,
   type DivergenceRow,
   type Severidad,
-} from "@/lib/domains/ratio-reconciliation";
+} from "@/lib/domains/ratio-reconciliation/meta";
 
 const MOTIVOS = [
   { value: "liquidacion",           label: "En liquidación" },
