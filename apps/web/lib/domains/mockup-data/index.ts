@@ -149,13 +149,15 @@ export async function fetchMockupData(): Promise<MockupData> {
       ),
       mora AS (
         SELECT nomb_correg, pct_mora_global AS mora_global
-          FROM marts.v_mora_global_por_entidad
-         WHERE nomb_correg = ANY(${entidades}::text[])
+          FROM marts.v_mora_global_historica
+         WHERE periodo     = ${periodo}
+           AND nomb_correg = ANY(${entidades}::text[])
       ),
       car AS (
         SELECT nomb_correg, pct_cobertura_car AS cobertura_car
-          FROM marts.v_cobertura_car_por_entidad
-         WHERE nomb_correg = ANY(${entidades}::text[])
+          FROM marts.v_cobertura_car_historica
+         WHERE periodo     = ${periodo}
+           AND nomb_correg = ANY(${entidades}::text[])
       )
       SELECT a.nomb_correg,
              a.cartera::text, p.cartera_prev::text, a.atrasada::text,
