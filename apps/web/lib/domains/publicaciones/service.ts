@@ -214,7 +214,7 @@ export async function generatePublicacion(
       ${parsed.contenidoMd}::text,
       ${hashtagsSql},
       ${chartsJson}::jsonb,
-      ${input.clienteSlug}::text,
+      (SELECT slug FROM config.cliente WHERE slug = ${input.clienteSlug} LIMIT 1),
       ${input.periodo}::int,
       ${input.entidadPropia}::text,
       ${peerGroupSql},
@@ -245,7 +245,7 @@ export async function generatePublicacion(
         (user_email, cliente_slug, periodo, seccion, cost_usd)
       VALUES (
         ${actor.email}::text,
-        ${input.clienteSlug}::text,
+        (SELECT slug FROM config.cliente WHERE slug = ${input.clienteSlug} LIMIT 1),
         ${input.periodo}::int,
         ${`publicacion:${input.tema}`}::text,
         ${result.usage.costUsd}::numeric
