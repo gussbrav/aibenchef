@@ -73,5 +73,24 @@ export async function GET() {
     results["muestra_mora_error"] = String(e);
   }
 
+  // Verificar si v_eeff_resultados_ancho existe (o solo la MV)
+  try {
+    const r7 = await db.execute<{ periodo: number }>(sql`
+      SELECT MAX(periodo)::int AS periodo FROM marts.v_eeff_resultados_ancho
+    `);
+    results["max_periodo_resultados_view"] = r7[0] ?? null;
+  } catch (e) {
+    results["v_eeff_resultados_ancho_error"] = String(e);
+  }
+
+  try {
+    const r8 = await db.execute<{ periodo: number }>(sql`
+      SELECT MAX(periodo)::int AS periodo FROM marts.mv_eeff_resultados_ancho
+    `);
+    results["max_periodo_resultados_mv"] = r8[0] ?? null;
+  } catch (e) {
+    results["mv_eeff_resultados_ancho_error"] = String(e);
+  }
+
   return NextResponse.json(results, { status: 200 });
 }

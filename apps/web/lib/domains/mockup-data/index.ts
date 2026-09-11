@@ -97,10 +97,9 @@ export async function fetchMockupData(): Promise<MockupData> {
        WHERE b.periodo      = ${periodo}
          AND b.moneda       = 'TOTAL'
          AND b.tipo_entidad = 'BANCOS'
-         AND EXISTS (
-           SELECT 1 FROM marts.v_mora_global_historica m
-            WHERE m.periodo = ${periodo} AND m.nomb_correg = b.nomb_correg
-         )
+         AND b.nomb_correg  NOT LIKE 'Total%'
+         AND b.nomb_correg  NOT LIKE '%con Sucursales en el Exterior%'
+         AND b.nomb_correg  NOT LIKE '%Incluye Sucursales%'
        ORDER BY COALESCE(b.cta_a4_1, 0) + COALESCE(b.cta_a4_2, 0) + COALESCE(b.cta_a4_3, 0) DESC
        LIMIT 5
     `);
@@ -145,7 +144,7 @@ export async function fetchMockupData(): Promise<MockupData> {
       ),
       er_ttm AS (
         SELECT nomb_correg, SUM(cta_17) AS utilidad_ttm
-          FROM marts.v_eeff_resultados_ancho
+          FROM marts.mv_eeff_resultados_ancho
          WHERE periodo BETWEEN ${periodoTtmDesde} AND ${periodo}
            AND moneda  = 'TOTAL'
            AND nomb_correg = ANY(${entidades}::text[])
