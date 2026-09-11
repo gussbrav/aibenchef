@@ -10,30 +10,28 @@ import { Pricing } from "@/components/marketing/pricing";
 import { FAQ } from "@/components/marketing/faq";
 import { CTABanner } from "@/components/marketing/cta-banner";
 import { Footer } from "@/components/marketing/footer";
+import { fetchMockupData } from "@/lib/domains/mockup-data";
 
 /**
  * Landing publica de Aibenchef. Orden de secciones optimizado para
- * conversion B2B SaaS (patron Stripe/Linear/Vercel):
+ * conversion B2B SaaS (patron Stripe/Linear/Vercel).
  *
- * 1. Hero — copy + credibilidad + mockup real (evidencia visual)
- * 2. ValueProps — por que existe el producto (4 pilares)
- * 3. ModuleShowcase — que hace (4 modulos con mini-mockups)
- * 4. ForWho — para quien es (4 personas)
- * 5. Coverage — que tan completo (numeros + 10 topicos)
- * 6. HowItWorks — como se usa (3 pasos)
- * 7. Comparison — vs alternativas (Excel / Consultora / Terminal financiera)
- * 8. Pricing — cuanto cuesta
- * 9. FAQ — objeciones frecuentes
- * 10. CTABanner — cierre final
- * 11. Footer
+ * ISR 24h: el Cuadro Resumen del hero se regenera con datos reales de la
+ * DB una vez al dia. Si la DB no esta disponible en build time, usa el
+ * JSON estatico pre-bakeado como fallback (el landing nunca queda vacio).
  */
 
-export default function HomePage() {
+// Revalidar cada 24 horas — el Cuadro Resumen siempre muestra el ultimo
+// cierre publicado sin necesidad de hacer build nuevo ni correr scripts.
+export const revalidate = 86400;
+
+export default async function HomePage() {
+  const mockupData = await fetchMockupData();
   return (
     <>
       <Nav />
       <main>
-        <Hero />
+        <Hero mockupData={mockupData} />
         <ValueProps />
         <ModuleShowcase />
         <ForWho />

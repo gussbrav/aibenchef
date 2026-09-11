@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { Button, Container } from "@/components/ui";
-import { DashboardMockup, MOCKUP_META } from "./dashboard-mockup";
+import { DashboardMockup } from "./dashboard-mockup";
+import type { MockupData } from "@/lib/domains/mockup-data";
 
 /**
  * Hero del landing publico. Estructura:
@@ -21,7 +22,7 @@ const credibilidad = [
   { valor: "100%", label: "auditable celda a celda" },
 ];
 
-export function Hero() {
+export function Hero({ mockupData }: { mockupData?: MockupData }) {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-white via-brand-50/30 to-white">
       <div
@@ -97,10 +98,10 @@ export function Hero() {
 
         {/* Mockup del dashboard */}
         <div className="mt-16 max-w-6xl mx-auto">
-          <DashboardMockup />
+          <DashboardMockup data={mockupData} />
           <p className="text-center text-xs text-slate-500 mt-4 italic">
-            Vista previa del Cuadro Resumen — {MOCKUP_META.grupoSbs} peruana al cierre{" "}
-            {MOCKUP_META.periodoLabel}. Análisis generado a partir de fuentes
+            Vista previa del Cuadro Resumen — {mockupData?.grupoSbs ?? "Banca Múltiple"} peruana al cierre{" "}
+            {mockupData?.periodoLabel ?? "Jun 2026"}. Análisis generado a partir de fuentes
             públicas oficiales.
           </p>
         </div>

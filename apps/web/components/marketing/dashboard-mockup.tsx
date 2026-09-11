@@ -13,51 +13,26 @@
  */
 
 import rawMockupData from "./dashboard-mockup-data.json";
+import type { MockupData } from "@/lib/domains/mockup-data";
 
 // ============================================================================
-// Types (contract fuerte con el JSON)
+// Types locales (subset del componente)
 // ============================================================================
 
 type FormatCelda = "moneda_mm" | "pct" | "moneda_mm_utilidad";
 type Seccion = "cartera" | "calidad" | "rentabilidad";
-type Signo = 1 | -1;
 
 type FilaJson = {
   label: string;
   seccion: Seccion;
   valores: number[];
   format: FormatCelda;
-  signo: Signo;
+  signo: 1 | -1;
 };
 
-type MockupData = {
-  generatedAt: string;
-  generatedBy: string;
-  periodo: number;
-  periodoLabel: string;
-  grupoSbs: string;
-  propiaIdx: number;
-  entidades: readonly string[];
-  filas: FilaJson[];
-};
-
-// Cast controlado: si el JSON tiene un `format` o `seccion` no valido,
-// el runtime lo detectaria; en la practica el script regen escribe solo
-// valores validos y el schema esta congelado. Se mantiene el cast para
-// evitar validaciones expensive en cada render del landing.
-const mockupData = rawMockupData as MockupData;
-
-/**
- * Export util para que otros componentes del landing (hero caption,
- * demo pages metadata) consuman el mismo periodo — asi actualizar el
- * JSON refleja el nuevo cierre en todo el sitio de una.
- */
-export const MOCKUP_META = {
-  periodo: mockupData.periodo,
-  periodoLabel: mockupData.periodoLabel,
-  grupoSbs: mockupData.grupoSbs,
-  entidadPropia: mockupData.entidades[mockupData.propiaIdx] ?? "",
-} as const;
+// Fallback estatico — se usa cuando la prop `data` no se pasa (build time)
+// o cuando fetchMockupData() falla.
+const staticData = rawMockupData as MockupData;
 
 // ============================================================================
 // Compute helpers (heatmap por celda)
@@ -108,8 +83,8 @@ function formatValor(v: number, format: FormatCelda): string {
 // Component
 // ============================================================================
 
-export function DashboardMockup() {
-  const { entidades, propiaIdx, periodoLabel, filas } = mockupData;
+export function DashboardMockup({ data }: { data?: MockupData }) {
+  const { entidades, propiaIdx, periodoLabel, filas } = data ?? staticData;
 
   // Agrupar filas por seccion en el orden en que aparecen (input order).
   const grupos = filas.reduce<Array<{ seccion: Seccion; items: FilaJson[] }>>(
