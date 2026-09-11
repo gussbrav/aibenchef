@@ -268,8 +268,8 @@ export async function fetchMockupData(): Promise<MockupData> {
       entidades,
       filas,
     };
-  } catch {
-    // DB no disponible en build time o error de query → fallback al JSON
+  } catch (err) {
+    console.error("[fetchMockupData] error — usando fallback JSON:", err);
     return STATIC_FALLBACK;
   }
 }
