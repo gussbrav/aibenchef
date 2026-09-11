@@ -20,7 +20,7 @@ import { db } from "@/lib/infrastructure/db";
 
 export type Indicador = "roa" | "roe" | "mora_atrasados_directos";
 
-export type Severidad = "ok" | "leve" | "alto" | "critico";
+export type Severidad = "ok" | "leve" | "alto" | "critico" | "excluida";
 
 export const INDICADOR_LABELS: Record<Indicador, string> = {
   roa: "ROA",
@@ -64,6 +64,8 @@ export type DivergenceRow = {
   sbsSeenAt: string | null;
   lastReconciledAt: string;
   notas: string | null;
+  excluida: boolean;
+  motivoExclusion: string | null;
 };
 
 export type PendingRow = {
@@ -123,21 +125,23 @@ export async function getRecentDivergences(limit = 100): Promise<DivergenceRow[]
     sbs_seen_at: string | null;
     last_reconciled_at: string;
     notas: string | null;
+    excluida: boolean;
+    motivo_exclusion: string | null;
   }>(sql`
     WITH ult AS (
       SELECT MAX(periodo) AS periodo
         FROM gov.v_ratio_divergences
     )
     SELECT v.periodo, v.nomb_correg, v.indicador,
-           v.derived_value::text     AS derived_value,
-           v.sbs_value::text         AS sbs_value,
+           v.derived_value::text      AS derived_value,
+           v.sbs_value::text          AS sbs_value,
            v.delta_bps, v.abs_delta_bps, v.severidad,
-           v.sbs_seen_at::text       AS sbs_seen_at,
+           v.sbs_seen_at::text        AS sbs_seen_at,
            v.last_reconciled_at::text AS last_reconciled_at,
-           v.notas
+           v.notas, v.excluida, v.motivo_exclusion
       FROM gov.v_ratio_divergences v, ult
      WHERE v.periodo = ult.periodo
-     ORDER BY v.abs_delta_bps DESC
+     ORDER BY v.excluida ASC, v.abs_delta_bps DESC
      LIMIT ${limit}
   `);
   return rows.map((r) => ({
@@ -152,6 +156,8 @@ export async function getRecentDivergences(limit = 100): Promise<DivergenceRow[]
     sbsSeenAt: r.sbs_seen_at,
     lastReconciledAt: r.last_reconciled_at,
     notas: r.notas,
+    excluida: Boolean(r.excluida),
+    motivoExclusion: r.motivo_exclusion,
   }));
 }
 
@@ -180,6 +186,32 @@ export async function getPendingSbs(limit = 100): Promise<PendingRow[]> {
     derivedValue: Number(r.derived_value),
     daysPending: Number(r.days_pending),
   }));
+}
+
+/**
+ * Marca o restaura la exclusion de una entidad en TODOS sus periodos e
+ * indicadores. Afecta el semaforo de accuracy (excluidas no cuentan) y
+ * la severidad en la vista (aparecen como 'excluida' en lugar de 'critico').
+ *
+ * Cuando excluida=false, motivoExclusion debe ser null.
+ * Cuando excluida=true, motivoExclusion es requerido a nivel de app.
+ */
+export async function markExclusion(
+  nombCorreg: string,
+  excluida: boolean,
+  motivoExclusion: string | null,
+): Promise<{ updated: number }> {
+  const result = await db.execute<{ n: number }>(sql`
+    WITH upd AS (
+      UPDATE gov.ratio_reconciliation
+         SET excluida         = ${excluida}::boolean,
+             motivo_exclusion = ${motivoExclusion}::text
+       WHERE nomb_correg = ${nombCorreg}::text
+      RETURNING 1
+    )
+    SELECT COUNT(*)::int AS n FROM upd
+  `);
+  return { updated: result[0]?.n ?? 0 };
 }
 
 /**

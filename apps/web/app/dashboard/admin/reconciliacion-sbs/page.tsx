@@ -24,8 +24,8 @@ import {
   INDICADOR_FORMULAS,
   INDICADOR_LABELS,
   type Indicador,
-  type Severidad,
 } from "@/lib/domains/ratio-reconciliation";
+import { DivergenciasTable } from "./divergencias-table";
 
 export const metadata: Metadata = {
   title: "Reconciliación SBS",
@@ -125,56 +125,7 @@ export default async function ReconciliacionSbsPage() {
             Threshold: |Δ| &gt; 5 bps
           </span>
         </div>
-        {divergences.length === 0 ? (
-          <EmptyState
-            message="Sin divergencias. Todos los ratios calculados están dentro de ±5 bps del valor oficial SBS."
-            positive
-          />
-        ) : (
-          <Card variant="elevated" className="overflow-x-auto p-0">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="text-left px-4 py-2 font-semibold">Severidad</th>
-                  <th className="text-left px-4 py-2 font-semibold">Entidad</th>
-                  <th className="text-left px-4 py-2 font-semibold">Indicador</th>
-                  <th className="text-right px-4 py-2 font-semibold">Nuestro</th>
-                  <th className="text-right px-4 py-2 font-semibold">SBS</th>
-                  <th className="text-right px-4 py-2 font-semibold">Δ (bps)</th>
-                  <th className="text-left px-4 py-2 font-semibold">Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {divergences.map((d) => (
-                  <tr key={`${d.periodo}:${d.nombCorreg}:${d.indicador}`}
-                      className="border-t border-slate-100 hover:bg-slate-50/60">
-                    <td className="px-4 py-2">
-                      <SeverityPill severidad={d.severidad} />
-                    </td>
-                    <td className="px-4 py-2 text-slate-800">{d.nombCorreg}</td>
-                    <td className="px-4 py-2 text-slate-700">
-                      {INDICADOR_LABELS[d.indicador]}
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono text-slate-800">
-                      {d.derivedValue.toFixed(2)}%
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono text-slate-800">
-                      {d.sbsValue.toFixed(2)}%
-                    </td>
-                    <td className={`px-4 py-2 text-right font-mono font-semibold ${
-                      d.deltaBps > 0 ? "text-rose-700" : "text-sky-700"
-                    }`}>
-                      {d.deltaBps > 0 ? "+" : ""}{d.deltaBps}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">
-                      {d.notas ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        )}
+        <DivergenciasTable divergencias={divergences} />
       </section>
 
       {/* ============ Pendientes SBS ============ */}
@@ -330,23 +281,6 @@ function AccuracyCard({
         )}
       </div>
     </Card>
-  );
-}
-
-function SeverityPill({ severidad }: { severidad: Severidad }) {
-  const map: Record<Severidad, { label: string; cls: string }> = {
-    ok: { label: "ok", cls: "bg-emerald-100 text-emerald-800" },
-    leve: { label: "leve", cls: "bg-amber-100 text-amber-800" },
-    alto: { label: "alto", cls: "bg-orange-100 text-orange-800" },
-    critico: { label: "crítico", cls: "bg-rose-100 text-rose-800" },
-  };
-  const s = map[severidad];
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold ${s.cls}`}
-    >
-      {s.label}
-    </span>
   );
 }
 
