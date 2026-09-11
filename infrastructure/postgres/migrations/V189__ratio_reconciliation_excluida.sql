@@ -37,9 +37,11 @@ CREATE INDEX IF NOT EXISTS idx_ratio_reconciliation_excluida
     ON gov.ratio_reconciliation (excluida)
     WHERE excluida = true;
 
--- Recrear vista: incluye excluida/motivo_exclusion, severity='excluida'
--- para entidades marcadas. ORDER BY: activas primero, excluidas al final.
-CREATE OR REPLACE VIEW gov.v_ratio_divergences AS
+-- Recrear vista: DROP + CREATE porque CREATE OR REPLACE VIEW no permite
+-- insertar columnas nuevas antes de columnas existentes (error 42P16).
+-- Nada depende de esta vista por lo que el DROP es seguro.
+DROP VIEW IF EXISTS gov.v_ratio_divergences;
+CREATE VIEW gov.v_ratio_divergences AS
 SELECT
     r.periodo,
     r.nomb_correg,
