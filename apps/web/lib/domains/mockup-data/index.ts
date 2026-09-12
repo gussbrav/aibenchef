@@ -51,17 +51,11 @@ function periodoLabel(periodo: number): string {
   return `${MESES[mes] ?? String(mes)} ${anio}`;
 }
 
-function ttmDesde(periodo: number): number {
-  const anio = Math.floor(periodo / 100);
-  const mes  = periodo % 100;
-  const mesDesde = mes - 11;
-  if (mesDesde > 0) return anio * 100 + mesDesde;
-  return (anio - 1) * 100 + (mesDesde + 12);
-}
 
+// Los valores en DB estan en miles de soles → dividir por 1,000 para MM S/
 function toMM(n: unknown): number {
   const v = Number(n);
-  return isNaN(v) ? 0 : Math.round(v / 1_000_000);
+  return isNaN(v) ? 0 : Math.round(v / 1_000);
 }
 
 function toPct(n: unknown): number {
@@ -138,29 +132,26 @@ export async function fetchMockupData(): Promise<MockupData> {
     if (entidades.length === 0) return STATIC_FALLBACK;
 
     const periodoAnterior = (Math.floor(periodo / 100) - 1) * 100 + (periodo % 100);
-    const periodoTtmDesde = ttmDesde(periodo);
     const listaIn = inList(entidades);
 
     // 3. KPIs: balance actual + anterior + resultados TTM + mora + cobertura
     type KpiRow = {
-      nomb_correg:  string;
-      cartera:      string | null;
-      cartera_prev: string | null;
-      atrasada:     string | null;
-      patrimonio:   string | null;
-      activos:      string | null;
-      utilidad_ttm: string | null;
-      mora_global:  string | null;
-      cobertura_car: string | null;
+      nomb_correg:        string;
+      cartera:            string | null;
+      cartera_prev:       string | null;
+      atrasada:           string | null;
+      utilidad_ttm:       string | null;
+      patrimonio_prom_12m: string | null;
+      activos_prom_12m:   string | null;
+      mora_global:        string | null;
+      cobertura_car:      string | null;
     };
 
     const kpis = await db.execute<KpiRow>(sql`
       WITH bg_act AS (
         SELECT nomb_correg,
                COALESCE(cta_a4_1, 0) + COALESCE(cta_a4_2, 0) + COALESCE(cta_a4_3, 0) AS cartera,
-               COALESCE(cta_a4_3, 0) AS atrasada,
-               cta_c                  AS patrimonio,
-               cta_a                  AS activos
+               COALESCE(cta_a4_3, 0) AS atrasada
           FROM marts.v_eeff_balance_ancho
          WHERE periodo    = ${periodo}
            AND moneda     = 'TOTAL'
@@ -174,13 +165,11 @@ export async function fetchMockupData(): Promise<MockupData> {
            AND moneda     = 'TOTAL'
            AND nomb_correg IN (${listaIn})
       ),
-      er_ttm AS (
-        SELECT nomb_correg, SUM(cta_17) AS utilidad_ttm
-          FROM marts.mv_eeff_resultados_ancho
-         WHERE periodo BETWEEN ${periodoTtmDesde} AND ${periodo}
-           AND moneda     = 'TOTAL'
+      kpi AS (
+        SELECT nomb_correg, utilidad_ttm, patrimonio_prom_12m, activos_prom_12m
+          FROM marts.v_kpis_anuales_entidad
+         WHERE periodo    = ${periodo}
            AND nomb_correg IN (${listaIn})
-         GROUP BY nomb_correg
       ),
       mora AS (
         SELECT nomb_correg, pct_mora_global AS mora_global
@@ -196,12 +185,11 @@ export async function fetchMockupData(): Promise<MockupData> {
       )
       SELECT a.nomb_correg,
              a.cartera::text, p.cartera_prev::text, a.atrasada::text,
-             a.patrimonio::text, a.activos::text,
-             e.utilidad_ttm::text,
+             k.utilidad_ttm::text, k.patrimonio_prom_12m::text, k.activos_prom_12m::text,
              m.mora_global::text, c.cobertura_car::text
         FROM bg_act a
         LEFT JOIN bg_prev p USING (nomb_correg)
-        LEFT JOIN er_ttm  e USING (nomb_correg)
+        LEFT JOIN kpi     k USING (nomb_correg)
         LEFT JOIN mora    m USING (nomb_correg)
         LEFT JOIN car     c USING (nomb_correg)
     `);
@@ -272,7 +260,7 @@ export async function fetchMockupData(): Promise<MockupData> {
         format:  "pct",
         signo:   1,
         valores: entidades.map((e) => get(e, (r) => {
-          const p = Number(r.patrimonio);
+          const p = Number(r.patrimonio_prom_12m);
           if (!p) return 0;
           return Number(((Number(r.utilidad_ttm) / p) * 100).toFixed(2));
         })),
@@ -283,7 +271,7 @@ export async function fetchMockupData(): Promise<MockupData> {
         format:  "pct",
         signo:   1,
         valores: entidades.map((e) => get(e, (r) => {
-          const a = Number(r.activos);
+          const a = Number(r.activos_prom_12m);
           if (!a) return 0;
           return Number(((Number(r.utilidad_ttm) / a) * 100).toFixed(2));
         })),
