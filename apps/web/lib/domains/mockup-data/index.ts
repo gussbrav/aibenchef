@@ -1,8 +1,6 @@
 /**
  * Dominio mockup-data — provee los KPIs reales para el Cuadro Resumen
- * del landing publico. Porta la logica de scripts/regen-hero-mockup.ts
- * para que el landing los obtenga directamente de la DB en cada render
- * ISR (revalidate = 86400), sin script manual.
+ * del landing publico.
  *
  * Fallback: si la DB falla o devuelve datos invalidos, retorna el JSON
  * estatico pre-bakeado (ultimo periodo conocido bueno). El landing
@@ -53,12 +51,9 @@ function periodoLabel(periodo: number): string {
   return `${MESES[mes] ?? String(mes)} ${anio}`;
 }
 
-// Retorna el primer periodo de la ventana TTM (12 meses) que termina en
-// `periodo`. Ej: 202607 → 202508 (12 meses: ago-25 a jul-26).
 function ttmDesde(periodo: number): number {
   const anio = Math.floor(periodo / 100);
   const mes  = periodo % 100;
-  // Retroceder 11 meses
   const mesDesde = mes - 11;
   if (mesDesde > 0) return anio * 100 + mesDesde;
   return (anio - 1) * 100 + (mesDesde + 12);
@@ -72,9 +67,44 @@ function toMM(n: unknown): number {
 function toPct(n: unknown): number {
   const v = Number(n);
   if (isNaN(v)) return 0;
-  // Valores que llegan como decimal (0.0273 = 2.73%) vs porcentaje (127.94)
-  // Heuristica: si abs <= 2 → decimal → multiplicar x100
   return Number((Math.abs(v) <= 2 ? v * 100 : v).toFixed(2));
+}
+
+// Nombres cortos para la UI del landing (los nombres en DB son largos)
+const ABREV_BANCO: Record<string, string> = {
+  "Banco de Crédito del Perú":         "BCP",
+  "Banco BBVA Perú":                   "BBVA",
+  "Interbank":                         "Interbank",
+  "Scotiabank Perú":                   "Scotiabank",
+  "Banco Interamericano de Finanzas":  "BanBif",
+  "Mibanco":                           "Mibanco",
+  "Banco GNB Perú":                    "GNB",
+  "Banco Falabella Perú":              "Falabella",
+  "Banco Ripley Perú":                 "Ripley",
+  "Banco Santander Perú":              "Santander",
+  "Banco de Comercio":                 "B. Comercio",
+  "Banco Azteca del Perú":             "Azteca",
+  "Citibank del Perú":                 "Citibank",
+  "ICBC Peru Bank":                    "ICBC",
+  "Bank of China":                     "Bank of China",
+  "Banco de la Nación":                "Nación",
+};
+
+function abrevEntidad(nombre: string): string {
+  return (
+    ABREV_BANCO[nombre] ??
+    nombre
+      .replace(/^Banco\s+/i, "")
+      .replace(/\s+del?\s+Per[uú]$/i, "")
+      .replace(/\s+Per[uú]$/i, "")
+      .trim()
+  );
+}
+
+// Construye un fragmento SQL IN ($1, $2, ...) compatible con drizzle + postgres.js.
+// Usar ANY(${array}::text[]) lanza "cannot cast type record to text[]".
+function inList(values: string[]) {
+  return sql.join(values.map((v) => sql`${v}`), sql`, `);
 }
 
 // ============================================================================
@@ -84,14 +114,15 @@ function toPct(n: unknown): number {
 export async function fetchMockupData(): Promise<MockupData> {
   try {
     // 1. Periodo mas reciente con datos de balance
-    const [{ periodo }] = await db.execute<{ periodo: number }>(sql`
+    const r1 = await db.execute<{ periodo: number }>(sql`
       SELECT MAX(periodo)::int AS periodo
         FROM marts.v_eeff_balance_ancho
     `);
+    const periodo = r1[0]?.periodo;
     if (!periodo) return STATIC_FALLBACK;
 
-    // 2. Top 5 bancos por cartera bruta (peer group del hero)
-    const bancos = await db.execute<{ nomb_correg: string }>(sql`
+    // 2. Top 5 bancos individuales por cartera bruta
+    const r2 = await db.execute<{ nomb_correg: string }>(sql`
       SELECT b.nomb_correg
         FROM marts.v_eeff_balance_ancho b
        WHERE b.periodo      = ${periodo}
@@ -103,15 +134,16 @@ export async function fetchMockupData(): Promise<MockupData> {
        ORDER BY COALESCE(b.cta_a4_1, 0) + COALESCE(b.cta_a4_2, 0) + COALESCE(b.cta_a4_3, 0) DESC
        LIMIT 5
     `);
-    const entidades = bancos.map((r) => r.nomb_correg);
+    const entidades = r2.map((r) => r.nomb_correg);
     if (entidades.length === 0) return STATIC_FALLBACK;
 
     const periodoAnterior = (Math.floor(periodo / 100) - 1) * 100 + (periodo % 100);
     const periodoTtmDesde = ttmDesde(periodo);
+    const listaIn = inList(entidades);
 
-    // 3. KPIs en una sola query multi-CTE (mismo SQL que regen-hero-mockup.ts)
+    // 3. KPIs: balance actual + anterior + resultados TTM + mora + cobertura
     type KpiRow = {
-      nomb_correg: string;
+      nomb_correg:  string;
       cartera:      string | null;
       cartera_prev: string | null;
       atrasada:     string | null;
@@ -130,37 +162,37 @@ export async function fetchMockupData(): Promise<MockupData> {
                cta_c                  AS patrimonio,
                cta_a                  AS activos
           FROM marts.v_eeff_balance_ancho
-         WHERE periodo = ${periodo}
-           AND moneda  = 'TOTAL'
-           AND nomb_correg = ANY(${entidades}::text[])
+         WHERE periodo    = ${periodo}
+           AND moneda     = 'TOTAL'
+           AND nomb_correg IN (${listaIn})
       ),
       bg_prev AS (
         SELECT nomb_correg,
                COALESCE(cta_a4_1, 0) + COALESCE(cta_a4_2, 0) + COALESCE(cta_a4_3, 0) AS cartera_prev
           FROM marts.v_eeff_balance_ancho
-         WHERE periodo = ${periodoAnterior}
-           AND moneda  = 'TOTAL'
-           AND nomb_correg = ANY(${entidades}::text[])
+         WHERE periodo    = ${periodoAnterior}
+           AND moneda     = 'TOTAL'
+           AND nomb_correg IN (${listaIn})
       ),
       er_ttm AS (
         SELECT nomb_correg, SUM(cta_17) AS utilidad_ttm
           FROM marts.mv_eeff_resultados_ancho
          WHERE periodo BETWEEN ${periodoTtmDesde} AND ${periodo}
-           AND moneda  = 'TOTAL'
-           AND nomb_correg = ANY(${entidades}::text[])
+           AND moneda     = 'TOTAL'
+           AND nomb_correg IN (${listaIn})
          GROUP BY nomb_correg
       ),
       mora AS (
         SELECT nomb_correg, pct_mora_global AS mora_global
           FROM marts.v_mora_global_historica
-         WHERE periodo     = ${periodo}
-           AND nomb_correg = ANY(${entidades}::text[])
+         WHERE periodo    = ${periodo}
+           AND nomb_correg IN (${listaIn})
       ),
       car AS (
         SELECT nomb_correg, pct_cobertura_car AS cobertura_car
           FROM marts.v_cobertura_car_historica
-         WHERE periodo     = ${periodo}
-           AND nomb_correg = ANY(${entidades}::text[])
+         WHERE periodo    = ${periodo}
+           AND nomb_correg IN (${listaIn})
       )
       SELECT a.nomb_correg,
              a.cartera::text, p.cartera_prev::text, a.atrasada::text,
@@ -198,7 +230,7 @@ export async function fetchMockupData(): Promise<MockupData> {
         signo:   1,
         valores: entidades.map((e) => get(e, (r) => {
           const c = Number(r.cartera), cp = Number(r.cartera_prev);
-          if (!cp || cp === 0) return 0;
+          if (!cp) return 0;
           return Number((((c - cp) / cp) * 100).toFixed(2));
         })),
       },
@@ -209,7 +241,7 @@ export async function fetchMockupData(): Promise<MockupData> {
         signo:   -1,
         valores: entidades.map((e) => get(e, (r) => {
           const c = Number(r.cartera);
-          if (!c || c === 0) return 0;
+          if (!c) return 0;
           return Number(((Number(r.atrasada) / c) * 100).toFixed(2));
         })),
       },
@@ -241,7 +273,7 @@ export async function fetchMockupData(): Promise<MockupData> {
         signo:   1,
         valores: entidades.map((e) => get(e, (r) => {
           const p = Number(r.patrimonio);
-          if (!p || p === 0) return 0;
+          if (!p) return 0;
           return Number(((Number(r.utilidad_ttm) / p) * 100).toFixed(2));
         })),
       },
@@ -252,16 +284,18 @@ export async function fetchMockupData(): Promise<MockupData> {
         signo:   1,
         valores: entidades.map((e) => get(e, (r) => {
           const a = Number(r.activos);
-          if (!a || a === 0) return 0;
+          if (!a) return 0;
           return Number(((Number(r.utilidad_ttm) / a) * 100).toFixed(2));
         })),
       },
     ];
 
-    // Validar: al menos la cartera bruta tiene datos reales
-    const carteraFila = filas.find((f) => f.label === "Cartera Bruta (MM S/)");
-    const valid = carteraFila?.valores.some((v) => v !== 0) ?? false;
+    // Validar que la cartera bruta tenga datos reales
+    const valid = filas[0]?.valores.some((v) => v !== 0) ?? false;
     if (!valid) return STATIC_FALLBACK;
+
+    // Usar nombres cortos en la UI (los nombres completos de DB son muy largos)
+    const entidadesDisplay = entidades.map(abrevEntidad);
 
     return {
       generatedAt:  new Date().toISOString(),
@@ -269,7 +303,7 @@ export async function fetchMockupData(): Promise<MockupData> {
       periodoLabel: periodoLabel(periodo),
       grupoSbs:     "Banca Múltiple",
       propiaIdx:    0,
-      entidades,
+      entidades:    entidadesDisplay,
       filas,
     };
   } catch (err) {
