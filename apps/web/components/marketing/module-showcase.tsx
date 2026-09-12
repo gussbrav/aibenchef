@@ -8,7 +8,7 @@
  *   - Read editorial abajo (conclusion 1-linea)
  *
  * Los mockups usan cifras reales publicas del regulador peruano al cierre
- * Jun 2026, aproximadas para fines demostrativos del landing.
+ * Jul 2026, aproximadas para fines demostrativos del landing.
  */
 
 import Link from "next/link";
@@ -25,16 +25,16 @@ function InformeMockup() {
     {
       label: "Calidad de cartera",
       rows: [
-        { m: "% Mora Global", vals: [5.55, 6.42, 7.83, 9.43], delta: -0.34, ranking: "1° de 4", better: "lower" as const },
-        { m: "% Créd. Atrasados", vals: [2.73, 3.51, 4.21, 4.87], delta: -0.18, ranking: "1° de 4", better: "lower" as const },
-        { m: "Cob. CAR (%)", vals: [127.9, 118.4, 108.2, 101.1], delta: 4.2, ranking: "1° de 4", better: "higher" as const },
+        { m: "% Mora Global", vals: [5.41, 4.93, 5.12, 8.51], delta: -0.39, ranking: "3° de 4", better: "lower" as const },
+        { m: "% Créd. Atrasados", vals: [2.68, 2.80, 2.21, 3.58], delta: -0.22, ranking: "2° de 4", better: "lower" as const },
+        { m: "Cob. CAR (%)", vals: [129.23, 101.46, 114.30, 101.86], delta: 4.4, ranking: "1° de 4", better: "higher" as const },
       ],
     },
     {
       label: "Rentabilidad",
       rows: [
-        { m: "% ROE (TTM)", vals: [27.18, 22.44, 18.90, 15.79], delta: 1.6, ranking: "1° de 4", better: "higher" as const },
-        { m: "% ROA (TTM)", vals: [3.44, 2.81, 2.11, 2.35], delta: 0.2, ranking: "1° de 4", better: "higher" as const },
+        { m: "% ROE (TTM)", vals: [27.41, 22.69, 19.08, 17.23], delta: 1.7, ranking: "1° de 4", better: "higher" as const },
+        { m: "% ROA (TTM)", vals: [3.46, 2.83, 2.14, 2.11], delta: 0.19, ranking: "1° de 4", better: "higher" as const },
       ],
     },
   ];
@@ -53,7 +53,7 @@ function InformeMockup() {
       <div className="px-3 py-2 bg-slate-900 text-white">
         <div className="flex items-center justify-between">
           <span className="font-semibold tracking-wider uppercase text-[9px]">Cuadro Resumen · Banca Múltiple</span>
-          <span className="text-[8.5px] text-slate-300 tabular-nums">Cierre Jun-26</span>
+          <span className="text-[8.5px] text-slate-300 tabular-nums">Cierre Jul-26</span>
         </div>
         <div className="text-[8.5px] text-slate-400 mt-0.5">
           BCP vs peer group (top-3 por cartera bruta)
@@ -66,7 +66,7 @@ function InformeMockup() {
             <th className="text-right px-1.5 py-1.5 font-bold text-brand-700 uppercase">BCP</th>
             <th className="text-right px-1.5 py-1.5 font-medium">BBVA</th>
             <th className="text-right px-1.5 py-1.5 font-medium">IBK</th>
-            <th className="text-right px-1.5 py-1.5 font-medium">Pich</th>
+            <th className="text-right px-1.5 py-1.5 font-medium">Scott</th>
           </tr>
         </thead>
         <tbody>
@@ -104,13 +104,13 @@ function InformeMockup() {
       {/* Read editorial estilo analista */}
       <div className="px-2.5 py-1.5 bg-slate-50/70 border-t border-slate-100">
         <p className="text-[9px] text-slate-700 leading-snug">
-          <span className="font-bold text-brand-700">Lectura:</span> BCP lidera en calidad y rentabilidad,
-          con mejora YoY en todas las métricas de mora. Cobertura CAR &gt;127% da colchón vs pares.
+          <span className="font-bold text-brand-700">Lectura:</span> BCP lidera en cobertura CAR (129.2%) y rentabilidad (ROE 27.4%).
+          Mora contenida pese a presión sectorial — mejor cobertura de la banca múltiple.
         </p>
       </div>
       <div className="px-2.5 py-1 border-t border-slate-100 bg-white text-[8px] text-slate-400 italic flex justify-between">
         <span>Fuente: publicaciones oficiales del regulador</span>
-        <span>▲/▼ vs Jun-25</span>
+        <span>▲/▼ vs Jul-25</span>
       </div>
     </div>
   );
@@ -140,7 +140,7 @@ function DupontMockup() {
       <div className="px-3 py-2 border-b border-slate-100 bg-white flex items-center justify-between">
         <div>
           <div className="font-semibold text-slate-900 text-[11px]">DuPont · Microfinanzas</div>
-          <div className="text-[8.5px] text-slate-500">ROE = ROA × Apalancamiento · TTM Jun-26</div>
+          <div className="text-[8.5px] text-slate-500">ROE = ROA × Apalancamiento · TTM Jul-26</div>
         </div>
         <span className="text-[8.5px] text-slate-500 tabular-nums">4 entidades</span>
       </div>
@@ -208,7 +208,7 @@ function PuntoEquilibrioMockup() {
     { p: "Dic-23", propio: 9.30, p25: 8.1, p75: 9.4 },
     { p: "Dic-24", propio: 9.83, p25: 8.3, p75: 9.6 },
     { p: "Dic-25", propio: 9.60, p25: 8.5, p75: 9.8 },
-    { p: "Jun-26", propio: 9.63, p25: 8.4, p75: 9.7 },
+    { p: "Jul-26", propio: 9.63, p25: 8.4, p75: 9.7 },
   ];
   const W = 260;
   const H = 100;
@@ -369,7 +369,7 @@ function PublicacionesMockup() {
           Las CMAC se dividen en dos:<br />contención al norte, deterioro al sur
         </h4>
         <p className="text-[9.5px] text-slate-600 italic mt-1 leading-snug">
-          Al cierre Jun-26, la brecha de mora entre la mejor y peor caja municipal
+          Al cierre Jul-26, la brecha de mora entre la mejor y peor caja municipal
           alcanza <span className="font-semibold text-slate-800">19.5 pp</span> — máximo
           histórico de 5 años.
         </p>
