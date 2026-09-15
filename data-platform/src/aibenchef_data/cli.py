@@ -263,7 +263,7 @@ def storage_scan(root: str, dry_run: bool) -> None:
                 UPDATE raw.archivos_descargados
                 SET tamanio_bytes = %s,
                     formato = %s,
-                    md5_hash = COALESCE(%s, md5_hash),
+                    md5_hash = COALESCE(%s::text, md5_hash),
                     actualizado_en = now(),
                     status = CASE
                         -- Caso 1: archivo antes marcado no_publicado y ahora tiene contenido valido
@@ -272,14 +272,14 @@ def storage_scan(root: str, dry_run: bool) -> None:
                         WHEN status IN ('procesado','sospechoso') AND tamanio_bytes IS NOT NULL
                              AND tamanio_bytes <> %s AND %s >= 2000 THEN 'descargado'
                         -- Caso 3: sospechoso, mismo tamanio pero MD5 cambio (SBS corrigio header)
-                        WHEN status = 'sospechoso' AND %s IS NOT NULL
-                             AND md5_hash IS NOT NULL AND md5_hash <> %s THEN 'descargado'
+                        WHEN status = 'sospechoso' AND %s::text IS NOT NULL
+                             AND md5_hash IS NOT NULL AND md5_hash <> %s::text THEN 'descargado'
                         ELSE status
                     END,
                     error_mensaje = CASE
                         WHEN status = 'no_publicado_sbs' AND %s >= 2000 THEN NULL
-                        WHEN status = 'sospechoso' AND %s IS NOT NULL
-                             AND md5_hash IS NOT NULL AND md5_hash <> %s THEN NULL
+                        WHEN status = 'sospechoso' AND %s::text IS NOT NULL
+                             AND md5_hash IS NOT NULL AND md5_hash <> %s::text THEN NULL
                         ELSE error_mensaje
                     END
                 WHERE path_local = %s
