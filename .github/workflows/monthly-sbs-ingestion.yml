@@ -176,11 +176,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
         run: uv run aibenchef storage scan
 
-      - name: Import .xls mensuales -> raw.eeff_observacion
+      - name: Import todos los topicos del periodo
         if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
-        run: uv run aibenchef import monthly-eeff ./local-data/raw
+          PERIODO: ${{ steps.periodo.outputs.periodo }}
+        run: uv run aibenchef import all-monthly --periodo "$PERIODO"
 
       - name: Normalize entidades
         if: steps.sbs_check.outputs.published == 'true' || github.event.inputs.force == 'true'
