@@ -120,8 +120,12 @@ async function getCheckAllowedValues(
       LIMIT 1
     `;
     const raw = rows[0]?.check_clause ?? "";
-    // Extraer lista dentro de `IN (...)` — soporta multi-linea + trimming.
-    const match = raw.match(/IN\s*\(([^)]+)\)/is);
+    // Soporta dos formatos que Postgres genera segun version:
+    //   col IN ('a', 'b')                          — Postgres 14-
+    //   col = ANY (ARRAY['a'::text, 'b'::text])    — Postgres 15+
+    const matchIn  = raw.match(/IN\s*\(([^)]+)\)/is);
+    const matchAny = raw.match(/=\s*ANY\s*\(\s*ARRAY\[([^\]]+)\]\s*\)/is);
+    const match = matchIn ?? matchAny;
     if (!match) return { values: [], raw };
     const values = match[1]
       .split(",")
