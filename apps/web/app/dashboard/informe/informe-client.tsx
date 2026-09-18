@@ -883,7 +883,7 @@ function FragmentGrupo({
                   title={tooltip}
                   className={`px-4 py-2 text-right tabular-nums text-[13px] ${
                     esPropio
-                      ? "bg-amber-50 font-semibold text-slate-900"
+                      ? "bg-blue-50 font-semibold text-slate-900"
                       : `${style.cell} ${style.text || "text-slate-700"}`
                   }`}
                 >
@@ -991,7 +991,7 @@ function SeccionPuntoEquilibrio({
                         <td
                           key={c}
                           className={`px-4 py-2 text-right tabular-nums text-[13px] ${valueClass} ${
-                            esPropio ? "bg-amber-50" : ""
+                            esPropio ? "bg-blue-50" : ""
                           } ${r.indentado ? "italic" : ""}`}
                         >
                           {formatValor(v, "pct")}
