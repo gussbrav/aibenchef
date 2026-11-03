@@ -7,6 +7,7 @@ Public API:
 - BaseDepositosImporter: importer del BASE DEPOSITOS.xlsx
 - BaseCastigosImporter: importer del BASE CASTIGOS.xlsx
 - MonthlyEeffImporter: importer de .xls mensuales SBS (topico 01)
+- MonthlyCoopacEeffImporter: importer de .xls mensuales COOPAC (coopac_n1/n2a/n2b/n3)
 - MonthlyOficinasImporter: importer de .xls mensuales SBS (topico 08)
 - DimCuentaSeeder: pobla dw.dim_cuenta desde los seeds JSON
 """
@@ -36,6 +37,7 @@ from .services.monthly_clientes_ahorro_importer import MonthlyClientesAhorroImpo
 from .services.monthly_clientes_importer import MonthlyClientesImporter
 from .services.monthly_colocaciones_importer import MonthlyColocacionesImporter
 from .services.monthly_depositos_importer import MonthlyDepositosImporter
+from .services.monthly_coopac_eeff_importer import MonthlyCoopacEeffImporter
 from .services.monthly_eeff_importer import MonthlyEeffImporter
 from .services.monthly_indicadores_importer import MonthlyIndicadoresImporter
 from .services.monthly_oficinas_grid_importer import MonthlyOficinasGridImporter
@@ -64,6 +66,7 @@ __all__ = [
     "MonthlyClientesImporter",
     "MonthlyColocacionesImporter",
     "MonthlyDepositosImporter",
+    "MonthlyCoopacEeffImporter",
     "MonthlyEeffImporter",
     "MonthlyIndicadoresImporter",
     "MonthlyOficinasGridImporter",

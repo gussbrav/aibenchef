@@ -2217,6 +2217,105 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
     asyncio.run(_run())
 
 
+@import_grp.command("coopac-eeff")
+@click.option("--periodo", type=str, required=True, help="YYYYMM.")
+@click.option("--batch-size", type=int, default=5_000, show_default=True)
+@click.option("--dry-run", is_flag=True, default=False)
+def import_coopac_eeff(periodo: str, batch_size: int, dry_run: bool) -> None:
+    """Importa EE.FF. de COOPAC descargados a raw.eeff_observacion.
+
+    Procesa archivos en raw.archivos_descargados con grupo LIKE 'coopac_%'
+    y status='descargado'. Usa MonthlyCoopacEeffImporter (mapa de nombres fijo).
+    Ejecutar import refresh-derived despues para actualizar MVs.
+
+    ROLLBACK:
+        DELETE FROM raw.eeff_observacion WHERE tipo_entidad LIKE 'COOPAC_%';
+        -- luego refresh MVs
+    """
+    import importlib
+    from pathlib import Path as _P
+
+    import psycopg
+
+    from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
+
+    try:
+        periodo_int = int(periodo)
+        if not (200001 <= periodo_int <= 209912):
+            raise ValueError
+    except ValueError as exc:
+        raise click.UsageError(f"--periodo debe ser YYYYMM valido (recibido: {periodo})") from exc
+
+    url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    archivos: list[str] = []
+    with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT path_local
+            FROM raw.archivos_descargados
+            WHERE periodo = %s AND status = 'descargado'
+              AND grupo LIKE 'coopac_%%'
+            ORDER BY grupo, path_local
+            """,
+            (periodo_int,),
+        )
+        archivos = [row[0] for row in cur.fetchall()]
+
+    click.echo(f"# periodo={periodo_int} archivos_coopac={len(archivos)}")
+    if not archivos:
+        click.echo("# Nada que importar.")
+        return
+
+    if dry_run:
+        for p in archivos:
+            click.echo(f"  [dry] {p}")
+        return
+
+    loading_module = importlib.import_module("aibenchef_data.domains.loading")
+    importer_cls = getattr(loading_module, "MonthlyCoopacEeffImporter")
+
+    grand_inserted = 0
+    grand_ok = 0
+    grand_fail = 0
+
+    async def _run() -> None:
+        nonlocal grand_inserted, grand_ok, grand_fail
+        await open_pool()
+        try:
+            async with connection() as conn:
+                importer = importer_cls(conn, batch_size=batch_size)
+                for i, p_str in enumerate(archivos, start=1):
+                    f = _P(p_str)
+                    if not f.exists():
+                        grand_fail += 1
+                        click.echo(f"  [{i:>3}/{len(archivos)}] {f.name:<40} SKIP: no existe")
+                        continue
+                    try:
+                        result = await _import_file_with_audit(importer, f, topico="eeff")
+                        grand_inserted += result.rows_inserted
+                        status_str = f"ERR x{len(result.errors)}" if result.errors else "OK"
+                        if not result.errors:
+                            grand_ok += 1
+                        else:
+                            grand_fail += 1
+                        click.echo(
+                            f"  [{i:>3}/{len(archivos)}] {f.name:<40} "
+                            f"rows={result.rows_inserted:>6,}  ({result.duration_seconds:.1f}s) {status_str}"
+                        )
+                    except Exception as e:
+                        grand_fail += 1
+                        click.echo(f"  [{i:>3}/{len(archivos)}] {f.name:<40} FATAL: {e}")
+        finally:
+            await close_pool()
+
+    asyncio.run(_run())
+    click.echo(
+        f"\n# TOTAL: {grand_ok} OK, {grand_fail} fallidos, "
+        f"{grand_inserted:,} filas insertadas"
+    )
+
+
 # Mapeo topico -> (importer_class_name, audit_topico_name).
 # Usado por `import all-monthly` para iterar sobre todos los topicos de un periodo.
 # Importante: el `audit_topico_name` es el string que `_import_file_with_audit`
