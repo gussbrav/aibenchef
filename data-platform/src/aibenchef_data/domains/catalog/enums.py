@@ -13,6 +13,12 @@ class Grupo(StrEnum):
     CMAC = "cmac"
     CRAC = "crac"
     EDPYME = "edpyme"
+    # Cooperativas de Ahorro y Credito (COOPAC) — 4 niveles SBS (SC-XXXX).
+    # Solo publican EEFF (BG + GYP). Mensual para N3/N2B, trimestral para N2A/N1.
+    COOPAC_N3 = "coopac_n3"
+    COOPAC_N2B = "coopac_n2b"
+    COOPAC_N2A = "coopac_n2a"
+    COOPAC_N1 = "coopac_n1"
 
     @property
     def label(self) -> str:
@@ -22,6 +28,10 @@ class Grupo(StrEnum):
             Grupo.CMAC: "Cajas Municipales (CMAC)",
             Grupo.CRAC: "Cajas Rurales (CRAC)",
             Grupo.EDPYME: "EDPYMEs",
+            Grupo.COOPAC_N3: "Cooperativas Nivel 3",
+            Grupo.COOPAC_N2B: "Cooperativas Nivel 2B",
+            Grupo.COOPAC_N2A: "Cooperativas Nivel 2A",
+            Grupo.COOPAC_N1: "Cooperativas Nivel 1",
         }[self]
 
     @property
@@ -33,6 +43,10 @@ class Grupo(StrEnum):
             Grupo.CMAC: "03",
             Grupo.CRAC: "04",
             Grupo.EDPYME: "05",
+            Grupo.COOPAC_N3: "06",
+            Grupo.COOPAC_N2B: "07",
+            Grupo.COOPAC_N2A: "08",
+            Grupo.COOPAC_N1: "09",
         }[self]
 
 

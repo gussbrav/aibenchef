@@ -2289,6 +2289,9 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
 
     # 1. Cargar mapa topico -> [path_local, ...] desde DB.
+    # COOPAC (grupo LIKE 'coopac_%') se excluye: no tiene parser SF aun.
+    # Los archivos quedan en status='descargado' hasta que se implemente
+    # el parser especifico en Fase 2 del modulo cooperativas.
     archivos_por_topico: dict[str, list[str]] = {}
     with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
         cur.execute(
@@ -2296,6 +2299,7 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
             SELECT topico, path_local
             FROM raw.archivos_descargados
             WHERE periodo = %s AND status = 'descargado'
+              AND grupo NOT LIKE 'coopac_%'
             ORDER BY topico, path_local
             """,
             (periodo_int,),

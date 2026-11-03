@@ -37,10 +37,11 @@ class TestSbsUrlBuilder:
         assert ref.filename == "C-1101-se2023.xls"
         assert "Setiembre" in ref.url()
 
-    def test_all_for_periodo_default_devuelve_48(self):
+    def test_all_for_periodo_default_devuelve_52(self):
         refs = SbsUrlBuilder.all_for_periodo(Periodo(2024, 3))
-        # 10 (BM) + 10 (Fin) + 10 (CMAC) + 10 (CRAC) + 8 (EDPYME, sin 2) = 48
-        assert len(refs) == 48
+        # 10 (BM) + 10 (Fin) + 10 (CMAC) + 10 (CRAC) + 8 (EDPYME, sin 2)
+        # + 4 COOPAC (solo EEFF) = 52
+        assert len(refs) == 52
 
     def test_all_for_periodo_solo_cmac(self):
         refs = SbsUrlBuilder.all_for_periodo(Periodo(2024, 3), grupos=[Grupo.CMAC])
@@ -49,5 +50,20 @@ class TestSbsUrlBuilder:
 
     def test_all_for_periodo_solo_eeff(self):
         refs = SbsUrlBuilder.all_for_periodo(Periodo(2024, 3), topicos=[Topico.EEFF])
-        assert len(refs) == 5  # un EEFF por grupo
+        # 5 SF + 4 COOPAC = 9
+        assert len(refs) == 9
         assert all(r.topico == Topico.EEFF for r in refs)
+
+    def test_coopac_n3_url_usa_extension_mayuscula(self):
+        """COOPAC publica con .XLS mayuscula — la URL debe reflejarlo."""
+        ref = SbsUrlBuilder.build(Grupo.COOPAC_N3, Topico.EEFF, Periodo(2026, 3))
+        assert ref.filename == "SC-0002-ma2026.xls"  # disco: minuscula
+        assert ref.url().endswith("SC-0002-ma2026.XLS")  # URL: mayuscula
+
+    def test_coopac_n1_url_codigo(self):
+        ref = SbsUrlBuilder.build(Grupo.COOPAC_N1, Topico.EEFF, Periodo(2026, 6))
+        assert ref.filename == "SC-0005-jn2026.xls"
+        assert "SC-0005-jn2026.XLS" in ref.url()
+
+    def test_coopac_no_publica_colocaciones(self):
+        assert not SbsUrlBuilder.is_published(Grupo.COOPAC_N3, Topico.COLOCACIONES)

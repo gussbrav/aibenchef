@@ -30,13 +30,21 @@ class SbsFileRef:
     codigo: str
 
     @property
+    def _url_ext(self) -> str:
+        # SBS publica archivos COOPAC con extension mayuscula .XLS.
+        # El archivo se guarda en disco siempre como .xls (minuscula) para
+        # compatibilidad con storage scan, pero la URL debe usar .XLS.
+        return ".XLS" if self.grupo.value.startswith("coopac_") else ".xls"
+
+    @property
     def filename(self) -> str:
         return f"{self.prefijo}-{self.codigo}-{self.periodo.sbs_suffix}.xls"
 
     def url(self, base: str = "https://intranet2.sbs.gob.pe") -> str:
+        url_filename = f"{self.prefijo}-{self.codigo}-{self.periodo.sbs_suffix}{self._url_ext}"
         return (
             f"{base}/estadistica/financiera/"
-            f"{self.periodo.anio}/{self.periodo.nombre_mes}/{self.filename}"
+            f"{self.periodo.anio}/{self.periodo.nombre_mes}/{url_filename}"
         )
 
 
@@ -99,6 +107,15 @@ _URL_CODES: dict[tuple[Grupo, Topico], tuple[str, str] | None] = {
     (Grupo.EDPYME, Topico.CREDITOS_DEPOSITOS_GEO): ("C", "4228"),
     (Grupo.EDPYME, Topico.PERSONAL): ("C", "4206"),
     (Grupo.EDPYME, Topico.INDICADORES): ("C", "4301"),
+    # ---------- COOPAC (Cooperativas) — solo EEFF, url extension .XLS ----------
+    # SC-0002 = Nivel 3 (>S/341M, mensual), SC-0003 = Nivel 2B (mensual),
+    # SC-0004 = Nivel 2A (trimestral), SC-0005 = Nivel 1 (<S/3M, trimestral).
+    # N2A y N1 solo publican cierres de trimestre (mar/jun/sep/dic); los meses
+    # intermedios devuelven 404 -> status no_publicado_sbs (comportamiento normal).
+    (Grupo.COOPAC_N3, Topico.EEFF): ("SC", "0002"),
+    (Grupo.COOPAC_N2B, Topico.EEFF): ("SC", "0003"),
+    (Grupo.COOPAC_N2A, Topico.EEFF): ("SC", "0004"),
+    (Grupo.COOPAC_N1, Topico.EEFF): ("SC", "0005"),
 }
 
 
