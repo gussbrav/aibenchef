@@ -105,7 +105,10 @@ class TestBgCuentas:
         assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "vigentes")] == "A4.1"
 
     def test_refinanciados_bajo_a4(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "refinanciados y reestructurados")] == "A4.2"
+        assert (
+            MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "refinanciados y reestructurados")]
+            == "A4.2"
+        )
 
     def test_vencidos_bajo_a4(self):
         assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "vencidos")] == "A4.3"
