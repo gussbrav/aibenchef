@@ -2213,7 +2213,159 @@ function ComparativoView({
 
   const [metrica, setMetrica] = useState<MetricaKey>("pctPuntoEq");
   const [peerModalOpen, setPeerModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const entidadIncluida = series.some((s) => s.esPropio);
+
+  // Exporta: hoja 1 = snapshot comparativo (entidades en columnas),
+  //          hojas 2..N = historico completo por entidad (periodos en columnas).
+  const handleExportComparativo = async () => {
+    if (isExporting || series.length === 0) return;
+    setIsExporting(true);
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Aibenchef";
+      wb.created = new Date();
+
+      const periodoLabel = series[0]?.puntos.at(-1)?.periodoLabel ?? "";
+
+      // ── Hoja 1: Comparativo snapshot (ultima columna de cada serie) ──────
+      const sheetComp = wb.addWorksheet("Comparativo");
+      sheetComp.columns = [{ width: 44 }, ...series.map(() => ({ width: 16 }))];
+
+      sheetComp.mergeCells(1, 1, 1, series.length + 1);
+      sheetComp.getRow(1).getCell(1).value = `Punto de Equilibrio comparativo — Cierre ${periodoLabel}`;
+      sheetComp.getRow(1).getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
+      sheetComp.getRow(1).height = 22;
+
+      sheetComp.mergeCells(2, 1, 2, series.length + 1);
+      sheetComp.getRow(2).getCell(1).value = "% sobre Cartera Directa Promedio · últimos 12 meses móviles";
+      sheetComp.getRow(2).getCell(1).font = { size: 9, color: { argb: "FF64748B" } };
+
+      sheetComp.mergeCells(3, 1, 3, series.length + 1);
+      sheetComp.getRow(3).getCell(1).value = `Exportado: ${new Date().toLocaleDateString("es-PE")}`;
+      sheetComp.getRow(3).getCell(1).font = { size: 9, italic: true, color: { argb: "FF94A3B8" } };
+      sheetComp.addRow([]);
+
+      const hdrComp = sheetComp.addRow([
+        "COMPONENTE", ...series.map((s) => s.entidad.toUpperCase()),
+      ]);
+      hdrComp.height = 20;
+      hdrComp.eachCell((cell, col) => {
+        cell.font = { bold: true, size: 10, color: { argb: "FF1E293B" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        cell.alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
+        cell.border = { bottom: { style: "medium", color: { argb: "FF334155" } } };
+      });
+
+      const addCompRow = (
+        label: string,
+        field: keyof PuntoEquilibrioRow,
+        opts: { bold?: boolean; indent?: number; bgArgb?: string; isComputed?: boolean },
+      ) => {
+        const pfx = opts.indent ? "   ".repeat(opts.indent) : "";
+        const vals: (string | number | null)[] = [`${pfx}${label}`];
+        for (const s of series) {
+          const ult = s.puntos.at(-1);
+          if (!ult) { vals.push(null); continue; }
+          vals.push(opts.isComputed ? computedPuntoEq(ult) : (ult[field] as number | null) ?? null);
+        }
+        const dr = sheetComp.addRow(vals);
+        if (opts.bgArgb) dr.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bgArgb! } }; });
+        dr.getCell(1).font = { bold: opts.bold, size: 10, color: { argb: opts.indent ? "FF475569" : "FF1E293B" } };
+        for (let i = 2; i <= series.length + 1; i++) {
+          const c = dr.getCell(i);
+          if (typeof c.value === "number") { c.numFmt = "0.00%"; c.alignment = { horizontal: "right" }; c.font = { bold: opts.bold, size: 10 }; }
+        }
+      };
+
+      for (const row of DEFAULT_ROW_ORDER) {
+        const isHL = row.variant === "highlight";
+        const isBold = ["bold", "highlight", "sum"].includes(row.variant);
+        const prefix = row.variant === "sum" ? "(+) " : row.variant === "sub" ? "(−) " : "";
+        addCompRow(`${prefix}${row.label}`, row.field, {
+          bold: isBold,
+          bgArgb: isHL ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
+          isComputed: row.field === "pctPuntoEq",
+        });
+        if (row.subrows) for (const sub of row.subrows) addCompRow(sub.label, sub.field, { indent: 1 });
+      }
+
+      // ── Hojas 2..N: historico completo por entidad ───────────────────────
+      for (const s of series) {
+        if (s.puntos.length === 0) continue;
+        const sheetName = s.entidad.replace(/[/\\?*[\]]/g, "").substring(0, 31);
+        const ws = wb.addWorksheet(sheetName);
+        const periodos = s.puntos.map((p) => p.periodo);
+        const byPeriodo = new Map(s.puntos.map((p) => [p.periodo, p]));
+        ws.columns = [{ width: 44 }, ...periodos.map(() => ({ width: 14 }))];
+
+        ws.mergeCells(1, 1, 1, periodos.length + 1);
+        ws.getRow(1).getCell(1).value = `Punto de Equilibrio — ${s.entidad}`;
+        ws.getRow(1).getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
+        ws.getRow(1).height = 22;
+        ws.mergeCells(2, 1, 2, periodos.length + 1);
+        ws.getRow(2).getCell(1).value = "% sobre Cartera Directa Promedio · últimos 12 meses móviles";
+        ws.getRow(2).getCell(1).font = { size: 9, color: { argb: "FF64748B" } };
+        ws.mergeCells(3, 1, 3, periodos.length + 1);
+        ws.getRow(3).getCell(1).value = `Exportado: ${new Date().toLocaleDateString("es-PE")}`;
+        ws.getRow(3).getCell(1).font = { size: 9, italic: true, color: { argb: "FF94A3B8" } };
+        ws.addRow([]);
+
+        const hdr = ws.addRow(["COMPONENTE", ...periodos.map((p) => byPeriodo.get(p)?.periodoLabel ?? String(p))]);
+        hdr.height = 20;
+        hdr.eachCell((cell, col) => {
+          cell.font = { bold: true, size: 10, color: { argb: "FF1E293B" } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+          cell.alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
+          cell.border = { bottom: { style: "medium", color: { argb: "FF334155" } } };
+        });
+
+        const addHRow = (
+          label: string, field: keyof PuntoEquilibrioRow,
+          opts: { bold?: boolean; indent?: number; bgArgb?: string; isComputed?: boolean },
+        ) => {
+          const pfx = opts.indent ? "   ".repeat(opts.indent) : "";
+          const vals: (string | number | null)[] = [`${pfx}${label}`];
+          for (const p of periodos) {
+            const pd = byPeriodo.get(p) as PuntoEquilibrioRow | undefined;
+            if (!pd) { vals.push(null); continue; }
+            vals.push(opts.isComputed ? computedPuntoEq(pd) : (pd[field] as number | null) ?? null);
+          }
+          const dr = ws.addRow(vals);
+          if (opts.bgArgb) dr.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bgArgb! } }; });
+          dr.getCell(1).font = { bold: opts.bold, size: 10, color: { argb: opts.indent ? "FF475569" : "FF1E293B" } };
+          for (let i = 2; i <= periodos.length + 1; i++) {
+            const c = dr.getCell(i);
+            if (typeof c.value === "number") { c.numFmt = "0.00%"; c.alignment = { horizontal: "right" }; c.font = { bold: opts.bold, size: 10 }; }
+          }
+        };
+
+        for (const row of DEFAULT_ROW_ORDER) {
+          const isHL = row.variant === "highlight";
+          const isBold = ["bold", "highlight", "sum"].includes(row.variant);
+          const prefix = row.variant === "sum" ? "(+) " : row.variant === "sub" ? "(−) " : "";
+          addHRow(`${prefix}${row.label}`, row.field, {
+            bold: isBold,
+            bgArgb: isHL ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
+            isComputed: row.field === "pctPuntoEq",
+          });
+          if (row.subrows) for (const sub of row.subrows) addHRow(sub.label, sub.field, { indent: 1 });
+        }
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `PE_Comparativo_${series.length}entidades_${periodoLabel.replace(/\s+/g, "")}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <section className="space-y-4">
@@ -2223,6 +2375,8 @@ function ComparativoView({
         peerGroup={draftPeerGroup}
         onChangePeers={onChangePeers}
         onOpenModal={() => setPeerModalOpen(true)}
+        isExporting={isExporting}
+        onExport={series.length > 0 ? handleExportComparativo : undefined}
       />
 
       {peerModalOpen && (
@@ -3086,10 +3240,14 @@ function PeerGroupControl({
   peerGroup,
   onChangePeers,
   onOpenModal,
+  isExporting,
+  onExport,
 }: {
   peerGroup: string[];
   onChangePeers: (nuevos: string[]) => void;
   onOpenModal: () => void;
+  isExporting?: boolean;
+  onExport?: () => void;
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
@@ -3124,14 +3282,28 @@ function PeerGroupControl({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onOpenModal}
-          className="h-9 px-4 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md shadow-sm inline-flex items-center gap-2"
-        >
-          <Users className="w-4 h-4" />
-          Editar comparación
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {onExport && peerGroup.length > 0 && (
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={isExporting}
+              className="h-9 px-4 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md shadow-sm inline-flex items-center gap-2 transition-colors"
+              title={`Exportar comparativo + historial de ${peerGroup.length} entidades a Excel`}
+            >
+              <FileDown className="w-4 h-4" />
+              {isExporting ? "Exportando…" : `Exportar Excel (${peerGroup.length})`}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onOpenModal}
+            className="h-9 px-4 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md shadow-sm inline-flex items-center gap-2"
+          >
+            <Users className="w-4 h-4" />
+            Editar comparación
+          </button>
+        </div>
       </div>
       <p className="text-[11px] text-slate-500 italic mt-3 pt-3 border-t border-slate-100">
         Los cambios en las entidades requieren <strong>Aplicar filtros</strong> arriba para
