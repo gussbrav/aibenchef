@@ -36,8 +36,8 @@ from .services.monthly_castigos_importer import MonthlyCastigosImporter
 from .services.monthly_clientes_ahorro_importer import MonthlyClientesAhorroImporter
 from .services.monthly_clientes_importer import MonthlyClientesImporter
 from .services.monthly_colocaciones_importer import MonthlyColocacionesImporter
-from .services.monthly_depositos_importer import MonthlyDepositosImporter
 from .services.monthly_coopac_eeff_importer import MonthlyCoopacEeffImporter
+from .services.monthly_depositos_importer import MonthlyDepositosImporter
 from .services.monthly_eeff_importer import MonthlyEeffImporter
 from .services.monthly_indicadores_importer import MonthlyIndicadoresImporter
 from .services.monthly_oficinas_grid_importer import MonthlyOficinasGridImporter
@@ -65,8 +65,8 @@ __all__ = [
     "MonthlyClientesAhorroImporter",
     "MonthlyClientesImporter",
     "MonthlyColocacionesImporter",
-    "MonthlyDepositosImporter",
     "MonthlyCoopacEeffImporter",
+    "MonthlyDepositosImporter",
     "MonthlyEeffImporter",
     "MonthlyIndicadoresImporter",
     "MonthlyOficinasGridImporter",

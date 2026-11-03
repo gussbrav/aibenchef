@@ -38,7 +38,6 @@ from .monthly_eeff_importer import (
     MonthlyEeffImporter,
     _cell_str,
     _classify_sheet,
-    _coerce_date,
     _coerce_number,
     _detect_layout,
     _normalize,
@@ -324,10 +323,7 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
             es_header = nombre_raw.strip() == nombre_raw.strip().upper()
 
             # Resolver codigo desde el mapa fijo
-            if es_header:
-                lookup_key = (None, nombre_norm)
-            else:
-                lookup_key = (current_parent_code, nombre_norm)
+            lookup_key = (None, nombre_norm) if es_header else (current_parent_code, nombre_norm)
 
             codigo: str | None = cuentas_map.get(lookup_key)
 

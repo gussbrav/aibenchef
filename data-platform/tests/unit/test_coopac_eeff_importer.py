@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 
 from aibenchef_data.domains.loading.services.monthly_coopac_eeff_importer import (
-    MonthlyCoopacEeffImporter,
     _PATH_COOPAC_TO_TIPO,
+    MonthlyCoopacEeffImporter,
     _normalize,
 )
 
