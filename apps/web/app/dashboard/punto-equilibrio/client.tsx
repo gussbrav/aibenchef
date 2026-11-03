@@ -1650,6 +1650,131 @@ function TablaComparativaCierre({
     }
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (isExporting || effectiveSeries.length === 0) return;
+    setIsExporting(true);
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Aibenchef";
+      workbook.created = new Date();
+
+      const sheet = workbook.addWorksheet("PE Comparativo");
+      const firstSerie = effectiveSeries[0]!;
+      const lastPunto = firstSerie.puntos[firstSerie.puntos.length - 1];
+      const pLabel = lastPunto?.periodoLabel ?? String(periodo);
+
+      sheet.columns = [
+        { width: 44 },
+        ...effectiveSeries.map(() => ({ width: 16 })),
+      ];
+
+      // Titulo
+      sheet.mergeCells(1, 1, 1, effectiveSeries.length + 1);
+      const titleRow = sheet.getRow(1);
+      titleRow.getCell(1).value = `Punto de Equilibrio comparativo — Cierre ${pLabel}`;
+      titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
+      titleRow.height = 22;
+
+      // Subtitulo
+      sheet.mergeCells(2, 1, 2, effectiveSeries.length + 1);
+      const subtitleRow = sheet.getRow(2);
+      subtitleRow.getCell(1).value = "% sobre Cartera Directa Promedio · últimos 12 meses móviles";
+      subtitleRow.getCell(1).font = { size: 9, color: { argb: "FF64748B" } };
+
+      // Fecha
+      sheet.mergeCells(3, 1, 3, effectiveSeries.length + 1);
+      const infoRow = sheet.getRow(3);
+      infoRow.getCell(1).value = `Exportado: ${new Date().toLocaleDateString("es-PE")}`;
+      infoRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF94A3B8" } };
+
+      // Fila vacía
+      sheet.addRow([]);
+
+      // Cabecera
+      const headerRow = sheet.addRow([
+        "COMPONENTE",
+        ...effectiveSeries.map((s) => s.entidad.toUpperCase()),
+      ]);
+      headerRow.height = 20;
+      headerRow.eachCell((cell, col) => {
+        cell.font = { bold: true, size: 10, color: { argb: "FF1E293B" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        cell.alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
+        cell.border = { bottom: { style: "medium", color: { argb: "FF334155" } } };
+      });
+
+      const addDataRow = (
+        label: string,
+        field: keyof PuntoEquilibrioRow,
+        opts: { bold?: boolean; indent?: number; bgArgb?: string; isComputed?: boolean },
+      ) => {
+        const indent = opts.indent ? "   ".repeat(opts.indent) : "";
+        const rowValues: (string | number | null)[] = [`${indent}${label}`];
+        for (const s of effectiveSeries) {
+          const ult = s.puntos[s.puntos.length - 1];
+          if (!ult) { rowValues.push(null); continue; }
+          const v = opts.isComputed
+            ? computedPuntoEq(ult)
+            : (ult[field] as number | null) ?? null;
+          rowValues.push(v);
+        }
+        const dr = sheet.addRow(rowValues);
+        if (opts.bgArgb) {
+          dr.eachCell((cell) => {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bgArgb! } };
+          });
+        }
+        dr.getCell(1).font = {
+          bold: opts.bold,
+          size: 10,
+          color: { argb: opts.indent ? "FF475569" : "FF1E293B" },
+        };
+        for (let i = 2; i <= effectiveSeries.length + 1; i++) {
+          const cell = dr.getCell(i);
+          if (typeof cell.value === "number") {
+            cell.numFmt = "0.00%";
+            cell.alignment = { horizontal: "right" };
+            cell.font = { bold: opts.bold, size: 10 };
+          }
+        }
+      };
+
+      for (const row of DEFAULT_ROW_ORDER) {
+        const isHighlight = row.variant === "highlight";
+        const isBold = ["bold", "highlight", "sum"].includes(row.variant);
+        const prefix = row.variant === "sum" ? "(+) " : row.variant === "sub" ? "(−) " : "";
+        addDataRow(`${prefix}${row.label}`, row.field, {
+          bold: isBold,
+          bgArgb: isHighlight ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
+          isComputed: row.field === "pctPuntoEq",
+        });
+        if (row.subrows) {
+          for (const sub of row.subrows) {
+            addDataRow(sub.label, sub.field, { indent: 1 });
+          }
+        }
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `PE_Comparativo_Cierre${pLabel.replace(/\s+/g, "")}_${effectiveSeries.length}entidades.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (series.length === 0) return null;
   const primerSerie = effectiveSeries[0]!;
   const ultimoPunto = primerSerie.puntos[primerSerie.puntos.length - 1];
@@ -1689,32 +1814,40 @@ function TablaComparativaCierre({
             desplegar el detalle por cuenta oficial.
           </p>
         </div>
-        {(Object.keys(colorOverrides).length > 0 || isCustomOrder) && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {Object.keys(colorOverrides).length > 0 && (
-              <button
-                type="button"
-                onClick={resetAllColors}
-                className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
-                title="Restablecer colores personalizados"
-                aria-label="Restablecer colores personalizados"
-              >
-                <Palette className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {isCustomOrder && (
-              <button
-                type="button"
-                onClick={resetEntidadOrder}
-                className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
-                title="Restablecer orden original del peer group"
-                aria-label="Restablecer orden original del peer group"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {Object.keys(colorOverrides).length > 0 && (
+            <button
+              type="button"
+              onClick={resetAllColors}
+              className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
+              title="Restablecer colores personalizados"
+              aria-label="Restablecer colores personalizados"
+            >
+              <Palette className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {isCustomOrder && (
+            <button
+              type="button"
+              onClick={resetEntidadOrder}
+              className="inline-flex items-center justify-center w-7 h-7 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-900 rounded text-slate-500 transition-colors"
+              title="Restablecer orden original del peer group"
+              aria-label="Restablecer orden original del peer group"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 border border-emerald-700 rounded text-white transition-colors"
+            title="Descargar tabla comparativa como archivo Excel (.xlsx)"
+          >
+            <FileDown className="w-3 h-3" />
+            {isExporting ? "Exportando…" : "Exportar Excel"}
+          </button>
+        </div>
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
