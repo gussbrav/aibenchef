@@ -2218,11 +2218,29 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
 
 
 @import_grp.command("coopac-eeff")
-@click.option("--periodo", type=str, required=True, help="YYYYMM.")
+@click.option(
+    "--periodo", type=str, default=None, help="YYYYMM. Alternativa a --desde/--hasta."
+)
+@click.option(
+    "--desde", type=str, default=None, help="YYYYMM inicio de rango (inclusive). Requiere --hasta."
+)
+@click.option(
+    "--hasta", type=str, default=None, help="YYYYMM fin de rango (inclusive). Requiere --desde."
+)
 @click.option("--batch-size", type=int, default=5_000, show_default=True)
 @click.option("--dry-run", is_flag=True, default=False)
-def import_coopac_eeff(periodo: str, batch_size: int, dry_run: bool) -> None:
+def import_coopac_eeff(
+    periodo: str | None,
+    desde: str | None,
+    hasta: str | None,
+    batch_size: int,
+    dry_run: bool,
+) -> None:
     """Importa EE.FF. de COOPAC descargados a raw.eeff_observacion.
+
+    Modos:
+      - 1 mes:  --periodo 202404
+      - Rango:  --desde 202101 --hasta 202610  (backfill historico)
 
     Procesa archivos en raw.archivos_descargados con grupo LIKE 'coopac_%'
     y status='descargado'. Usa MonthlyCoopacEeffImporter (mapa de nombres fijo).
@@ -2239,12 +2257,27 @@ def import_coopac_eeff(periodo: str, batch_size: int, dry_run: bool) -> None:
 
     from aibenchef_data.infrastructure.db import close_pool, connection, open_pool
 
-    try:
-        periodo_int = int(periodo)
-        if not (200001 <= periodo_int <= 209912):
-            raise ValueError
-    except ValueError as exc:
-        raise click.UsageError(f"--periodo debe ser YYYYMM valido (recibido: {periodo})") from exc
+    if (desde and not hasta) or (hasta and not desde):
+        raise click.UsageError("--desde y --hasta deben pasarse juntos.")
+    if not periodo and not desde:
+        raise click.UsageError("Pasa --periodo YYYYMM o --desde/--hasta.")
+    if periodo and desde:
+        raise click.UsageError("Usa --periodo o --desde/--hasta, no ambos.")
+
+    if desde and hasta:
+        periodos_obj = _periodo_range(desde, hasta)
+        periodos_int = [p.to_int() for p in periodos_obj]
+        click.echo(f"# Rango: {desde} -> {hasta} ({len(periodos_int)} meses)")
+    else:
+        try:
+            p_int = int(periodo)  # type: ignore[arg-type]
+            if not (200001 <= p_int <= 209912):
+                raise ValueError
+        except ValueError as exc:
+            raise click.UsageError(
+                f"--periodo debe ser YYYYMM valido (recibido: {periodo})"
+            ) from exc
+        periodos_int = [p_int]
 
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
 
@@ -2254,15 +2287,15 @@ def import_coopac_eeff(periodo: str, batch_size: int, dry_run: bool) -> None:
             """
             SELECT path_local
             FROM raw.archivos_descargados
-            WHERE periodo = %s AND status = 'descargado'
+            WHERE periodo = ANY(%s) AND status = 'descargado'
               AND grupo LIKE 'coopac_%%'
-            ORDER BY grupo, path_local
+            ORDER BY periodo, grupo, path_local
             """,
-            (periodo_int,),
+            (periodos_int,),
         )
         archivos = [row[0] for row in cur.fetchall()]
 
-    click.echo(f"# periodo={periodo_int} archivos_coopac={len(archivos)}")
+    click.echo(f"# periodos={len(periodos_int)} archivos_coopac={len(archivos)}")
     if not archivos:
         click.echo("# Nada que importar.")
         return
