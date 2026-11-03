@@ -817,14 +817,18 @@ export async function getPuntoEquilibrioSeries(opts: {
  *
  * Fallback: si un nomb_correg del view no tiene entrada en la maestra,
  * lo devolvemos con su nombre tal cual (compat con data legacy).
+ *
+ * tipoEntidad: tipo_entidad_actual de entidad_maestra (ej. 'COOPAC_N3',
+ * 'CMAC', 'BANCOS'). Permite agrupar y badgear en el dropdown del PE.
  */
 export async function listEntidadesConDataPE(): Promise<
-  Array<{ nombCorreg: string; primerPeriodo: number; ultimoPeriodo: number }>
+  Array<{ nombCorreg: string; primerPeriodo: number; ultimoPeriodo: number; tipoEntidad: string | null }>
 > {
   const rows = await db.execute<{
     nomb_correg: string;
     primer_periodo: number;
     ultimo_periodo: number;
+    tipo_entidad: string | null;
   }>(sql`
     WITH pe_por_nombre AS (
       SELECT LOWER(TRIM(nomb_correg)) AS nombre_lower,
@@ -835,36 +839,42 @@ export async function listEntidadesConDataPE(): Promise<
       GROUP BY LOWER(TRIM(nomb_correg))
     ),
     canonicos AS (
-      -- Todos los canonicos con al menos un alias que tiene data en PE
+      -- Todos los canonicos con al menos un alias que tiene data en PE.
+      -- tipo_entidad_actual permite badgear el nivel COOPAC en el dropdown.
       SELECT em.nomb_correg_canonico AS nomb_correg,
+             em.tipo_entidad_actual  AS tipo_entidad,
              MIN(pe.primer) AS primer_periodo,
              MAX(pe.ultimo) AS ultimo_periodo
       FROM dw.entidad_maestra em
       JOIN dw.entidad_nombre en ON en.entidad_id = em.id AND en.consolidar = TRUE
       JOIN pe_por_nombre pe ON pe.nombre_lower = LOWER(TRIM(en.nombre))
-      GROUP BY em.nomb_correg_canonico
+      GROUP BY em.nomb_correg_canonico, em.tipo_entidad_actual
     ),
     huerfanos AS (
       -- Nombres en PE que NO estan en la maestra — devolver tal cual para
       -- no perder data si la maestra esta incompleta.
+      -- LEFT JOIN dim_entidad para recuperar tipo_entidad como fallback.
       SELECT pe.nombre_lower AS nomb_correg,
+             de.tipo_entidad,
              pe.primer AS primer_periodo,
              pe.ultimo AS ultimo_periodo
       FROM pe_por_nombre pe
+      LEFT JOIN dw.dim_entidad de ON LOWER(TRIM(de.nomb_correg)) = pe.nombre_lower
       WHERE NOT EXISTS (
         SELECT 1 FROM dw.entidad_nombre en
         WHERE en.consolidar = TRUE
           AND LOWER(TRIM(en.nombre)) = pe.nombre_lower
       )
     )
-    SELECT nomb_correg, primer_periodo, ultimo_periodo FROM canonicos
+    SELECT nomb_correg, tipo_entidad, primer_periodo, ultimo_periodo FROM canonicos
     UNION ALL
-    SELECT nomb_correg, primer_periodo, ultimo_periodo FROM huerfanos
+    SELECT nomb_correg, tipo_entidad, primer_periodo, ultimo_periodo FROM huerfanos
     ORDER BY nomb_correg
   `);
   return rows.map((r) => ({
     nombCorreg: String(r.nomb_correg),
     primerPeriodo: Number(r.primer_periodo),
     ultimoPeriodo: Number(r.ultimo_periodo),
+    tipoEntidad: r.tipo_entidad ? String(r.tipo_entidad) : null,
   }));
 }

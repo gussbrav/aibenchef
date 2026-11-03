@@ -3,10 +3,10 @@
 /**
  * EntityCombobox — selector de entidad con search, keyboard nav y look
  * premium tipo Linear/Vercel/Notion. Reemplaza el <select> nativo (feo
- * y sin busqueda) por un combobox accesible que escala a 100+ opciones.
+ * y sin busqueda) por un combobox accesible que escala a 300+ opciones.
  *
  * Features:
- *   - Boton trigger con nombre actual + chevron
+ *   - Boton trigger con nombre actual + badge nivel COOPAC si aplica
  *   - Popover con search autofocus al abrir
  *   - Filtro fuzzy (case-insensitive, substring match)
  *   - Keyboard nav: ArrowUp/Down mueve, Enter selecciona, Esc cierra
@@ -14,9 +14,11 @@
  *   - Rango de data disponible junto a cada opcion (opcional)
  *   - Item activo destacado con background brand
  *   - Scroll auto-follow del item activo
+ *   - Section headers "Sistema Financiero" / "Cooperativas" cuando no hay busqueda
+ *   - Badge nivel COOPAC (N3/N2B/N2A/N1) junto al nombre de cada cooperativa
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Building2, Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { EntidadFreshnessBadge } from "@/components/ui";
@@ -26,6 +28,9 @@ export type EntityOption = {
   nombCorreg: string;
   primerPeriodo?: number;
   ultimoPeriodo?: number;
+  /** Tipo de entidad (ej. 'COOPAC_N3', 'CMAC', 'BANCOS'). Permite badgear
+   *  cooperativas y agruparlas en secciones separadas del Sistema Financiero. */
+  tipoEntidad?: string | null;
 };
 
 export function EntityCombobox({
@@ -50,10 +55,17 @@ export function EntityCombobox({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => {
+  // Lista filtrada y ordenada:
+  //   - Sin busqueda: SF primero (orden original), luego COOPAC (orden original).
+  //   - Con busqueda: plana (sin reordenar), para que el match mas relevante
+  //     quede donde el usuario lo espera.
+  const sorted = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((o) => o.nombCorreg.toLowerCase().includes(q));
+    const base = q ? options.filter((o) => o.nombCorreg.toLowerCase().includes(q)) : options;
+    if (q) return base;
+    const sf = base.filter(o => !o.tipoEntidad?.startsWith("COOPAC_"));
+    const coopac = base.filter(o => o.tipoEntidad?.startsWith("COOPAC_"));
+    return [...sf, ...coopac];
   }, [search, options]);
 
   // Max ultimoPeriodo del universo para el badge "sin data reciente".
@@ -62,22 +74,24 @@ export function EntityCombobox({
     [options],
   );
 
-  // Reset active idx cuando cambia el filtro
+  // Entidad actualmente seleccionada — para mostrar badge en el trigger.
+  const selectedOption = useMemo(
+    () => options.find(o => o.nombCorreg === value),
+    [options, value],
+  );
+
   useEffect(() => {
     setActiveIdx(0);
   }, [search]);
 
-  // Autofocus search input al abrir
   useEffect(() => {
     if (open) {
-      // Timeout para que el DOM se renderice antes del focus
       const t = setTimeout(() => searchInputRef.current?.focus(), 10);
       return () => clearTimeout(t);
     }
     setSearch("");
   }, [open]);
 
-  // Click fuera -> cerrar
   useEffect(() => {
     if (!open) return;
     const onClickOutside = (e: MouseEvent) => {
@@ -89,7 +103,6 @@ export function EntityCombobox({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
-  // Scroll auto-follow del item activo
   useEffect(() => {
     if (!open || !listRef.current) return;
     const activeEl = listRef.current.querySelector<HTMLElement>(
@@ -106,19 +119,24 @@ export function EntityCombobox({
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, filtered.length - 1));
+      setActiveIdx((i) => Math.min(i + 1, sorted.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const opt = filtered[activeIdx];
+      const opt = sorted[activeIdx];
       if (opt) seleccionar(opt.nombCorreg);
     } else if (e.key === "Escape") {
       e.preventDefault();
       setOpen(false);
     }
   };
+
+  const isSearching = search.trim() !== "";
+  const sfCount = sorted.filter(o => !o.tipoEntidad?.startsWith("COOPAC_")).length;
+  const coopacCount = sorted.filter(o => o.tipoEntidad?.startsWith("COOPAC_")).length;
+  const showSections = !isSearching && coopacCount > 0 && sfCount > 0;
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
@@ -139,7 +157,12 @@ export function EntityCombobox({
           open && "border-brand-500 ring-2 ring-brand-100",
         )}
       >
-        <span className="truncate text-slate-900">{value || "—"}</span>
+        <span className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="truncate text-slate-900">{value || "—"}</span>
+          {selectedOption?.tipoEntidad?.startsWith("COOPAC_") && selectedOption.tipoEntidad && (
+            <CoopacNivelBadge tipo={selectedOption.tipoEntidad} />
+          )}
+        </span>
         <ChevronDown
           className={cn(
             "w-4 h-4 text-slate-400 flex-shrink-0 transition-transform",
@@ -169,7 +192,7 @@ export function EntityCombobox({
               />
             </div>
             <p className="text-[10px] text-slate-500 mt-1 px-1">
-              {filtered.length} de {options.length}
+              {sorted.length} de {options.length}
               {" · "}
               <span className="text-slate-400">↑↓ navegar · Enter elegir · Esc cerrar</span>
             </p>
@@ -180,48 +203,80 @@ export function EntityCombobox({
             ref={listRef}
             className="max-h-72 overflow-y-auto py-1"
           >
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-slate-500">
                 Sin resultados para <span className="font-mono">&quot;{search}&quot;</span>
               </div>
             ) : (
-              filtered.map((opt, idx) => {
+              sorted.map((opt, idx) => {
+                const isCoopac = opt.tipoEntidad?.startsWith("COOPAC_");
+                const prevIsCoopac = sorted[idx - 1]?.tipoEntidad?.startsWith("COOPAC_");
                 const isActive = idx === activeIdx;
                 const isSelected = opt.nombCorreg === value;
+
+                // Section header: se inyecta en la transicion SF→COOPAC.
+                let sectionHeader: React.ReactNode = null;
+                if (showSections) {
+                  if (!isCoopac && idx === 0) {
+                    sectionHeader = (
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50/80 border-b border-slate-100">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                          Sistema Financiero
+                        </span>
+                        <span className="text-[10px] text-slate-400">{sfCount}</span>
+                      </div>
+                    );
+                  } else if (isCoopac && !prevIsCoopac) {
+                    sectionHeader = (
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-teal-50/60 border-t border-b border-teal-100 mt-0.5">
+                        <span className="text-[10px] font-semibold text-teal-600 uppercase tracking-wider">
+                          Cooperativas
+                        </span>
+                        <span className="text-[10px] text-teal-500">{coopacCount}</span>
+                      </div>
+                    );
+                  }
+                }
+
                 return (
-                  <button
-                    key={opt.nombCorreg}
-                    type="button"
-                    data-idx={idx}
-                    onClick={() => seleccionar(opt.nombCorreg)}
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    className={cn(
-                      "w-full flex items-center justify-between gap-3 px-3 py-2 text-left transition-colors",
-                      isActive && "bg-brand-50",
-                      isSelected && !isActive && "bg-slate-50",
-                    )}
-                  >
-                    <span className="flex items-center gap-2 min-w-0 flex-1">
-                      <Check
-                        className={cn(
-                          "w-3.5 h-3.5 flex-shrink-0",
-                          isSelected ? "text-brand-600" : "text-transparent",
+                  <Fragment key={opt.nombCorreg}>
+                    {sectionHeader}
+                    <button
+                      type="button"
+                      data-idx={idx}
+                      onClick={() => seleccionar(opt.nombCorreg)}
+                      onMouseEnter={() => setActiveIdx(idx)}
+                      className={cn(
+                        "w-full flex items-center justify-between gap-3 px-3 py-2 text-left transition-colors",
+                        isActive && "bg-brand-50",
+                        isSelected && !isActive && "bg-slate-50",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 min-w-0 flex-1">
+                        <Check
+                          className={cn(
+                            "w-3.5 h-3.5 flex-shrink-0",
+                            isSelected ? "text-brand-600" : "text-transparent",
+                          )}
+                        />
+                        <span className="text-sm text-slate-800 truncate">
+                          {highlightMatch(opt.nombCorreg, search)}
+                        </span>
+                        {isCoopac && opt.tipoEntidad && (
+                          <CoopacNivelBadge tipo={opt.tipoEntidad} />
                         )}
-                      />
-                      <span className="text-sm text-slate-800 truncate">
-                        {highlightMatch(opt.nombCorreg, search)}
+                        <EntidadFreshnessBadge
+                          ultimoPeriodo={opt.ultimoPeriodo}
+                          maxDisponible={maxUltimoPeriodo}
+                        />
                       </span>
-                      <EntidadFreshnessBadge
-                        ultimoPeriodo={opt.ultimoPeriodo}
-                        maxDisponible={maxUltimoPeriodo}
-                      />
-                    </span>
-                    {opt.primerPeriodo != null && opt.ultimoPeriodo != null && (
-                      <span className="text-[10px] font-mono text-slate-400 flex-shrink-0 whitespace-nowrap">
-                        {opt.primerPeriodo} – {opt.ultimoPeriodo}
-                      </span>
-                    )}
-                  </button>
+                      {opt.primerPeriodo != null && opt.ultimoPeriodo != null && (
+                        <span className="text-[10px] font-mono text-slate-400 flex-shrink-0 whitespace-nowrap">
+                          {opt.primerPeriodo} – {opt.ultimoPeriodo}
+                        </span>
+                      )}
+                    </button>
+                  </Fragment>
                 );
               })
             )}
@@ -232,10 +287,15 @@ export function EntityCombobox({
   );
 }
 
-/**
- * Resalta el substring que matchea con la busqueda (en negrita).
- * Devuelve un array de fragmentos para renderizar seguros (sin dangerouslySetInnerHTML).
- */
+function CoopacNivelBadge({ tipo }: { tipo: string }) {
+  const nivel = tipo.replace("COOPAC_", "");
+  return (
+    <span className="inline-flex items-center px-1 py-px text-[9px] font-bold rounded-sm bg-teal-100 text-teal-700 tracking-wide flex-shrink-0">
+      {nivel}
+    </span>
+  );
+}
+
 function highlightMatch(text: string, search: string): React.ReactNode {
   if (!search.trim()) return text;
   const idx = text.toLowerCase().indexOf(search.toLowerCase());

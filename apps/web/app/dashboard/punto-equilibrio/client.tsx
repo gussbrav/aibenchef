@@ -57,6 +57,7 @@ type EntidadDisponible = {
   nombCorreg: string;
   primerPeriodo: number;
   ultimoPeriodo: number;
+  tipoEntidad?: string | null;
 };
 
 type Config = {
