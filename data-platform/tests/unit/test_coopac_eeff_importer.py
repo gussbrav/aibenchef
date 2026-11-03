@@ -74,35 +74,61 @@ class TestGypCuentas:
 
 
 class TestBgCuentas:
-    """Verifica que _BG_CUENTAS tiene las cuentas clave para el balance."""
+    """Verifica que _BG_CUENTAS resuelve correctamente los textos reales del BG COOPAC.
 
-    def test_creditos_directos_es_a4(self):
-        # Cuenta critica para calculo de cartera en PE
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A", "creditos directos")] == "A4"
+    Las cuentas principales BG son ALL CAPS en el archivo → lookup con parent=None.
+    Los sub-items son mixed-case bajo el codigo de su seccion padre.
+    """
 
-    def test_activo_nivel_cero(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "activo")] == "A"
+    def test_total_activo_es_a(self):
+        # "TOTAL ACTIVO" aparece ALL CAPS → lookup (None, "total activo")
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "total activo")] == "A"
 
-    def test_pasivo_nivel_cero(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "pasivo")] == "B"
+    def test_total_pasivo_es_b(self):
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "total pasivo")] == "B"
 
     def test_patrimonio_nivel_cero(self):
+        # "PATRIMONIO" ALL CAPS → lookup (None, "patrimonio")
         assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "patrimonio")] == "C"
 
-    def test_disponible_bajo_activo(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A", "disponible")] == "A1"
+    def test_disponible_es_a1(self):
+        # "DISPONIBLE" ALL CAPS → lookup (None, "disponible")
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "disponible")] == "A1"
 
-    def test_obligaciones_socios_presente(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("B", "obligaciones con los socios")] == "B1"
+    def test_creditos_netos_es_a4(self):
+        # Nombre real del archivo COOPAC (mismo que SF)
+        key = "creditos netos de provisiones y de ingresos no devengados"
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, key)] == "A4"
+
+    def test_vigentes_bajo_a4(self):
+        # "Vigentes" / "   Vigentes" → normalize → "vigentes", parent=A4
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "vigentes")] == "A4.1"
+
+    def test_refinanciados_bajo_a4(self):
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "refinanciados y reestructurados")] == "A4.2"
+
+    def test_vencidos_bajo_a4(self):
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "vencidos")] == "A4.3"
+
+    def test_en_cobranza_judicial_bajo_a4(self):
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "en cobranza judicial")] == "A4.4"
+
+    def test_provisiones_bajo_a4(self):
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "provisiones")] == "A4.6"
+
+    def test_obligaciones_socios_es_b1(self):
+        # "OBLIGACIONES CON LOS SOCIOS" ALL CAPS → lookup (None, ...)
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[(None, "obligaciones con los socios")] == "B1"
 
     def test_capital_social_presente(self):
         assert MonthlyCoopacEeffImporter._BG_CUENTAS[("C", "capital social")] == "C1"
 
-    def test_creditos_vigentes_bajo_a4(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "creditos vigentes")] == "A4.1"
+    def test_sin_clave_activo_title_case(self):
+        # "Activo" title case NO debe ser una clave de nivel raiz; se usa TOTAL ACTIVO
+        assert (None, "activo") not in MonthlyCoopacEeffImporter._BG_CUENTAS
 
-    def test_provisiones_bajo_a4(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "provisiones")] == "A4.6"
+    def test_sin_clave_pasivo_title_case(self):
+        assert (None, "pasivo") not in MonthlyCoopacEeffImporter._BG_CUENTAS
 
 
 class TestNormalize:
