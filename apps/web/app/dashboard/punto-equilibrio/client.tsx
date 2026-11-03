@@ -362,7 +362,7 @@ export function PuntoEquilibrioClient({
         </div>
       )}
       {tab === "historico" && config.granularidad !== "cierre" && (
-        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series} />
+        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series.filter((s) => s.entidad !== entidadActual)} />
       )}
       {tab === "comparativo" && (
         <ComparativoView
