@@ -14,7 +14,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
-  BarChart3, Calendar, ChevronDown, ChevronRight, GripVertical, Info, Layers, Palette, RotateCcw, TrendingUp, Users, X,
+  BarChart3, Calendar, ChevronDown, ChevronRight, FileDown, GripVertical, Info, Layers, Palette, RotateCcw, TrendingUp, Users, X,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -362,7 +362,7 @@ export function PuntoEquilibrioClient({
         </div>
       )}
       {tab === "historico" && config.granularidad !== "cierre" && (
-        <HistoricoTable data={historico} entidad={entidadActual} />
+        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} />
       )}
       {tab === "comparativo" && (
         <ComparativoView
@@ -898,8 +898,8 @@ const LS_COL_ORDER = "pe-col-order-v1";
  * Ambos vienen pre-computados del backend sobre los componentes.
  */
 function HistoricoTable({
-  data, entidad,
-}: { data: PuntoEquilibrioRow[]; entidad: string }) {
+  data, entidad, granularidad,
+}: { data: PuntoEquilibrioRow[]; entidad: string; granularidad?: Granularidad }) {
   // Orden de filas (por key) y columnas (por periodo). Se hidratan desde
   // localStorage al mount para preservar el layout del usuario.
   const [rowOrder, setRowOrder] = useState<string[]>(() =>
@@ -1043,6 +1043,137 @@ function HistoricoTable({
     });
   };
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (isExporting || data.length === 0) return;
+    setIsExporting(true);
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Aibenchef";
+      workbook.created = new Date();
+
+      const sheet = workbook.addWorksheet("Punto de Equilibrio");
+      sheet.columns = [
+        { width: 44 },
+        ...effectiveCols.map(() => ({ width: 14 })),
+      ];
+
+      // Titulo
+      sheet.mergeCells(1, 1, 1, effectiveCols.length + 1);
+      const titleRow = sheet.getRow(1);
+      titleRow.getCell(1).value = `Punto de Equilibrio — ${entidad}`;
+      titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
+      titleRow.height = 22;
+
+      // Subtitulo
+      sheet.mergeCells(2, 1, 2, effectiveCols.length + 1);
+      const subtitleRow = sheet.getRow(2);
+      subtitleRow.getCell(1).value = "% sobre Cartera Directa Promedio · últimos 12 meses móviles";
+      subtitleRow.getCell(1).font = { size: 9, color: { argb: "FF64748B" } };
+
+      // Info granularidad + fecha
+      sheet.mergeCells(3, 1, 3, effectiveCols.length + 1);
+      const infoRow = sheet.getRow(3);
+      const granLabel = GRANULARIDADES.find((g) => g.value === granularidad)?.label ?? "";
+      infoRow.getCell(1).value = `Granularidad: ${granLabel} · Exportado: ${new Date().toLocaleDateString("es-PE")}`;
+      infoRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF94A3B8" } };
+
+      // Fila vacía
+      sheet.addRow([]);
+
+      // Cabecera
+      const headerRow = sheet.addRow([
+        "COMPONENTE",
+        ...effectiveCols.map((p) => dataByPeriodo.get(p)?.periodoLabel ?? String(p)),
+      ]);
+      headerRow.height = 20;
+      headerRow.eachCell((cell, col) => {
+        cell.font = { bold: true, size: 10, color: { argb: "FF1E293B" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        cell.alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
+        cell.border = { bottom: { style: "medium", color: { argb: "FF334155" } } };
+      });
+
+      // Helper para agregar fila de datos
+      const addDataRow = (
+        label: string,
+        field: keyof PuntoEquilibrioRow,
+        opts: { bold?: boolean; indent?: number; bgArgb?: string; isComputed?: boolean },
+      ) => {
+        const indent = opts.indent ? "   ".repeat(opts.indent) : "";
+        const rowValues: (string | number | null)[] = [`${indent}${label}`];
+        for (const p of effectiveCols) {
+          const pd = dataByPeriodo.get(p);
+          if (!pd) { rowValues.push(null); continue; }
+          let v: number | null;
+          if (opts.isComputed) {
+            v = computedPuntoEq(pd);
+          } else {
+            v = (pd[field] as number | null) ?? null;
+          }
+          rowValues.push(v);
+        }
+        const dr = sheet.addRow(rowValues);
+        if (opts.bgArgb) {
+          dr.eachCell((cell) => {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bgArgb! } };
+          });
+        }
+        dr.getCell(1).font = {
+          bold: opts.bold,
+          size: 10,
+          color: { argb: opts.indent ? "FF475569" : "FF1E293B" },
+        };
+        for (let i = 2; i <= effectiveCols.length + 1; i++) {
+          const cell = dr.getCell(i);
+          if (typeof cell.value === "number") {
+            cell.numFmt = "0.00%";
+            cell.alignment = { horizontal: "right" };
+            cell.font = { bold: opts.bold, size: 10 };
+          }
+        }
+      };
+
+      // Filas de datos (todas las filas, sub-filas siempre incluidas)
+      for (const row of effectiveRows) {
+        const isHighlight = row.variant === "highlight";
+        const isBold = ["bold", "highlight", "sum"].includes(row.variant);
+        const prefix = row.variant === "sum" ? "(+) " : row.variant === "sub" ? "(−) " : "";
+        addDataRow(`${prefix}${row.label}`, row.field, {
+          bold: isBold,
+          bgArgb: isHighlight ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
+          isComputed: row.field === "pctPuntoEq",
+        });
+        if (row.subrows) {
+          for (const sub of row.subrows) {
+            addDataRow(sub.label, sub.field, { indent: 1 });
+          }
+        }
+      }
+
+      // Generar y descargar
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const lastP = effectiveCols[effectiveCols.length - 1];
+      const lastLabel = dataByPeriodo.get(lastP)?.periodoLabel?.replace(/\s+/g, "") ?? String(lastP);
+      const granSlug = (granLabel || "historico").replace(/\s+/g, "_");
+      a.download = `PE_${entidad.replace(/[^a-zA-Z0-9]/g, "_")}_${granSlug}_${lastLabel}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (data.length === 0) return <EmptyState />;
 
   return (
@@ -1062,17 +1193,29 @@ function HistoricoTable({
             reordenar filas o columnas. El orden se guarda en tu navegador.
           </p>
         </div>
-        {isCustomOrder && (
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isCustomOrder && (
+            <button
+              type="button"
+              onClick={resetOrder}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
+              title="Restablecer al orden por defecto (cronológico + contable)"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Restablecer orden
+            </button>
+          )}
           <button
             type="button"
-            onClick={resetOrder}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-white border border-slate-300 hover:bg-slate-50 rounded text-slate-700"
-            title="Restablecer al orden por defecto (cronológico + contable)"
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 border border-emerald-700 rounded text-white transition-colors"
+            title="Descargar tabla como archivo Excel (.xlsx)"
           >
-            <RotateCcw className="w-3 h-3" />
-            Restablecer orden
+            <FileDown className="w-3 h-3" />
+            {isExporting ? "Exportando…" : "Exportar Excel"}
           </button>
-        )}
+        </div>
       </header>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
