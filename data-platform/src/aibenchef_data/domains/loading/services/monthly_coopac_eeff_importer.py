@@ -394,19 +394,19 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
                 for moneda, valor in vals_by_moneda.items():
                     observations.append(
                         (
-                            layout.periodo_yyyymm,   # periodo INT
-                            layout.fecha_cierre,     # fecha_cierre DATE
-                            tipo_estado,             # 'balance' | 'resultados'
-                            None,                    # empresa_sbs (no disponible en COOPAC)
-                            entidad_info.nombre,     # nomb_correg TEXT
-                            tipo_entidad,            # 'COOPAC_N3' etc
-                            None,                    # microfinanciera (no disponible)
-                            None,                    # nacional (no disponible)
-                            moneda,                  # 'MN' | 'ME' | 'TOTAL'
-                            codigo,                  # cuenta_codigo
-                            cuenta_nombre,           # nombre desde el archivo
-                            valor,                   # NUMERIC
-                            source_file,             # path.name
+                            layout.periodo_yyyymm,  # periodo INT
+                            layout.fecha_cierre,  # fecha_cierre DATE
+                            tipo_estado,  # 'balance' | 'resultados'
+                            None,  # empresa_sbs (no disponible en COOPAC)
+                            entidad_info.nombre,  # nomb_correg TEXT
+                            tipo_entidad,  # 'COOPAC_N3' etc
+                            None,  # microfinanciera (no disponible)
+                            None,  # nacional (no disponible)
+                            moneda,  # 'MN' | 'ME' | 'TOTAL'
+                            codigo,  # cuenta_codigo
+                            cuenta_nombre,  # nombre desde el archivo
+                            valor,  # NUMERIC
+                            source_file,  # path.name
                         )
                     )
 

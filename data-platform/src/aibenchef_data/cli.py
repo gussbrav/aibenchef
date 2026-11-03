@@ -2273,7 +2273,7 @@ def import_coopac_eeff(periodo: str, batch_size: int, dry_run: bool) -> None:
         return
 
     loading_module = importlib.import_module("aibenchef_data.domains.loading")
-    importer_cls = getattr(loading_module, "MonthlyCoopacEeffImporter")
+    importer_cls = loading_module.MonthlyCoopacEeffImporter
 
     grand_inserted = 0
     grand_ok = 0
@@ -2311,8 +2311,7 @@ def import_coopac_eeff(periodo: str, batch_size: int, dry_run: bool) -> None:
 
     asyncio.run(_run())
     click.echo(
-        f"\n# TOTAL: {grand_ok} OK, {grand_fail} fallidos, "
-        f"{grand_inserted:,} filas insertadas"
+        f"\n# TOTAL: {grand_ok} OK, {grand_fail} fallidos, {grand_inserted:,} filas insertadas"
     )
 
 

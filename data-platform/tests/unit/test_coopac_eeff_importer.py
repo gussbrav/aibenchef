@@ -53,10 +53,15 @@ class TestGypCuentas:
         assert MonthlyCoopacEeffImporter._GYP_CUENTAS[("10", "personal")] == "10.1"
 
     def test_resultado_neto_presente(self):
-        assert MonthlyCoopacEeffImporter._GYP_CUENTAS[(None, "resultado neto del ejercicio")] == "17"
+        assert (
+            MonthlyCoopacEeffImporter._GYP_CUENTAS[(None, "resultado neto del ejercicio")] == "17"
+        )
 
     def test_provisiones_creditos_presente(self):
-        assert MonthlyCoopacEeffImporter._GYP_CUENTAS[(None, "provisiones para creditos directos")] == "4"
+        assert (
+            MonthlyCoopacEeffImporter._GYP_CUENTAS[(None, "provisiones para creditos directos")]
+            == "4"
+        )
 
     def test_creditos_directos_bajo_ingresos(self):
         assert MonthlyCoopacEeffImporter._GYP_CUENTAS[("1", "creditos directos")] == "1.4"
