@@ -87,7 +87,8 @@ const tools = [
       properties: {
         tipo: {
           type: "string" as const,
-          enum: ["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES"],
+          enum: ["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES",
+                 "COOPAC_N3", "COOPAC_N2B", "COOPAC_N2A", "COOPAC_N1"],
           description: "Filtro por tipo regulatorio",
         },
       },
@@ -190,7 +191,10 @@ const tools = [
 
 // Schemas Zod para validar args
 const listEntidadesArgs = z.object({
-  tipo: z.enum(["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES"]).optional(),
+  tipo: z
+    .enum(["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES",
+           "COOPAC_N3", "COOPAC_N2B", "COOPAC_N2A", "COOPAC_N1"])
+    .optional(),
 });
 const listPeriodosArgs = z.object({
   ultimos_n: z.number().int().min(1).max(240).optional(),

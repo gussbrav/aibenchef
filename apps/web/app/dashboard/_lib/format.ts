@@ -51,6 +51,10 @@ const TIPO_ENTIDAD_LABEL: Record<string, string> = {
   CMAC: "Cajas Municipales",
   CRAC: "Cajas Rurales",
   EDPYMES: "Empresas de Créditos",
+  COOPAC_N3: "Cooperativas Nivel 3",
+  COOPAC_N2B: "Cooperativas Nivel 2B",
+  COOPAC_N2A: "Cooperativas Nivel 2A",
+  COOPAC_N1: "Cooperativas Nivel 1",
 };
 
 export function tipoEntidadLabel(code: string | null | undefined): string {
@@ -65,4 +69,8 @@ export const TIPO_ENTIDAD_ORDER: Record<string, number> = {
   CMAC: 3,
   CRAC: 4,
   EDPYMES: 5,
+  COOPAC_N3: 6,
+  COOPAC_N2B: 7,
+  COOPAC_N2A: 8,
+  COOPAC_N1: 9,
 };

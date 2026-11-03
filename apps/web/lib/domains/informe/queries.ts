@@ -2462,7 +2462,8 @@ export async function getTop2PorGrupoByCartera(
         SELECT nomb_correg, tipo_entidad, cartera_total, rn
         FROM ranked
         WHERE rn <= ${topN}
-          AND tipo_entidad IN ('BANCOS', 'FINANCIERAS', 'CMAC', 'CRAC', 'EDPYMES')
+          AND tipo_entidad IN ('BANCOS', 'FINANCIERAS', 'CMAC', 'CRAC', 'EDPYMES',
+                              'COOPAC_N3', 'COOPAC_N2B', 'COOPAC_N2A', 'COOPAC_N1')
         ORDER BY
           CASE tipo_entidad
             WHEN 'BANCOS'      THEN 0
@@ -2470,6 +2471,10 @@ export async function getTop2PorGrupoByCartera(
             WHEN 'CMAC'        THEN 2
             WHEN 'CRAC'        THEN 3
             WHEN 'EDPYMES'     THEN 4
+            WHEN 'COOPAC_N3'   THEN 5
+            WHEN 'COOPAC_N2B'  THEN 6
+            WHEN 'COOPAC_N2A'  THEN 7
+            WHEN 'COOPAC_N1'   THEN 8
             ELSE 99
           END,
           rn

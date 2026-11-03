@@ -25,7 +25,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 const TIPOS_ESTADO: TipoEstado[] = ["balance", "resultados"];
-const TIPOS_ENTIDAD = ["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES"];
+const TIPOS_ENTIDAD = [
+  "BANCOS",
+  "FINANCIERAS",
+  "CMAC",
+  "CRAC",
+  "EDPYMES",
+  "COOPAC_N3",
+  "COOPAC_N2B",
+  "COOPAC_N2A",
+  "COOPAC_N1",
+];
 
 interface PageProps {
   searchParams: Promise<{

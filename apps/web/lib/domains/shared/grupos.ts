@@ -20,6 +20,10 @@ export const ORDEN_GRUPOS_DB = [
   "cmac",
   "crac",
   "edpyme",
+  "coopac_n3",
+  "coopac_n2b",
+  "coopac_n2a",
+  "coopac_n1",
 ] as const;
 
 /** Orden en formato uppercase singular (tipo_entidad en raw.*_observacion). */
@@ -29,6 +33,10 @@ export const ORDEN_GRUPOS_UPPER = [
   "CMAC",
   "CRAC",
   "EDPYMES",
+  "COOPAC_N3",
+  "COOPAC_N2B",
+  "COOPAC_N2A",
+  "COOPAC_N1",
 ] as const;
 
 /** Mapping uniforme: cualquier forma del grupo → label display oficial. */
@@ -39,15 +47,23 @@ export const GRUPO_DISPLAY: Record<string, string> = {
   cmac: "Cajas Municipales",
   crac: "Cajas Rurales",
   edpyme: "Empresas de Créditos",
+  coopac_n3: "Cooperativas Nivel 3",
+  coopac_n2b: "Cooperativas Nivel 2B",
+  coopac_n2a: "Cooperativas Nivel 2A",
+  coopac_n1: "Cooperativas Nivel 1",
   // Formas uppercase
   BANCOS: "Bancos",
   FINANCIERAS: "Financieras",
   CMAC: "Cajas Municipales",
   CRAC: "Cajas Rurales",
   EDPYMES: "Empresas de Créditos",
+  COOPAC_N3: "Cooperativas Nivel 3",
+  COOPAC_N2B: "Cooperativas Nivel 2B",
+  COOPAC_N2A: "Cooperativas Nivel 2A",
+  COOPAC_N1: "Cooperativas Nivel 1",
 };
 
-/** Index del grupo para ORDER BY (BANCOS=0, EDPYMES=4, otro=99). */
+/** Index del grupo para ORDER BY (BANCOS=0, COOPAC_N1=8, otro=99). */
 export function ordenGrupo(grupo: string | null | undefined): number {
   if (!grupo) return 99;
   const upper = grupo.toUpperCase();
@@ -65,6 +81,14 @@ export function ordenGrupo(grupo: string | null | undefined): number {
     case "EDPYMES":
     case "EDPYME":
       return 4;
+    case "COOPAC_N3":
+      return 5;
+    case "COOPAC_N2B":
+      return 6;
+    case "COOPAC_N2A":
+      return 7;
+    case "COOPAC_N1":
+      return 8;
     default:
       return 99;
   }

@@ -794,7 +794,8 @@ export async function getVerificacionEntidades(
         COUNT(DISTINCT ${sql.raw(info.columnaPeriodo)}) AS n_periodos_reporto
       FROM ${sql.raw(info.tablaRaw)}
       WHERE ${sql.raw(info.columnaPeriodo)} BETWEEN ${periodo - 100} AND ${periodo}
-        AND ${sql.raw(info.columnaGrupo)} IN ('BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES')
+        AND ${sql.raw(info.columnaGrupo)} IN ('BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES',
+                'COOPAC_N3','COOPAC_N2B','COOPAC_N2A','COOPAC_N1')
       GROUP BY 1, 2
       HAVING COUNT(DISTINCT ${sql.raw(info.columnaPeriodo)}) >= 1
     ),

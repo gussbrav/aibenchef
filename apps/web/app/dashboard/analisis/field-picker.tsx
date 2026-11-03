@@ -15,7 +15,17 @@ import type {
   Moneda,
 } from "./types";
 
-const TIPOS_ENTIDAD_OPCIONES = ["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES"].sort(
+const TIPOS_ENTIDAD_OPCIONES = [
+  "BANCOS",
+  "FINANCIERAS",
+  "CMAC",
+  "CRAC",
+  "EDPYMES",
+  "COOPAC_N3",
+  "COOPAC_N2B",
+  "COOPAC_N2A",
+  "COOPAC_N1",
+].sort(
   (a, b) => (TIPO_ENTIDAD_ORDER[a] ?? 99) - (TIPO_ENTIDAD_ORDER[b] ?? 99),
 );
 
