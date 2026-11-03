@@ -362,7 +362,7 @@ export function PuntoEquilibrioClient({
         </div>
       )}
       {tab === "historico" && config.granularidad !== "cierre" && (
-        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} />
+        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series} />
       )}
       {tab === "comparativo" && (
         <ComparativoView
@@ -899,8 +899,21 @@ const LS_COL_ORDER = "pe-col-order-v1";
  * Ambos vienen pre-computados del backend sobre los componentes.
  */
 function HistoricoTable({
-  data, entidad, granularidad,
-}: { data: PuntoEquilibrioRow[]; entidad: string; granularidad?: Granularidad }) {
+  data, entidad, granularidad, peerSeries,
+}: {
+  data: PuntoEquilibrioRow[];
+  entidad: string;
+  granularidad?: Granularidad;
+  peerSeries?: PuntoEquilibrioSerie[];
+}) {
+  const [activeEntity, setActiveEntity] = useState<string>(entidad);
+
+  // Data de la entidad activa: main entity usa 'data', peers usan series[i].puntos
+  const activeData = useMemo<PuntoEquilibrioRow[]>(() => {
+    if (activeEntity === entidad || !peerSeries) return data;
+    const s = peerSeries.find((p) => p.entidad === activeEntity);
+    return s ? (s.puntos as unknown as PuntoEquilibrioRow[]) : data;
+  }, [activeEntity, entidad, data, peerSeries]);
   // Orden de filas (por key) y columnas (por periodo). Se hidratan desde
   // localStorage al mount para preservar el layout del usuario.
   const [rowOrder, setRowOrder] = useState<string[]>(() =>
@@ -976,15 +989,14 @@ function HistoricoTable({
   // Columnas efectivas: si hay orden guardado y matchea con los periodos
   // actuales, usarlo. Si no, usar el orden que vino del backend.
   const effectiveCols = useMemo(() => {
-    const currentPeriodos = data.map((d) => d.periodo);
+    const currentPeriodos = activeData.map((d) => d.periodo);
     if (!colOrder) return currentPeriodos;
     const saved = colOrder.filter((p) => currentPeriodos.includes(p));
-    // Agregar periodos nuevos que no estaban en el orden guardado
     for (const p of currentPeriodos) {
       if (!saved.includes(p)) saved.push(p);
     }
     return saved;
-  }, [colOrder, data]);
+  }, [colOrder, activeData]);
 
   // Filas efectivas ordenadas
   const effectiveRows = useMemo(() => {
@@ -995,9 +1007,9 @@ function HistoricoTable({
 
   const dataByPeriodo = useMemo(() => {
     const m = new Map<number, PuntoEquilibrioRow>();
-    for (const d of data) m.set(d.periodo, d);
+    for (const d of activeData) m.set(d.periodo, d);
     return m;
-  }, [data]);
+  }, [activeData]);
 
   // Drag state
   const [draggedRow, setDraggedRow] = useState<string | null>(null);
@@ -1033,7 +1045,7 @@ function HistoricoTable({
   const moveCol = (from: number, to: number) => {
     if (from === to) return;
     setColOrder((prev) => {
-      const base = prev ?? data.map((d) => d.periodo);
+      const base = prev ?? activeData.map((d) => d.periodo);
       const arr = [...base];
       const fromIdx = arr.indexOf(from);
       const toIdx = arr.indexOf(to);
@@ -1047,114 +1059,121 @@ function HistoricoTable({
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExportExcel = async () => {
-    if (isExporting || data.length === 0) return;
+    if (isExporting) return;
+    // Todas las entidades: main entity primero, luego peers
+    const allEntities: Array<{ entidad: string; rows: PuntoEquilibrioRow[] }> = [
+      { entidad, rows: data },
+      ...(peerSeries ?? []).map((s) => ({
+        entidad: s.entidad,
+        rows: s.puntos as unknown as PuntoEquilibrioRow[],
+      })),
+    ];
+    if (allEntities.every((e) => e.rows.length === 0)) return;
     setIsExporting(true);
     try {
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Aibenchef";
       workbook.created = new Date();
-
-      const sheet = workbook.addWorksheet("Punto de Equilibrio");
-      sheet.columns = [
-        { width: 44 },
-        ...effectiveCols.map(() => ({ width: 14 })),
-      ];
-
-      // Titulo
-      sheet.mergeCells(1, 1, 1, effectiveCols.length + 1);
-      const titleRow = sheet.getRow(1);
-      titleRow.getCell(1).value = `Punto de Equilibrio — ${entidad}`;
-      titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
-      titleRow.height = 22;
-
-      // Subtitulo
-      sheet.mergeCells(2, 1, 2, effectiveCols.length + 1);
-      const subtitleRow = sheet.getRow(2);
-      subtitleRow.getCell(1).value = "% sobre Cartera Directa Promedio · últimos 12 meses móviles";
-      subtitleRow.getCell(1).font = { size: 9, color: { argb: "FF64748B" } };
-
-      // Info granularidad + fecha
-      sheet.mergeCells(3, 1, 3, effectiveCols.length + 1);
-      const infoRow = sheet.getRow(3);
       const granLabel = GRANULARIDADES.find((g) => g.value === granularidad)?.label ?? "";
-      infoRow.getCell(1).value = `Granularidad: ${granLabel} · Exportado: ${new Date().toLocaleDateString("es-PE")}`;
-      infoRow.getCell(1).font = { size: 9, italic: true, color: { argb: "FF94A3B8" } };
 
-      // Fila vacía
-      sheet.addRow([]);
+      // Una hoja por entidad (misma estructura, columnas = periodos del rango)
+      for (const ent of allEntities) {
+        if (ent.rows.length === 0) continue;
+        const entPeriodos = ent.rows.map((r) => r.periodo);
+        const entByPeriodo = new Map<number, PuntoEquilibrioRow>(
+          ent.rows.map((r) => [r.periodo, r]),
+        );
+        // Excel sheet names: max 31 chars, no caracteres especiales
+        const sheetName = ent.entidad.replace(/[/\\?*[\]]/g, "").substring(0, 31);
+        const sheet = workbook.addWorksheet(sheetName);
+        sheet.columns = [{ width: 44 }, ...entPeriodos.map(() => ({ width: 14 }))];
 
-      // Cabecera
-      const headerRow = sheet.addRow([
-        "COMPONENTE",
-        ...effectiveCols.map((p) => dataByPeriodo.get(p)?.periodoLabel ?? String(p)),
-      ]);
-      headerRow.height = 20;
-      headerRow.eachCell((cell, col) => {
-        cell.font = { bold: true, size: 10, color: { argb: "FF1E293B" } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
-        cell.alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
-        cell.border = { bottom: { style: "medium", color: { argb: "FF334155" } } };
-      });
+        // Titulo
+        sheet.mergeCells(1, 1, 1, entPeriodos.length + 1);
+        const titleRow = sheet.getRow(1);
+        titleRow.getCell(1).value = `Punto de Equilibrio — ${ent.entidad}`;
+        titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FF1E293B" } };
+        titleRow.height = 22;
 
-      // Helper para agregar fila de datos
-      const addDataRow = (
-        label: string,
-        field: keyof PuntoEquilibrioRow,
-        opts: { bold?: boolean; indent?: number; bgArgb?: string; isComputed?: boolean },
-      ) => {
-        const indent = opts.indent ? "   ".repeat(opts.indent) : "";
-        const rowValues: (string | number | null)[] = [`${indent}${label}`];
-        for (const p of effectiveCols) {
-          const pd = dataByPeriodo.get(p);
-          if (!pd) { rowValues.push(null); continue; }
-          let v: number | null;
-          if (opts.isComputed) {
-            v = computedPuntoEq(pd);
-          } else {
-            v = (pd[field] as number | null) ?? null;
-          }
-          rowValues.push(v);
-        }
-        const dr = sheet.addRow(rowValues);
-        if (opts.bgArgb) {
-          dr.eachCell((cell) => {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bgArgb! } };
-          });
-        }
-        dr.getCell(1).font = {
-          bold: opts.bold,
-          size: 10,
-          color: { argb: opts.indent ? "FF475569" : "FF1E293B" },
-        };
-        for (let i = 2; i <= effectiveCols.length + 1; i++) {
-          const cell = dr.getCell(i);
-          if (typeof cell.value === "number") {
-            cell.numFmt = "0.00%";
-            cell.alignment = { horizontal: "right" };
-            cell.font = { bold: opts.bold, size: 10 };
-          }
-        }
-      };
+        // Subtitulo
+        sheet.mergeCells(2, 1, 2, entPeriodos.length + 1);
+        sheet.getRow(2).getCell(1).value = "% sobre Cartera Directa Promedio · últimos 12 meses móviles";
+        sheet.getRow(2).getCell(1).font = { size: 9, color: { argb: "FF64748B" } };
 
-      // Filas de datos (todas las filas, sub-filas siempre incluidas)
-      for (const row of effectiveRows) {
-        const isHighlight = row.variant === "highlight";
-        const isBold = ["bold", "highlight", "sum"].includes(row.variant);
-        const prefix = row.variant === "sum" ? "(+) " : row.variant === "sub" ? "(−) " : "";
-        addDataRow(`${prefix}${row.label}`, row.field, {
-          bold: isBold,
-          bgArgb: isHighlight ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
-          isComputed: row.field === "pctPuntoEq",
+        // Info
+        sheet.mergeCells(3, 1, 3, entPeriodos.length + 1);
+        sheet.getRow(3).getCell(1).value =
+          `Granularidad: ${granLabel} · Exportado: ${new Date().toLocaleDateString("es-PE")}`;
+        sheet.getRow(3).getCell(1).font = { size: 9, italic: true, color: { argb: "FF94A3B8" } };
+
+        sheet.addRow([]);
+
+        // Cabecera de periodos
+        const headerRow = sheet.addRow([
+          "COMPONENTE",
+          ...entPeriodos.map((p) => entByPeriodo.get(p)?.periodoLabel ?? String(p)),
+        ]);
+        headerRow.height = 20;
+        headerRow.eachCell((cell, col) => {
+          cell.font = { bold: true, size: 10, color: { argb: "FF1E293B" } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+          cell.alignment = { horizontal: col === 1 ? "left" : "center", vertical: "middle" };
+          cell.border = { bottom: { style: "medium", color: { argb: "FF334155" } } };
         });
-        if (row.subrows) {
-          for (const sub of row.subrows) {
-            addDataRow(sub.label, sub.field, { indent: 1 });
+
+        // Helper fila de datos — captura entPeriodos y entByPeriodo via closure
+        const addRow = (
+          label: string,
+          field: keyof PuntoEquilibrioRow,
+          opts: { bold?: boolean; indent?: number; bgArgb?: string; isComputed?: boolean },
+        ) => {
+          const pfx = opts.indent ? "   ".repeat(opts.indent) : "";
+          const vals: (string | number | null)[] = [`${pfx}${label}`];
+          for (const p of entPeriodos) {
+            const pd = entByPeriodo.get(p);
+            if (!pd) { vals.push(null); continue; }
+            vals.push(
+              opts.isComputed ? computedPuntoEq(pd) : (pd[field] as number | null) ?? null,
+            );
+          }
+          const dr = sheet.addRow(vals);
+          if (opts.bgArgb) {
+            dr.eachCell((cell) => {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bgArgb! } };
+            });
+          }
+          dr.getCell(1).font = {
+            bold: opts.bold, size: 10,
+            color: { argb: opts.indent ? "FF475569" : "FF1E293B" },
+          };
+          for (let i = 2; i <= entPeriodos.length + 1; i++) {
+            const cell = dr.getCell(i);
+            if (typeof cell.value === "number") {
+              cell.numFmt = "0.00%";
+              cell.alignment = { horizontal: "right" };
+              cell.font = { bold: opts.bold, size: 10 };
+            }
+          }
+        };
+
+        for (const row of effectiveRows) {
+          const isHighlight = row.variant === "highlight";
+          const isBold = ["bold", "highlight", "sum"].includes(row.variant);
+          const prefix = row.variant === "sum" ? "(+) " : row.variant === "sub" ? "(−) " : "";
+          addRow(`${prefix}${row.label}`, row.field, {
+            bold: isBold,
+            bgArgb: isHighlight ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
+            isComputed: row.field === "pctPuntoEq",
+          });
+          if (row.subrows) {
+            for (const sub of row.subrows) {
+              addRow(sub.label, sub.field, { indent: 1 });
+            }
           }
         }
       }
 
-      // Generar y descargar
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1162,10 +1181,13 @@ function HistoricoTable({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const lastP = effectiveCols[effectiveCols.length - 1];
-      const lastLabel = dataByPeriodo.get(lastP)?.periodoLabel?.replace(/\s+/g, "") ?? String(lastP);
+      const lastRow = data[data.length - 1];
+      const lastLabel = (lastRow?.periodoLabel ?? "").replace(/\s+/g, "");
       const granSlug = (granLabel || "historico").replace(/\s+/g, "_");
-      a.download = `PE_${entidad.replace(/[^a-zA-Z0-9]/g, "_")}_${granSlug}_${lastLabel}.xlsx`;
+      const nEnt = allEntities.filter((e) => e.rows.length > 0).length;
+      a.download = nEnt === 1
+        ? `PE_${entidad.replace(/[^a-zA-Z0-9]/g, "_")}_${granSlug}_${lastLabel}.xlsx`
+        : `PE_Historico_${nEnt}entidades_${granSlug}_${lastLabel}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1175,14 +1197,17 @@ function HistoricoTable({
     }
   };
 
-  if (data.length === 0) return <EmptyState />;
+  if (data.length === 0 && (!peerSeries || peerSeries.length === 0)) return <EmptyState />;
+
+  const hasPeers = peerSeries && peerSeries.length > 0;
+  const nEntidades = 1 + (peerSeries?.length ?? 0);
 
   return (
     <section className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
       <header className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-slate-900 mb-1">
-            Cuadro histórico — {entidad}
+            Cuadro histórico — {activeEntity}
           </h2>
           <div className="flex items-center gap-1.5 mb-1.5">
             <span className="inline-flex items-center gap-1 h-5 px-2 text-[10px] font-medium bg-white border border-slate-300 rounded-full text-slate-700">
@@ -1211,13 +1236,45 @@ function HistoricoTable({
             onClick={handleExportExcel}
             disabled={isExporting}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 border border-emerald-700 rounded text-white transition-colors"
-            title="Descargar tabla como archivo Excel (.xlsx)"
+            title={hasPeers ? `Descargar ${nEntidades} entidades como Excel (.xlsx), una hoja por entidad` : "Descargar tabla como archivo Excel (.xlsx)"}
           >
             <FileDown className="w-3 h-3" />
-            {isExporting ? "Exportando…" : "Exportar Excel"}
+            {isExporting ? "Exportando…" : hasPeers ? `Exportar Excel (${nEntidades})` : "Exportar Excel"}
           </button>
         </div>
       </header>
+
+      {/* Tabs de entidad — solo si hay peers en el peer group */}
+      {hasPeers && (
+        <div className="px-5 py-2.5 border-b border-slate-100 bg-white flex gap-1.5 flex-wrap">
+          {[{ entidad, color: "#1e3a5f" }, ...peerSeries!].map((s) => {
+            const isActive = activeEntity === s.entidad;
+            return (
+              <button
+                key={s.entidad}
+                type="button"
+                onClick={() => {
+                  setActiveEntity(s.entidad);
+                  setColOrder(null); // resetear orden de columnas al cambiar entidad
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-7 px-3 text-xs font-medium rounded-full border transition-colors whitespace-nowrap",
+                  isActive
+                    ? "bg-slate-900 border-slate-900 text-white"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300",
+                )}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: s.color }}
+                />
+                {s.entidad}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[#FFC000] border-b-2 border-slate-900/30">
