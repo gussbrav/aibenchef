@@ -72,6 +72,9 @@ class TestGypCuentas:
     def test_depreciacion_presente(self):
         assert MonthlyCoopacEeffImporter._GYP_CUENTAS[("12", "depreciacion")] == "12.7"
 
+    def test_actividades_asociativas_presente(self):
+        assert MonthlyCoopacEeffImporter._GYP_CUENTAS[("10", "actividades asociativas")] == "10.5"
+
 
 class TestBgCuentas:
     """Verifica que _BG_CUENTAS resuelve correctamente los textos reales del BG COOPAC.

@@ -110,6 +110,7 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         ("10", "personal"): "10.1",
         ("10", "directorio"): "10.2",
         ("10", "servicios recibidos de terceros"): "10.3",
+        ("10", "actividades asociativas"): "10.5",
         ("10", "impuestos y contribuciones"): "10.4",
         (None, "provisiones depreciacion y amortizacion"): "12",
         ("12", "depreciacion"): "12.7",
