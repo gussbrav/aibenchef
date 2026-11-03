@@ -2218,9 +2218,7 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
 
 
 @import_grp.command("coopac-eeff")
-@click.option(
-    "--periodo", type=str, default=None, help="YYYYMM. Alternativa a --desde/--hasta."
-)
+@click.option("--periodo", type=str, default=None, help="YYYYMM. Alternativa a --desde/--hasta.")
 @click.option(
     "--desde", type=str, default=None, help="YYYYMM inicio de rango (inclusive). Requiere --hasta."
 )
