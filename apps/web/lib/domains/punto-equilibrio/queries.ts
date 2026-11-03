@@ -30,6 +30,10 @@ export type PuntoEquilibrioRow = {
   pctPersonal?: number | null;
   pctGenerales?: number | null;
   pctDepreciacion?: number | null;
+  // Residual = pctGastosOp - pctPersonal - pctGenerales - pctDepreciacion.
+  // Captura cta 10.2 (Directorio) y otros sub-cuentas de cta_10 no
+  // desglosadas individualmente. Garantiza que sub-filas sumen al total.
+  pctOtrosGastosOp?: number | null;
   // Sub-componentes calculados via ratios sobre el total (evita gastar
   // cartera_prom otra vez). Todos garantizados a cuadrar exacto con el
   // total del componente padre.
@@ -76,6 +80,7 @@ export type PuntoEquilibrioSerie = {
     pctPersonal?: number | null;
     pctGenerales?: number | null;
     pctDepreciacion?: number | null;
+    pctOtrosGastosOp?: number | null;
     // Sub-componentes de Otros / GF / Provisiones (ratios × total).
     // Calculados en la misma query series via TTMs inline — asi el cuadro
     // comparativo modo "cierre unico" muestra el detalle completo por
@@ -401,6 +406,14 @@ export async function getPuntoEquilibrioHistorico(opts: {
       pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
       pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
       pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
+      pctOtrosGastosOp: (() => {
+        const go = r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op);
+        if (go == null) return null;
+        return go
+          - (r?.pct_gastos_personal == null ? 0 : Number(r.pct_gastos_personal))
+          - (r?.pct_gastos_generales == null ? 0 : Number(r.pct_gastos_generales))
+          - (r?.pct_deprec == null ? 0 : Number(r.pct_deprec));
+      })(),
       // Sub-componentes calculados como ratio × total. Garantiza cuadre
       // exacto: SUMA(subs) = total del padre (matematicamente).
       pctISF: mult(r?.ratio_isf, pctOtros),
@@ -535,7 +548,6 @@ export async function getPuntoEquilibrioSeries(opts: {
     pct_costo_fondeo: number | null;
     pct_provisiones: number | null;
     pct_gastos_op: number | null;
-    // Sub-componentes de gastos op (pre-calculados en la MV — cero costo)
     pct_gastos_personal: number | null;
     pct_gastos_generales: number | null;
     pct_deprec: number | null;
@@ -735,6 +747,14 @@ export async function getPuntoEquilibrioSeries(opts: {
           pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
           pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
           pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
+          pctOtrosGastosOp: (() => {
+            const go = r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op);
+            if (go == null) return null;
+            return go
+              - (r?.pct_gastos_personal == null ? 0 : Number(r.pct_gastos_personal))
+              - (r?.pct_gastos_generales == null ? 0 : Number(r.pct_gastos_generales))
+              - (r?.pct_deprec == null ? 0 : Number(r.pct_deprec));
+          })(),
           // Sub-componentes calculados como ratio × total. Cuadre exacto.
           pctISF: mult(r?.ratio_isf, pctOtros),
           pctGSF: mult(r?.ratio_gsf, pctOtros),

@@ -811,6 +811,7 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
       { key: "personal", label: "Personal", field: "pctPersonal", ctaSbs: "cta 10.1" },
       { key: "generales", label: "Servicios Terceros + Impuestos", field: "pctGenerales", ctaSbs: "cta 10.3+10.4" },
       { key: "deprec", label: "Depreciación + Amortización", field: "pctDepreciacion", ctaSbs: "cta 12.7+12.8" },
+      { key: "otrosGastosOp", label: "Directorio y otros gastos", field: "pctOtrosGastosOp", ctaSbs: "cta 10.2 y otros" },
     ],
   },
   {
