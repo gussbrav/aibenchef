@@ -121,32 +121,47 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
     # -----------------------------------------------------------------------
     # Mapa de cuentas para Balance General
     # Clave: (parent_code | None, nombre_normalizado) -> cuenta_codigo
+    #
+    # Regla de lookup (ver _import_coopac_sheet):
+    #   - Fila ALL CAPS (es_header=True):  lookup con parent=None
+    #   - Fila mixed-case con parent:      lookup con (parent_code, nombre_norm)
+    #   - Fila mixed-case sin parent:      se descarta (no hace lookup)
+    #
+    # Las cuentas principales del BG COOPAC son ALL CAPS identicas al SF:
+    # "DISPONIBLE", "CREDITOS NETOS...", "TOTAL ACTIVO", etc.
+    # Los sub-items (Vigentes, Vencidos...) son mixed-case bajo el parent ALL CAPS.
     # -----------------------------------------------------------------------
     _BG_CUENTAS: dict[tuple[str | None, str], str] = {
-        (None, "activo"): "A",
-        ("A", "disponible"): "A1",
-        ("A1", "caja y canje"): "A1.1",
-        ("A1", "depositos en empresas del sistema financiero"): "A1.2",
+        # === ACTIVO ===
+        (None, "total activo"): "A",
+        (None, "disponible"): "A1",
+        (None, "fondos intercooperativos"): "A2",
+        (None, "inversiones netas de provisiones"): "A3",
+        (None, "creditos netos de provisiones y de ingresos no devengados"): "A4",
+        (None, "inmueble mobiliario y equipo neto"): "A6",
+        (None, "otros activos"): "A7",
+        # A1 sub-cuentas (mixed-case, padre=A1)
+        ("A1", "caja"): "A1.1",
+        ("A1", "bancos y corresponsales"): "A1.2",
         ("A1", "otros"): "A1.4",
-        ("A", "fondos interbancarios"): "A2",
-        ("A", "inversiones financieras"): "A3",
-        ("A", "creditos directos"): "A4",
-        ("A4", "creditos vigentes"): "A4.1",
-        ("A4", "creditos reestructurados"): "A4.2",
-        ("A4", "creditos refinanciados"): "A4.2",
-        ("A4", "creditos vencidos"): "A4.3",
-        ("A4", "creditos en cobranza judicial"): "A4.4",
+        # A4 sub-cuentas (mixed-case, padre=A4)
+        # "Atrasados" NO se mapea: es agregado de A4.3+A4.4, igual que en SF
+        ("A4", "vigentes"): "A4.1",
+        ("A4", "refinanciados y reestructurados"): "A4.2",
+        ("A4", "vencidos"): "A4.3",
+        ("A4", "en cobranza judicial"): "A4.4",
         ("A4", "provisiones"): "A4.6",
         ("A4", "intereses y comisiones no devengados"): "A4.7",
-        ("A", "activos fijos"): "A6",
-        ("A", "otros activos"): "A7",
-        (None, "pasivo"): "B",
-        ("B", "obligaciones con los socios"): "B1",
+        # === PASIVO ===
+        (None, "total pasivo"): "B",
+        (None, "obligaciones con los socios"): "B1",
+        (None, "adeudos y obligaciones financieras"): "B3",
+        (None, "otros pasivos"): "B6",
+        # B1 sub-cuentas
+        ("B1", "depositos a la vista"): "B1.1",
         ("B1", "depositos de ahorro"): "B1.2",
         ("B1", "depositos a plazo"): "B1.3",
-        ("B1", "depositos cts"): "B1.3.3",
-        ("B", "adeudos y obligaciones financieras"): "B3",
-        ("B", "otros pasivos"): "B6",
+        # === PATRIMONIO ===
         (None, "patrimonio"): "C",
         ("C", "capital social"): "C1",
         ("C", "reservas"): "C3",
@@ -322,10 +337,18 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
             # mixed-case para cuentas hijo. Misma convencion que SF.
             es_header = nombre_raw.strip() == nombre_raw.strip().upper()
 
-            # Resolver codigo desde el mapa fijo
-            lookup_key = (None, nombre_norm) if es_header else (current_parent_code, nombre_norm)
-
-            codigo: str | None = cuentas_map.get(lookup_key)
+            # Resolver codigo desde el mapa fijo.
+            # Filas ALL CAPS: buscan con parent=None (clave de nivel raiz).
+            # Filas mixed-case CON parent: buscan bajo ese parent.
+            # Filas mixed-case SIN parent: no hacen lookup (evita falsos matches
+            # cuando items title-case aparecen fuera de una seccion reconocida,
+            # ej. "Disponible" bajo "RENDIMIENTOS POR COBRAR").
+            if es_header:
+                codigo: str | None = cuentas_map.get((None, nombre_norm))
+            elif current_parent_code is not None:
+                codigo = cuentas_map.get((current_parent_code, nombre_norm))
+            else:
+                codigo = None
 
             # Si el header resolvio, actualizar el parent para las filas siguientes
             if es_header and codigo is not None:

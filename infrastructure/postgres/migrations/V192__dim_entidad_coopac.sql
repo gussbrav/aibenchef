@@ -61,13 +61,13 @@ ALTER TABLE dw.entidad_maestra
 -- ---------------------------------------------------------------------------
 INSERT INTO dw.dim_entidad (nomb_correg, tipo_entidad, microfinanciera, nacional)
 SELECT DISTINCT
-    entidad          AS nomb_correg,
+    nomb_correg,
     tipo_entidad,
     TRUE             AS microfinanciera,
     'LOCAL'          AS nacional
 FROM raw.eeff_observacion
 WHERE tipo_entidad LIKE 'COOPAC_%'
-  AND entidad NOT ILIKE 'total%'
-  AND entidad NOT ILIKE '%sistema%'
-  AND TRIM(entidad) <> ''
+  AND nomb_correg NOT ILIKE 'total%'
+  AND nomb_correg NOT ILIKE '%sistema%'
+  AND TRIM(nomb_correg) <> ''
 ON CONFLICT (nomb_correg) DO NOTHING;
