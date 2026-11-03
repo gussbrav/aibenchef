@@ -30,9 +30,11 @@ export type PuntoEquilibrioRow = {
   pctPersonal?: number | null;
   pctGenerales?: number | null;
   pctDepreciacion?: number | null;
-  // Residual = pctGastosOp - pctPersonal - pctGenerales - pctDepreciacion.
-  // Captura cta 10.2 (Directorio) y otros sub-cuentas de cta_10 no
-  // desglosadas individualmente. Garantiza que sub-filas sumen al total.
+  // Directorio = ratio_directorio × (pctGastosOp - pctDepreciacion).
+  // ratio_directorio = cta_10_2_ttm / cta_10_ttm (calculado inline en query).
+  pctDirectorio?: number | null;
+  // Residual = pctGastosOp - pctPersonal - pctGenerales - pctDepreciacion - pctDirectorio.
+  // Garantiza que sub-filas sumen exactamente al total del padre.
   pctOtrosGastosOp?: number | null;
   // Sub-componentes calculados via ratios sobre el total (evita gastar
   // cartera_prom otra vez). Todos garantizados a cuadrar exacto con el
@@ -80,6 +82,7 @@ export type PuntoEquilibrioSerie = {
     pctPersonal?: number | null;
     pctGenerales?: number | null;
     pctDepreciacion?: number | null;
+    pctDirectorio?: number | null;
     pctOtrosGastosOp?: number | null;
     // Sub-componentes de Otros / GF / Provisiones (ratios × total).
     // Calculados en la misma query series via TTMs inline — asi el cuadro
@@ -222,6 +225,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
     ratio_gf_otros: number | null;
     ratio_prov_credito: number | null;
     ratio_prov_inversion: number | null;
+    ratio_directorio: number | null;
   }>(sql`
     WITH aliases AS (
       ${consolidar
@@ -252,7 +256,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
              SUM(COALESCE(cta_2_5, 0) + COALESCE(cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(cta_4, 0)) AS cta_4,
              SUM(COALESCE(cta_4_1, 0)) AS cta_4_1,
-             SUM(COALESCE(cta_4_2, 0)) AS cta_4_2
+             SUM(COALESCE(cta_4_2, 0)) AS cta_4_2,
+             SUM(COALESCE(cta_10, 0)) AS cta_10,
+             SUM(COALESCE(cta_10_2, 0)) AS cta_10_2
       FROM marts.mv_eeff_resultados_ancho
       WHERE LOWER(TRIM(nomb_correg)) IN (SELECT nombre_lower FROM aliases)
         AND moneda = ${moneda}
@@ -273,7 +279,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
              SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1,
-             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
+             SUM(COALESCE(r.cta_10, 0)) AS cta_10,
+             SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
       LEFT JOIN marts.mv_eeff_resultados_ancho r
         ON r.periodo = (tgt.periodo / 100 - 1) * 100 + 12
@@ -295,7 +303,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
              SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1,
-             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
+             SUM(COALESCE(r.cta_10, 0)) AS cta_10,
+             SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
       LEFT JOIN marts.mv_eeff_resultados_ancho r
         ON r.periodo = tgt.periodo - 100
@@ -317,7 +327,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
              (c.cta_2_oblig + COALESCE(d.cta_2_oblig, 0) - COALESCE(s.cta_2_oblig, 0)) AS cta_2_oblig_ttm,
              (c.cta_4 + COALESCE(d.cta_4, 0) - COALESCE(s.cta_4, 0)) AS cta_4_ttm,
              (c.cta_4_1 + COALESCE(d.cta_4_1, 0) - COALESCE(s.cta_4_1, 0)) AS cta_4_1_ttm,
-             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm
+             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm,
+             (c.cta_10 + COALESCE(d.cta_10, 0) - COALESCE(s.cta_10, 0)) AS cta_10_ttm,
+             (c.cta_10_2 + COALESCE(d.cta_10_2, 0) - COALESCE(s.cta_10_2, 0)) AS cta_10_2_ttm
       FROM ytd_cur c
       LEFT JOIN ytd_dic d ON d.target_periodo = c.periodo
       LEFT JOIN ytd_same s ON s.target_periodo = c.periodo
@@ -370,7 +382,9 @@ export async function getPuntoEquilibrioHistorico(opts: {
              WHEN t.cta_4_ttm > 0
                THEN 0.0
              ELSE NULL
-           END AS ratio_prov_inversion
+           END AS ratio_prov_inversion,
+           -- Directorio: cta_10_2 / cta_10_ttm (denominador = gastos personal+directorio total)
+           CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
     FROM marts.v_punto_equilibrio_ancho v
     LEFT JOIN ttm t ON t.periodo = v.periodo
     WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
@@ -387,12 +401,21 @@ export async function getPuntoEquilibrioHistorico(opts: {
     const pctOtros = r?.pct_otros == null ? null : Number(r.pct_otros);
     const pctCostoFondeo = r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo);
     const pctProvisiones = r?.pct_provisiones == null ? null : Number(r.pct_provisiones);
+    const pctGastosOp = r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op);
+    const pctDepreciacion = r?.pct_deprec == null ? null : Number(r.pct_deprec);
+    const pctPersonal = r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal);
+    const pctGenerales = r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales);
     // Helper: ratio (0-1) × total = sub_pct exacto. Devuelve null si algo falta.
     const mult = (
       ratio: number | null | undefined,
       total: number | null,
     ): number | null =>
       ratio == null || total == null ? null : Number(ratio) * total;
+    // pctDirectorio = ratio_dir × (pctGastosOp - pctDepreciacion) = -cta_10_2/cartera exacto
+    const pctDirectorio = mult(
+      r?.ratio_directorio,
+      pctGastosOp != null && pctDepreciacion != null ? pctGastosOp - pctDepreciacion : pctGastosOp,
+    );
     return {
       periodo: p,
       periodoLabel: formatPeriodo(p),
@@ -400,20 +423,19 @@ export async function getPuntoEquilibrioHistorico(opts: {
       pctOtros,
       pctCostoFondeo,
       pctProvisiones,
-      pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
+      pctGastosOp,
       pctMargenNeto: r?.pct_margen_neto == null ? null : Number(r.pct_margen_neto),
       pctPuntoEq: r?.pct_punto_eq == null ? null : Number(r.pct_punto_eq),
-      pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
-      pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
-      pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
-      pctOtrosGastosOp: (() => {
-        const go = r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op);
-        if (go == null) return null;
-        return go
-          - (r?.pct_gastos_personal == null ? 0 : Number(r.pct_gastos_personal))
-          - (r?.pct_gastos_generales == null ? 0 : Number(r.pct_gastos_generales))
-          - (r?.pct_deprec == null ? 0 : Number(r.pct_deprec));
-      })(),
+      pctPersonal,
+      pctGenerales,
+      pctDepreciacion,
+      pctDirectorio,
+      pctOtrosGastosOp: pctGastosOp == null ? null :
+        pctGastosOp
+          - (pctPersonal ?? 0)
+          - (pctGenerales ?? 0)
+          - (pctDepreciacion ?? 0)
+          - (pctDirectorio ?? 0),
       // Sub-componentes calculados como ratio × total. Garantiza cuadre
       // exacto: SUMA(subs) = total del padre (matematicamente).
       pctISF: mult(r?.ratio_isf, pctOtros),
@@ -565,6 +587,7 @@ export async function getPuntoEquilibrioSeries(opts: {
     ratio_gf_otros: number | null;
     ratio_prov_credito: number | null;
     ratio_prov_inversion: number | null;
+    ratio_directorio: number | null;
   }>(sql`
     WITH entidades_solicitadas AS (
       SELECT unnest(ARRAY[${entidadesClause}]::text[]) AS canonico
@@ -596,7 +619,8 @@ export async function getPuntoEquilibrioSeries(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
+             SUM(COALESCE(r.cta_10, 0)) AS cta_10, SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM aliases a
       JOIN marts.mv_eeff_resultados_ancho r
         ON LOWER(TRIM(r.nomb_correg)) = a.nombre_lower
@@ -618,7 +642,8 @@ export async function getPuntoEquilibrioSeries(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
+             SUM(COALESCE(r.cta_10, 0)) AS cta_10, SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM target tgt
       LEFT JOIN aliases a ON a.canonico = tgt.canonico
       LEFT JOIN marts.mv_eeff_resultados_ancho r
@@ -636,7 +661,8 @@ export async function getPuntoEquilibrioSeries(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2
+             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
+             SUM(COALESCE(r.cta_10, 0)) AS cta_10, SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM target tgt
       LEFT JOIN aliases a ON a.canonico = tgt.canonico
       LEFT JOIN marts.mv_eeff_resultados_ancho r
@@ -658,7 +684,9 @@ export async function getPuntoEquilibrioSeries(opts: {
              (c.cta_2_oblig + COALESCE(d.cta_2_oblig, 0) - COALESCE(s.cta_2_oblig, 0)) AS cta_2_oblig_ttm,
              (c.cta_4 + COALESCE(d.cta_4, 0) - COALESCE(s.cta_4, 0)) AS cta_4_ttm,
              (c.cta_4_1 + COALESCE(d.cta_4_1, 0) - COALESCE(s.cta_4_1, 0)) AS cta_4_1_ttm,
-             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm
+             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm,
+             (c.cta_10 + COALESCE(d.cta_10, 0) - COALESCE(s.cta_10, 0)) AS cta_10_ttm,
+             (c.cta_10_2 + COALESCE(d.cta_10_2, 0) - COALESCE(s.cta_10_2, 0)) AS cta_10_2_ttm
       FROM ytd_cur c
       LEFT JOIN ytd_dic d ON d.canonico = c.canonico AND d.target_periodo = c.periodo
       LEFT JOIN ytd_same s ON s.canonico = c.canonico AND s.target_periodo = c.periodo
@@ -696,7 +724,8 @@ export async function getPuntoEquilibrioSeries(opts: {
                THEN t.cta_4_1_ttm / t.cta_4_ttm
              WHEN t.cta_4_ttm > 0 THEN 0.0
              ELSE NULL
-           END AS ratio_prov_inversion
+           END AS ratio_prov_inversion,
+           CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
     FROM aliases a
     JOIN marts.v_punto_equilibrio_ancho v
       ON LOWER(TRIM(v.nomb_correg)) = a.nombre_lower
@@ -734,6 +763,14 @@ export async function getPuntoEquilibrioSeries(opts: {
           r?.pct_costo_fondeo == null ? null : Number(r.pct_costo_fondeo);
         const pctProvisiones =
           r?.pct_provisiones == null ? null : Number(r.pct_provisiones);
+        const pctGastosOp = r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op);
+        const pctDepreciacion = r?.pct_deprec == null ? null : Number(r.pct_deprec);
+        const pctPersonal = r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal);
+        const pctGenerales = r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales);
+        const pctDirectorio = mult(
+          r?.ratio_directorio,
+          pctGastosOp != null && pctDepreciacion != null ? pctGastosOp - pctDepreciacion : pctGastosOp,
+        );
         return {
           periodo: p,
           periodoLabel: formatPeriodo(p),
@@ -743,18 +780,17 @@ export async function getPuntoEquilibrioSeries(opts: {
           pctOtros,
           pctCostoFondeo,
           pctProvisiones,
-          pctGastosOp: r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op),
-          pctPersonal: r?.pct_gastos_personal == null ? null : Number(r.pct_gastos_personal),
-          pctGenerales: r?.pct_gastos_generales == null ? null : Number(r.pct_gastos_generales),
-          pctDepreciacion: r?.pct_deprec == null ? null : Number(r.pct_deprec),
-          pctOtrosGastosOp: (() => {
-            const go = r?.pct_gastos_op == null ? null : Number(r.pct_gastos_op);
-            if (go == null) return null;
-            return go
-              - (r?.pct_gastos_personal == null ? 0 : Number(r.pct_gastos_personal))
-              - (r?.pct_gastos_generales == null ? 0 : Number(r.pct_gastos_generales))
-              - (r?.pct_deprec == null ? 0 : Number(r.pct_deprec));
-          })(),
+          pctGastosOp,
+          pctPersonal,
+          pctGenerales,
+          pctDepreciacion,
+          pctDirectorio,
+          pctOtrosGastosOp: pctGastosOp == null ? null :
+            pctGastosOp
+              - (pctPersonal ?? 0)
+              - (pctGenerales ?? 0)
+              - (pctDepreciacion ?? 0)
+              - (pctDirectorio ?? 0),
           // Sub-componentes calculados como ratio × total. Cuadre exacto.
           pctISF: mult(r?.ratio_isf, pctOtros),
           pctGSF: mult(r?.ratio_gsf, pctOtros),

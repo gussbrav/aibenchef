@@ -809,9 +809,9 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     info: "Personal + Servicios Terceros + Impuestos + Depreciación + Amortización. Todos los costos operativos ÷ Cartera Promedio 12M. Fuente SBS: cuentas 10 y 12 del Estado de Resultados.",
     subrows: [
       { key: "personal", label: "Personal", field: "pctPersonal", ctaSbs: "cta 10.1" },
+      { key: "directorio", label: "Directorio", field: "pctDirectorio", ctaSbs: "cta 10.2" },
       { key: "generales", label: "Servicios Terceros + Impuestos", field: "pctGenerales", ctaSbs: "cta 10.3+10.4" },
       { key: "deprec", label: "Depreciación + Amortización", field: "pctDepreciacion", ctaSbs: "cta 12.7+12.8" },
-      { key: "otrosGastosOp", label: "Directorio y otros gastos", field: "pctOtrosGastosOp", ctaSbs: "cta 10.2 y otros" },
     ],
   },
   {
