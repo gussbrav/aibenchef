@@ -86,7 +86,7 @@ type ErRow = {
   cta_1_4: string|null; cta_2: string|null; cta_4: string|null;
   cta_6: string|null; cta_7: string|null; cta_8: string|null;
   cta_10: string|null; cta_10_1: string|null; cta_10_2: string|null;
-  cta_10_3: string|null; cta_10_4: string|null;
+  cta_10_3: string|null; cta_10_4: string|null; cta_10_5: string|null;
   cta_12_7: string|null; cta_12_8: string|null; cta_13: string|null;
 };
 type MesRow = {
@@ -139,7 +139,7 @@ async function generarExcel(opts: {
     incEr ? db.execute<ErRow>(sql`
       SELECT periodo, nomb_correg,
         cta_1_4, cta_2, cta_4, cta_6, cta_7, cta_8,
-        cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4,
+        cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4, cta_10_5,
         cta_12_7, cta_12_8, cta_13
       FROM marts.mv_eeff_resultados_ancho
       WHERE nomb_correg IN (${entIn})
@@ -195,7 +195,7 @@ async function generarExcel(opts: {
     incCartera ? db.execute<ErRow>(sql`
       SELECT periodo, nomb_correg,
         cta_1_4, cta_2, cta_4, cta_6, cta_7, cta_8,
-        cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4,
+        cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4, cta_10_5,
         cta_12_7, cta_12_8, cta_13
       FROM marts.mv_eeff_resultados_ancho
       WHERE nomb_correg IN (${entIn})
@@ -610,8 +610,9 @@ async function generarExcel(opts: {
       { grupo: "",          label: "   Personal (10.1)",               fn: e => n(e.cta_10_1) },
       { grupo: "",          label: "   Directorio (10.2)",             fn: e => n(e.cta_10_2) },
       { grupo: "",          label: "   Servicios de Terceros (10.3)",  fn: e => n(e.cta_10_3) },
-      { grupo: "",          label: "   Impuestos y Contrib. (10.4)",   fn: e => n(e.cta_10_4) },
-      { grupo: "",          label: "   Depreciación (12.7)",           fn: e => n(e.cta_12_7) },
+      { grupo: "",          label: "   Impuestos y Contrib. (10.4)",    fn: e => n(e.cta_10_4) },
+      { grupo: "",          label: "   Act. Asociativas COOPAC (10.5)", fn: e => n(e.cta_10_5) },
+      { grupo: "",          label: "   Depreciación (12.7)",            fn: e => n(e.cta_12_7) },
       { grupo: "",          label: "   Amortización (12.8)",           fn: e => n(e.cta_12_8) },
     ];
 

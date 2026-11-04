@@ -113,41 +113,42 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
     # Clave: (parent_code | None, nombre_normalizado) -> cuenta_codigo
     # -----------------------------------------------------------------------
     _GYP_CUENTAS: dict[tuple[str | None, str], str] = {
+        # === Totales principales (mismo código que SF) ===
         (None, "ingresos financieros"): "1",
-        ("1", "creditos directos"): "1.4",
-        ("1", "inversiones"): "1.3",
-        ("1", "diferencia de cambio"): "1.7",
-        ("1", "otros"): "1.10",
         (None, "gastos financieros"): "2",
-        ("2", "obligaciones con los socios"): "2.1",
-        ("2", "adeudos y obligaciones financieras"): "2.4",
-        ("2", "otros gastos financieros"): "2.13",
-        ("2", "otros"): "2.13",
         (None, "margen financiero bruto"): "3",
         (None, "provisiones para creditos directos"): "4",
+        (None, "margen financiero neto"): "5",
         (None, "ingresos por servicios financieros"): "6",
         (None, "gastos por servicios financieros"): "7",
+        # Código 8 = Utilidad/Pérdida por Venta de Cartera (mismo nombre en COOPAC y SF)
+        (None, "utilidad perdida por venta de cartera crediticia"): "8",
+        # Fallback por si archivos viejos usan nombre anterior (no aparece en Excel oficial)
         (None, "resultado por operaciones financieras"): "8",
+        (None, "margen operacional"): "9",
         (None, "gastos administrativos"): "10",
-        ("10", "personal"): "10.1",
-        ("10", "directorio"): "10.2",
-        ("10", "servicios recibidos de terceros"): "10.3",
-        ("10", "actividades asociativas"): "10.5",
-        ("10", "impuestos y contribuciones"): "10.4",
+        (None, "margen operacional neto"): "11",
         (None, "provisiones depreciacion y amortizacion"): "12",
-        ("12", "depreciacion"): "12.7",
-        ("12", "amortizacion"): "12.8",
         (None, "otros ingresos y gastos"): "13",
+        (None, "resultado antes del impuesto a la renta"): "15",
+        (None, "impuesto a la renta"): "16",
         (None, "resultado neto del ejercicio"): "17",
-        # Ingresos Financieros sub-cuentas adicionales
+        # === Ingresos Financieros sub-cuentas ===
         ("1", "disponible"): "1.1",
         ("1", "fondos intercooperativos"): "1.2",
+        ("1", "inversiones"): "1.3",
+        ("1", "creditos directos"): "1.4",
         ("1", "ganancias por valorizacion de inversiones"): "1.5",
         ("1", "ganancias por inversiones en subsidiarias y asociadas"): "1.6",
+        ("1", "diferencia de cambio"): "1.7",
         ("1", "ganancias en productos financieros derivados"): "1.8",
-        # Gastos Financieros sub-cuentas adicionales (completar cobertura)
+        # 1.9=Reajuste por Indexación no existe en COOPAC → cta_1_9=NULL
+        ("1", "otros"): "1.10",
+        # === Gastos Financieros sub-cuentas ===
+        ("2", "obligaciones con los socios"): "2.1",
         ("2", "depositos de coopac"): "2.2",
         ("2", "fondos intercooperativos"): "2.3",
+        ("2", "adeudos y obligaciones financieras"): "2.4",
         ("2", "obligaciones en circulacion no subordinadas"): "2.5",
         ("2", "obligaciones en circulacion subordinadas"): "2.6",
         ("2", "perdida por valorizacion de inversiones"): "2.7",
@@ -155,16 +156,35 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         ("2", "primas al fondo de seguro de depositos cooperativo"): "2.9",
         ("2", "diferencia de cambio"): "2.10",
         ("2", "perdidas en productos financieros derivados"): "2.11",
-        # Resultado / Impuesto (captura completa P&G)
-        (None, "utilidad perdida por venta de cartera crediticia"): "9",
-        (None, "resultado antes del impuesto a la renta"): "15",
-        (None, "impuesto a la renta"): "16",
-        # Provisiones, Deprec y Amort sub-items
+        # 2.12=Reajuste por Indexación no existe en COOPAC → cta_2_12=NULL
+        ("2", "otros gastos financieros"): "2.13",
+        ("2", "otros"): "2.13",
+        # === Ingresos por Servicios Financieros sub-cuentas ===
+        ("6", "cuentas por cobrar"): "6.1",
+        ("6", "creditos indirectos"): "6.2",
+        ("6", "fideicomisos"): "6.3",
+        ("6", "ingresos diversos"): "6.4",
+        # === Gastos por Servicios Financieros sub-cuentas ===
+        ("7", "cuentas por pagar"): "7.1",
+        ("7", "creditos indirectos"): "7.2",
+        ("7", "fideicomisos"): "7.3",
+        ("7", "gastos diversos"): "7.4",
+        # === Gastos Administrativos sub-cuentas ===
+        # 10.4=Impuestos mantiene mismo código que SF para consistencia semántica
+        # 10.5=Actividades Asociativas es COOPAC-específico (NULL para SF)
+        ("10", "personal"): "10.1",
+        ("10", "directorio"): "10.2",
+        ("10", "servicios recibidos de terceros"): "10.3",
+        ("10", "impuestos y contribuciones"): "10.4",
+        ("10", "actividades asociativas"): "10.5",
+        # === Provisiones, Deprec y Amort sub-cuentas ===
         ("12", "provisiones para creditos indirectos"): "12.1",
         ("12", "provisiones por perdida por deterioro de inversiones"): "12.2",
         ("12", "provisiones para incobrabilidad de cuentas por cobrar"): "12.3",
         ("12", "provisiones para bienes realizados recibidos en pago y adjudicados"): "12.4",
         ("12", "otras provisiones"): "12.5",
+        ("12", "depreciacion"): "12.7",
+        ("12", "amortizacion"): "12.8",
     }
 
     # -----------------------------------------------------------------------
