@@ -86,7 +86,7 @@ function carteraBruta12m(serie: MesRow[], periodo: number): number | null {
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 type BalRow = {
   periodo: number; nomb_correg: string;
-  cta_a: string|null; cta_c: string|null;
+  cta_a: string|null; cta_b: string|null; cta_c: string|null;
   cta_a1: string|null; cta_a3: string|null;
   cta_a4: string|null; cta_a4_1: string|null; cta_a4_2: string|null;
   cta_a4_3: string|null; cta_a4_4: string|null;
@@ -136,7 +136,7 @@ async function generarExcel(opts: {
   const [balRows, erRows, mesRows, kpiRows, kpiAnualRows, balDicRows, erDicRows, coopacDupontRows] = await Promise.all([
     incBalance ? db.execute<BalRow>(sql`
       SELECT periodo, nomb_correg,
-        cta_a, cta_c, cta_a1, cta_a3,
+        cta_a, cta_b, cta_c, cta_a1, cta_a3,
         cta_a4, cta_a4_1, cta_a4_2, cta_a4_3, cta_a4_4,
         cta_b1, cta_b4
       FROM marts.v_eeff_balance_ancho
@@ -511,11 +511,11 @@ async function generarExcel(opts: {
     h2.height = 18; r++;
 
     type BalDef = {
-      grupo: string; label: string; bold?: boolean; pct?: boolean;
+      grupo: string; label: string; bold?: boolean; pct?: boolean; check?: boolean;
       fn: (b: BalRow | undefined, ent: string, periodo: number) => number | null;
     };
     const balDefs: BalDef[] = [
-      { grupo: "ACTIVO",  label: "Total Activos",                                      bold: true,  fn: b => b ? n(b.cta_a) : null },
+      { grupo: "ACTIVO",  label: "Total Activo",                                       bold: true,  fn: b => b ? n(b.cta_a) : null },
       { grupo: "",        label: "Cartera Bruta  [A4.1+A4.2+A4.3+max(0,A4.4)]",       bold: true,
         fn: b => b ? nv(b.cta_a4_1)+nv(b.cta_a4_2)+nv(b.cta_a4_3)+Math.max(0,nv(b.cta_a4_4)) : null },
       { grupo: "",        label: "   Vigentes (A4.1)",                                              fn: b => b ? n(b.cta_a4_1) : null },
@@ -531,25 +531,29 @@ async function generarExcel(opts: {
         fn: (_, ent, periodo) => getCobCar(ent, periodo) },
       { grupo: "",        label: "Disponible (A1)",                                                 fn: b => b ? n(b.cta_a1) : null },
       { grupo: "",        label: "Inversiones (A3)",                                                fn: b => b ? n(b.cta_a3) : null },
-      { grupo: "PASIVO",  label: "Obligaciones con Socios / Público (B1)",             bold: true,  fn: b => b ? n(b.cta_b1) : null },
-      { grupo: "",        label: "Adeudos y Oblig. Financieras (B4)",                               fn: b => b ? n(b.cta_b4) : null },
-      { grupo: "PATRIM.", label: "Patrimonio",                                          bold: true,  fn: b => b ? n(b.cta_c) : null },
+      { grupo: "PASIVO",  label: "Total Pasivo",                                        bold: true,  fn: b => b ? n(b.cta_b) : null },
+      { grupo: "",        label: "   Obligaciones con Socios / Público (B1)",                       fn: b => b ? n(b.cta_b1) : null },
+      { grupo: "",        label: "   Adeudos y Oblig. Financieras (B4)",                            fn: b => b ? n(b.cta_b4) : null },
+      { grupo: "PATRIM.", label: "Total Patrimonio",                                    bold: true,  fn: b => b ? n(b.cta_c) : null },
+      { grupo: "CHECK",   label: "✓  Pasivo + Patrimonio − Activo  (debe ser 0)",      check: true,
+        fn: b => b ? (nv(b.cta_b) + nv(b.cta_c) - nv(b.cta_a)) : null },
     ];
 
     for (let di = 0; di < balDefs.length; di++) {
       const def   = balDefs[di]!;
       const isAlt = di % 2 === 0;
-      const bgBase = def.bold ? C.doradoClaro : def.pct ? C.azulClaro : (isAlt ? C.grisClaro : C.blanco);
+      const bgBase = def.check ? C.tealClaro : def.bold ? C.doradoClaro : def.pct ? C.azulClaro : (isAlt ? C.grisClaro : C.blanco);
       const row   = ws.getRow(r);
 
       const gCell = row.getCell(1);
       gCell.value = def.grupo;
-      fontBold(gCell, 9, C.blanco); fillSolid(gCell, def.grupo ? C.azul : C.grisClaro);
+      fontBold(gCell, 9, C.blanco);
+      fillSolid(gCell, def.grupo ? (def.check ? C.teal : C.azul) : C.grisClaro);
       gCell.alignment = { horizontal: "center", vertical: "middle" };
 
       const lCell = row.getCell(2);
       lCell.value = def.label;
-      lCell.font  = { bold: !!def.bold, size: 10, color: { argb: C.negro } };
+      lCell.font  = { bold: !!(def.bold || def.check), size: 10, color: { argb: def.check ? C.teal : C.negro } };
       fillSolid(lCell, bgBase); border(lCell);
 
       for (let ei = 0; ei < entidades.length; ei++) {
@@ -561,8 +565,13 @@ async function generarExcel(opts: {
           const v   = def.pct ? pct2(raw) : miles(raw);
           c.value = v; c.numFmt = def.pct ? '0.00"%"' : '#,##0';
           c.alignment = { horizontal: "right" };
-          fillSolid(c, bgBase);
-          if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: C.rojoMed } };
+          if (def.check && typeof v === "number") {
+            fillSolid(c, v === 0 ? C.verde : C.rojo);
+            c.font = { bold: true, size: 10, color: { argb: v === 0 ? C.verdeOsc : C.rojoOsc } };
+          } else {
+            fillSolid(c, bgBase);
+            if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: C.rojoMed } };
+          }
           border(c);
         }
       }
