@@ -92,9 +92,10 @@ type MesRow = {
   periodo: number; nomb_correg: string;
   cta_a4: string|null; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null;
 };
-type KpiRow     = { periodo: number; nomb_correg: string; kpi_codigo: string; valor: string|null; };
-type KpiAnualRow = { periodo: number; nomb_correg: string; utilidad_ttm: string|null; activos_prom_12m: string|null; patrimonio_prom_12m: string|null; };
-type BalDicRow  = { periodo: number; nomb_correg: string; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null; cta_a4_4: string|null; };
+type KpiRow        = { periodo: number; nomb_correg: string; kpi_codigo: string; valor: string|null; };
+type KpiAnualRow   = { periodo: number; nomb_correg: string; utilidad_ttm: string|null; activos_prom_12m: string|null; patrimonio_prom_12m: string|null; };
+type BalDicRow     = { periodo: number; nomb_correg: string; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null; cta_a4_4: string|null; };
+type CoopacDupontRow = { periodo: number; nomb_correg: string; roa_pct: string|null; roe_pct: string|null; };
 
 async function generarExcel(opts: {
   entidades: string[];
@@ -115,7 +116,7 @@ async function generarExcel(opts: {
   // Consultas paralelas — balDicRows y erDicRows siempre se traen cuando
   // "cartera" está activo para garantizar que la hoja Validación PE tenga
   // todos los datos aunque el usuario no active Balance/ER.
-  const [balRows, erRows, mesRows, kpiRows, kpiAnualRows, balDicRows, erDicRows] = await Promise.all([
+  const [balRows, erRows, mesRows, kpiRows, kpiAnualRows, balDicRows, erDicRows, coopacDupontRows] = await Promise.all([
     incBalance ? db.execute<BalRow>(sql`
       SELECT periodo, nomb_correg,
         cta_a, cta_c, cta_a1, cta_a3,
@@ -197,6 +198,18 @@ async function generarExcel(opts: {
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
     `) : Promise.resolve([] as ErRow[]),
+
+    // ROA/ROE COOPAC: v_dupont_coopac (V193) calcula desde raw.eeff_observacion
+    // porque mv_eeff_resultados_ancho no expone cta_17 para COOPAC.
+    incCartera ? db.execute<CoopacDupontRow>(sql`
+      SELECT periodo, nomb_correg, roa_pct, roe_pct
+      FROM analytics.v_dupont_coopac
+      WHERE nomb_correg IN (${entIn})
+        AND moneda = 'TOTAL'
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
+      ORDER BY nomb_correg, periodo
+    `) : Promise.resolve([] as CoopacDupontRow[]),
   ]);
 
   // ── Índices ───────────────────────────────────────────────────────────────
@@ -228,6 +241,9 @@ async function generarExcel(opts: {
   const erDicIdx = new Map<string, ErRow>();
   for (const r of erDicRows) erDicIdx.set(`${r.nomb_correg}__${r.periodo}`, r);
 
+  const coopacDupontIdx = new Map<string, CoopacDupontRow>();
+  for (const r of coopacDupontRows) coopacDupontIdx.set(`${r.nomb_correg}__${r.periodo}`, r);
+
   // ── Helpers de calidad de cartera ─────────────────────────────────────────
   function getBalDic(ent: string, periodo: number): BalDicRow | BalRow | undefined {
     return balDicIdx.get(`${ent}__${periodo}`) ?? balIdx.get(`${ent}__${periodo}`);
@@ -251,16 +267,27 @@ async function generarExcel(opts: {
     return car > 0 ? Math.abs(nv(b.cta_a4_4)) / car : null;
   }
   function getRoa(ent: string, periodo: number): number | null {
+    // SF (CMACs, financieras, bancos): v_kpis_anuales_entidad (V067) tiene utilidad_ttm
     const k = kpiAnualIdx.get(`${ent}__${periodo}`);
-    if (!k) return null;
-    const util = n(k.utilidad_ttm); const act = n(k.activos_prom_12m);
-    return util != null && act != null && act !== 0 ? util / act : null;
+    if (k) {
+      const util = n(k.utilidad_ttm); const act = n(k.activos_prom_12m);
+      if (util != null && act != null && act !== 0) return util / act;
+    }
+    // COOPAC: v_dupont_coopac (V193) calcula desde raw.eeff_observacion.
+    // roa_pct ya viene en % (ej: 1.36), convertir a decimal (0.0136).
+    const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
+    const roa = cd ? n(cd.roa_pct) : null;
+    return roa != null ? roa / 100 : null;
   }
   function getRoe(ent: string, periodo: number): number | null {
     const k = kpiAnualIdx.get(`${ent}__${periodo}`);
-    if (!k) return null;
-    const util = n(k.utilidad_ttm); const pat = n(k.patrimonio_prom_12m);
-    return util != null && pat != null && pat !== 0 ? util / pat : null;
+    if (k) {
+      const util = n(k.utilidad_ttm); const pat = n(k.patrimonio_prom_12m);
+      if (util != null && pat != null && pat !== 0) return util / pat;
+    }
+    const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
+    const roe = cd ? n(cd.roe_pct) : null;
+    return roe != null ? roe / 100 : null;
   }
 
   // ── Workbook ─────────────────────────────────────────────────────────────
@@ -794,7 +821,7 @@ async function generarExcel(opts: {
     r++;
     ws.mergeCells(r, 1, r, 2 + nCols);
     const nota2 = ws.getRow(r).getCell(1);
-    nota2.value = "Fuente: SBS vía Aibenchef · KPIs PE almacenados en marts.fact_kpis_mensuales (cálculo set-based, V034/V078/V197) · ROA/ROE calculados desde marts.v_kpis_anuales_entidad (V067) · Mora y Cobertura calculados desde marts.v_eeff_balance_ancho · Gastos Op TTM = cta_10 + cta_12_7 + cta_12_8 (Administración + Deprec. + Amort.)";
+    nota2.value = "Fuente: SBS vía Aibenchef · KPIs PE almacenados en marts.fact_kpis_mensuales (cálculo set-based, V034/V078/V197) · ROA/ROE SF (CMACs/financieras/bancos): marts.v_kpis_anuales_entidad (V067) · ROA/ROE COOPAC: analytics.v_dupont_coopac (V193, desde raw.eeff_observacion cuenta 17) · Mora y Cobertura calculados desde marts.v_eeff_balance_ancho · Gastos Op TTM = cta_10 + cta_12_7 + cta_12_8 (Administración + Deprec. + Amort.)";
     nota2.font = { size: 9, italic: true, color: { argb: C.grisMed } };
     nota2.alignment = { wrapText: true }; ws.getRow(r).height = 36;
   }
