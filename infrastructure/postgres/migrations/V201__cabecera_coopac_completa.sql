@@ -146,7 +146,7 @@ FROM (VALUES
 CROSS JOIN (VALUES
     ('COOPAC_N3'::TEXT), ('COOPAC_N2B'), ('COOPAC_N2A'), ('COOPAC_N1')
 ) AS g(tipo_entidad)
-ON CONFLICT (tipo_estado, tipo_entidad, orden, valido_desde) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- 3. INSERT cuentas BG faltantes (en importer Python pero no en cabecera)
@@ -182,7 +182,7 @@ FROM (VALUES
 CROSS JOIN (VALUES
     ('COOPAC_N3'::TEXT), ('COOPAC_N2B'), ('COOPAC_N2A'), ('COOPAC_N1')
 ) AS g(tipo_entidad)
-ON CONFLICT (tipo_estado, tipo_entidad, orden, valido_desde) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 COMMENT ON TABLE dw.cabecera_maestra IS
     'Cabecera canónica por (tipo_estado, tipo_entidad, periodo). '
