@@ -752,6 +752,9 @@ type RowDef = {
     label: string;
     field: keyof PuntoEquilibrioRow;
     ctaSbs?: string;
+    /** Si true: ocultar la sub-fila cuando su valor sea 0 o null (evita
+     *  ruido para entidades que no usan esas subcuentas). */
+    hideWhenZero?: boolean;
   }>;
 };
 
@@ -812,6 +815,7 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
       { key: "directorio", label: "Directorio", field: "pctDirectorio", ctaSbs: "cta 10.2" },
       { key: "generales", label: "Servicios Terceros + Impuestos", field: "pctGenerales", ctaSbs: "cta 10.3+10.4" },
       { key: "deprec", label: "Depreciación + Amortización", field: "pctDepreciacion", ctaSbs: "cta 12.7+12.8" },
+      { key: "otrosGastosOp", label: "Otros gastos operativos", field: "pctOtrosGastosOp", ctaSbs: "cta 10.5+", hideWhenZero: true },
     ],
   },
   {
@@ -1170,6 +1174,13 @@ function HistoricoTable({
           });
           if (row.subrows) {
             for (const sub of row.subrows) {
+              if (sub.hideWhenZero) {
+                const hasData = ent.rows.some((r) => {
+                  const v = r[sub.field] as number | null | undefined;
+                  return v != null && Math.abs(v) > 1e-9;
+                });
+                if (!hasData) continue;
+              }
               addRow(sub.label, sub.field, { indent: 1 });
             }
           }
@@ -1439,7 +1450,14 @@ function HistoricoTable({
                     );
                   })}
                 </tr>
-                {isExpanded && row.subrows?.map((sub, subIdx) => (
+                {isExpanded && row.subrows?.filter((sub) => {
+                  if (!sub.hideWhenZero) return true;
+                  return effectiveCols.some((p) => {
+                    const d = dataByPeriodo.get(p);
+                    const v = d ? (d[sub.field] as number | null | undefined) : null;
+                    return v != null && Math.abs(v) > 1e-9;
+                  });
+                }).map((sub, subIdx) => (
                   <tr
                     key={`${row.key}__${sub.key}`}
                     className={cn(
@@ -1813,6 +1831,15 @@ function TablaComparativaCierre({
         });
         if (row.subrows) {
           for (const sub of row.subrows) {
+            if (sub.hideWhenZero) {
+              const hasData = effectiveSeries.some((s) => {
+                const ult = s.puntos[s.puntos.length - 1];
+                if (!ult) return false;
+                const v = ult[sub.field] as number | null | undefined;
+                return v != null && Math.abs(v) > 1e-9;
+              });
+              if (!hasData) continue;
+            }
             addDataRow(sub.label, sub.field, { indent: 1 });
           }
         }
@@ -2290,7 +2317,10 @@ function ComparativoView({
           bgArgb: isHL ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
           isComputed: row.field === "pctPuntoEq",
         });
-        if (row.subrows) for (const sub of row.subrows) addCompRow(sub.label, sub.field, { indent: 1 });
+        if (row.subrows) for (const sub of row.subrows) {
+          if (sub.hideWhenZero && !series.some((s) => { const v = s.puntos.at(-1)?.[sub.field] as number | null | undefined; return v != null && Math.abs(v) > 1e-9; })) continue;
+          addCompRow(sub.label, sub.field, { indent: 1 });
+        }
       }
 
       // ── Hojas 2..N: historico completo por entidad ───────────────────────
@@ -2352,7 +2382,10 @@ function ComparativoView({
             bgArgb: isHL ? "FFDBEAFE" : row.variant === "bold" ? "FFF8FAFC" : undefined,
             isComputed: row.field === "pctPuntoEq",
           });
-          if (row.subrows) for (const sub of row.subrows) addHRow(sub.label, sub.field, { indent: 1 });
+          if (row.subrows) for (const sub of row.subrows) {
+            if (sub.hideWhenZero && !s.puntos.some((p) => { const v = (p as unknown as PuntoEquilibrioRow)[sub.field] as number | null | undefined; return v != null && Math.abs(v) > 1e-9; })) continue;
+            addHRow(sub.label, sub.field, { indent: 1 });
+          }
         }
       }
 
