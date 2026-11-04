@@ -102,12 +102,12 @@ DROP MATERIALIZED VIEW IF EXISTS marts.mv_eeff_resultados_ancho CASCADE;
 CREATE MATERIALIZED VIEW marts.mv_eeff_resultados_ancho AS
 SELECT
     periodo,
-    fecha_cierre,
+    MAX(fecha_cierre)    AS fecha_cierre,
     nomb_correg,
-    empresa_sbs,
-    tipo_entidad,
-    microfinanciera,
-    nacional,
+    MAX(empresa_sbs)     AS empresa_sbs,
+    MAX(tipo_entidad)    AS tipo_entidad,
+    MAX(microfinanciera) AS microfinanciera,
+    MAX(nacional)        AS nacional,
     moneda,
     MAX(CASE WHEN cuenta_codigo = '1' THEN valor END) AS cta_1  /* INGRESOS FINANCIEROS */,
     MAX(CASE WHEN cuenta_codigo = '1.1' THEN valor END) AS cta_1_1  /* Disponible */,
@@ -177,8 +177,7 @@ SELECT
     MAX(CASE WHEN cuenta_codigo = '17' THEN valor END) AS cta_17  /* RESULTADO NETO DEL EJERCICIO */
 FROM raw.eeff_observacion
 WHERE tipo_estado = 'resultados'
-GROUP BY periodo, fecha_cierre, nomb_correg, empresa_sbs,
-         tipo_entidad, microfinanciera, nacional, moneda;
+GROUP BY periodo, nomb_correg, moneda;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mv_eeff_resultados_ancho
     ON marts.mv_eeff_resultados_ancho (periodo, nomb_correg, moneda);
