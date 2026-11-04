@@ -102,7 +102,8 @@ async function generarExcel(opts: {
         cta_b1, cta_b4
       FROM marts.v_eeff_balance_ancho
       WHERE nomb_correg = ANY(${entidades}::text[])
-        AND periodo = ANY(${DIC_PERIODOS}::int[])
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
     `) : Promise.resolve([]),
@@ -114,7 +115,8 @@ async function generarExcel(opts: {
         cta_12_7, cta_12_8, cta_13
       FROM marts.mv_eeff_resultados_ancho
       WHERE nomb_correg = ANY(${entidades}::text[])
-        AND periodo = ANY(${DIC_PERIODOS}::int[])
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
     `) : Promise.resolve([]),
@@ -137,7 +139,8 @@ async function generarExcel(opts: {
           'pe_gastos_operacionales','pe_punto_equilibrio','pe_margen_neto'
         )
         AND moneda = 'TOTAL'
-        AND periodo = ANY(${DIC_PERIODOS}::int[])
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
       ORDER BY nomb_correg, periodo, kpi_codigo
     `) : Promise.resolve([]),
   ]);
