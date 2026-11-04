@@ -222,14 +222,18 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         ("A1", "caja"): "A1.1",
         ("A1", "bancos y corresponsales"): "A1.2",
         ("A1", "otros"): "A1.4",
-        # A4 sub-cuentas (mixed-case, padre=A4)
-        # "Atrasados" NO se mapea: es subtotal de A4.3+A4.4, igual que en SF
+        # A4 sub-cuentas (mixed-case, padre=A4) — alineado con SF desde V203
+        # Atrasados = subtotal (MV: cta_a4_3), mismo código que SF
+        # Vencidos y CobranzaJud = sub-items bajo Atrasados, pero el state
+        # machine usa current_l2_code="A4" para todos (Excel no es ALL CAPS),
+        # por lo que el lookup siempre usa ("A4", nombre_norm).
         ("A4", "vigentes"): "A4.1",
         ("A4", "refinanciados y reestructurados"): "A4.2",
-        ("A4", "vencidos"): "A4.3",
-        ("A4", "en cobranza judicial"): "A4.4",
-        ("A4", "provisiones"): "A4.6",
-        ("A4", "intereses y comisiones no devengados"): "A4.7",
+        ("A4", "atrasados"): "A4.3",               # subtotal (MV: cta_a4_3)
+        ("A4", "vencidos"): "A4.3.1",              # sub-item (MV: cta_a4_3_1)
+        ("A4", "en cobranza judicial"): "A4.3.2",  # sub-item (MV: cta_a4_3_2)
+        ("A4", "provisiones"): "A4.4",             # alineado con SF (MV: cta_a4_4)
+        ("A4", "intereses y comisiones no devengados"): "A4.5",  # alineado con SF (MV: cta_a4_5)
         # === PASIVO (current_l1_code = "B" tras "TOTAL PASIVO") ===
         (None, "total pasivo"): "B",
         (None, "obligaciones con los socios"): "B1",

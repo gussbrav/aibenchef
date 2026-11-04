@@ -113,14 +113,26 @@ class TestBgCuentas:
             == "A4.2"
         )
 
+    def test_atrasados_bajo_a4(self):
+        # "Atrasados" es el subtotal (A4.3), alineado con SF desde V203
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "atrasados")] == "A4.3"
+
     def test_vencidos_bajo_a4(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "vencidos")] == "A4.3"
+        # sub-item de Atrasados, mismo código que SF
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "vencidos")] == "A4.3.1"
 
     def test_en_cobranza_judicial_bajo_a4(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "en cobranza judicial")] == "A4.4"
+        # sub-item de Atrasados, mismo código que SF
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "en cobranza judicial")] == "A4.3.2"
 
     def test_provisiones_bajo_a4(self):
-        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "provisiones")] == "A4.6"
+        # alineado con SF (era A4.6)
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", "provisiones")] == "A4.4"
+
+    def test_intereses_bajo_a4(self):
+        # alineado con SF (era A4.7)
+        key = "intereses y comisiones no devengados"
+        assert MonthlyCoopacEeffImporter._BG_CUENTAS[("A4", key)] == "A4.5"
 
     def test_obligaciones_socios_es_b1(self):
         # "OBLIGACIONES CON LOS SOCIOS" ALL CAPS → lookup (None, ...)

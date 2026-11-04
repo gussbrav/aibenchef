@@ -66,8 +66,8 @@ function carteraBruta12m(serie: MesRow[], periodo: number): number | null {
   if (startMes <= 0) { startMes += 12; startAnio -= 1; }
   const ini  = startAnio * 100 + startMes;
   const v    = serie.filter(x => x.periodo >= ini && x.periodo <= periodo);
-  // max(0, cta_a4_4) incluye CobranzaJud de COOPAC (>0) y excluye Provisiones de SF (<0)
-  const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0) + Math.max(0, n(x.cta_a4_4) ?? 0)).filter(x => x > 0);
+  // cta_a4_3 = Atrasados (subtotal) para SF y COOPAC — semántica unificada en V203
+  const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0)).filter(x => x > 0);
   if (vals.length === 0) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
@@ -256,7 +256,7 @@ async function generarExcel(opts: {
     return balDicIdx.get(`${ent}__${periodo}`) ?? balIdx.get(`${ent}__${periodo}`);
   }
   function getMora(ent: string, periodo: number): number | null {
-    // COOPAC: usar v_dupont_coopac que calcula (A4.3+A4.4)/bruta correctamente
+    // COOPAC: usar v_dupont_coopac que calcula Atrasados(A4.3)/bruta correctamente
     const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
     if (cd && cd.mora_pct != null) {
       const v = n(cd.mora_pct);
@@ -269,7 +269,7 @@ async function generarExcel(opts: {
     return bruta > 0 ? nv(b.cta_a4_3) / bruta : null;
   }
   function getCobAtras(ent: string, periodo: number): number | null {
-    // COOPAC: v_dupont_coopac calcula A4.6/(A4.3+A4.4) correctamente
+    // COOPAC: v_dupont_coopac calcula Prov(A4.4)/Atrasados(A4.3) correctamente
     const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
     if (cd && cd.cobertura_car_pct != null) {
       const v = n(cd.cobertura_car_pct);
