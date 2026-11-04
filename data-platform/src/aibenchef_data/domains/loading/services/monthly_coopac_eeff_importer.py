@@ -192,65 +192,68 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
     # Clave: (parent_code | None, nombre_normalizado) -> cuenta_codigo
     #
     # Regla de lookup (ver _import_coopac_sheet):
-    #   - Fila ALL CAPS (es_header=True):  lookup con parent=None
-    #   - Fila mixed-case con parent:      lookup con (parent_code, nombre_norm)
-    #   - Fila mixed-case sin parent:      se descarta (no hace lookup)
-    #
-    # Las cuentas principales del BG COOPAC son ALL CAPS identicas al SF:
-    # "DISPONIBLE", "CREDITOS NETOS...", "TOTAL ACTIVO", etc.
-    # Los sub-items (Vigentes, Vencidos...) son mixed-case bajo el parent ALL CAPS.
+    #   - Fila ALL CAPS (es_header=True): busca (current_l1_code, nombre_norm)
+    #     primero, luego (None, nombre_norm) como fallback.
+    #   - current_l1_code es el código de la sección raíz activa ('A', 'B', 'C').
+    #     'TOTAL ACTIVO' → current_l1_code='A'; 'TOTAL PASIVO' → 'B'; 'PATRIMONIO' → 'C'.
+    #   - 'FONDOS INTERCOOPERATIVOS' aparece DOS VECES en el Excel COOPAC:
+    #     una en Activo (→ A2) y otra en Pasivo (→ B_fi). Se distinguen por
+    #     current_l1_code: ("A", ...) → A2 y ("B", ...) → B_fi.
+    #     NO usar (None, ...) para ambas — Python dict sobrescribiría la primera.
+    #   - Fila mixed-case con parent:  lookup con (current_l2_code, nombre_norm)
+    #   - Fila mixed-case sin parent:  se descarta
     # -----------------------------------------------------------------------
     _BG_CUENTAS: dict[tuple[str | None, str], str] = {
-        # === ACTIVO ===
+        # === ACTIVO (current_l1_code = "A" tras "TOTAL ACTIVO") ===
         (None, "total activo"): "A",
         (None, "disponible"): "A1",
-        (None, "fondos intercooperativos"): "A2",
+        # "FONDOS INTERCOOPERATIVOS" Activo: se busca como ("A", ...) en sección Activo
+        ("A", "fondos intercooperativos"): "A2",
         (None, "inversiones netas de provisiones"): "A3",
         (None, "creditos netos de provisiones y de ingresos no devengados"): "A4",
+        (None, "cuentas por cobrar netas de provisiones"): "A5",
+        (None, "rendimientos por cobrar"): "A8",
+        (None, "bienes realizables recibidos en pago y adjudicados netos"): "A_bir",
         (None, "inmueble mobiliario y equipo neto"): "A6",
         (None, "otros activos"): "A7",
         # A1 sub-cuentas (mixed-case, padre=A1)
+        # COOPAC tiene 3 sub-items: Caja (A1.1), Bancos (A1.2), Otros (A1.4).
+        # SF además tiene Canje (A1.3) — COOPAC lo salta, A1.4 va a "Otros".
         ("A1", "caja"): "A1.1",
         ("A1", "bancos y corresponsales"): "A1.2",
         ("A1", "otros"): "A1.4",
         # A4 sub-cuentas (mixed-case, padre=A4)
-        # "Atrasados" NO se mapea: es agregado de A4.3+A4.4, igual que en SF
+        # "Atrasados" NO se mapea: es subtotal de A4.3+A4.4, igual que en SF
         ("A4", "vigentes"): "A4.1",
         ("A4", "refinanciados y reestructurados"): "A4.2",
         ("A4", "vencidos"): "A4.3",
         ("A4", "en cobranza judicial"): "A4.4",
         ("A4", "provisiones"): "A4.6",
         ("A4", "intereses y comisiones no devengados"): "A4.7",
-        # === PASIVO ===
+        # === PASIVO (current_l1_code = "B" tras "TOTAL PASIVO") ===
         (None, "total pasivo"): "B",
         (None, "obligaciones con los socios"): "B1",
+        (None, "depositos de coopac"): "B2",
+        # "FONDOS INTERCOOPERATIVOS" Pasivo: se busca como ("B", ...) en sección Pasivo
+        ("B", "fondos intercooperativos"): "B_fi",
         (None, "adeudos y obligaciones financieras"): "B3",
+        (None, "cuentas por pagar"): "B5",
+        (None, "intereses y otros gastos por pagar"): "B_igp",
         (None, "otros pasivos"): "B6",
+        (None, "provisiones"): "B_prov",
+        (None, "obligaciones en circulacion subordinadas"): "B_sub",
         # B1 sub-cuentas
         ("B1", "depositos a la vista"): "B1.1",
         ("B1", "depositos de ahorro"): "B1.2",
         ("B1", "depositos a plazo"): "B1.3",
-        # === PATRIMONIO ===
+        # === PATRIMONIO (current_l1_code = "C" tras "PATRIMONIO") ===
         (None, "patrimonio"): "C",
         ("C", "capital social"): "C1",
+        ("C", "capital adicional"): "C2",
         ("C", "reservas"): "C3",
+        ("C", "ajustes al patrimonio"): "C4",
         ("C", "resultados acumulados"): "C5",
         ("C", "resultado neto del ejercicio"): "C6",
-        # Activo adicionales
-        (None, "cuentas por cobrar netas de provisiones"): "A5",
-        (None, "rendimientos por cobrar"): "A8",
-        (None, "bienes realizables recibidos en pago y adjudicados netos"): "A_bir",
-        # Pasivo adicionales
-        (None, "depósitos de coopac"): "B2",
-        (None, "depositos de coopac"): "B2",
-        (None, "fondos intercooperativos"): "B_fi",
-        (None, "cuentas por pagar"): "B5",
-        (None, "intereses y otros gastos por pagar"): "B_igp",
-        (None, "provisiones"): "B_prov",
-        (None, "obligaciones en circulacion subordinadas"): "B_sub",
-        # Patrimonio adicionales
-        ("C", "capital adicional"): "C2",
-        ("C", "ajustes al patrimonio"): "C4",
     }
 
     def __init__(
