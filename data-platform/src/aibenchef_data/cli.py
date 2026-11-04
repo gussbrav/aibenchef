@@ -2418,10 +2418,8 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
 
     # 1. Cargar mapa topico -> [path_local, ...] desde DB.
-    # COOPAC (grupo LIKE 'coopac_%') se excluye: no tiene parser SF aun.
-    # Los archivos quedan en status='descargado' hasta que se implemente
-    # el parser especifico en Fase 2 del modulo cooperativas.
     archivos_por_topico: dict[str, list[str]] = {}
+    coopac_archivos: list[str] = []
     with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -2436,13 +2434,27 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
         for topico_db, path_local in cur.fetchall():
             archivos_por_topico.setdefault(topico_db, []).append(path_local)
 
-    total_archivos = sum(len(v) for v in archivos_por_topico.values())
+        cur.execute(
+            """
+            SELECT path_local
+            FROM raw.archivos_descargados
+            WHERE periodo = %s AND status = 'descargado'
+              AND grupo LIKE 'coopac_%'
+            ORDER BY grupo, path_local
+            """,
+            (periodo_int,),
+        )
+        coopac_archivos = [row[0] for row in cur.fetchall()]
+
+    total_sf = sum(len(v) for v in archivos_por_topico.values())
+    total_coopac = len(coopac_archivos)
     click.echo(
-        f"# periodo={periodo_int} archivos_descargado={total_archivos} "
+        f"# periodo={periodo_int} archivos_descargado={total_sf + total_coopac} "
+        f"(sf={total_sf} coopac={total_coopac}) "
         f"topicos={sorted(archivos_por_topico.keys())}"
     )
 
-    if total_archivos == 0:
+    if total_sf == 0 and total_coopac == 0:
         click.echo("# Nada que importar (no hay archivos en estado 'descargado').")
         return
 
@@ -2450,6 +2462,10 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
         for topico, paths in archivos_por_topico.items():
             click.echo(f"  [dry] {topico}: {len(paths)} archivos")
             for p in paths:
+                click.echo(f"        ~ {p}")
+        if coopac_archivos:
+            click.echo(f"  [dry] coopac_eeff: {len(coopac_archivos)} archivos")
+            for p in coopac_archivos:
                 click.echo(f"        ~ {p}")
         return
 
@@ -2504,6 +2520,52 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
                     with contextlib.suppress(Exception):
                         await conn.rollback()
 
+    async def _run_coopac() -> None:
+        nonlocal grand_inserted, grand_errors, grand_ok, grand_fail
+        if not coopac_archivos:
+            return
+        importer_cls = getattr(loading_module, "MonthlyCoopacEeffImporter", None)
+        if importer_cls is None:
+            click.echo("  ! coopac_eeff: MonthlyCoopacEeffImporter no existe (skip)")
+            return
+        click.echo(
+            f"\n## topico=coopac_eeff archivos={len(coopac_archivos)} "
+            f"importer=MonthlyCoopacEeffImporter"
+        )
+        async with connection() as conn:
+            importer = importer_cls(conn, batch_size=batch_size)
+            for i, p_str in enumerate(coopac_archivos, start=1):
+                f = _P(p_str)
+                if not f.exists():
+                    grand_fail += 1
+                    click.echo(
+                        f"  [{i:>3}/{len(coopac_archivos)}] {f.name:<40} SKIP: no existe en disco"
+                    )
+                    continue
+                try:
+                    result = await _import_file_with_audit(importer, f, topico="eeff")
+                    grand_inserted += result.rows_inserted
+                    if result.errors:
+                        grand_errors += len(result.errors)
+                        grand_fail += 1
+                        status_str = f"ERR x{len(result.errors)}"
+                    else:
+                        grand_ok += 1
+                        status_str = "OK"
+                    click.echo(
+                        f"  [{i:>3}/{len(coopac_archivos)}] {f.name:<40} "
+                        f"rows={result.rows_inserted:>7,}  "
+                        f"({result.duration_seconds:.1f}s)  {status_str}"
+                    )
+                except Exception as e:
+                    grand_fail += 1
+                    grand_errors += 1
+                    click.echo(
+                        f"  [{i:>3}/{len(coopac_archivos)}] {f.name:<40} FATAL: {e}"
+                    )
+                    with contextlib.suppress(Exception):
+                        await conn.rollback()
+
     async def _main() -> None:
         # Pool abierto UNA vez para todos los topicos. psycopg_pool no permite
         # reabrir un pool cerrado — abrir/cerrar por topico tira PoolClosed
@@ -2512,6 +2574,7 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
         try:
             for topico_db, importer_name, audit_name in _MONTHLY_TOPICO_IMPORTERS:
                 await _run_topico(topico_db, importer_name, audit_name)
+            await _run_coopac()
         finally:
             await close_pool()
 
