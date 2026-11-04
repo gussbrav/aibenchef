@@ -7,7 +7,6 @@ import ExcelJS from "exceljs";
 import { db } from "@/lib/infrastructure/db";
 import { requireSession } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
-import { ForbiddenError, handleRoute, ValidationError } from "@/lib/domains/shared";
 
 // ── Colores corporativos ──────────────────────────────────────────────────────
 const C = {
@@ -522,44 +521,37 @@ async function generarExcel(opts: {
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
+// Nota: no usamos handleRoute porque devuelve un archivo binario, no JSON.
+// handleRoute envuelve el return en un Response JSON y rompe la descarga.
 export async function POST(req: NextRequest) {
-  return handleRoute(async () => {
+  try {
     const session = await requireSession();
     if (!(await isAdmin(session.id))) {
-      throw new ForbiddenError("Solo admins pueden generar reportes EEFF", {});
+      return Response.json({ error: "Solo admins pueden generar reportes EEFF" }, { status: 403 });
     }
 
     const body = await req.json() as unknown;
-    if (typeof body !== "object" || body === null) throw new ValidationError("Body inválido", {});
+    if (typeof body !== "object" || body === null)
+      return Response.json({ error: "Body inválido" }, { status: 400 });
 
     const { entidades, desde, hasta, secciones } = body as Record<string, unknown>;
 
     if (!Array.isArray(entidades) || entidades.length === 0)
-      throw new ValidationError("entidades es requerido y no puede estar vacío", {});
+      return Response.json({ error: "Selecciona al menos una entidad" }, { status: 400 });
     if (entidades.length > 30)
-      throw new ValidationError("Máximo 30 entidades por reporte", { got: entidades.length });
+      return Response.json({ error: `Máximo 30 entidades por reporte (seleccionadas: ${entidades.length})` }, { status: 400 });
     if (!Array.isArray(secciones) || secciones.length === 0)
-      throw new ValidationError("Debes seleccionar al menos una sección", {});
+      return Response.json({ error: "Selecciona al menos una sección" }, { status: 400 });
 
     const desdeNum = Number(desde);
     const hastaNum = Number(hasta);
     if (!Number.isInteger(desdeNum) || desdeNum < 2009 || desdeNum > 2030)
-      throw new ValidationError("desde debe ser un año entre 2009 y 2030", { got: desde });
+      return Response.json({ error: "desde debe ser un año entre 2009 y 2030" }, { status: 400 });
     if (!Number.isInteger(hastaNum) || hastaNum < desdeNum || hastaNum > 2030)
-      throw new ValidationError("hasta debe ser >= desde y <= 2030", { got: hasta });
+      return Response.json({ error: "hasta debe ser mayor o igual a desde" }, { status: 400 });
 
     const entList = (entidades as unknown[]).map(String);
     const secList = (secciones as unknown[]).map(String).filter(s => ["balance","er","cartera"].includes(s));
-
-    // Verificar que las entidades existan en la maestra
-    const existe = await db.execute<{ nomb_correg_canonico: string }>(sql`
-      SELECT nomb_correg_canonico FROM dw.entidad_maestra
-      WHERE nomb_correg_canonico = ANY(${entList})
-    `);
-    const encontradas = new Set(existe.map(r => r.nomb_correg_canonico));
-    const noEncontradas = entList.filter(e => !encontradas.has(e));
-    if (noEncontradas.length > 0)
-      throw new ValidationError("Entidades no encontradas en la maestra", { noEncontradas });
 
     const buffer = await generarExcel({ entidades: entList, desde: desdeNum, hasta: hastaNum, secciones: secList });
     const filename = `Reporte_EEFF_${desdeNum}-${hastaNum}.xlsx`;
@@ -572,5 +564,9 @@ export async function POST(req: NextRequest) {
         "Content-Length": String(buffer.length),
       },
     });
-  });
+  } catch (err) {
+    console.error("[reportes/eeff] Error generando reporte:", err);
+    const msg = err instanceof Error ? err.message : "Error interno al generar el reporte";
+    return Response.json({ error: msg }, { status: 500 });
+  }
 }
