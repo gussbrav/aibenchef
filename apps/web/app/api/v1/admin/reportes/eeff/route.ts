@@ -564,7 +564,7 @@ export async function POST(req: NextRequest) {
     const buffer = await generarExcel({ entidades: entList, desde: desdeNum, hasta: hastaNum, secciones: secList });
     const filename = `Reporte_EEFF_${desdeNum}-${hastaNum}.xlsx`;
 
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
