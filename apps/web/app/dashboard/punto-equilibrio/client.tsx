@@ -909,6 +909,8 @@ function HistoricoTable({
 }) {
   const [activeEntity, setActiveEntity] = useState<string>(entidad);
 
+  useEffect(() => { setActiveEntity(entidad); }, [entidad]);
+
   // Data de la entidad activa: main entity usa 'data', peers usan series[i].puntos
   const activeData = useMemo<PuntoEquilibrioRow[]>(() => {
     if (activeEntity === entidad || !peerSeries) return data;
