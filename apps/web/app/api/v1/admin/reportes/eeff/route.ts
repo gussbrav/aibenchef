@@ -30,6 +30,17 @@ const C = {
   negro:       "FF0F172A",
 };
 
+const ENT_PALETTE = [
+  "FF1E3A5F", // azul
+  "FF0F766E", // teal
+  "FF7C3AED", // violet
+  "FFB45309", // amber
+  "FF0369A1", // sky
+  "FF047857", // emerald
+  "FFB91C1C", // red
+  "FF6D28D9", // indigo
+] as const;
+
 function fillSolid(cell: ExcelJS.Cell, argb: string) {
   cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
@@ -480,7 +491,7 @@ async function generarExcel(opts: {
       ws.mergeCells(r, col, r, col + DIC_PERIODOS.length - 1);
       const c = h1.getCell(col);
       c.value = entidades[ei]!; fontBold(c, 10, C.blanco);
-      c.alignment = { horizontal: "center" }; fillSolid(c, C.azul);
+      c.alignment = { horizontal: "center" }; fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
     }
     h1.height = 20; r++;
 
@@ -493,7 +504,7 @@ async function generarExcel(opts: {
         const col = 3 + ei * DIC_PERIODOS.length + pi;
         const c   = h2.getCell(col);
         c.value   = fmtDic(DIC_PERIODOS[pi]!);
-        fontBold(c, 9, C.blanco); fillSolid(c, C.grisOsc);
+        fontBold(c, 9, C.blanco); fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
         c.alignment = { horizontal: "center" }; border(c);
       }
     }
@@ -580,7 +591,7 @@ async function generarExcel(opts: {
       ws.mergeCells(r, col, r, col + DIC_PERIODOS.length - 1);
       const c = h1.getCell(col);
       c.value = entidades[ei]!; fontBold(c, 10, C.blanco);
-      c.alignment = { horizontal: "center" }; fillSolid(c, C.teal);
+      c.alignment = { horizontal: "center" }; fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
     }
     h1.height = 20; r++;
 
@@ -592,7 +603,7 @@ async function generarExcel(opts: {
         const col = 3 + ei * DIC_PERIODOS.length + pi;
         const c   = h2.getCell(col);
         c.value   = fmtDic(DIC_PERIODOS[pi]!);
-        fontBold(c, 9, C.blanco); fillSolid(c, C.grisOsc);
+        fontBold(c, 9, C.blanco); fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
         c.alignment = { horizontal: "center" }; border(c);
       }
     }
@@ -683,7 +694,7 @@ async function generarExcel(opts: {
       ws.mergeCells(r, col, r, col + DIC_PERIODOS.length - 1);
       const c = h1.getCell(col);
       c.value = entidades[ei]!; fontBold(c, 9, C.blanco);
-      c.alignment = { horizontal: "center" }; fillSolid(c, C.azul);
+      c.alignment = { horizontal: "center" }; fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
     }
     h1.height = 20; r++;
 
@@ -695,7 +706,7 @@ async function generarExcel(opts: {
         const col = 3 + ei * DIC_PERIODOS.length + pi;
         const c   = h2.getCell(col);
         c.value   = fmtDic(DIC_PERIODOS[pi]!);
-        fontBold(c, 9, C.blanco); fillSolid(c, C.grisOsc);
+        fontBold(c, 9, C.blanco); fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
         c.alignment = { horizontal: "center" }; border(c);
       }
     }
@@ -745,6 +756,18 @@ async function generarExcel(opts: {
         fn: ctx => ctx.er ? -(nv(ctx.er.cta_12_7)+nv(ctx.er.cta_12_8)) : null },
       { type: "data", grupo: "", label: "   Deprec. + Amort. %", fmt: "pct",
         fn: ctx => ctx.kpi?.get("pe_deprec_amortiz") ?? null },
+      { type: "data", grupo: "", label: "   Directorio TTM (S/ Miles)", fmt: "miles",
+        fn: ctx => ctx.er ? -nv(ctx.er.cta_10_2) : null },
+      { type: "data", grupo: "", label: "   Directorio %", fmt: "pct",
+        fn: ctx => { const p = carteraBruta12m(mesIdx.get(ctx.ent)??[], ctx.periodo); const a = ctx.er ? -nv(ctx.er.cta_10_2) : null; return (a != null && p != null && p > 0) ? a/p : null; } },
+      { type: "data", grupo: "", label: "   Serv. Terceros + Impuestos TTM (S/ Miles)  [10.3 + 10.4]", fmt: "miles",
+        fn: ctx => ctx.er ? -(nv(ctx.er.cta_10_3)+nv(ctx.er.cta_10_4)) : null },
+      { type: "data", grupo: "", label: "   Serv. Terceros + Impuestos %", fmt: "pct",
+        fn: ctx => { const p = carteraBruta12m(mesIdx.get(ctx.ent)??[], ctx.periodo); const a = ctx.er ? -(nv(ctx.er.cta_10_3)+nv(ctx.er.cta_10_4)) : null; return (a != null && p != null && p > 0) ? a/p : null; } },
+      { type: "data", grupo: "", label: "   Otros Gastos Op. TTM (S/ Miles)  [10 − 10.1..10.5]", fmt: "miles",
+        fn: ctx => ctx.er ? -(nv(ctx.er.cta_10)-nv(ctx.er.cta_10_1)-nv(ctx.er.cta_10_2)-nv(ctx.er.cta_10_3)-nv(ctx.er.cta_10_4)-nv(ctx.er.cta_10_5)) : null },
+      { type: "data", grupo: "", label: "   Otros Gastos Op. %", fmt: "pct",
+        fn: ctx => { const p = carteraBruta12m(mesIdx.get(ctx.ent)??[], ctx.periodo); const a = ctx.er ? -(nv(ctx.er.cta_10)-nv(ctx.er.cta_10_1)-nv(ctx.er.cta_10_2)-nv(ctx.er.cta_10_3)-nv(ctx.er.cta_10_4)-nv(ctx.er.cta_10_5)) : null; return (a != null && p != null && p > 0) ? a/p : null; } },
 
       { type: "sep" },
       { type: "data", grupo: "PE", label: "★  PUNTO DE EQUILIBRIO %  =  Otros + Fondeo + Provisiones + Gastos Op", fmt: "pct", bold: true, hl: "pe",
@@ -893,7 +916,7 @@ async function generarExcel(opts: {
       ws.mergeCells(r, col, r, col + COLS_PER_ENT - 1);
       const c = h1.getCell(col);
       c.value = entidades[ei]!; fontBold(c, 10, C.blanco);
-      c.alignment = { horizontal: "center" }; fillSolid(c, C.azul);
+      c.alignment = { horizontal: "center" }; fillSolid(c, ENT_PALETTE[ei % ENT_PALETTE.length]!);
     }
     h1.height = 20; r++;
 
