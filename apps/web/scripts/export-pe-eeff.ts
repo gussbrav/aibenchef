@@ -209,7 +209,11 @@ async function main() {
       if (!serie) return null;
       const mes  = periodo % 100;
       const anio = Math.floor(periodo / 100);
-      const ini  = (anio - 1) * 100 + mes;
+      // Ventana estricta de 12 meses: 11 meses atrás hasta periodo (inclusive)
+      let startMes = mes - 11;
+      let startAnio = anio;
+      if (startMes <= 0) { startMes += 12; startAnio -= 1; }
+      const ini  = startAnio * 100 + startMes;
       const v    = serie.filter(x => x.periodo >= ini && x.periodo <= periodo);
       const vals = v.map(x => (x.cta_a4_1 ?? 0) + (x.cta_a4_2 ?? 0) + (x.cta_a4_3 ?? 0)).filter(x => x > 0);
       if (vals.length === 0) return null;

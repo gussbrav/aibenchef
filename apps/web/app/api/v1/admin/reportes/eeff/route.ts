@@ -76,7 +76,11 @@ function n(v: string | null | undefined): number | null {
 function carteraBruta12m(serie: MesRow[], periodo: number): number | null {
   const mes  = periodo % 100;
   const anio = Math.floor(periodo / 100);
-  const ini  = (anio - 1) * 100 + mes;
+  // Ventana estricta de 12 meses: 11 meses atrás hasta periodo (inclusive)
+  let startMes = mes - 11;
+  let startAnio = anio;
+  if (startMes <= 0) { startMes += 12; startAnio -= 1; }
+  const ini  = startAnio * 100 + startMes;
   const v    = serie.filter(x => x.periodo >= ini && x.periodo <= periodo);
   const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0)).filter(x => x > 0);
   if (vals.length === 0) return null;
@@ -247,7 +251,7 @@ async function generarExcel(opts: {
     r++;
     ws.mergeCells(r, 1, r, 7);
     const nota = ws.getRow(r).getCell(1);
-    nota.value = "Metodología: Cartera bruta = cta_a4_1 + cta_a4_2 + cta_a4_3 (antes de provisiones). Cartera prom 12M = promedio mismo mes año anterior → periodo objetivo. PE = Costo Fondeo + Provisiones + Gastos Operacionales sobre Cartera Prom. Fuente: marts.v_eeff_balance_ancho, marts.mv_eeff_resultados_ancho, marts.fact_kpis_mensuales.";
+    nota.value = "Metodología: Cartera bruta = cta_a4_1 + cta_a4_2 + cta_a4_3 (antes de provisiones). Prom.12M = promedio de los 12 meses que terminan en el periodo (inclusive), equivale al año calendario para diciembre. PE = Costo Fondeo + Provisiones + Gastos Operacionales sobre Cartera Prom. Fuente: marts.v_eeff_balance_ancho, marts.mv_eeff_resultados_ancho, marts.fact_kpis_mensuales.";
     nota.font = { size: 9, italic: true, color: { argb: C.grisMed } };
     nota.alignment = { wrapText: true };
     ws.getRow(r).height = 36;
