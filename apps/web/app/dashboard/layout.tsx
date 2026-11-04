@@ -140,6 +140,11 @@ export default async function DashboardLayout({
                       label: "Catálogo de datos",
                       description: "Explora todas las tablas, vistas y modelos disponibles del data warehouse",
                     },
+                    {
+                      href: "/dashboard/reportes/eeff",
+                      label: "Reporte EEFF",
+                      description: "Exporta Balance, ER y Cartera Bruta a Excel para las entidades que elijas",
+                    },
                   ]}
                 />
               )}
