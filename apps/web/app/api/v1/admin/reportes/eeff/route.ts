@@ -397,7 +397,7 @@ async function generarExcel(opts: {
         carBruta,
         pct2(mora),
         pct2(cob),
-        pct2(pe),
+        pct2(pe != null ? Math.abs(pe) : null),
         pct2(margen),
         pct2(roa),
         pct2(roe),
@@ -741,7 +741,7 @@ async function generarExcel(opts: {
 
       { type: "sep" },
       { type: "data", grupo: "PE", label: "★  PUNTO DE EQUILIBRIO %  =  Fondeo + Provisiones + Gastos Op", fmt: "pct", bold: true, hl: "pe",
-        fn: ctx => ctx.kpi?.get("pe_punto_equilibrio") ?? null },
+        fn: ctx => { const v = ctx.kpi?.get("pe_punto_equilibrio"); return v != null ? Math.abs(v) : null; } },
       { type: "sep" },
 
       { type: "data", grupo: "OTROS", label: "Otros Ing/Egr Netos TTM (S/ Miles)  [cta_6 − cta_7 + cta_8 + cta_13]", fmt: "miles",
@@ -926,7 +926,8 @@ async function generarExcel(opts: {
           const prom12m   = esDic ? miles(carteraBruta12m(serie, periodo)) : null;
           const kpiMap    = esDic ? kpiIdx.get(`${ent}__${periodo}`) : undefined;
           const rendim    = esDic ? pct2(kpiMap?.get("pe_rendimiento_cartera") ?? null) : null;
-          const pe        = esDic ? pct2(kpiMap?.get("pe_punto_equilibrio") ?? null)    : null;
+          const peRaw     = esDic ? (kpiMap?.get("pe_punto_equilibrio") ?? null) : null;
+          const pe        = esDic ? pct2(peRaw != null ? Math.abs(peRaw) : null)         : null;
           const margen    = esDic ? pct2(kpiMap?.get("pe_margen_neto") ?? null)         : null;
 
           const vals = [cartBruta, prom12m, rendim, pe, margen];
