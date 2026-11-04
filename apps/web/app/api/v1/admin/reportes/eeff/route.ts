@@ -376,7 +376,13 @@ async function generarExcel(opts: {
       const ent     = entidades[ei]!;
       const lastDic = DIC_PERIODOS[DIC_PERIODOS.length - 1]!;
       const kpiMap  = kpiIdx.get(`${ent}__${lastDic}`);
-      const pe      = kpiMap?.get("pe_punto_equilibrio") ?? null;
+      const _peOtros    = kpiMap?.get("pe_otros_ing_egr") ?? null;
+      const _peFondeo   = kpiMap?.get("pe_costo_fondeo") ?? null;
+      const _peProv     = kpiMap?.get("pe_costo_provisiones") ?? null;
+      const _peGastosOp = kpiMap?.get("pe_gastos_operacionales") ?? null;
+      const pe = (_peOtros != null && _peFondeo != null && _peProv != null && _peGastosOp != null)
+        ? Math.abs(_peOtros + _peFondeo + _peProv + _peGastosOp)
+        : null;
       const margen  = kpiMap?.get("pe_margen_neto") ?? null;
       const balC    = getBalDic(ent, lastDic);
       const carBruta = balC ? miles(nv(balC.cta_a4_1)+nv(balC.cta_a4_2)+nv(balC.cta_a4_3)+Math.max(0,nv(balC.cta_a4_4))) : null;
@@ -397,7 +403,7 @@ async function generarExcel(opts: {
         carBruta,
         pct2(mora),
         pct2(cob),
-        pct2(pe != null ? Math.abs(pe) : null),
+        pct2(pe),
         pct2(margen),
         pct2(roa),
         pct2(roe),
@@ -740,8 +746,15 @@ async function generarExcel(opts: {
         fn: ctx => ctx.kpi?.get("pe_deprec_amortiz") ?? null },
 
       { type: "sep" },
-      { type: "data", grupo: "PE", label: "★  PUNTO DE EQUILIBRIO %  =  Fondeo + Provisiones + Gastos Op", fmt: "pct", bold: true, hl: "pe",
-        fn: ctx => { const v = ctx.kpi?.get("pe_punto_equilibrio"); return v != null ? Math.abs(v) : null; } },
+      { type: "data", grupo: "PE", label: "★  PUNTO DE EQUILIBRIO %  =  Otros + Fondeo + Provisiones + Gastos Op", fmt: "pct", bold: true, hl: "pe",
+        fn: ctx => {
+          const otros    = ctx.kpi?.get("pe_otros_ing_egr");
+          const fondeo   = ctx.kpi?.get("pe_costo_fondeo");
+          const prov     = ctx.kpi?.get("pe_costo_provisiones");
+          const gastosOp = ctx.kpi?.get("pe_gastos_operacionales");
+          if (otros == null || fondeo == null || prov == null || gastosOp == null) return null;
+          return Math.abs(otros + fondeo + prov + gastosOp);
+        } },
       { type: "sep" },
 
       { type: "data", grupo: "OTROS", label: "Otros Ing/Egr Netos TTM (S/ Miles)  [cta_6 − cta_7 + cta_8 + cta_13]", fmt: "miles",
@@ -750,7 +763,7 @@ async function generarExcel(opts: {
         fn: ctx => ctx.kpi?.get("pe_otros_ing_egr") ?? null },
 
       { type: "sep" },
-      { type: "data", grupo: "MARGEN", label: "★  MARGEN NETO %  =  Rendimiento − PE + Otros", fmt: "margen", bold: true, hl: "margen",
+      { type: "data", grupo: "MARGEN", label: "★  MARGEN NETO %  =  Rendimiento − PE", fmt: "margen", bold: true, hl: "margen",
         fn: ctx => ctx.kpi?.get("pe_margen_neto") ?? null },
       { type: "sep" },
 
@@ -926,8 +939,14 @@ async function generarExcel(opts: {
           const prom12m   = esDic ? miles(carteraBruta12m(serie, periodo)) : null;
           const kpiMap    = esDic ? kpiIdx.get(`${ent}__${periodo}`) : undefined;
           const rendim    = esDic ? pct2(kpiMap?.get("pe_rendimiento_cartera") ?? null) : null;
-          const peRaw     = esDic ? (kpiMap?.get("pe_punto_equilibrio") ?? null) : null;
-          const pe        = esDic ? pct2(peRaw != null ? Math.abs(peRaw) : null)         : null;
+          const pe = esDic ? (() => {
+            const otros    = kpiMap?.get("pe_otros_ing_egr");
+            const fondeo   = kpiMap?.get("pe_costo_fondeo");
+            const prov     = kpiMap?.get("pe_costo_provisiones");
+            const gastosOp = kpiMap?.get("pe_gastos_operacionales");
+            if (otros == null || fondeo == null || prov == null || gastosOp == null) return null;
+            return pct2(Math.abs(otros + fondeo + prov + gastosOp));
+          })() : null;
           const margen    = esDic ? pct2(kpiMap?.get("pe_margen_neto") ?? null)         : null;
 
           const vals = [cartBruta, prom12m, rendim, pe, margen];
