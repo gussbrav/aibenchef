@@ -8,7 +8,7 @@ import { db } from "@/lib/infrastructure/db";
 import { requireSession } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
 
-// ── Colores corporativos ──────────────────────────────────────────────────────
+// ── Paleta ────────────────────────────────────────────────────────────────────
 const C = {
   azul:        "FF1E3A5F",
   azulClaro:   "FFE8F0F8",
@@ -22,9 +22,11 @@ const C = {
   blanco:      "FFFFFFFF",
   verde:       "FFD1FAE5",
   verdeOsc:    "FF166534",
+  verdeMed:    "FF15803D",
   amarillo:    "FFFEF9C3",
   rojo:        "FFFEE2E2",
   rojoOsc:     "FF991B1B",
+  rojoMed:     "FFB91C1C",
   negro:       "FF0F172A",
 };
 
@@ -39,15 +41,38 @@ function border(cell: ExcelJS.Cell) {
   cell.border = { top: s, left: s, bottom: s, right: s };
 }
 
-const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const fmtDic      = (p: number) => `Dic ${Math.floor(p / 100)}`;
-const fmtPeriodo  = (p: number) => `${MESES[(p % 100) - 1]} ${Math.floor(p / 100)}`;
-const miles       = (v: number | null | undefined): number | null => v == null ? null : Math.round(v / 1_000);
-const pct2        = (v: number | null | undefined): number | null => v == null ? null : Math.round(v * 10_000) / 100;
+const MESES      = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const fmtDic     = (p: number) => `Dic ${Math.floor(p / 100)}`;
+const fmtPeriodo = (p: number) => `${MESES[(p % 100) - 1]} ${Math.floor(p / 100)}`;
+const miles      = (v: number | null | undefined): number | null =>
+  v == null ? null : Math.round(v / 1_000);
+const pct2       = (v: number | null | undefined): number | null =>
+  v == null ? null : Math.round(v * 10_000) / 100;
 
-// ── Tipos de filas de datos ───────────────────────────────────────────────────
+function n(v: string | null | undefined): number | null {
+  if (v == null) return null;
+  const x = parseFloat(String(v));
+  return isNaN(x) ? null : x;
+}
+function nv(v: string | null | undefined): number { return n(v) ?? 0; }
+
+function carteraBruta12m(serie: MesRow[], periodo: number): number | null {
+  const mes  = periodo % 100;
+  const anio = Math.floor(periodo / 100);
+  let startMes = mes - 11;
+  let startAnio = anio;
+  if (startMes <= 0) { startMes += 12; startAnio -= 1; }
+  const ini  = startAnio * 100 + startMes;
+  const v    = serie.filter(x => x.periodo >= ini && x.periodo <= periodo);
+  const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0)).filter(x => x > 0);
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 type BalRow = {
   periodo: number; nomb_correg: string;
+  cta_a: string|null; cta_c: string|null;
   cta_a1: string|null; cta_a3: string|null;
   cta_a4: string|null; cta_a4_1: string|null; cta_a4_2: string|null;
   cta_a4_3: string|null; cta_a4_4: string|null;
@@ -65,27 +90,9 @@ type MesRow = {
   periodo: number; nomb_correg: string;
   cta_a4: string|null; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null;
 };
-type KpiRow = { periodo: number; nomb_correg: string; kpi_codigo: string; valor: string|null; };
-
-function n(v: string | null | undefined): number | null {
-  if (v == null) return null;
-  const x = parseFloat(String(v));
-  return isNaN(x) ? null : x;
-}
-
-function carteraBruta12m(serie: MesRow[], periodo: number): number | null {
-  const mes  = periodo % 100;
-  const anio = Math.floor(periodo / 100);
-  // Ventana estricta de 12 meses: 11 meses atrás hasta periodo (inclusive)
-  let startMes = mes - 11;
-  let startAnio = anio;
-  if (startMes <= 0) { startMes += 12; startAnio -= 1; }
-  const ini  = startAnio * 100 + startMes;
-  const v    = serie.filter(x => x.periodo >= ini && x.periodo <= periodo);
-  const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0)).filter(x => x > 0);
-  if (vals.length === 0) return null;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
+type KpiRow     = { periodo: number; nomb_correg: string; kpi_codigo: string; valor: string|null; };
+type KpiAnualRow = { periodo: number; nomb_correg: string; utilidad_ttm: string|null; activos_prom_12m: string|null; patrimonio_prom_12m: string|null; };
+type BalDicRow  = { periodo: number; nomb_correg: string; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null; cta_a4_4: string|null; };
 
 async function generarExcel(opts: {
   entidades: string[];
@@ -95,18 +102,22 @@ async function generarExcel(opts: {
 }): Promise<Buffer> {
   const { entidades, desde, hasta, secciones } = opts;
   const DIC_PERIODOS = Array.from({ length: hasta - desde + 1 }, (_, i) => (desde + i) * 100 + 12);
-  const MES_INICIO = desde * 100 + 1;
-  const MES_FIN    = hasta * 100 + 12;
+  const MES_INICIO   = desde * 100 + 1;
+  const MES_FIN      = hasta * 100 + 12;
+  const entIn        = sql.join(entidades.map(e => sql`${e}`), sql`, `);
 
-  // IN clause con parámetros escalares individuales — drizzle no soporta
-  // arrays JS como parámetros SQL (los serializa como record/tuple).
-  const entIn = sql.join(entidades.map(e => sql`${e}`), sql`, `);
+  const incBalance = secciones.includes("balance");
+  const incEr      = secciones.includes("er");
+  const incCartera = secciones.includes("cartera");
 
-  // ── Consultas paralelas ───────────────────────────────────────────────────
-  const [balRows, erRows, mesRows, kpiRows] = await Promise.all([
-    secciones.includes("balance") ? db.execute<BalRow>(sql`
+  // Consultas paralelas — balDicRows y erDicRows siempre se traen cuando
+  // "cartera" está activo para garantizar que la hoja Validación PE tenga
+  // todos los datos aunque el usuario no active Balance/ER.
+  const [balRows, erRows, mesRows, kpiRows, kpiAnualRows, balDicRows, erDicRows] = await Promise.all([
+    incBalance ? db.execute<BalRow>(sql`
       SELECT periodo, nomb_correg,
-        cta_a1, cta_a3, cta_a4, cta_a4_1, cta_a4_2, cta_a4_3, cta_a4_4,
+        cta_a, cta_c, cta_a1, cta_a3,
+        cta_a4, cta_a4_1, cta_a4_2, cta_a4_3, cta_a4_4,
         cta_b1, cta_b4
       FROM marts.v_eeff_balance_ancho
       WHERE nomb_correg IN (${entIn})
@@ -114,9 +125,9 @@ async function generarExcel(opts: {
         AND periodo / 100 BETWEEN ${desde} AND ${hasta}
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
-    `) : Promise.resolve([]),
+    `) : Promise.resolve([] as BalRow[]),
 
-    secciones.includes("er") ? db.execute<ErRow>(sql`
+    incEr ? db.execute<ErRow>(sql`
       SELECT periodo, nomb_correg,
         cta_1_4, cta_2, cta_4, cta_6, cta_7, cta_8,
         cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4,
@@ -127,33 +138,66 @@ async function generarExcel(opts: {
         AND periodo / 100 BETWEEN ${desde} AND ${hasta}
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
-    `) : Promise.resolve([]),
+    `) : Promise.resolve([] as ErRow[]),
 
-    secciones.includes("cartera") ? db.execute<MesRow>(sql`
+    incCartera ? db.execute<MesRow>(sql`
       SELECT periodo, nomb_correg, cta_a4, cta_a4_1, cta_a4_2, cta_a4_3
       FROM marts.v_eeff_balance_ancho
       WHERE nomb_correg IN (${entIn})
         AND periodo BETWEEN ${MES_INICIO} AND ${MES_FIN}
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
-    `) : Promise.resolve([]),
+    `) : Promise.resolve([] as MesRow[]),
 
-    secciones.includes("cartera") ? db.execute<KpiRow>(sql`
+    incCartera ? db.execute<KpiRow>(sql`
       SELECT periodo, nomb_correg, kpi_codigo, valor
       FROM marts.fact_kpis_mensuales
       WHERE nomb_correg IN (${entIn})
         AND kpi_codigo IN (
           'pe_rendimiento_cartera','pe_costo_fondeo','pe_costo_provisiones',
-          'pe_gastos_operacionales','pe_punto_equilibrio','pe_margen_neto'
+          'pe_gastos_operacionales','pe_gastos_personal','pe_gastos_generales',
+          'pe_deprec_amortiz','pe_otros_ing_egr','pe_punto_equilibrio','pe_margen_neto'
         )
         AND moneda = 'TOTAL'
         AND periodo % 100 = 12
         AND periodo / 100 BETWEEN ${desde} AND ${hasta}
       ORDER BY nomb_correg, periodo, kpi_codigo
-    `) : Promise.resolve([]),
+    `) : Promise.resolve([] as KpiRow[]),
+
+    incCartera ? db.execute<KpiAnualRow>(sql`
+      SELECT periodo, nomb_correg, utilidad_ttm, activos_prom_12m, patrimonio_prom_12m
+      FROM marts.v_kpis_anuales_entidad
+      WHERE nomb_correg IN (${entIn})
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
+      ORDER BY nomb_correg, periodo
+    `) : Promise.resolve([] as KpiAnualRow[]),
+
+    incCartera ? db.execute<BalDicRow>(sql`
+      SELECT periodo, nomb_correg, cta_a4_1, cta_a4_2, cta_a4_3, cta_a4_4
+      FROM marts.v_eeff_balance_ancho
+      WHERE nomb_correg IN (${entIn})
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
+        AND moneda = 'TOTAL'
+      ORDER BY nomb_correg, periodo
+    `) : Promise.resolve([] as BalDicRow[]),
+
+    incCartera ? db.execute<ErRow>(sql`
+      SELECT periodo, nomb_correg,
+        cta_1_4, cta_2, cta_4, cta_6, cta_7, cta_8,
+        cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4,
+        cta_12_7, cta_12_8, cta_13
+      FROM marts.mv_eeff_resultados_ancho
+      WHERE nomb_correg IN (${entIn})
+        AND periodo % 100 = 12
+        AND periodo / 100 BETWEEN ${desde} AND ${hasta}
+        AND moneda = 'TOTAL'
+      ORDER BY nomb_correg, periodo
+    `) : Promise.resolve([] as ErRow[]),
   ]);
 
-  // Índices en memoria
+  // ── Índices ───────────────────────────────────────────────────────────────
   const balIdx = new Map<string, BalRow>();
   for (const r of balRows) balIdx.set(`${r.nomb_correg}__${r.periodo}`, r);
 
@@ -173,6 +217,50 @@ async function generarExcel(opts: {
     kpiIdx.get(key)!.set(r.kpi_codigo, n(r.valor));
   }
 
+  const kpiAnualIdx = new Map<string, KpiAnualRow>();
+  for (const r of kpiAnualRows) kpiAnualIdx.set(`${r.nomb_correg}__${r.periodo}`, r);
+
+  const balDicIdx = new Map<string, BalDicRow>();
+  for (const r of balDicRows) balDicIdx.set(`${r.nomb_correg}__${r.periodo}`, r);
+
+  const erDicIdx = new Map<string, ErRow>();
+  for (const r of erDicRows) erDicIdx.set(`${r.nomb_correg}__${r.periodo}`, r);
+
+  // ── Helpers de calidad de cartera ─────────────────────────────────────────
+  function getBalDic(ent: string, periodo: number): BalDicRow | BalRow | undefined {
+    return balDicIdx.get(`${ent}__${periodo}`) ?? balIdx.get(`${ent}__${periodo}`);
+  }
+  function getMora(ent: string, periodo: number): number | null {
+    const b = getBalDic(ent, periodo);
+    if (!b) return null;
+    const bruta = nv(b.cta_a4_1) + nv(b.cta_a4_2) + nv(b.cta_a4_3);
+    return bruta > 0 ? nv(b.cta_a4_3) / bruta : null;
+  }
+  function getCobAtras(ent: string, periodo: number): number | null {
+    const b = getBalDic(ent, periodo);
+    if (!b) return null;
+    const venc = nv(b.cta_a4_3);
+    return venc > 0 ? Math.abs(nv(b.cta_a4_4)) / venc : null;
+  }
+  function getCobCar(ent: string, periodo: number): number | null {
+    const b = getBalDic(ent, periodo);
+    if (!b) return null;
+    const car = nv(b.cta_a4_2) + nv(b.cta_a4_3);
+    return car > 0 ? Math.abs(nv(b.cta_a4_4)) / car : null;
+  }
+  function getRoa(ent: string, periodo: number): number | null {
+    const k = kpiAnualIdx.get(`${ent}__${periodo}`);
+    if (!k) return null;
+    const util = n(k.utilidad_ttm); const act = n(k.activos_prom_12m);
+    return util != null && act != null && act !== 0 ? util / act : null;
+  }
+  function getRoe(ent: string, periodo: number): number | null {
+    const k = kpiAnualIdx.get(`${ent}__${periodo}`);
+    if (!k) return null;
+    const util = n(k.utilidad_ttm); const pat = n(k.patrimonio_prom_12m);
+    return util != null && pat != null && pat !== 0 ? util / pat : null;
+  }
+
   // ── Workbook ─────────────────────────────────────────────────────────────
   const wb = new ExcelJS.Workbook();
   wb.creator  = "Aibenchef";
@@ -183,34 +271,49 @@ async function generarExcel(opts: {
   {
     const ws = wb.addWorksheet("Portada");
     ws.views = [{ showGridLines: false }];
-    ws.columns = [{ width: 32 }, { width: 14 }, { width: 14 }, { width: 18 }, { width: 14 }, { width: 14 }, { width: 14 }];
+    ws.columns = [
+      { width: 32 }, { width: 11 }, { width: 11 },
+      { width: 16 }, { width: 10 }, { width: 12 },
+      { width: 11 }, { width: 11 }, { width: 10 }, { width: 10 },
+    ];
     let r = 1;
 
-    ws.mergeCells(r, 1, r, 7);
+    ws.mergeCells(r, 1, r, 10);
     const titleCell = ws.getRow(r).getCell(1);
     titleCell.value = `Reporte EEFF — ${entidades.length} entidad${entidades.length > 1 ? "es" : ""}`;
     titleCell.font  = { bold: true, size: 18, color: { argb: C.blanco } };
     titleCell.alignment = { horizontal: "left", vertical: "middle" };
-    fillSolid(titleCell, C.azul);
-    ws.getRow(r).height = 36; r++;
+    fillSolid(titleCell, C.azul); ws.getRow(r).height = 36; r++;
 
-    ws.mergeCells(r, 1, r, 7);
+    ws.mergeCells(r, 1, r, 10);
     const sub = ws.getRow(r).getCell(1);
-    sub.value = `Saldos en Miles S/ · SBS · Aibenchef · Generado: ${new Date().toLocaleDateString("es-PE")} · Rango: ${desde}–${hasta}`;
+    sub.value = `Saldos en Miles S/ · SBS · Aibenchef · ${new Date().toLocaleDateString("es-PE")} · Rango: ${desde}–${hasta}`;
     sub.font  = { size: 10, color: { argb: C.blanco }, italic: true };
     fillSolid(sub, C.azul); ws.getRow(r).height = 18; r++;
-
     r++;
 
-    const headers = ["Entidad", "Primer Dic disponible", "Último Dic disponible", `Cartera Bruta Dic ${hasta} (Miles S/)`, `PE Dic ${hasta} (%)`, `Rend. Dic ${hasta} (%)`, "Estado"];
+    // Cabeceras
+    const hCols = [
+      "Entidad",
+      "Primer\nDic",
+      "Último\nDic",
+      `Cartera Bruta\nDic ${hasta} (Miles S/)`,
+      "Mora\n%",
+      "Cobertura\nAtrasados %",
+      "PE\n%",
+      "Margen\nNeto %",
+      "ROA\n%",
+      "ROE\n%",
+    ];
     const hRow = ws.getRow(r);
-    headers.forEach((h, i) => {
+    hRow.height = 32;
+    hCols.forEach((h, i) => {
       const c = hRow.getCell(i + 1);
-      c.value = h; fontBold(c, 10, C.blanco); fillSolid(c, C.azul);
-      c.alignment = { horizontal: i === 0 ? "left" : "center", vertical: "middle" };
+      c.value = h; fontBold(c, 9, C.blanco); fillSolid(c, C.azul);
+      c.alignment = { horizontal: i === 0 ? "left" : "center", vertical: "middle", wrapText: true };
       border(c);
     });
-    hRow.height = 20; r++;
+    r++;
 
     for (let ei = 0; ei < entidades.length; ei++) {
       const ent     = entidades[ei]!;
@@ -218,56 +321,91 @@ async function generarExcel(opts: {
       const bal     = balIdx.get(`${ent}__${lastDic}`);
       const kpiMap  = kpiIdx.get(`${ent}__${lastDic}`);
       const pe      = kpiMap?.get("pe_punto_equilibrio") ?? null;
-      const rend    = kpiMap?.get("pe_rendimiento_cartera") ?? null;
-      const carBruta = bal ? miles((n(bal.cta_a4_1) ?? 0) + (n(bal.cta_a4_2) ?? 0) + (n(bal.cta_a4_3) ?? 0)) : null;
-      const firstDic  = DIC_PERIODOS.find(p => balIdx.has(`${ent}__${p}`));
-      const lastDicOk = [...DIC_PERIODOS].reverse().find(p => balIdx.has(`${ent}__${p}`));
-      const hasKpi    = pe != null && rend != null;
-      const bg        = ei % 2 === 0 ? C.blanco : C.grisClaro;
+      const margen  = kpiMap?.get("pe_margen_neto") ?? null;
+      const carBruta = bal ? miles(nv(bal.cta_a4_1)+nv(bal.cta_a4_2)+nv(bal.cta_a4_3)) : null;
+      const firstDic = DIC_PERIODOS.find(p  => balIdx.has(`${ent}__${p}`) || balDicIdx.has(`${ent}__${p}`));
+      const lastOk   = [...DIC_PERIODOS].reverse().find(p => balIdx.has(`${ent}__${p}`) || balDicIdx.has(`${ent}__${p}`));
+      const mora     = getMora(ent, lastDic);
+      const cob      = getCobAtras(ent, lastDic);
+      const roa      = getRoa(ent, lastDic);
+      const roe      = getRoe(ent, lastDic);
+      const bg       = ei % 2 === 0 ? C.blanco : C.grisClaro;
+      const row      = ws.getRow(r);
+      row.height = 18;
 
-      const row = ws.getRow(r);
       const vals: (string | number | null)[] = [
         ent,
-        firstDic   ? fmtDic(firstDic)   : "—",
-        lastDicOk  ? fmtDic(lastDicOk)  : "—",
+        firstDic ? fmtDic(firstDic) : "—",
+        lastOk   ? fmtDic(lastOk)   : "—",
         carBruta,
-        rend != null ? pct2(rend) : null,
-        pe   != null ? pct2(pe)   : null,
-        hasKpi ? "Con KPI" : "Sin KPI",
+        pct2(mora),
+        pct2(cob),
+        pct2(pe),
+        pct2(margen),
+        pct2(roa),
+        pct2(roe),
       ];
+
       vals.forEach((v, i) => {
         const c = row.getCell(i + 1);
         c.value = v;
         c.alignment = { horizontal: i === 0 ? "left" : "center", vertical: "middle" };
-        fillSolid(c, i === 6 ? (hasKpi ? C.verde : C.amarillo) : bg);
         border(c);
-        if (i === 3 && typeof v === "number") c.numFmt = '#,##0';
-        if ((i === 4 || i === 5) && typeof v === "number") c.numFmt = '0.00"%"';
-        if (i === 6) c.font = { bold: true, size: 10, color: { argb: hasKpi ? C.verdeOsc : C.grisOsc } };
+
+        switch (i) {
+          case 0: fillSolid(c, bg); c.font = { size: 10, color: { argb: C.negro } }; break;
+          case 1: case 2: fillSolid(c, bg); c.font = { size: 9, color: { argb: C.grisOsc } }; break;
+          case 3:
+            fillSolid(c, bg); c.numFmt = '#,##0';
+            c.font = { bold: true, size: 10, color: { argb: C.azul } }; break;
+          case 4: { // Mora — semáforo
+            const mv = typeof v === "number" ? v : null;
+            fillSolid(c, mv == null ? bg : mv < 5 ? C.verde : mv < 10 ? C.amarillo : C.rojo);
+            c.numFmt = '0.00"%"';
+            if (mv != null && mv >= 10) c.font = { bold: true, size: 10, color: { argb: C.rojoOsc } };
+            break;
+          }
+          case 5: { // Cobertura — semáforo
+            const cv = typeof v === "number" ? v : null;
+            fillSolid(c, cv == null ? bg : cv >= 100 ? C.verde : cv >= 80 ? C.amarillo : C.rojo);
+            c.numFmt = '0.00"%"';
+            if (cv != null && cv < 80) c.font = { bold: true, size: 10, color: { argb: C.rojoOsc } };
+            break;
+          }
+          case 6: fillSolid(c, bg); c.numFmt = '0.00"%"'; break;
+          case 7: { // Margen — verde/rojo
+            const mv = typeof v === "number" ? v : null;
+            fillSolid(c, mv == null ? bg : mv >= 0 ? C.verde : C.rojo);
+            c.numFmt = '0.00"%"';
+            if (mv != null) c.font = { bold: true, size: 10, color: { argb: mv >= 0 ? C.verdeOsc : C.rojoOsc } };
+            break;
+          }
+          default: fillSolid(c, bg); c.numFmt = '0.00"%"'; break;
+        }
       });
       r++;
     }
 
     r++;
-    ws.mergeCells(r, 1, r, 7);
+    ws.mergeCells(r, 1, r, 10);
     const nota = ws.getRow(r).getCell(1);
-    nota.value = "Metodología: Cartera bruta = cta_a4_1 + cta_a4_2 + cta_a4_3 (antes de provisiones). Prom.12M = promedio de los 12 meses que terminan en el periodo (inclusive), equivale al año calendario para diciembre. PE = Costo Fondeo + Provisiones + Gastos Operacionales sobre Cartera Prom. Fuente: marts.v_eeff_balance_ancho, marts.mv_eeff_resultados_ancho, marts.fact_kpis_mensuales.";
+    nota.value = "Metodología · Cartera Bruta = cta_a4_1 + cta_a4_2 + cta_a4_3 (antes de provisiones) · Mora = Vencidos / Cartera Bruta · Cobertura Atrasados = |Provisiones| / Vencidos · PE = Costo Fondeo + Provisiones + Gastos Op sobre Cartera Bruta Prom.12M (12 meses exactos que terminan en Diciembre) · Margen Neto = Rendimiento − PE + Otros · ROA/ROE = Utilidad TTM / Activos o Patrimonio Prom.12M · Ver hoja «Validación PE» para el desglose completo verificable · Fuente: SBS vía Aibenchef";
     nota.font = { size: 9, italic: true, color: { argb: C.grisMed } };
     nota.alignment = { wrapText: true };
     ws.getRow(r).height = 36;
   }
 
   // ── BALANCE DICIEMBRES ────────────────────────────────────────────────────
-  if (secciones.includes("balance")) {
+  if (incBalance) {
     const ws = wb.addWorksheet("Balance Dic");
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 4 }];
     const nCols = entidades.length * DIC_PERIODOS.length;
-    ws.columns = [{ width: 24 }, { width: 36 }, ...Array(nCols).fill({ width: 14 })];
+    ws.columns = [{ width: 24 }, { width: 40 }, ...Array(nCols).fill({ width: 14 })];
     let r = 1;
 
     ws.mergeCells(r, 1, r, 2 + nCols);
     const t = ws.getRow(r).getCell(1);
-    t.value = `Balance — Saldos de Diciembre (Miles S/)`;
+    t.value = "Balance — Saldos de Diciembre (Miles S/)";
     t.font  = { bold: true, size: 14, color: { argb: C.blanco } };
     fillSolid(t, C.azul); ws.getRow(r).height = 28; r++;
 
@@ -298,43 +436,58 @@ async function generarExcel(opts: {
     }
     h2.height = 18; r++;
 
-    type BalDef = { grupo: string; label: string; fn: (b: BalRow) => number | null; bold?: boolean };
+    type BalDef = {
+      grupo: string; label: string; bold?: boolean; pct?: boolean;
+      fn: (b: BalRow) => number | null;
+    };
     const balDefs: BalDef[] = [
-      { grupo: "ACTIVO",  label: "Cartera Bruta",                   fn: b => (n(b.cta_a4_1)??0)+(n(b.cta_a4_2)??0)+(n(b.cta_a4_3)??0), bold: true },
-      { grupo: "",        label: "   Vigentes",                      fn: b => n(b.cta_a4_1) },
-      { grupo: "",        label: "   Refinanciados/Reestructurados", fn: b => n(b.cta_a4_2) },
-      { grupo: "",        label: "   Vencidos y en Cobranza Jud.",   fn: b => n(b.cta_a4_3) },
-      { grupo: "",        label: "   Provisiones (negativo)",        fn: b => n(b.cta_a4_4) },
-      { grupo: "",        label: "Cartera Neta",                     fn: b => n(b.cta_a4), bold: true },
-      { grupo: "",        label: "Disponible",                       fn: b => n(b.cta_a1) },
-      { grupo: "",        label: "Inversiones",                      fn: b => n(b.cta_a3) },
-      { grupo: "PASIVO",  label: "Obligaciones con el Público",      fn: b => n(b.cta_b1), bold: true },
-      { grupo: "",        label: "Adeudos y Oblig. Financieras",     fn: b => n(b.cta_b4) },
+      { grupo: "ACTIVO",  label: "Total Activos",                          bold: true,  fn: b => n(b.cta_a) },
+      { grupo: "",        label: "Cartera Bruta",                           bold: true,  fn: b => nv(b.cta_a4_1)+nv(b.cta_a4_2)+nv(b.cta_a4_3) },
+      { grupo: "",        label: "   Vigentes (A4.1)",                                   fn: b => n(b.cta_a4_1) },
+      { grupo: "",        label: "   Refinanciados/Reestructurados (A4.2)",              fn: b => n(b.cta_a4_2) },
+      { grupo: "",        label: "   Vencidos y Cobranza Judicial (A4.3)",               fn: b => n(b.cta_a4_3) },
+      { grupo: "",        label: "   Provisiones (A4.4, negativo)",                      fn: b => n(b.cta_a4_4) },
+      { grupo: "",        label: "Cartera Neta",                            bold: true,  fn: b => n(b.cta_a4) },
+      { grupo: "",        label: "   Mora % = Venc / Cartera Bruta",        pct: true,
+        fn: b => { const br=nv(b.cta_a4_1)+nv(b.cta_a4_2)+nv(b.cta_a4_3); return br>0?nv(b.cta_a4_3)/br:null; }},
+      { grupo: "",        label: "   Cobertura Atrasados % = Prov/Venc",    pct: true,
+        fn: b => nv(b.cta_a4_3)>0 ? Math.abs(nv(b.cta_a4_4))/nv(b.cta_a4_3) : null },
+      { grupo: "",        label: "   Cobertura CAR % = Prov/(Venc+Refin)",  pct: true,
+        fn: b => (nv(b.cta_a4_2)+nv(b.cta_a4_3))>0 ? Math.abs(nv(b.cta_a4_4))/(nv(b.cta_a4_2)+nv(b.cta_a4_3)) : null },
+      { grupo: "",        label: "Disponible (A1)",                                      fn: b => n(b.cta_a1) },
+      { grupo: "",        label: "Inversiones (A3)",                                     fn: b => n(b.cta_a3) },
+      { grupo: "PASIVO",  label: "Obligaciones con el Público (B1)",        bold: true,  fn: b => n(b.cta_b1) },
+      { grupo: "",        label: "Adeudos y Oblig. Financieras (B4)",                    fn: b => n(b.cta_b4) },
+      { grupo: "PATRIM.", label: "Patrimonio",                              bold: true,  fn: b => n(b.cta_c) },
     ];
 
     for (let di = 0; di < balDefs.length; di++) {
       const def   = balDefs[di]!;
       const isAlt = di % 2 === 0;
+      const bgBase = def.bold ? C.doradoClaro : def.pct ? C.azulClaro : (isAlt ? C.grisClaro : C.blanco);
       const row   = ws.getRow(r);
+
       const gCell = row.getCell(1);
       gCell.value = def.grupo;
       fontBold(gCell, 9, C.blanco); fillSolid(gCell, def.grupo ? C.azul : C.grisClaro);
       gCell.alignment = { horizontal: "center", vertical: "middle" };
+
       const lCell = row.getCell(2);
       lCell.value = def.label;
       lCell.font  = { bold: !!def.bold, size: 10, color: { argb: C.negro } };
-      fillSolid(lCell, def.bold ? C.doradoClaro : (isAlt ? C.grisClaro : C.blanco));
-      border(lCell);
+      fillSolid(lCell, bgBase); border(lCell);
+
       for (let ei = 0; ei < entidades.length; ei++) {
         for (let pi = 0; pi < DIC_PERIODOS.length; pi++) {
           const col = 3 + ei * DIC_PERIODOS.length + pi;
           const c   = row.getCell(col);
           const bal = balIdx.get(`${entidades[ei]}__${DIC_PERIODOS[pi]}`);
-          const v   = bal ? miles(def.fn(bal)) : null;
-          c.value = v; c.numFmt = '#,##0';
+          const raw = bal ? def.fn(bal) : null;
+          const v   = def.pct ? pct2(raw) : miles(raw);
+          c.value = v; c.numFmt = def.pct ? '0.00"%"' : '#,##0';
           c.alignment = { horizontal: "right" };
-          fillSolid(c, def.bold ? C.doradoClaro : (isAlt ? C.grisClaro : C.blanco));
-          if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: "FFB91C1C" } };
+          fillSolid(c, bgBase);
+          if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: C.rojoMed } };
           border(c);
         }
       }
@@ -343,7 +496,7 @@ async function generarExcel(opts: {
   }
 
   // ── ESTADO DE RESULTADOS DICIEMBRES ───────────────────────────────────────
-  if (secciones.includes("er")) {
+  if (incEr) {
     const ws = wb.addWorksheet("ER Dic");
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 4 }];
     const nCols = entidades.length * DIC_PERIODOS.length;
@@ -352,7 +505,7 @@ async function generarExcel(opts: {
 
     ws.mergeCells(r, 1, r, 2 + nCols);
     const t = ws.getRow(r).getCell(1);
-    t.value = `Estado de Resultados — Diciembres YTD (Miles S/)`;
+    t.value = "Estado de Resultados — Diciembres YTD (Miles S/)";
     t.font  = { bold: true, size: 14, color: { argb: C.blanco } };
     fillSolid(t, C.teal); ws.getRow(r).height = 28; r++;
 
@@ -385,11 +538,11 @@ async function generarExcel(opts: {
     const erDefs: ErDef[] = [
       { grupo: "INGRESOS",  label: "Ingresos por Créditos (1.4)",     fn: e => n(e.cta_1_4), bold: true },
       { grupo: "",          label: "Ing. Servicios Financieros (6)",   fn: e => n(e.cta_6) },
-      { grupo: "",          label: "Otros Ingresos/Gastos (8+13)",     fn: e => (n(e.cta_8)??0)+(n(e.cta_13)??0) },
+      { grupo: "",          label: "Otros Ingresos/Gastos (8+13)",     fn: e => nv(e.cta_8)+nv(e.cta_13) },
       { grupo: "COSTOS",    label: "Gastos Financieros (2)",           fn: e => n(e.cta_2), bold: true },
       { grupo: "",          label: "Gastos Servicios Financieros (7)", fn: e => n(e.cta_7) },
       { grupo: "",          label: "Provisiones (4)",                  fn: e => n(e.cta_4), bold: true },
-      { grupo: "GASTOS OP", label: "Total Gastos Operacionales (10)", fn: e => n(e.cta_10), bold: true },
+      { grupo: "GASTOS OP", label: "Total Gastos Operacionales (10)",  fn: e => n(e.cta_10), bold: true },
       { grupo: "",          label: "   Personal (10.1)",               fn: e => n(e.cta_10_1) },
       { grupo: "",          label: "   Directorio (10.2)",             fn: e => n(e.cta_10_2) },
       { grupo: "",          label: "   Servicios de Terceros (10.3)",  fn: e => n(e.cta_10_3) },
@@ -420,7 +573,7 @@ async function generarExcel(opts: {
           c.value = v; c.numFmt = '#,##0';
           c.alignment = { horizontal: "right" };
           fillSolid(c, def.bold ? C.tealClaro : (isAlt ? C.grisClaro : C.blanco));
-          if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: "FFB91C1C" } };
+          if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: C.rojoMed } };
           border(c);
         }
       }
@@ -428,9 +581,225 @@ async function generarExcel(opts: {
     }
   }
 
-  // ── CARTERA MENSUAL & VALIDACIÓN PE ──────────────────────────────────────
-  if (secciones.includes("cartera")) {
-    const ws = wb.addWorksheet("Cartera & PE");
+  // ── VALIDACIÓN PE ─────────────────────────────────────────────────────────
+  if (incCartera) {
+    const ws = wb.addWorksheet("Validación PE");
+    ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 5 }];
+    const nCols = entidades.length * DIC_PERIODOS.length;
+    ws.columns = [{ width: 22 }, { width: 44 }, ...Array(nCols).fill({ width: 14 })];
+    let r = 1;
+
+    // Título
+    ws.mergeCells(r, 1, r, 2 + nCols);
+    const t = ws.getRow(r).getCell(1);
+    t.value = "Validación Punto de Equilibrio — Diciembres (Miles S/ y %)";
+    t.font  = { bold: true, size: 14, color: { argb: C.azul } };
+    fillSolid(t, C.dorado); ws.getRow(r).height = 28; r++;
+
+    ws.mergeCells(r, 1, r, 2 + nCols);
+    const sub2 = ws.getRow(r).getCell(1);
+    sub2.value = "Verificación: Monto TTM (Miles S/) ÷ Cartera Prom.12M (Miles S/) × 100 = Ratio %. Para Diciembre, YTD acumulado = TTM. Cartera Prom.12M = promedio simple de los 12 meses Ene–Dic del mismo año (12 meses exactos).";
+    sub2.font = { size: 9, italic: true, color: { argb: C.grisOsc } };
+    sub2.alignment = { wrapText: true }; ws.getRow(r).height = 24; r++;
+
+    ws.mergeCells(r, 1, r, 2 + nCols);
+    const sub3 = ws.getRow(r).getCell(1);
+    sub3.value = "Semáforos · Mora: verde <5% · amarillo <10% · rojo ≥10%  |  Cobertura: verde ≥100% · amarillo ≥80% · rojo <80%  |  Margen Neto: verde ≥0% · rojo <0%";
+    sub3.font = { size: 9, italic: true, color: { argb: C.grisOsc } };
+    ws.getRow(r).height = 16; r++;
+
+    // Header entidades
+    const h1 = ws.getRow(r);
+    fillSolid(h1.getCell(1), C.azul); fillSolid(h1.getCell(2), C.azul);
+    h1.getCell(1).value = "GRUPO"; fontBold(h1.getCell(1), 9, C.blanco); h1.getCell(1).alignment = { horizontal: "center" };
+    h1.getCell(2).value = "MÉTRICA"; fontBold(h1.getCell(2), 9, C.blanco);
+    for (let ei = 0; ei < entidades.length; ei++) {
+      const col = 3 + ei * DIC_PERIODOS.length;
+      ws.mergeCells(r, col, r, col + DIC_PERIODOS.length - 1);
+      const c = h1.getCell(col);
+      c.value = entidades[ei]!; fontBold(c, 9, C.blanco);
+      c.alignment = { horizontal: "center" }; fillSolid(c, C.azul);
+    }
+    h1.height = 20; r++;
+
+    // Header años
+    const h2 = ws.getRow(r);
+    fillSolid(h2.getCell(1), C.grisOsc); fillSolid(h2.getCell(2), C.grisOsc);
+    for (let ei = 0; ei < entidades.length; ei++) {
+      for (let pi = 0; pi < DIC_PERIODOS.length; pi++) {
+        const col = 3 + ei * DIC_PERIODOS.length + pi;
+        const c   = h2.getCell(col);
+        c.value   = fmtDic(DIC_PERIODOS[pi]!);
+        fontBold(c, 9, C.blanco); fillSolid(c, C.grisOsc);
+        c.alignment = { horizontal: "center" }; border(c);
+      }
+    }
+    h2.height = 18; r++;
+
+    // ── Definición de filas ───────────────────────────────────────────────
+    type VCtx = { er: ErRow|undefined; kpi: Map<string,number|null>|undefined; prom12m: number|null; ent: string; periodo: number };
+    type FmtV = "miles" | "pct" | "mora" | "cob" | "margen";
+    type VRow =
+      | { type: "sep" }
+      | { type: "data"; grupo: string; label: string; fmt: FmtV; bold?: boolean;
+          hl?: "pe" | "margen"; fn: (ctx: VCtx) => number | null };
+
+    const vRows: VRow[] = [
+      { type: "data", grupo: "DENOMIN.", label: "Cartera Bruta Prom.12M (S/ Miles) ← denominador de todos los ratios",
+        fmt: "miles", bold: true,
+        fn: ctx => { const s = mesIdx.get(ctx.ent)??[]; return carteraBruta12m(s, ctx.periodo); } },
+
+      { type: "sep" },
+      { type: "data", grupo: "RENDIM.", label: "Ingresos por Créditos TTM (S/ Miles)", fmt: "miles",
+        fn: ctx => ctx.er ? n(ctx.er.cta_1_4) : null },
+      { type: "data", grupo: "", label: "Rendimiento Cartera %  =  Ingresos / Cartera Prom", fmt: "pct", bold: true,
+        fn: ctx => ctx.kpi?.get("pe_rendimiento_cartera") ?? null },
+
+      { type: "sep" },
+      { type: "data", grupo: "FONDEO", label: "Gastos Financieros TTM (S/ Miles)", fmt: "miles",
+        fn: ctx => ctx.er ? -nv(ctx.er.cta_2) : null },
+      { type: "data", grupo: "", label: "Costo de Fondeo %  =  Gastos Fin. / Cartera Prom", fmt: "pct", bold: true,
+        fn: ctx => ctx.kpi?.get("pe_costo_fondeo") ?? null },
+
+      { type: "sep" },
+      { type: "data", grupo: "PROVISI.", label: "Provisiones TTM (S/ Miles)", fmt: "miles",
+        fn: ctx => ctx.er ? -nv(ctx.er.cta_4) : null },
+      { type: "data", grupo: "", label: "Costo Provisiones %  =  Prov. / Cartera Prom", fmt: "pct", bold: true,
+        fn: ctx => ctx.kpi?.get("pe_costo_provisiones") ?? null },
+
+      { type: "sep" },
+      { type: "data", grupo: "GTOS.OP", label: "Total Gastos Operacionales TTM (S/ Miles)  [cta_10 + 12.7 + 12.8]", fmt: "miles", bold: true,
+        fn: ctx => ctx.er ? -(nv(ctx.er.cta_10)+nv(ctx.er.cta_12_7)+nv(ctx.er.cta_12_8)) : null },
+      { type: "data", grupo: "", label: "Gastos Operacionales %  =  Gastos Op / Cartera Prom", fmt: "pct", bold: true,
+        fn: ctx => ctx.kpi?.get("pe_gastos_operacionales") ?? null },
+      { type: "data", grupo: "", label: "   Personal TTM (S/ Miles)", fmt: "miles",
+        fn: ctx => ctx.er ? -nv(ctx.er.cta_10_1) : null },
+      { type: "data", grupo: "", label: "   Personal %", fmt: "pct",
+        fn: ctx => ctx.kpi?.get("pe_gastos_personal") ?? null },
+      { type: "data", grupo: "", label: "   Deprec. + Amort. TTM (S/ Miles)  [12.7 + 12.8]", fmt: "miles",
+        fn: ctx => ctx.er ? -(nv(ctx.er.cta_12_7)+nv(ctx.er.cta_12_8)) : null },
+      { type: "data", grupo: "", label: "   Deprec. + Amort. %", fmt: "pct",
+        fn: ctx => ctx.kpi?.get("pe_deprec_amortiz") ?? null },
+
+      { type: "sep" },
+      { type: "data", grupo: "PE", label: "★  PUNTO DE EQUILIBRIO %  =  Fondeo + Provisiones + Gastos Op", fmt: "pct", bold: true, hl: "pe",
+        fn: ctx => ctx.kpi?.get("pe_punto_equilibrio") ?? null },
+      { type: "sep" },
+
+      { type: "data", grupo: "OTROS", label: "Otros Ing/Egr Netos TTM (S/ Miles)  [cta_6 − cta_7 + cta_8 + cta_13]", fmt: "miles",
+        fn: ctx => ctx.er ? nv(ctx.er.cta_6)-nv(ctx.er.cta_7)+nv(ctx.er.cta_8)+nv(ctx.er.cta_13) : null },
+      { type: "data", grupo: "", label: "Otros Ing/Egr Netos %", fmt: "pct",
+        fn: ctx => ctx.kpi?.get("pe_otros_ing_egr") ?? null },
+
+      { type: "sep" },
+      { type: "data", grupo: "MARGEN", label: "★  MARGEN NETO %  =  Rendimiento − PE + Otros", fmt: "margen", bold: true, hl: "margen",
+        fn: ctx => ctx.kpi?.get("pe_margen_neto") ?? null },
+      { type: "sep" },
+
+      { type: "data", grupo: "CALIDAD", label: "Mora %  =  Vencidos / Cartera Bruta", fmt: "mora",
+        fn: ctx => getMora(ctx.ent, ctx.periodo) },
+      { type: "data", grupo: "", label: "Cobertura Atrasados %  =  |Prov| / Vencidos", fmt: "cob",
+        fn: ctx => getCobAtras(ctx.ent, ctx.periodo) },
+      { type: "data", grupo: "", label: "Cobertura CAR %  =  |Prov| / (Venc + Refin)", fmt: "cob",
+        fn: ctx => getCobCar(ctx.ent, ctx.periodo) },
+
+      { type: "sep" },
+      { type: "data", grupo: "RENTAB.", label: "ROA %  =  Utilidad TTM / Activos Prom.12M", fmt: "pct",
+        fn: ctx => getRoa(ctx.ent, ctx.periodo) },
+      { type: "data", grupo: "", label: "ROE %  =  Utilidad TTM / Patrimonio Prom.12M", fmt: "pct",
+        fn: ctx => getRoe(ctx.ent, ctx.periodo) },
+    ];
+
+    for (const def of vRows) {
+      const row = ws.getRow(r);
+
+      if (def.type === "sep") {
+        ws.mergeCells(r, 1, r, 2 + nCols);
+        fillSolid(row.getCell(1), C.azulClaro);
+        row.height = 5;
+        r++; continue;
+      }
+
+      const isPe     = def.hl === "pe";
+      const isMargen = def.hl === "margen";
+      const bgLabel  = isPe ? C.dorado : isMargen ? C.teal : def.bold ? C.doradoClaro : C.blanco;
+      const fgLabel  = isMargen ? C.blanco : C.negro;
+
+      const gCell = row.getCell(1);
+      gCell.value = def.grupo;
+      fontBold(gCell, 9, C.blanco);
+      fillSolid(gCell, def.grupo ? (isPe ? C.dorado : isMargen ? C.teal : C.azul) : C.grisClaro);
+      if (def.grupo) gCell.font = { bold: true, size: 9, color: { argb: isMargen ? C.blanco : isPe ? C.azul : C.blanco } };
+      gCell.alignment = { horizontal: "center", vertical: "middle" };
+      border(gCell);
+
+      const lCell = row.getCell(2);
+      lCell.value = def.label;
+      lCell.font  = { bold: !!def.bold, size: isPe || isMargen ? 11 : 10, color: { argb: fgLabel } };
+      fillSolid(lCell, bgLabel); border(lCell);
+
+      for (let ei = 0; ei < entidades.length; ei++) {
+        for (let pi = 0; pi < DIC_PERIODOS.length; pi++) {
+          const col     = 3 + ei * DIC_PERIODOS.length + pi;
+          const c       = row.getCell(col);
+          const ent     = entidades[ei]!;
+          const periodo = DIC_PERIODOS[pi]!;
+          const ctx: VCtx = {
+            er:     erDicIdx.get(`${ent}__${periodo}`),
+            kpi:    kpiIdx.get(`${ent}__${periodo}`),
+            prom12m: null,
+            ent,
+            periodo,
+          };
+          const rawVal = def.fn(ctx);
+          c.alignment  = { horizontal: "right" };
+          border(c);
+
+          if (def.fmt === "miles") {
+            const v = miles(rawVal);
+            c.value  = v; c.numFmt = '#,##0';
+            fillSolid(c, isPe ? C.doradoClaro : isMargen ? C.tealClaro : def.bold ? C.doradoClaro : C.blanco);
+            if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: C.rojoMed } };
+          } else {
+            const v = pct2(rawVal);
+            c.value  = v; c.numFmt = '0.00"%"';
+            c.alignment = { horizontal: "center" };
+
+            if (def.fmt === "mora") {
+              const mv = typeof v === "number" ? v : null;
+              fillSolid(c, mv == null ? C.blanco : mv < 5 ? C.verde : mv < 10 ? C.amarillo : C.rojo);
+              if (mv != null && mv >= 10) c.font = { bold: true, size: 10, color: { argb: C.rojoOsc } };
+            } else if (def.fmt === "cob") {
+              const cv = typeof v === "number" ? v : null;
+              fillSolid(c, cv == null ? C.blanco : cv >= 100 ? C.verde : cv >= 80 ? C.amarillo : C.rojo);
+              if (cv != null && cv < 80) c.font = { bold: true, size: 10, color: { argb: C.rojoOsc } };
+            } else if (def.fmt === "margen") {
+              const mv = typeof v === "number" ? v : null;
+              fillSolid(c, mv == null ? C.tealClaro : mv >= 0 ? C.verde : C.rojo);
+              if (mv != null) c.font = { bold: true, size: 11, color: { argb: mv >= 0 ? C.verdeMed : C.rojoOsc } };
+            } else if (isPe) {
+              fillSolid(c, C.dorado);
+              if (v != null) c.font = { bold: true, size: 11, color: { argb: C.azul } };
+            } else {
+              fillSolid(c, def.bold ? C.doradoClaro : C.blanco);
+            }
+          }
+        }
+      }
+      r++;
+    }
+
+    r++;
+    ws.mergeCells(r, 1, r, 2 + nCols);
+    const nota2 = ws.getRow(r).getCell(1);
+    nota2.value = "Fuente: SBS vía Aibenchef · KPIs PE almacenados en marts.fact_kpis_mensuales (cálculo set-based, V034/V078/V197) · ROA/ROE calculados desde marts.v_kpis_anuales_entidad (V067) · Mora y Cobertura calculados desde marts.v_eeff_balance_ancho · Gastos Op TTM = cta_10 + cta_12_7 + cta_12_8 (Administración + Deprec. + Amort.)";
+    nota2.font = { size: 9, italic: true, color: { argb: C.grisMed } };
+    nota2.alignment = { wrapText: true }; ws.getRow(r).height = 36;
+  }
+
+  // ── CARTERA MENSUAL ───────────────────────────────────────────────────────
+  if (incCartera) {
+    const ws = wb.addWorksheet("Cartera Mensual");
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 3 }];
     const COLS_PER_ENT = 5;
     const nCols = entidades.length * COLS_PER_ENT;
@@ -439,7 +808,7 @@ async function generarExcel(opts: {
 
     ws.mergeCells(r, 1, r, 2 + nCols);
     const t = ws.getRow(r).getCell(1);
-    t.value = `Cartera Bruta Mensual & Validación PE — ${desde}–${hasta} (Miles S/ y %)`;
+    t.value = `Cartera Bruta Mensual — ${desde}–${hasta} (Miles S/ y %)`;
     t.font  = { bold: true, size: 14, color: { argb: C.azul } };
     fillSolid(t, C.dorado); ws.getRow(r).height = 28; r++;
 
@@ -532,8 +901,6 @@ async function generarExcel(opts: {
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
-// Nota: no usamos handleRoute porque devuelve un archivo binario, no JSON.
-// handleRoute envuelve el return en un Response JSON y rompe la descarga.
 export async function POST(req: NextRequest) {
   try {
     const session = await requireSession();
@@ -564,7 +931,7 @@ export async function POST(req: NextRequest) {
     const entList = (entidades as unknown[]).map(String);
     const secList = (secciones as unknown[]).map(String).filter(s => ["balance","er","cartera"].includes(s));
 
-    const buffer = await generarExcel({ entidades: entList, desde: desdeNum, hasta: hastaNum, secciones: secList });
+    const buffer   = await generarExcel({ entidades: entList, desde: desdeNum, hasta: hastaNum, secciones: secList });
     const filename = `Reporte_EEFF_${desdeNum}-${hastaNum}.xlsx`;
 
     return new Response(new Uint8Array(buffer), {

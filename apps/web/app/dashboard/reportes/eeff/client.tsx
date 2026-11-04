@@ -321,7 +321,7 @@ export function ReporteEeffClient({ entidades }: { entidades: EntidadItem[] }) {
               </div>
             </div>
             <p className="text-[11px] text-slate-400">
-              {años} año{años !== 1 ? "s" : ""} · {meses} meses en hoja Cartera & PE
+              {años} año{años !== 1 ? "s" : ""} · {meses} filas en hoja Cartera Mensual
             </p>
           </div>
 
@@ -332,7 +332,7 @@ export function ReporteEeffClient({ entidades }: { entidades: EntidadItem[] }) {
               [
                 { key: "balance" as Seccion, label: "Balance (Diciembres)", desc: "Cartera, disponible, obligaciones" },
                 { key: "er"      as Seccion, label: "Estado de Resultados (Diciembres)", desc: "Ingresos, costos, gastos op" },
-                { key: "cartera" as Seccion, label: "Cartera & Validación PE", desc: "Mensual + KPIs almacenados" },
+                { key: "cartera" as Seccion, label: "Validación PE + Cartera Mensual", desc: "Hoja auditoría PE (Miles S/ y %) + cartera mensual" },
               ] as const
             ).map(({ key, label, desc }) => (
               <label key={key} className="flex items-start gap-2.5 cursor-pointer group">
