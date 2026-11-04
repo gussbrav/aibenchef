@@ -684,6 +684,12 @@ async function generarExcel(opts: {
     sub3.font = { size: 9, italic: true, color: { argb: C.grisOsc } };
     ws.getRow(r).height = 16; r++;
 
+    ws.mergeCells(r, 1, r, 2 + nCols);
+    const sub4 = ws.getRow(r).getCell(1);
+    sub4.value = "Desglose de Gastos Operacionales: Personal (sueldos y beneficios) · Directorio (dietas y retribuciones) · Serv. Terceros + Impuestos (outsourcing, alquileres, tributos) · Deprec. + Amort. (activos fijos e intangibles) · Otros Gastos Op. (prima al Fondo de Seguro de Depósitos — FSD —, publicidad, seguros y otros gastos menores de administración). «Otros» es residual: si su % es pequeño respecto al total de Gastos Op., confirma que nada relevante queda sin clasificar.";
+    sub4.font = { size: 9, italic: true, color: { argb: C.grisOsc } };
+    sub4.alignment = { wrapText: true }; ws.getRow(r).height = 24; r++;
+
     // Header entidades
     const h1 = ws.getRow(r);
     fillSolid(h1.getCell(1), C.azul); fillSolid(h1.getCell(2), C.azul);
