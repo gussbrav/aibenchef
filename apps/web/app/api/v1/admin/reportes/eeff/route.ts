@@ -686,7 +686,7 @@ async function generarExcel(opts: {
 
     ws.mergeCells(r, 1, r, 2 + nCols);
     const sub4 = ws.getRow(r).getCell(1);
-    sub4.value = "Desglose de Gastos Operacionales: Personal (sueldos y beneficios) · Directorio (dietas y retribuciones) · Serv. Terceros + Impuestos (outsourcing, alquileres, tributos) · Deprec. + Amort. (activos fijos e intangibles) · Otros Gastos Op. (prima al Fondo de Seguro de Depósitos — FSD —, publicidad, seguros y otros gastos menores de administración). «Otros» es residual: si su % es pequeño respecto al total de Gastos Op., confirma que nada relevante queda sin clasificar.";
+    sub4.value = "Desglose de Gastos Operacionales: Personal · Directorio · Serv. Terceros + Impuestos · Deprec. + Amort. · Otros Gastos Op. — «Otros Gastos Op.» es el residual de la cuenta 10 (Gastos de Administración SBS) luego de descontar las partidas nombradas. Para conocer su composición exacta, consultar el detalle de la cuenta 10 en los estados financieros auditados de la entidad.";
     sub4.font = { size: 9, italic: true, color: { argb: C.grisOsc } };
     sub4.alignment = { wrapText: true }; ws.getRow(r).height = 24; r++;
 
