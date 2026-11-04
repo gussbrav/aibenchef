@@ -101,8 +101,8 @@ async function generarExcel(opts: {
         cta_a1, cta_a3, cta_a4, cta_a4_1, cta_a4_2, cta_a4_3, cta_a4_4,
         cta_b1, cta_b4
       FROM marts.v_eeff_balance_ancho
-      WHERE nomb_correg = ANY(${entidades})
-        AND periodo = ANY(${DIC_PERIODOS})
+      WHERE nomb_correg = ANY(${entidades}::text[])
+        AND periodo = ANY(${DIC_PERIODOS}::int[])
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
     `) : Promise.resolve([]),
@@ -113,8 +113,8 @@ async function generarExcel(opts: {
         cta_10, cta_10_1, cta_10_2, cta_10_3, cta_10_4,
         cta_12_7, cta_12_8, cta_13
       FROM marts.mv_eeff_resultados_ancho
-      WHERE nomb_correg = ANY(${entidades})
-        AND periodo = ANY(${DIC_PERIODOS})
+      WHERE nomb_correg = ANY(${entidades}::text[])
+        AND periodo = ANY(${DIC_PERIODOS}::int[])
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
     `) : Promise.resolve([]),
@@ -122,7 +122,7 @@ async function generarExcel(opts: {
     secciones.includes("cartera") ? db.execute<MesRow>(sql`
       SELECT periodo, nomb_correg, cta_a4, cta_a4_1, cta_a4_2, cta_a4_3
       FROM marts.v_eeff_balance_ancho
-      WHERE nomb_correg = ANY(${entidades})
+      WHERE nomb_correg = ANY(${entidades}::text[])
         AND periodo BETWEEN ${MES_INICIO} AND ${MES_FIN}
         AND moneda = 'TOTAL'
       ORDER BY nomb_correg, periodo
@@ -131,13 +131,13 @@ async function generarExcel(opts: {
     secciones.includes("cartera") ? db.execute<KpiRow>(sql`
       SELECT periodo, nomb_correg, kpi_codigo, valor
       FROM marts.fact_kpis_mensuales
-      WHERE nomb_correg = ANY(${entidades})
+      WHERE nomb_correg = ANY(${entidades}::text[])
         AND kpi_codigo IN (
           'pe_rendimiento_cartera','pe_costo_fondeo','pe_costo_provisiones',
           'pe_gastos_operacionales','pe_punto_equilibrio','pe_margen_neto'
         )
         AND moneda = 'TOTAL'
-        AND periodo = ANY(${DIC_PERIODOS})
+        AND periodo = ANY(${DIC_PERIODOS}::int[])
       ORDER BY nomb_correg, periodo, kpi_codigo
     `) : Promise.resolve([]),
   ]);
