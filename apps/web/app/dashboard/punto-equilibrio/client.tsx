@@ -435,9 +435,10 @@ function SelectoresBar({
         dirty ? "border-amber-400 ring-2 ring-amber-100" : "border-slate-200",
       )}
     >
-      {/* Fila 1: Entidad + Desde año + Hasta periodo */}
+      {/* Fila única: Entidad · Desde año · Hasta periodo · Granularidad */}
       <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[200px] flex-[3_1_0]">
+        {/* Entidad — toma el espacio disponible, min 220px */}
+        <div className="min-w-[220px] flex-[2_1_0]">
           <EntityCombobox
             label="Entidad"
             value={draft.entidad}
@@ -447,7 +448,7 @@ function SelectoresBar({
         </div>
 
         {/* Desde año */}
-        <div className="min-w-[120px] flex-[1_1_0]">
+        <div className="w-[112px] flex-shrink-0">
           <label
             className={cn(
               "text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1 mb-1",
@@ -473,7 +474,7 @@ function SelectoresBar({
         </div>
 
         {/* Hasta periodo */}
-        <div className="min-w-[160px] flex-[1_1_0]">
+        <div className="w-[172px] flex-shrink-0">
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
             <Calendar className="w-3 h-3" />
             Hasta periodo
@@ -495,36 +496,34 @@ function SelectoresBar({
             ))}
           </select>
         </div>
-      </div>
 
-      {/* Fila 2: Granularidad como control segmentado — full width */}
-      <div className="mt-3">
-        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
-          <Layers className="w-3 h-3" />
-          Granularidad
-          {draft.granularidad === "cierre" && (
-            <span className="text-[9px] normal-case font-normal italic text-slate-400 ml-1">
-              · "Desde año" no aplica
-            </span>
-          )}
-        </label>
-        <div className="flex rounded-md border border-slate-300 bg-slate-50 overflow-hidden h-9">
-          {GRANULARIDADES.map((g) => (
-            <button
-              key={g.value}
-              type="button"
-              title={g.hint}
-              onClick={() => setDraft((d) => ({ ...d, granularidad: g.value }))}
-              className={cn(
-                "flex-1 text-xs font-medium transition-all border-r border-slate-200 last:border-r-0 leading-tight text-center px-1",
-                draft.granularidad === g.value
-                  ? "bg-brand-600 text-white shadow-inner"
-                  : "text-slate-600 hover:bg-white hover:text-slate-900",
-              )}
-            >
-              {g.label}
-            </button>
-          ))}
+        {/* Granularidad — pills segmentados, ocupa el espacio restante */}
+        <div className="min-w-[280px] flex-[3_1_0]">
+          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
+            <Layers className="w-3 h-3" />
+            Granularidad
+          </label>
+          <div className="flex rounded-md border border-slate-300 bg-slate-50 overflow-hidden h-9">
+            {GRANULARIDADES.map((g) => (
+              <button
+                key={g.value}
+                type="button"
+                title={g.hint}
+                onClick={() => setDraft((d) => ({ ...d, granularidad: g.value }))}
+                className={cn(
+                  "flex-1 text-xs font-medium transition-all border-r border-slate-200 last:border-r-0 leading-tight text-center px-1",
+                  draft.granularidad === g.value
+                    ? "bg-brand-600 text-white shadow-inner"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900",
+                  g.value === "cierre" && draft.granularidad !== "cierre"
+                    ? "text-slate-500"
+                    : "",
+                )}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
