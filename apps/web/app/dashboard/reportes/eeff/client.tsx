@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, FileSpreadsheet, Search, CheckSquare, Square } from "lucide-react";
+import { AlertTriangle, Download, FileSpreadsheet, Search, CheckSquare, Square } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 type EntidadItem = { nombre: string; tipo: string; activa: boolean };
@@ -363,8 +363,9 @@ export function ReporteEeffClient({ entidades }: { entidades: EntidadItem[] }) {
           {/* Resumen + botón */}
           <div className="space-y-2">
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
-                {error}
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <span className="text-sm text-red-700 leading-snug">{error}</span>
               </div>
             )}
             <div className="text-[11px] text-slate-400 text-center">

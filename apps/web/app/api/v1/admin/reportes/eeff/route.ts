@@ -1023,7 +1023,19 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[reportes/eeff] Error generando reporte:", err);
-    const msg = err instanceof Error ? err.message : "Error interno al generar el reporte";
+    const raw = err instanceof Error ? err.message : String(err);
+
+    let msg: string;
+    if (/column ".*" does not exist/i.test(raw) || /relation ".*" does not exist/i.test(raw)) {
+      msg = "El esquema de datos está desactualizado. Contacta al administrador para aplicar las migraciones pendientes.";
+    } else if (/ECONNREFUSED|connection refused|could not connect/i.test(raw)) {
+      msg = "No se pudo conectar a la base de datos. Intenta nuevamente en unos minutos.";
+    } else if (/timeout|canceling statement/i.test(raw)) {
+      msg = "La consulta tardó demasiado. Reduce el rango de años o el número de entidades seleccionadas.";
+    } else {
+      msg = "Error interno al generar el reporte. Contacta al administrador.";
+    }
+
     return Response.json({ error: msg }, { status: 500 });
   }
 }
