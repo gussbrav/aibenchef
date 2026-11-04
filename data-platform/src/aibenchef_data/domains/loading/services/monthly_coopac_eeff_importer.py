@@ -117,6 +117,32 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         ("12", "amortizacion"): "12.8",
         (None, "otros ingresos y gastos"): "13",
         (None, "resultado neto del ejercicio"): "17",
+        # Ingresos Financieros sub-cuentas adicionales
+        ("1", "disponible"): "1.1",
+        ("1", "fondos intercooperativos"): "1.2",
+        ("1", "ganancias por valorizacion de inversiones"): "1.5",
+        ("1", "ganancias por inversiones en subsidiarias y asociadas"): "1.6",
+        ("1", "ganancias en productos financieros derivados"): "1.8",
+        # Gastos Financieros sub-cuentas adicionales (completar cobertura)
+        ("2", "depositos de coopac"): "2.2",
+        ("2", "fondos intercooperativos"): "2.3",
+        ("2", "obligaciones en circulacion no subordinadas"): "2.5",
+        ("2", "obligaciones en circulacion subordinadas"): "2.6",
+        ("2", "perdida por valorizacion de inversiones"): "2.7",
+        ("2", "perdida por inversiones en subsidiarias y asociadas"): "2.8",
+        ("2", "primas al fondo de seguro de depositos cooperativo"): "2.9",
+        ("2", "diferencia de cambio"): "2.10",
+        ("2", "perdidas en productos financieros derivados"): "2.11",
+        # Resultado / Impuesto (captura completa P&G)
+        (None, "utilidad perdida por venta de cartera crediticia"): "9",
+        (None, "resultado antes del impuesto a la renta"): "15",
+        (None, "impuesto a la renta"): "16",
+        # Provisiones, Deprec y Amort sub-items
+        ("12", "provisiones para creditos indirectos"): "12.1",
+        ("12", "provisiones por perdida por deterioro de inversiones"): "12.2",
+        ("12", "provisiones para incobrabilidad de cuentas por cobrar"): "12.3",
+        ("12", "provisiones para bienes realizados recibidos en pago y adjudicados"): "12.4",
+        ("12", "otras provisiones"): "12.5",
     }
 
     # -----------------------------------------------------------------------
@@ -168,6 +194,21 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         ("C", "reservas"): "C3",
         ("C", "resultados acumulados"): "C5",
         ("C", "resultado neto del ejercicio"): "C6",
+        # Activo adicionales
+        (None, "cuentas por cobrar netas de provisiones"): "A5",
+        (None, "rendimientos por cobrar"): "A8",
+        (None, "bienes realizables recibidos en pago y adjudicados netos"): "A_bir",
+        # Pasivo adicionales
+        (None, "depósitos de coopac"): "B2",
+        (None, "depositos de coopac"): "B2",
+        (None, "fondos intercooperativos"): "B_fi",
+        (None, "cuentas por pagar"): "B5",
+        (None, "intereses y otros gastos por pagar"): "B_igp",
+        (None, "provisiones"): "B_prov",
+        (None, "obligaciones en circulacion subordinadas"): "B_sub",
+        # Patrimonio adicionales
+        ("C", "capital adicional"): "C2",
+        ("C", "ajustes al patrimonio"): "C4",
     }
 
     def __init__(

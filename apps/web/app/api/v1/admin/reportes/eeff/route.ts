@@ -66,7 +66,8 @@ function carteraBruta12m(serie: MesRow[], periodo: number): number | null {
   if (startMes <= 0) { startMes += 12; startAnio -= 1; }
   const ini  = startAnio * 100 + startMes;
   const v    = serie.filter(x => x.periodo >= ini && x.periodo <= periodo);
-  const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0)).filter(x => x > 0);
+  // max(0, cta_a4_4) incluye CobranzaJud de COOPAC (>0) y excluye Provisiones de SF (<0)
+  const vals = v.map(x => (n(x.cta_a4_1) ?? 0) + (n(x.cta_a4_2) ?? 0) + (n(x.cta_a4_3) ?? 0) + Math.max(0, n(x.cta_a4_4) ?? 0)).filter(x => x > 0);
   if (vals.length === 0) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
@@ -90,12 +91,17 @@ type ErRow = {
 };
 type MesRow = {
   periodo: number; nomb_correg: string;
-  cta_a4: string|null; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null;
+  cta_a4: string|null; cta_a4_1: string|null; cta_a4_2: string|null;
+  cta_a4_3: string|null; cta_a4_4: string|null;
 };
 type KpiRow        = { periodo: number; nomb_correg: string; kpi_codigo: string; valor: string|null; };
 type KpiAnualRow   = { periodo: number; nomb_correg: string; utilidad_ttm: string|null; activos_prom_12m: string|null; patrimonio_prom_12m: string|null; };
 type BalDicRow     = { periodo: number; nomb_correg: string; cta_a4_1: string|null; cta_a4_2: string|null; cta_a4_3: string|null; cta_a4_4: string|null; };
-type CoopacDupontRow = { periodo: number; nomb_correg: string; roa_pct: string|null; roe_pct: string|null; };
+type CoopacDupontRow = {
+  periodo: number; nomb_correg: string;
+  roa_pct: string|null; roe_pct: string|null;
+  mora_pct: string|null; cobertura_car_pct: string|null;
+};
 
 async function generarExcel(opts: {
   entidades: string[];
@@ -144,7 +150,7 @@ async function generarExcel(opts: {
     `) : Promise.resolve([] as ErRow[]),
 
     incCartera ? db.execute<MesRow>(sql`
-      SELECT periodo, nomb_correg, cta_a4, cta_a4_1, cta_a4_2, cta_a4_3
+      SELECT periodo, nomb_correg, cta_a4, cta_a4_1, cta_a4_2, cta_a4_3, cta_a4_4
       FROM marts.v_eeff_balance_ancho
       WHERE nomb_correg IN (${entIn})
         AND periodo BETWEEN ${MES_INICIO} AND ${MES_FIN}
@@ -199,17 +205,18 @@ async function generarExcel(opts: {
       ORDER BY nomb_correg, periodo
     `) : Promise.resolve([] as ErRow[]),
 
-    // ROA/ROE COOPAC: v_dupont_coopac (V193) calcula desde raw.eeff_observacion
-    // porque mv_eeff_resultados_ancho no expone cta_17 para COOPAC.
-    incCartera ? db.execute<CoopacDupontRow>(sql`
-      SELECT periodo, nomb_correg, roa_pct, roe_pct
+    // ROA/ROE/Mora/Cobertura COOPAC: v_dupont_coopac (V193/V198) calcula desde raw.eeff_observacion.
+    // Se corre siempre (no gateado por incCartera) porque la Portada y Balance Dic
+    // también consumen mora/cobertura de COOPAC aunque el usuario no active "cartera".
+    db.execute<CoopacDupontRow>(sql`
+      SELECT periodo, nomb_correg, roa_pct, roe_pct, mora_pct, cobertura_car_pct
       FROM analytics.v_dupont_coopac
       WHERE nomb_correg IN (${entIn})
         AND moneda = 'TOTAL'
         AND periodo % 100 = 12
         AND periodo / 100 BETWEEN ${desde} AND ${hasta}
       ORDER BY nomb_correg, periodo
-    `) : Promise.resolve([] as CoopacDupontRow[]),
+    `),
   ]);
 
   // ── Índices ───────────────────────────────────────────────────────────────
@@ -249,18 +256,39 @@ async function generarExcel(opts: {
     return balDicIdx.get(`${ent}__${periodo}`) ?? balIdx.get(`${ent}__${periodo}`);
   }
   function getMora(ent: string, periodo: number): number | null {
+    // COOPAC: usar v_dupont_coopac que calcula (A4.3+A4.4)/bruta correctamente
+    const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
+    if (cd && cd.mora_pct != null) {
+      const v = n(cd.mora_pct);
+      return v != null ? v / 100 : null;
+    }
+    // SF: A4.3 = Atrasados (Venc+CobranzaJud), A4.4 = Provisiones (negativo)
     const b = getBalDic(ent, periodo);
     if (!b) return null;
     const bruta = nv(b.cta_a4_1) + nv(b.cta_a4_2) + nv(b.cta_a4_3);
     return bruta > 0 ? nv(b.cta_a4_3) / bruta : null;
   }
   function getCobAtras(ent: string, periodo: number): number | null {
+    // COOPAC: v_dupont_coopac calcula A4.6/(A4.3+A4.4) correctamente
+    const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
+    if (cd && cd.cobertura_car_pct != null) {
+      const v = n(cd.cobertura_car_pct);
+      return v != null ? v / 100 : null;
+    }
+    // SF: A4.4 = Provisiones, A4.3 = Atrasados
     const b = getBalDic(ent, periodo);
     if (!b) return null;
     const venc = nv(b.cta_a4_3);
     return venc > 0 ? Math.abs(nv(b.cta_a4_4)) / venc : null;
   }
   function getCobCar(ent: string, periodo: number): number | null {
+    // COOPAC: usar misma cobertura (Prov/Atrasados) — v_dupont_coopac no tiene CAR separado
+    const cd = coopacDupontIdx.get(`${ent}__${periodo}`);
+    if (cd && cd.cobertura_car_pct != null) {
+      const v = n(cd.cobertura_car_pct);
+      return v != null ? v / 100 : null;
+    }
+    // SF: A4.4 = Provisiones, A4.2+A4.3 = CAR (Refi + Atrasados)
     const b = getBalDic(ent, periodo);
     if (!b) return null;
     const car = nv(b.cta_a4_2) + nv(b.cta_a4_3);
@@ -347,11 +375,11 @@ async function generarExcel(opts: {
     for (let ei = 0; ei < entidades.length; ei++) {
       const ent     = entidades[ei]!;
       const lastDic = DIC_PERIODOS[DIC_PERIODOS.length - 1]!;
-      const bal     = balIdx.get(`${ent}__${lastDic}`);
       const kpiMap  = kpiIdx.get(`${ent}__${lastDic}`);
       const pe      = kpiMap?.get("pe_punto_equilibrio") ?? null;
       const margen  = kpiMap?.get("pe_margen_neto") ?? null;
-      const carBruta = bal ? miles(nv(bal.cta_a4_1)+nv(bal.cta_a4_2)+nv(bal.cta_a4_3)) : null;
+      const balC    = getBalDic(ent, lastDic);
+      const carBruta = balC ? miles(nv(balC.cta_a4_1)+nv(balC.cta_a4_2)+nv(balC.cta_a4_3)+Math.max(0,nv(balC.cta_a4_4))) : null;
       const firstDic = DIC_PERIODOS.find(p  => balIdx.has(`${ent}__${p}`) || balDicIdx.has(`${ent}__${p}`));
       const lastOk   = [...DIC_PERIODOS].reverse().find(p => balIdx.has(`${ent}__${p}`) || balDicIdx.has(`${ent}__${p}`));
       const mora     = getMora(ent, lastDic);
@@ -467,27 +495,28 @@ async function generarExcel(opts: {
 
     type BalDef = {
       grupo: string; label: string; bold?: boolean; pct?: boolean;
-      fn: (b: BalRow) => number | null;
+      fn: (b: BalRow | undefined, ent: string, periodo: number) => number | null;
     };
     const balDefs: BalDef[] = [
-      { grupo: "ACTIVO",  label: "Total Activos",                          bold: true,  fn: b => n(b.cta_a) },
-      { grupo: "",        label: "Cartera Bruta",                           bold: true,  fn: b => nv(b.cta_a4_1)+nv(b.cta_a4_2)+nv(b.cta_a4_3) },
-      { grupo: "",        label: "   Vigentes (A4.1)",                                   fn: b => n(b.cta_a4_1) },
-      { grupo: "",        label: "   Refinanciados/Reestructurados (A4.2)",              fn: b => n(b.cta_a4_2) },
-      { grupo: "",        label: "   Vencidos y Cobranza Judicial (A4.3)",               fn: b => n(b.cta_a4_3) },
-      { grupo: "",        label: "   Provisiones (A4.4, negativo)",                      fn: b => n(b.cta_a4_4) },
-      { grupo: "",        label: "Cartera Neta",                            bold: true,  fn: b => n(b.cta_a4) },
-      { grupo: "",        label: "   Mora % = Venc / Cartera Bruta",        pct: true,
-        fn: b => { const br=nv(b.cta_a4_1)+nv(b.cta_a4_2)+nv(b.cta_a4_3); return br>0?nv(b.cta_a4_3)/br:null; }},
-      { grupo: "",        label: "   Cobertura Atrasados % = Prov/Venc",    pct: true,
-        fn: b => nv(b.cta_a4_3)>0 ? Math.abs(nv(b.cta_a4_4))/nv(b.cta_a4_3) : null },
-      { grupo: "",        label: "   Cobertura CAR % = Prov/(Venc+Refin)",  pct: true,
-        fn: b => (nv(b.cta_a4_2)+nv(b.cta_a4_3))>0 ? Math.abs(nv(b.cta_a4_4))/(nv(b.cta_a4_2)+nv(b.cta_a4_3)) : null },
-      { grupo: "",        label: "Disponible (A1)",                                      fn: b => n(b.cta_a1) },
-      { grupo: "",        label: "Inversiones (A3)",                                     fn: b => n(b.cta_a3) },
-      { grupo: "PASIVO",  label: "Obligaciones con el Público (B1)",        bold: true,  fn: b => n(b.cta_b1) },
-      { grupo: "",        label: "Adeudos y Oblig. Financieras (B4)",                    fn: b => n(b.cta_b4) },
-      { grupo: "PATRIM.", label: "Patrimonio",                              bold: true,  fn: b => n(b.cta_c) },
+      { grupo: "ACTIVO",  label: "Total Activos",                                      bold: true,  fn: b => b ? n(b.cta_a) : null },
+      { grupo: "",        label: "Cartera Bruta  [A4.1+A4.2+A4.3+max(0,A4.4)]",       bold: true,
+        fn: b => b ? nv(b.cta_a4_1)+nv(b.cta_a4_2)+nv(b.cta_a4_3)+Math.max(0,nv(b.cta_a4_4)) : null },
+      { grupo: "",        label: "   Vigentes (A4.1)",                                              fn: b => b ? n(b.cta_a4_1) : null },
+      { grupo: "",        label: "   Refinanciados/Reestructurados (A4.2)",                         fn: b => b ? n(b.cta_a4_2) : null },
+      { grupo: "",        label: "   Vencidos y Cobranza Judicial (A4.3)",                          fn: b => b ? n(b.cta_a4_3) : null },
+      { grupo: "",        label: "   Prov. SF / CobranzaJud. COOPAC (A4.4)",                       fn: b => b ? n(b.cta_a4_4) : null },
+      { grupo: "",        label: "Cartera Neta",                                        bold: true,  fn: b => b ? n(b.cta_a4) : null },
+      { grupo: "",        label: "   Mora % = Atrasados / Cartera Bruta",               pct: true,
+        fn: (_, ent, periodo) => getMora(ent, periodo) },
+      { grupo: "",        label: "   Cobertura Atrasados %  =  |Prov| / Atrasados",    pct: true,
+        fn: (_, ent, periodo) => getCobAtras(ent, periodo) },
+      { grupo: "",        label: "   Cobertura CAR %  =  |Prov| / (Refi + Atrasados)", pct: true,
+        fn: (_, ent, periodo) => getCobCar(ent, periodo) },
+      { grupo: "",        label: "Disponible (A1)",                                                 fn: b => b ? n(b.cta_a1) : null },
+      { grupo: "",        label: "Inversiones (A3)",                                                fn: b => b ? n(b.cta_a3) : null },
+      { grupo: "PASIVO",  label: "Obligaciones con Socios / Público (B1)",             bold: true,  fn: b => b ? n(b.cta_b1) : null },
+      { grupo: "",        label: "Adeudos y Oblig. Financieras (B4)",                               fn: b => b ? n(b.cta_b4) : null },
+      { grupo: "PATRIM.", label: "Patrimonio",                                          bold: true,  fn: b => b ? n(b.cta_c) : null },
     ];
 
     for (let di = 0; di < balDefs.length; di++) {
@@ -511,7 +540,7 @@ async function generarExcel(opts: {
           const col = 3 + ei * DIC_PERIODOS.length + pi;
           const c   = row.getCell(col);
           const bal = balIdx.get(`${entidades[ei]}__${DIC_PERIODOS[pi]}`);
-          const raw = bal ? def.fn(bal) : null;
+          const raw = def.fn(bal, entidades[ei]!, DIC_PERIODOS[pi]!);
           const v   = def.pct ? pct2(raw) : miles(raw);
           c.value = v; c.numFmt = def.pct ? '0.00"%"' : '#,##0';
           c.alignment = { horizontal: "right" };
@@ -821,7 +850,7 @@ async function generarExcel(opts: {
     r++;
     ws.mergeCells(r, 1, r, 2 + nCols);
     const nota2 = ws.getRow(r).getCell(1);
-    nota2.value = "Fuente: SBS vía Aibenchef · KPIs PE almacenados en marts.fact_kpis_mensuales (cálculo set-based, V034/V078/V197) · ROA/ROE SF (CMACs/financieras/bancos): marts.v_kpis_anuales_entidad (V067) · ROA/ROE COOPAC: analytics.v_dupont_coopac (V193, desde raw.eeff_observacion cuenta 17) · Mora y Cobertura calculados desde marts.v_eeff_balance_ancho · Gastos Op TTM = cta_10 + cta_12_7 + cta_12_8 (Administración + Deprec. + Amort.)";
+    nota2.value = "Fuente: SBS vía Aibenchef · KPIs PE: marts.fact_kpis_mensuales (V034/V078/V197/V199) · ROA/ROE SF: v_kpis_anuales_entidad (V067) · ROA/ROE+Mora+Cobertura COOPAC: analytics.v_dupont_coopac (V193/V198) · Nota: para COOPAC, A4.3=Vencidos y A4.4=CobranzaJudicial; para SF, A4.3=Atrasados y A4.4=Provisiones · Cartera Bruta = A4.1+A4.2+A4.3+max(0,A4.4)";
     nota2.font = { size: 9, italic: true, color: { argb: C.grisMed } };
     nota2.alignment = { wrapText: true }; ws.getRow(r).height = 36;
   }
@@ -893,7 +922,7 @@ async function generarExcel(opts: {
           const ent   = entidades[ei]!;
           const serie = mesIdx.get(ent) ?? [];
           const mes   = serie.find(x => x.periodo === periodo);
-          const cartBruta = mes ? miles((n(mes.cta_a4_1)??0)+(n(mes.cta_a4_2)??0)+(n(mes.cta_a4_3)??0)) : null;
+          const cartBruta = mes ? miles((n(mes.cta_a4_1)??0)+(n(mes.cta_a4_2)??0)+(n(mes.cta_a4_3)??0)+Math.max(0,n(mes.cta_a4_4)??0)) : null;
           const prom12m   = esDic ? miles(carteraBruta12m(serie, periodo)) : null;
           const kpiMap    = esDic ? kpiIdx.get(`${ent}__${periodo}`) : undefined;
           const rendim    = esDic ? pct2(kpiMap?.get("pe_rendimiento_cartera") ?? null) : null;
