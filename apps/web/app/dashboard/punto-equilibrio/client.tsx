@@ -435,42 +435,19 @@ function SelectoresBar({
         dirty ? "border-amber-400 ring-2 ring-amber-100" : "border-slate-200",
       )}
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Entidad — combobox con search */}
-        <EntityCombobox
-          label="Entidad"
-          value={draft.entidad}
-          options={entidadesDisponibles}
-          onChange={(v) => setDraft((d) => ({ ...d, entidad: v }))}
-        />
-
-        {/* Granularidad — va PRIMERO porque decide el modo de analisis
-            (cierre unico deshabilita 'Desde año'). Ponerla antes evita
-            que el user vea 'Desde año' disabled sin entender por que. */}
-        <div>
-          <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
-            <Layers className="w-3 h-3" />
-            Granularidad
-          </label>
-          <select
-            value={draft.granularidad}
-            onChange={(e) => {
-              const v = e.target.value as Granularidad;
-              setDraft((d) => ({ ...d, granularidad: v }));
-            }}
-            className="w-full h-9 px-2 text-sm rounded-md border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none bg-white"
-          >
-            {GRANULARIDADES.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.label} — {g.hint}
-              </option>
-            ))}
-          </select>
+      {/* Fila 1: Entidad + Desde año + Hasta periodo */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[200px] flex-[3_1_0]">
+          <EntityCombobox
+            label="Entidad"
+            value={draft.entidad}
+            options={entidadesDisponibles}
+            onChange={(v) => setDraft((d) => ({ ...d, entidad: v }))}
+          />
         </div>
 
-        {/* Desde año — deshabilitado en modo 'Cierre único' porque no aplica
-            (ese modo muestra solo el hasta-periodo). */}
-        <div>
+        {/* Desde año */}
+        <div className="min-w-[120px] flex-[1_1_0]">
           <label
             className={cn(
               "text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1 mb-1",
@@ -479,11 +456,6 @@ function SelectoresBar({
           >
             <Calendar className="w-3 h-3" />
             Desde año
-            {draft.granularidad === "cierre" && (
-              <span className="text-[9px] normal-case italic text-slate-400">
-                (no aplica en cierre único)
-              </span>
-            )}
           </label>
           <select
             value={draft.desdeAnio}
@@ -500,11 +472,8 @@ function SelectoresBar({
           </select>
         </div>
 
-        {/* Hasta periodo — dropdown de periodos publicados. Antes era input
-            libre YYYYMM que permitia escribir cualquier numero (incluso
-            periodos sin data). Dropdown evita ese error y muestra label
-            legible ("Jun 2026") + codigo. */}
-        <div>
+        {/* Hasta periodo */}
+        <div className="min-w-[160px] flex-[1_1_0]">
           <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
             <Calendar className="w-3 h-3" />
             Hasta periodo
@@ -525,6 +494,37 @@ function SelectoresBar({
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Fila 2: Granularidad como control segmentado — full width */}
+      <div className="mt-3">
+        <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider flex items-center gap-1 mb-1">
+          <Layers className="w-3 h-3" />
+          Granularidad
+          {draft.granularidad === "cierre" && (
+            <span className="text-[9px] normal-case font-normal italic text-slate-400 ml-1">
+              · "Desde año" no aplica
+            </span>
+          )}
+        </label>
+        <div className="flex rounded-md border border-slate-300 bg-slate-50 overflow-hidden h-9">
+          {GRANULARIDADES.map((g) => (
+            <button
+              key={g.value}
+              type="button"
+              title={g.hint}
+              onClick={() => setDraft((d) => ({ ...d, granularidad: g.value }))}
+              className={cn(
+                "flex-1 text-xs font-medium transition-all border-r border-slate-200 last:border-r-0 leading-tight text-center px-1",
+                draft.granularidad === g.value
+                  ? "bg-brand-600 text-white shadow-inner"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900",
+              )}
+            >
+              {g.label}
+            </button>
+          ))}
         </div>
       </div>
 
