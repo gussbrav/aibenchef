@@ -5,12 +5,17 @@ Los archivos COOPAC tienen el mismo layout XLS que los SF (SF = sistema financie
     - row 6: monedas MN | ME | TOTAL
     - row 8+: filas de cuentas
 
-La diferencia clave es que las cuentas COOPAC se identifican por NOMBRE TEXTUAL
-(no por codigo numerico SBS). Este importer traduce esos nombres a codigos SF
-equivalentes usando dos mapas fijos: _BG_CUENTAS (balance) y _GYP_CUENTAS (resultados).
+Las cuentas se identifican por NOMBRE TEXTUAL. El importer carga el mapa
+(parent_codigo, nombre_norm) → _CabeceraEntry desde dw.cabecera_maestra (V201)
+al primer uso y lo cachea por (tipo_entidad, tipo_estado). Agregar o corregir
+una cuenta = migration SQL, no deploy de código.
 
-El mecanismo es stateful: cuando ve una fila en MAYUSCULAS es un header parent;
-las siguientes filas mixed-case son hijos bajo ese parent hasta el proximo header.
+El mecanismo es stateful con dos niveles de contexto:
+  - current_l1_code: sección raíz ('A'/'B'/'C' en BG; None en GYP)
+  - current_l2_code: cabecera activa bajo la cual caen los sub-items
+
+Esto resuelve la ambigüedad cuando el mismo nombre aparece en distintas
+secciones (ej. FONDOS INTERCOOPERATIVOS en Activo=A2 vs Pasivo=B_fi).
 
 Grupos soportados: coopac_n1, coopac_n2a, coopac_n2b, coopac_n3.
 
@@ -26,7 +31,7 @@ from __future__ import annotations
 import contextlib
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import psycopg
 
@@ -44,6 +49,19 @@ from .monthly_eeff_importer import (
 )
 
 log = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Tipos para el mapa de cuentas cargado desde dw.cabecera_maestra
+# ---------------------------------------------------------------------------
+
+class _CabeceraEntry(NamedTuple):
+    codigo: str
+    nivel: int
+
+
+# (parent_codigo | None, nombre_normalizado) → _CabeceraEntry
+_CabeceraMap = dict[tuple[str | None, str], _CabeceraEntry]
 
 
 # ---------------------------------------------------------------------------
@@ -77,9 +95,13 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
     Hereda de MonthlyEeffImporter para reutilizar _copy_batch y
     _copy_batch_celdas (los metodos de escritura a DB).
 
-    La diferencia con MonthlyEeffImporter es que NO usa dim_cuenta ni
-    cabecera_maestra para resolver nombres: usa los mapas fijos _BG_CUENTAS
-    y _GYP_CUENTAS definidos como constantes de clase.
+    A diferencia de MonthlyEeffImporter (que usa dim_cuenta + posición),
+    este importer carga su mapa (parent_codigo, nombre_norm) → _CabeceraEntry
+    desde dw.cabecera_maestra al primer uso y lo cachea. Agregar o corregir
+    una cuenta = INSERT/UPDATE en cabecera_maestra (V201+), no deploy de código.
+
+    _GYP_CUENTAS/_BG_CUENTAS se conservan como atributos de clase para
+    compatibilidad con tests unitarios existentes; ya no son usados en runtime.
 
     Uso:
         importer = MonthlyCoopacEeffImporter(conn, batch_size=5000)
@@ -218,6 +240,59 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         batch_size: int = 5_000,
     ) -> None:
         super().__init__(conn, batch_size=batch_size)
+        # Cache: (tipo_entidad, tipo_estado, pais) → _CabeceraMap
+        self._cabecera_cache: dict[tuple[str, str, str], _CabeceraMap] = {}
+
+    async def _get_cuentas_map(
+        self,
+        tipo_entidad: str,
+        tipo_estado: str,
+        pais: str = "PE",
+    ) -> _CabeceraMap:
+        """Carga el mapa (parent_codigo, nombre_norm) → _CabeceraEntry desde dw.cabecera_maestra.
+
+        Resultado cacheado por (tipo_entidad, tipo_estado, pais) durante la
+        vida del importer (una instancia por archivo importado en batch).
+        """
+        cache_key = (tipo_entidad, tipo_estado, pais)
+        if cache_key in self._cabecera_cache:
+            return self._cabecera_cache[cache_key]
+
+        async with self._conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT codigo,
+                       COALESCE(nombre_fuente, nombre) AS nombre_match,
+                       nivel,
+                       parent_codigo
+                FROM dw.cabecera_maestra
+                WHERE tipo_entidad = %s
+                  AND tipo_estado  = %s
+                  AND pais         = %s
+                  AND valido_hasta IS NULL
+                ORDER BY orden
+                """,
+                (tipo_entidad, tipo_estado, pais),
+            )
+            rows = await cur.fetchall()
+        await self._conn.commit()
+
+        result: _CabeceraMap = {
+            (row[3], _normalize(row[1])): _CabeceraEntry(codigo=row[0], nivel=row[2])
+            for row in rows
+        }
+
+        if not result:
+            log.warning(
+                "coopac_eeff.cabecera_vacia",
+                tipo_entidad=tipo_entidad,
+                tipo_estado=tipo_estado,
+                pais=pais,
+                hint="Verifica que V200+V201 se aplicaron en la DB.",
+            )
+
+        self._cabecera_cache[cache_key] = result
+        return result
 
     async def import_file(
         self,
@@ -283,6 +358,10 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         inserted = 0
         errors: list[str] = []
 
+        # Cargar mapas desde dw.cabecera_maestra una vez por archivo
+        bg_map  = await self._get_cuentas_map(tipo_entidad, "balance")
+        gyp_map = await self._get_cuentas_map(tipo_entidad, "resultados")
+
         for sheet in balance_sheets:
             try:
                 n = await self._import_coopac_sheet(
@@ -291,7 +370,7 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
                     tipo_entidad=tipo_entidad,
                     source_file=path.name,
                     archivo_id=archivo_id,
-                    cuentas_map=self._BG_CUENTAS,
+                    cuentas_map=bg_map,
                 )
                 inserted += n
                 log.info("coopac_eeff.sheet_ok", sheet=sheet.name, rows=n)
@@ -309,7 +388,7 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
                     tipo_entidad=tipo_entidad,
                     source_file=path.name,
                     archivo_id=archivo_id,
-                    cuentas_map=self._GYP_CUENTAS,
+                    cuentas_map=gyp_map,
                 )
                 inserted += n
                 log.info("coopac_eeff.sheet_ok", sheet=sheet.name, rows=n)
@@ -335,17 +414,22 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         tipo_entidad: str,
         source_file: str,
         archivo_id: str | None,
-        cuentas_map: dict[tuple[str | None, str], str],
+        cuentas_map: _CabeceraMap,
     ) -> int:
         """Parsea una hoja COOPAC y escribe observaciones a raw.eeff_observacion.
 
         Estrategia:
-        - Detecta el layout con _detect_layout (funciona igual para COOPAC).
-        - Recorre filas de datos con un state machine de parent actual.
-        - Una fila en MAYUSCULAS es un header: busca en (None, nombre_norm).
-        - Una fila mixed-case es un hijo: busca en (current_parent_code, nombre_norm).
-        - Si el codigo no se resuelve, la observacion se descarta (pero la celda
-          cruda se guarda igual para el inspector).
+        - Detecta el layout con _detect_layout.
+        - Recorre filas con state machine de dos niveles:
+            current_l1_code: sección raíz ('A'/'B'/'C' en BG; None en GYP)
+            current_l2_code: cabecera activa bajo la cual caen sub-items
+        - Fila ALL CAPS:
+            1. Busca como L2 bajo la sección actual: (current_l1_code, nombre_norm)
+            2. Si no: busca como L1 raíz: (None, nombre_norm)
+            Si nivel==1 → actualiza current_l1_code; si nivel==2 → current_l2_code.
+        - Fila mixed-case: busca (current_l2_code, nombre_norm).
+        - Si el codigo no se resuelve, se descarta la observacion pero la celda
+          cruda se guarda igual para el inspector.
         """
         layout = _detect_layout(sheet)
         if not layout.entidades:
@@ -363,9 +447,11 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
         observations: list[tuple] = []
         cells_raw: list[tuple] = []
 
-        # Maquina de estado: current_parent_code es el codigo del ultimo header visto.
-        # Empieza en None porque el primer header no tiene parent.
-        current_parent_code: str | None = None
+        # Maquina de estado de dos niveles:
+        #   current_l1_code: seccion raiz ('A'/'B'/'C' en BG; None en GYP)
+        #   current_l2_code: cabecera activa bajo la cual caen los sub-items
+        current_l1_code: str | None = None
+        current_l2_code: str | None = None
         orden = 0
 
         for r in range(layout.data_start_row, sheet.n_rows):
@@ -379,26 +465,28 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
             # mixed-case para cuentas hijo. Misma convencion que SF.
             es_header = nombre_raw.strip() == nombre_raw.strip().upper()
 
-            # Resolver codigo desde el mapa fijo.
-            # Filas ALL CAPS: buscan con parent=None (clave de nivel raiz).
-            # Filas mixed-case CON parent: buscan bajo ese parent.
-            # Filas mixed-case SIN parent: no hacen lookup (evita falsos matches
-            # cuando items title-case aparecen fuera de una seccion reconocida,
-            # ej. "Disponible" bajo "RENDIMIENTOS POR COBRAR").
             if es_header:
-                codigo: str | None = cuentas_map.get((None, nombre_norm))
-            elif current_parent_code is not None:
-                codigo = cuentas_map.get((current_parent_code, nombre_norm))
+                # 1) Intentar como L2 bajo la seccion L1 actual
+                # 2) Fallback: intentar como L1 raiz (parent_codigo=None)
+                entry = (
+                    cuentas_map.get((current_l1_code, nombre_norm))
+                    or cuentas_map.get((None, nombre_norm))
+                )
+                if entry is not None:
+                    codigo: str | None = entry.codigo
+                    if entry.nivel == 1:
+                        current_l1_code = codigo
+                        current_l2_code = None
+                    else:
+                        current_l2_code = codigo
+                else:
+                    codigo = None
+                    current_l2_code = None  # header no reconocido: evita hijos huerfanos
+            elif current_l2_code is not None:
+                sub_entry = cuentas_map.get((current_l2_code, nombre_norm))
+                codigo = sub_entry.codigo if sub_entry is not None else None
             else:
                 codigo = None
-
-            # Si el header resolvio, actualizar el parent para las filas siguientes
-            if es_header and codigo is not None:
-                current_parent_code = codigo
-            elif es_header and codigo is None:
-                # Header no reconocido: resetear parent para evitar asignaciones
-                # incorrectas de hijos bajo un parent fantasma.
-                current_parent_code = None
 
             # Captura de celdas crudas para todas las entidades del layout,
             # incluyendo filas sin codigo (el inspector las muestra como sin asignar).
