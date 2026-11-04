@@ -44,8 +44,10 @@ function border(cell: ExcelJS.Cell) {
 const MESES      = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const fmtDic     = (p: number) => `Dic ${Math.floor(p / 100)}`;
 const fmtPeriodo = (p: number) => `${MESES[(p % 100) - 1]} ${Math.floor(p / 100)}`;
+// Los valores en DB ya vienen en Miles S/ (unidad SBS).
+// Solo redondeamos al entero más próximo; NO dividimos entre 1,000.
 const miles      = (v: number | null | undefined): number | null =>
-  v == null ? null : Math.round(v / 1_000);
+  v == null ? null : Math.round(v);
 const pct2       = (v: number | null | undefined): number | null =>
   v == null ? null : Math.round(v * 10_000) / 100;
 
@@ -400,7 +402,7 @@ async function generarExcel(opts: {
     const ws = wb.addWorksheet("Balance Dic");
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 4 }];
     const nCols = entidades.length * DIC_PERIODOS.length;
-    ws.columns = [{ width: 24 }, { width: 40 }, ...Array(nCols).fill({ width: 14 })];
+    ws.columns = [{ width: 24 }, { width: 40 }, ...Array(nCols).fill({ width: 16 }) ];
     let r = 1;
 
     ws.mergeCells(r, 1, r, 2 + nCols);
@@ -500,7 +502,7 @@ async function generarExcel(opts: {
     const ws = wb.addWorksheet("ER Dic");
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 4 }];
     const nCols = entidades.length * DIC_PERIODOS.length;
-    ws.columns = [{ width: 24 }, { width: 36 }, ...Array(nCols).fill({ width: 14 })];
+    ws.columns = [{ width: 24 }, { width: 36 }, ...Array(nCols).fill({ width: 16 }) ];
     let r = 1;
 
     ws.mergeCells(r, 1, r, 2 + nCols);
@@ -586,7 +588,7 @@ async function generarExcel(opts: {
     const ws = wb.addWorksheet("Validación PE");
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 5 }];
     const nCols = entidades.length * DIC_PERIODOS.length;
-    ws.columns = [{ width: 22 }, { width: 44 }, ...Array(nCols).fill({ width: 14 })];
+    ws.columns = [{ width: 22 }, { width: 44 }, ...Array(nCols).fill({ width: 16 }) ];
     let r = 1;
 
     // Título
@@ -803,7 +805,7 @@ async function generarExcel(opts: {
     ws.views = [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 3 }];
     const COLS_PER_ENT = 5;
     const nCols = entidades.length * COLS_PER_ENT;
-    ws.columns = [{ width: 12 }, { width: 10 }, ...Array(nCols).fill({ width: 14 })];
+    ws.columns = [{ width: 12 }, { width: 10 }, ...Array(nCols).fill({ width: 16 }) ];
     let r = 1;
 
     ws.mergeCells(r, 1, r, 2 + nCols);
