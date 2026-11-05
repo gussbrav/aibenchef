@@ -202,7 +202,7 @@ export async function POST(req: Request) {
       fillSolid(cell, bgRow);
       cell.alignment = { horizontal: c === 5 ? "right" : "left", vertical: "middle" };
       cell.font = { size: 10 };
-      if (c === 5 && totalSum) cell.numFmt = "#,##0";
+      if (c === 5 && totalSum) cell.numFmt = "#,##0.00";
     }
   }
 
@@ -327,7 +327,7 @@ export async function POST(req: Request) {
         const cell = ws.getCell(rn, col);
         const val  = pivotRow ? nv(pivotRow[PROD_KEYS[pi]!]) : 0;
         cell.value     = val || null;
-        cell.numFmt    = "#,##0";
+        cell.numFmt    = "#,##0.00";
         cell.font      = { size: 10, color: { argb: fgRow }, bold: isDic && pi === 0 };
         cell.alignment = { horizontal: "right", vertical: "middle" };
         fillSolid(cell, bgRow);
@@ -358,7 +358,7 @@ export async function POST(req: Request) {
       const cell = ws.getCell(totRow.number, col);
       const val  = accumTotals[ei * COLS_PER_ENT + pi]!;
       cell.value     = val || null;
-      if (val) cell.numFmt = "#,##0";
+      if (val) cell.numFmt = "#,##0.00";
       cell.font      = { bold: true, size: 10, color: { argb: C.blanco } };
       cell.alignment = { horizontal: "right", vertical: "middle" };
       fillSolid(cell, C.azul);
