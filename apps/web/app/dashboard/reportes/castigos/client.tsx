@@ -59,14 +59,8 @@ export function ReporteCastigosClient({
     [minPeriodo, maxPeriodo],
   );
 
-  // Default: todas las CMACs seleccionadas
-  const defaultSelected = useMemo(
-    () => new Set(entidades.filter(e => e.tipo === "CMAC").map(e => e.nombre)),
-    [entidades],
-  );
-
   const [search,   setSearch]   = useState("");
-  const [selected, setSelected] = useState<Set<string>>(defaultSelected);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [desde,    setDesde]    = useState(minPeriodo);
   const [hasta,    setHasta]    = useState(maxPeriodo);
   const [loading,  setLoading]  = useState(false);

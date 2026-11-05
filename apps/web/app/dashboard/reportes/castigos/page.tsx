@@ -25,7 +25,7 @@ export default async function ReporteCastigosPage() {
 
   const rows = await db.execute<{ entidad: string; tipo_entidad: string }>(sql`
     SELECT DISTINCT
-      COALESCE(entidad_final, entidad) AS entidad,
+      TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')) AS entidad,
       tipo_entidad
     FROM raw.castigos_observacion
     ORDER BY tipo_entidad, entidad

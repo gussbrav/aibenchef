@@ -74,6 +74,8 @@ export async function POST(req: Request) {
 
   // ── Consulta ─────────────────────────────────────────────────────────────────
   // SUM across clasificacion (UNIQUE es por periodo+entidad+producto+clasificacion)
+  // Normaliza sufijos SBS: *, **, (*), (**), 1/, 3/, etc.
+  // "Interbank (con sucursales en el exterior)" NO se toca — solo \(\*+\) y \d+/
   const rawRows = await db.execute<{
     periodo: number;
     entidad_key: string;
@@ -83,14 +85,18 @@ export async function POST(req: Request) {
   }>(sql`
     SELECT
       periodo,
-      COALESCE(entidad_final, entidad) AS entidad_key,
+      TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')) AS entidad_key,
       tipo_entidad,
       producto,
       SUM(saldo_castigos) AS valor
     FROM raw.castigos_observacion
-    WHERE COALESCE(entidad_final, entidad) = ANY(${entidades}::text[])
+    WHERE TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')) = ANY(${entidades}::text[])
       AND periodo BETWEEN ${desde} AND ${hasta}
-    GROUP BY periodo, entidad_key, tipo_entidad, producto
+    GROUP BY
+      periodo,
+      TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')),
+      tipo_entidad,
+      producto
     ORDER BY periodo, entidad_key, producto
   `);
 
