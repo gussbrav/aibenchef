@@ -145,6 +145,11 @@ export default async function DashboardLayout({
                       label: "Reporte EEFF",
                       description: "Exporta Balance, ER y Cartera Bruta a Excel para las entidades que elijas",
                     },
+                    {
+                      href: "/dashboard/reportes/castigos",
+                      label: "Reporte Castigos SF",
+                      description: "Exporta castigos mensuales por entidad y línea de producto a Excel",
+                    },
                   ]}
                 />
               )}
