@@ -2426,7 +2426,7 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
             SELECT topico, path_local
             FROM raw.archivos_descargados
             WHERE periodo = %s AND status = 'descargado'
-              AND grupo NOT LIKE 'coopac_%'
+              AND grupo NOT LIKE 'coopac_%%'
             ORDER BY topico, path_local
             """,
             (periodo_int,),
@@ -2439,7 +2439,7 @@ def import_all_monthly(periodo: str, batch_size: int, dry_run: bool) -> None:
             SELECT path_local
             FROM raw.archivos_descargados
             WHERE periodo = %s AND status = 'descargado'
-              AND grupo LIKE 'coopac_%'
+              AND grupo LIKE 'coopac_%%'
             ORDER BY grupo, path_local
             """,
             (periodo_int,),
