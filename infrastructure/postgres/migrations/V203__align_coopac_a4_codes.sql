@@ -80,7 +80,7 @@ SELECT
        AND cm2.tipo_estado   = 'balance'
        AND cm2.codigo        = 'A4.3.1'
        AND cm2.valido_hasta IS NULL) - 1,
-    CURRENT_DATE
+    (EXTRACT(YEAR FROM NOW())::INT * 100 + EXTRACT(MONTH FROM NOW())::INT)
 FROM (VALUES
     ('COOPAC_N3'::TEXT),
     ('COOPAC_N2B'),
