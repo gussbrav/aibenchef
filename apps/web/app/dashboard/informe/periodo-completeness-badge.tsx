@@ -27,11 +27,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle, X } from "lucide-react";
 
-import type { PeriodoCompletenessStatus } from "@/lib/domains/informe/queries";
+import type { PeriodoCompletenessStatus, TopicoParcialDetalle } from "@/lib/domains/informe/queries";
 
 // Mapeo topico -> label legible castellano.
 const TOPICO_LABELS: Record<string, string> = {
   eeff: "Estados Financieros",
+  eeff_coopac: "EEFF de cooperativas (COOPAC)",
   colocaciones: "Colocaciones",
   depositos: "Depositos",
   castigos: "Castigos",
@@ -51,6 +52,16 @@ const labelOf = (topico: string): string =>
     .split("_")
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join(" ");
+
+// Cuando "eeff" aparece en parciales/faltantes y todos los grupos ausentes
+// son cooperativas, muestra label especifico en lugar del generico.
+function smartTopicKey(topico: string, detalle: TopicoParcialDetalle[]): string {
+  if (topico !== "eeff") return topico;
+  const d = detalle.find((x) => x.topico === "eeff");
+  if (!d || d.grupos_faltantes.length === 0) return topico;
+  const allCoopac = d.grupos_faltantes.every((g) => g.grupo.startsWith("coopac_"));
+  return allCoopac ? "eeff_coopac" : topico;
+}
 
 const POPOVER_WIDTH = 340;
 const GAP = 8;
@@ -252,14 +263,18 @@ export function PeriodoCompletenessBadge({
               {status.topicos_parciales.length > 0 && (
                 <TopicoBlock
                   titulo="Publicacion parcial"
-                  items={status.topicos_parciales}
+                  items={status.topicos_parciales.map((t) =>
+                    smartTopicKey(t, status.topicos_parciales_detalle ?? [])
+                  )}
                   variant="warn"
                 />
               )}
               {status.topicos_faltantes.length > 0 && (
                 <TopicoBlock
                   titulo="No publicados aun por SBS"
-                  items={status.topicos_faltantes}
+                  items={status.topicos_faltantes.map((t) =>
+                    smartTopicKey(t, status.topicos_parciales_detalle ?? [])
+                  )}
                   variant="pending"
                 />
               )}

@@ -1778,6 +1778,16 @@ export async function getCalidadCartera(
  *
  * Devuelve null si SQL falla (fallback graceful — la UI muestra sin badge).
  */
+export type TopicoParcialDetalle = {
+  topico: string;
+  grupos_faltantes: Array<{
+    grupo: string;
+    status: string;
+    actualizado_en: string;
+    dias_desde_cierre: number;
+  }>;
+};
+
 export type PeriodoCompletenessStatus = {
   periodo: number;
   eeff_completo: boolean;
@@ -1785,6 +1795,7 @@ export type PeriodoCompletenessStatus = {
   topicos_completos: string[];
   topicos_parciales: string[];
   topicos_faltantes: string[];
+  topicos_parciales_detalle?: TopicoParcialDetalle[];
 };
 
 export async function getPeriodoCompletenessStatus(
