@@ -114,14 +114,23 @@ export async function POST(req: NextRequest) {
         metadata: { jobId, alreadyRunning, scope: "all_mvs" },
       });
 
+      // Invalidar cache de Next.js inmediatamente — el worker actualizara
+      // las MVs en background, pero los tags de cache deben limpiarse ya
+      // para que el proximo request al informe relance la query contra la DB
+      // y no sirva un resultado stale de hasta 4h.
+      revalidateTag("informe");
+      revalidateTag("periodos");
+      revalidateTag("entidades");
+
       return {
         ok: true,
         scope: "all_mvs",
         jobId,
         alreadyRunning,
+        cachesInvalidated: ["informe", "periodos", "entidades"],
         mensaje: alreadyRunning
-          ? "Ya hay un refresh completo en curso — no encolo duplicado."
-          : `Refresh completo encolado (job #${jobId}). El worker lo procesa en <1 seg (LISTEN/NOTIFY V160). El refresh real tarda 30-60 min según el tamaño de las MVs. Refresca este panel en unos minutos para ver el progreso.`,
+          ? "Ya hay un refresh completo en curso — no encolo duplicado. Cache Next.js invalidado."
+          : `Refresh completo encolado (job #${jobId}). Cache Next.js invalidado. El worker procesa en <1 seg (LISTEN/NOTIFY V160). El refresh real tarda 30-60 min según el tamaño de las MVs.`,
       };
     }
 
