@@ -343,7 +343,7 @@ export async function POST(req: Request) {
         const cell = ws.getCell(rn, col);
         const val  = pivotRow ? nv(pivotRow[PROD_KEYS[pi]!]) : 0;
         const isTotal = pi === COLS_PER_ENT - 1;
-        cell.value     = val || null;
+        cell.value     = val;
         cell.numFmt    = "#,##0.00";
         cell.font      = { size: 10, color: { argb: fgRow }, bold: isDic || isTotal };
         cell.alignment = { horizontal: "right", vertical: "middle" };
@@ -374,8 +374,8 @@ export async function POST(req: Request) {
       const col  = 3 + ei * COLS_PER_ENT + pi;
       const cell = ws.getCell(totRow.number, col);
       const val  = accumTotals[ei * COLS_PER_ENT + pi]!;
-      cell.value     = val || null;
-      if (val) cell.numFmt = "#,##0.00";
+      cell.value     = val;
+      cell.numFmt    = "#,##0.00";
       cell.font      = { bold: true, size: 10, color: { argb: C.blanco } };
       cell.alignment = { horizontal: "right", vertical: "middle" };
       fillSolid(cell, C.azul);
