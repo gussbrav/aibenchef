@@ -2149,9 +2149,10 @@ function TablaComparativaCierre({
         </table>
       </div>
       {(() => {
-        // Contexto para el LLM: ultima observacion por entidad con todos los
-        // componentes del PE. Filtramos entidades sin data del cierre (sin
-        // puntos) para no ensuciar el prompt con "—".
+        // Contexto para el LLM: ultima observacion por entidad + tendencia
+        // historica de la ENTIDAD PROPIA (ultimos 4 puntos con data completa).
+        // La tendencia permite al analista diagnosticar si la entidad mejora
+        // o se deteriora, no solo donde esta hoy.
         const entidadesCtx = effectiveSeries
           .map((s) => {
             const ult = s.puntos[s.puntos.length - 1];
@@ -2173,6 +2174,29 @@ function TablaComparativaCierre({
           .filter((e): e is NonNullable<typeof e> => e !== null);
         if (entidadesCtx.length === 0) return null;
         const peerGroup = entidadesCtx.map((e) => e.entidad);
+
+        // Tendencia historica de la ENTIDAD PROPIA: ultimos 4 puntos con
+        // todos los componentes clave disponibles.
+        const propiaS = effectiveSeries.find((s) => s.esPropio);
+        const tendenciaPropia = (propiaS?.puntos ?? [])
+          .filter((p) =>
+            p.pctRendimiento != null &&
+            p.pctMargenNeto != null &&
+            p.pctCostoFondeo != null &&
+            p.pctProvisiones != null &&
+            p.pctGastosOp != null
+          )
+          .slice(-4)
+          .map((p) => ({
+            periodoLabel: p.periodoLabel,
+            rendimiento: p.pctRendimiento as number,
+            gastoFinanciero: p.pctCostoFondeo as number,
+            costoProvision: p.pctProvisiones as number,
+            gastosOp: p.pctGastosOp as number,
+            margen: p.pctMargenNeto as number,
+            puntoEquilibrio: computedPuntoEq(p) as number,
+          }));
+
         return (
           <div className="px-4 py-4 border-t border-slate-200 bg-slate-50/50">
             <ReportInsights
@@ -2181,7 +2205,7 @@ function TablaComparativaCierre({
               clienteSlug={clienteSlug}
               entidadPropia={entidadPropia}
               peerGroup={peerGroup}
-              contexto={{ entidades: entidadesCtx }}
+              contexto={{ entidades: entidadesCtx, tendenciaPropia }}
             />
           </div>
         );
