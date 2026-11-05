@@ -363,7 +363,7 @@ export function PuntoEquilibrioClient({
         </div>
       )}
       {tab === "historico" && config.granularidad !== "cierre" && (
-        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series.filter((s) => s.entidad !== entidadActual)} />
+        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series.filter((s) => s.entidad !== entidadActual)} clienteSlug={cliente.slug} />
       )}
       {tab === "comparativo" && (
         <ComparativoView
@@ -903,12 +903,13 @@ const LS_COL_ORDER = "pe-col-order-v1";
  * Ambos vienen pre-computados del backend sobre los componentes.
  */
 function HistoricoTable({
-  data, entidad, granularidad, peerSeries,
+  data, entidad, granularidad, peerSeries, clienteSlug,
 }: {
   data: PuntoEquilibrioRow[];
   entidad: string;
   granularidad?: Granularidad;
   peerSeries?: PuntoEquilibrioSerie[];
+  clienteSlug: string;
 }) {
   const [activeEntity, setActiveEntity] = useState<string>(entidad);
 
@@ -1501,6 +1502,68 @@ function HistoricoTable({
           </tbody>
         </table>
       </div>
+      {(() => {
+        // Ultima observacion con datos completos por entidad (el periodo
+        // seleccionado puede estar vacio si SBS aun no publica ese cierre).
+        const propiaRow = [...data].reverse().find((r) =>
+          r.pctRendimiento != null && r.pctOtros != null &&
+          r.pctCostoFondeo != null && r.pctProvisiones != null &&
+          r.pctGastosOp != null && r.pctMargenNeto != null
+        );
+        if (!propiaRow) return null;
+
+        const toCtx = (r: { pctRendimiento: number | null; pctOtros: number | null; pctCostoFondeo: number | null; pctProvisiones: number | null; pctGastosOp: number | null; pctMargenNeto: number | null }, nombre: string) => {
+          const pe = computedPuntoEq(r);
+          if (pe == null || r.pctRendimiento == null || r.pctOtros == null || r.pctCostoFondeo == null || r.pctProvisiones == null || r.pctGastosOp == null || r.pctMargenNeto == null) return null;
+          return { entidad: nombre, rendimiento: r.pctRendimiento, otros: r.pctOtros, gastoFinanciero: r.pctCostoFondeo, costoProvision: r.pctProvisiones, gastosOp: r.pctGastosOp, margenAntesImpuestos: r.pctMargenNeto, puntoEquilibrio: pe };
+        };
+
+        const propiaCtx = toCtx(propiaRow, entidad);
+        if (!propiaCtx) return null;
+
+        const peerCtxs = (peerSeries ?? []).flatMap((s) => {
+          const ult = [...(s.puntos as unknown as typeof data)].reverse().find((p) =>
+            p.pctRendimiento != null && p.pctOtros != null &&
+            p.pctCostoFondeo != null && p.pctProvisiones != null &&
+            p.pctGastosOp != null && p.pctMargenNeto != null
+          );
+          if (!ult) return [];
+          const ctx = toCtx(ult, s.entidad);
+          return ctx ? [ctx] : [];
+        });
+
+        const entidadesCtx = [propiaCtx, ...peerCtxs];
+        const peerGroup = entidadesCtx.map((e) => e.entidad);
+
+        const tendenciaPropia = data
+          .filter((p) =>
+            p.pctRendimiento != null && p.pctMargenNeto != null &&
+            p.pctCostoFondeo != null && p.pctProvisiones != null && p.pctGastosOp != null
+          )
+          .slice(-4)
+          .map((p) => ({
+            periodoLabel: p.periodoLabel,
+            rendimiento: p.pctRendimiento as number,
+            gastoFinanciero: p.pctCostoFondeo as number,
+            costoProvision: p.pctProvisiones as number,
+            gastosOp: p.pctGastosOp as number,
+            margen: p.pctMargenNeto as number,
+            puntoEquilibrio: computedPuntoEq(p) as number,
+          }));
+
+        return (
+          <div className="px-4 py-4 border-t border-slate-200 bg-slate-50/50">
+            <ReportInsights
+              periodo={propiaRow.periodo}
+              seccion="punto_equilibrio"
+              clienteSlug={clienteSlug}
+              entidadPropia={entidad}
+              peerGroup={peerGroup}
+              contexto={{ entidades: entidadesCtx, tendenciaPropia }}
+            />
+          </div>
+        );
+      })()}
     </section>
   );
 }
