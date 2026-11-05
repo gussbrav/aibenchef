@@ -44,6 +44,12 @@ function periodoLabel(p: number): string {
 
 function nv(v: number | null): number { return v ?? 0; }
 
+// Quita sufijos SBS de ciclo de vida: *, **, (*), (**), 1/, 3/, etc.
+// No toca "Interbank (con sucursales en el exterior)" porque \( requiere solo asteriscos.
+function normalizeSbs(name: string): string {
+  return name.replace(/\s*(\(\*+\)|\*+|\d+\/)\s*$/, "").trim();
+}
+
 function classifyProducto(producto: string): ProdKey | null {
   const p = producto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   if (p === "total") return "total";
@@ -73,12 +79,10 @@ export async function POST(req: Request) {
   if (!desde || !hasta || desde > hasta) return NextResponse.json({ error: "Rango de períodos inválido" }, { status: 400 });
 
   // ── Consulta ─────────────────────────────────────────────────────────────────
-  // SUM across clasificacion (UNIQUE es por periodo+entidad+producto+clasificacion)
-  // Normaliza sufijos SBS: *, **, (*), (**), 1/, 3/ — usa clases POSIX para
-  // compatibilidad garantizada con PostgreSQL ERE (evita \s \d \( que pueden
-  // fallar dependiendo de cómo el driver envía el string).
-  // "Interbank (con sucursales en el exterior)" NO se toca — el patrón solo
-  // matchea [(][*]+[)] (paréntesis con solo asteriscos) no texto arbitrario.
+  // Consulta simple sin REGEXP_REPLACE en SQL — la normalización de sufijos SBS
+  // (*, **, (*), 1/, etc.) se aplica en JS con normalizeSbs() en el loop de pivot.
+  // Se filtra por periodo en SQL; el filtro por entidad se aplica en JS tras
+  // normalizar, para que "B. BBVA Perú*" quede agrupado con "B. BBVA Perú".
   const rawRows = await db.execute<{
     periodo: number;
     entidad_key: string;
@@ -86,44 +90,34 @@ export async function POST(req: Request) {
     producto: string;
     valor: number;
   }>(sql`
-    WITH base AS (
-      SELECT
-        periodo,
-        TRIM(REGEXP_REPLACE(
-          COALESCE(entidad_final, entidad),
-          '[[:space:]]*([(][*]+[)]|[*]+|[[:digit:]]+/)[[:space:]]*$',
-          ''
-        )) AS entidad_key,
-        tipo_entidad,
-        producto,
-        SUM(saldo_castigos) AS valor
-      FROM raw.castigos_observacion
-      WHERE periodo BETWEEN ${desde} AND ${hasta}
-      GROUP BY
-        periodo,
-        TRIM(REGEXP_REPLACE(
-          COALESCE(entidad_final, entidad),
-          '[[:space:]]*([(][*]+[)]|[*]+|[[:digit:]]+/)[[:space:]]*$',
-          ''
-        )),
-        tipo_entidad,
-        producto
-    )
-    SELECT periodo, entidad_key, tipo_entidad, producto, valor
-    FROM base
-    WHERE entidad_key = ANY(${entidades}::text[])
+    SELECT
+      periodo,
+      COALESCE(entidad_final, entidad) AS entidad_key,
+      tipo_entidad,
+      producto,
+      SUM(saldo_castigos) AS valor
+    FROM raw.castigos_observacion
+    WHERE periodo BETWEEN ${desde} AND ${hasta}
+    GROUP BY periodo, COALESCE(entidad_final, entidad), tipo_entidad, producto
     ORDER BY periodo, entidad_key, producto
   `);
 
   // ── Pivot ─────────────────────────────────────────────────────────────────────
+  // Normaliza en JS y filtra por entidades solicitadas.
+  // "B. BBVA Perú*" normaliza a "B. BBVA Perú" → se agrupa con filas limpias.
+  const entSet = new Set(entidades);
   const dataMap = new Map<string, PivotRow>();
+  const tipoMap = new Map<string, string>();
 
   for (const r of rawRows) {
-    const key = `${r.periodo}|${r.entidad_key}`;
+    const nombre = normalizeSbs(String(r.entidad_key));
+    if (!entSet.has(nombre)) continue; // descarta entidades no solicitadas
+    tipoMap.set(nombre, r.tipo_entidad);
+    const key = `${r.periodo}|${nombre}`;
     if (!dataMap.has(key)) {
       dataMap.set(key, {
         periodo: r.periodo,
-        entidad: r.entidad_key,
+        entidad: nombre,
         tipo:    r.tipo_entidad,
         total: null, micro: null, pequena: null,
         consumo: null, hipotecario: null, comercial: null,
@@ -141,10 +135,6 @@ export async function POST(req: Request) {
       if (sub > 0) row.total = sub;
     }
   }
-
-  // Tipos por entidad (para portada)
-  const tipoMap = new Map<string, string>();
-  for (const r of rawRows) tipoMap.set(r.entidad_key, r.tipo_entidad);
 
   // Períodos con data, ordenados
   const periodos = [...new Set([...dataMap.values()].map(r => r.periodo))].sort((a, b) => a - b);
