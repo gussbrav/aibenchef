@@ -52,10 +52,13 @@ export async function requireSession(): Promise<SessionUser> {
   if (!session) {
     throw new UnauthorizedError("Sesion requerida", {});
   }
+  // better-auth no incluye campos custom en session.user sin el plugin admin.
+  // Leemos el role directo de la DB (deduplicado por request via getUserRole).
+  const role = await getUserRole(session.user.id);
   return {
     id: session.user.id,
     email: session.user.email,
-    role: (session.user as { role?: string | null }).role ?? null,
+    role,
   };
 }
 
@@ -74,6 +77,22 @@ export async function requireAdminSession(): Promise<SessionUser> {
  * V173 fix: incluir 'trial' y 'academic'. Antes retornaba 'free' para
  * academic (bug — el enforcement estaba bien, pero UI se confundia).
  */
+/**
+ * Devuelve el rol del user desde la DB (deduplicado por request via cache).
+ * better-auth no incluye campos custom como 'role' en el session object sin
+ * el plugin admin — leerlo directo de auth.users es la forma segura.
+ */
+export const getUserRole = cache(async (userId: string): Promise<string | null> => {
+  try {
+    const rows = await db.execute<{ role: string | null }>(sql`
+      SELECT role FROM auth.users WHERE id = ${userId}::uuid LIMIT 1
+    `);
+    return rows[0]?.role ?? null;
+  } catch {
+    return null;
+  }
+});
+
 export const getUserPlan = cache(async (userId: string): Promise<UserPlan> => {
   try {
     const rows = await db.execute<{ plan: string | null }>(sql`
@@ -151,7 +170,7 @@ export async function getPlanHistoricoBoundary(
 ): Promise<number | null> {
   const isAdmin =
     (role ?? null) === "admin" ||
-    (role === undefined ? await isAdminByUserId(userId) : false);
+    (role === undefined ? (await getUserRole(userId)) === "admin" : false);
   if (isAdmin) return null;
   const plan = await getUserPlan(userId);
   const limits = limitsForPlan(plan);
@@ -159,21 +178,6 @@ export async function getPlanHistoricoBoundary(
   return earliestPeriodoForWindow(hastaPeriodo, limits.maxHistoricoMeses);
 }
 
-/**
- * Lookup barato del rol (no dedupeado — la duplicacion se resuelve por
- * cache en isAdmin() de domains/users cuando esta disponible). Se
- * mantiene local para evitar ciclo de import.
- */
-async function isAdminByUserId(userId: string): Promise<boolean> {
-  try {
-    const rows = await db.execute<{ role: string | null }>(sql`
-      SELECT role FROM auth.users WHERE id = ${userId}::uuid LIMIT 1
-    `);
-    return rows[0]?.role === "admin";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Guard para endpoints EEFF que reciben UN periodo (balance, ER acumulado).
