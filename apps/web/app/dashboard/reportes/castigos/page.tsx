@@ -25,7 +25,7 @@ export default async function ReporteCastigosPage() {
 
   const rows = await db.execute<{ entidad: string; tipo_entidad: string }>(sql`
     SELECT DISTINCT
-      TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')) AS entidad,
+      COALESCE(entidad_final, entidad) AS entidad,
       tipo_entidad
     FROM raw.castigos_observacion
     ORDER BY tipo_entidad, entidad
@@ -36,10 +36,23 @@ export default async function ReporteCastigosPage() {
     FROM raw.castigos_observacion
   `);
 
-  const entidades: EntidadItem[] = rows.map(r => ({
-    nombre: String(r.entidad),
-    tipo:   String(r.tipo_entidad),
-  }));
+  // Normaliza en JS: quita sufijos SBS *, **, (*), (**), 1/, 3/ al final del nombre
+  // y deduplica para que "B. BBVA Perú" y "B. BBVA Perú*" aparezcan como uno solo
+  function normalizeSbs(name: string): string {
+    return name.replace(/\s*(\(\*+\)|\*+|\d+\/)\s*$/, "").trim();
+  }
+
+  const seen = new Set<string>();
+  const entidades: EntidadItem[] = [];
+  for (const r of rows) {
+    const nombre = normalizeSbs(String(r.entidad));
+    const tipo   = String(r.tipo_entidad);
+    const key    = `${tipo}|${nombre}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      entidades.push({ nombre, tipo });
+    }
+  }
 
   const rango       = rangoRows[0];
   const minPeriodo  = rango ? Number(rango.min_periodo) : 202501;

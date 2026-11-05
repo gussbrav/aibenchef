@@ -74,8 +74,11 @@ export async function POST(req: Request) {
 
   // ── Consulta ─────────────────────────────────────────────────────────────────
   // SUM across clasificacion (UNIQUE es por periodo+entidad+producto+clasificacion)
-  // Normaliza sufijos SBS: *, **, (*), (**), 1/, 3/, etc.
-  // "Interbank (con sucursales en el exterior)" NO se toca — solo \(\*+\) y \d+/
+  // Normaliza sufijos SBS: *, **, (*), (**), 1/, 3/ — usa clases POSIX para
+  // compatibilidad garantizada con PostgreSQL ERE (evita \s \d \( que pueden
+  // fallar dependiendo de cómo el driver envía el string).
+  // "Interbank (con sucursales en el exterior)" NO se toca — el patrón solo
+  // matchea [(][*]+[)] (paréntesis con solo asteriscos) no texto arbitrario.
   const rawRows = await db.execute<{
     periodo: number;
     entidad_key: string;
@@ -83,20 +86,32 @@ export async function POST(req: Request) {
     producto: string;
     valor: number;
   }>(sql`
-    SELECT
-      periodo,
-      TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')) AS entidad_key,
-      tipo_entidad,
-      producto,
-      SUM(saldo_castigos) AS valor
-    FROM raw.castigos_observacion
-    WHERE TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')) = ANY(${entidades}::text[])
-      AND periodo BETWEEN ${desde} AND ${hasta}
-    GROUP BY
-      periodo,
-      TRIM(REGEXP_REPLACE(COALESCE(entidad_final, entidad), '\s*(\(\*+\)|\*+|\d+/)\s*$', '')),
-      tipo_entidad,
-      producto
+    WITH base AS (
+      SELECT
+        periodo,
+        TRIM(REGEXP_REPLACE(
+          COALESCE(entidad_final, entidad),
+          '[[:space:]]*([(][*]+[)]|[*]+|[[:digit:]]+/)[[:space:]]*$',
+          ''
+        )) AS entidad_key,
+        tipo_entidad,
+        producto,
+        SUM(saldo_castigos) AS valor
+      FROM raw.castigos_observacion
+      WHERE periodo BETWEEN ${desde} AND ${hasta}
+      GROUP BY
+        periodo,
+        TRIM(REGEXP_REPLACE(
+          COALESCE(entidad_final, entidad),
+          '[[:space:]]*([(][*]+[)]|[*]+|[[:digit:]]+/)[[:space:]]*$',
+          ''
+        )),
+        tipo_entidad,
+        producto
+    )
+    SELECT periodo, entidad_key, tipo_entidad, producto, valor
+    FROM base
+    WHERE entidad_key = ANY(${entidades}::text[])
     ORDER BY periodo, entidad_key, producto
   `);
 
