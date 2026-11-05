@@ -24,8 +24,17 @@ const C = {
   azulMed:  "FF334155",
 };
 
-const PROD_LABELS = ["Total", "Microempresa", "Pequeña Empresa", "Consumo", "Hipotecario", "Comerciales"] as const;
-const PROD_KEYS   = ["total", "micro", "pequena", "consumo", "hipotecario", "comercial"] as const;
+// Orden y nombres idénticos al Reporte SBS N.° 25 (castigos y condonaciones)
+const PROD_LABELS = [
+  "Corporativos", "Grandes Emp.", "Medianas Emp.",
+  "Pequeñas Emp.", "Microempresas", "Consumo",
+  "Hipotecario", "Total",
+] as const;
+const PROD_KEYS = [
+  "corporativo", "grandes", "medianas",
+  "pequena", "micro", "consumo",
+  "hipotecario", "total",
+] as const;
 type ProdKey = typeof PROD_KEYS[number];
 const COLS_PER_ENT = PROD_KEYS.length;
 
@@ -52,12 +61,16 @@ function normalizeSbs(name: string): string {
 
 function classifyProducto(producto: string): ProdKey | null {
   const p = producto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  if (p === "total") return "total";
-  if (p.includes("micro"))    return "micro";
+  if (p.includes("total"))    return "total";
+  if (p.includes("corporat")) return "corporativo";
+  if (p.includes("grandes"))  return "grandes";
+  if (p.includes("median"))   return "medianas";
   if (p.includes("pequ"))     return "pequena";
+  if (p.includes("micro"))    return "micro";
   if (p.includes("consumo"))  return "consumo";
   if (p.includes("hipotec"))  return "hipotecario";
-  if (p.includes("corporat") || p.includes("grandes") || p.includes("mediana") || p.includes("comerci")) return "comercial";
+  // "comerci" genérico: skip — evita doble conteo si el raw tiene el agregado
+  // además de los sub-tipos Corporativo/Grandes/Medianas
   return null;
 }
 
@@ -119,8 +132,9 @@ export async function POST(req: Request) {
         periodo: r.periodo,
         entidad: nombre,
         tipo:    r.tipo_entidad,
-        total: null, micro: null, pequena: null,
-        consumo: null, hipotecario: null, comercial: null,
+        corporativo: null, grandes: null, medianas: null,
+        pequena: null, micro: null, consumo: null,
+        hipotecario: null, total: null,
       });
     }
     const row = dataMap.get(key)!;
@@ -128,10 +142,11 @@ export async function POST(req: Request) {
     if (cat) row[cat] = (row[cat] ?? 0) + Number(r.valor);
   }
 
-  // Si no hay fila "Total" del SBS, derivar de sub-productos
+  // Si no hay fila "Total" del SBS, derivar sumando los 7 sub-productos
   for (const row of dataMap.values()) {
     if (row.total === null) {
-      const sub = nv(row.micro) + nv(row.pequena) + nv(row.consumo) + nv(row.hipotecario) + nv(row.comercial);
+      const sub = nv(row.corporativo) + nv(row.grandes) + nv(row.medianas) +
+                  nv(row.pequena) + nv(row.micro) + nv(row.consumo) + nv(row.hipotecario);
       if (sub > 0) row.total = sub;
     }
   }
@@ -232,7 +247,8 @@ export async function POST(req: Request) {
   ws.getColumn(2).width = 12; // Mes
   for (let ei = 0; ei < entidades.length; ei++) {
     for (let pi = 0; pi < COLS_PER_ENT; pi++) {
-      ws.getColumn(3 + ei * COLS_PER_ENT + pi).width = pi === 0 ? 17 : 14;
+      // Total (último, pi === 7) más ancho; sub-tipos algo más ajustados
+      ws.getColumn(3 + ei * COLS_PER_ENT + pi).width = pi === COLS_PER_ENT - 1 ? 15 : 13;
     }
   }
 
@@ -326,9 +342,10 @@ export async function POST(req: Request) {
         const col  = 3 + ei * COLS_PER_ENT + pi;
         const cell = ws.getCell(rn, col);
         const val  = pivotRow ? nv(pivotRow[PROD_KEYS[pi]!]) : 0;
+        const isTotal = pi === COLS_PER_ENT - 1;
         cell.value     = val || null;
         cell.numFmt    = "#,##0.00";
-        cell.font      = { size: 10, color: { argb: fgRow }, bold: isDic && pi === 0 };
+        cell.font      = { size: 10, color: { argb: fgRow }, bold: isDic || isTotal };
         cell.alignment = { horizontal: "right", vertical: "middle" };
         fillSolid(cell, bgRow);
         if (val) accumTotals[ei * COLS_PER_ENT + pi]! += val;
