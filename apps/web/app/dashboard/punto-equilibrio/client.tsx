@@ -2155,7 +2155,16 @@ function TablaComparativaCierre({
         // o se deteriora, no solo donde esta hoy.
         const entidadesCtx = effectiveSeries
           .map((s) => {
-            const ult = s.puntos[s.puntos.length - 1];
+            // Busca el ultimo punto con datos completos, no solo el ultimo periodo
+            // (el periodo mas reciente puede estar vacio si aun no hay datos publicados)
+            const ult = [...s.puntos].reverse().find((p) =>
+              p.pctRendimiento != null &&
+              p.pctOtros != null &&
+              p.pctCostoFondeo != null &&
+              p.pctProvisiones != null &&
+              p.pctGastosOp != null &&
+              p.pctMargenNeto != null
+            );
             if (!ult) return null;
             const pe = computedPuntoEq(ult);
             const parts = [ult.pctRendimiento, ult.pctOtros, ult.pctCostoFondeo, ult.pctProvisiones, ult.pctGastosOp, ult.pctMargenNeto, pe];
