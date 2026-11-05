@@ -317,11 +317,22 @@ function PeerGroupEditor({
 
   const filtradas = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
-    return entidadesDisponibles.filter((e) => {
+    const list = entidadesDisponibles.filter((e) => {
       if (filtroTipo && e.tipoEntidad !== filtroTipo) return false;
       if (!q) return true;
       return e.nombCorreg.toLowerCase().includes(q) || e.tipoEntidad.toLowerCase().includes(q);
     });
+    // Sin filtro de tipo activo: ordena SF primero, COOPAC después,
+    // luego alfabético dentro de cada grupo — igual que los tabs.
+    if (!filtroTipo) {
+      list.sort((a, b) => {
+        const oa = TIPO_ENTIDAD_ORDER[a.tipoEntidad] ?? 99;
+        const ob = TIPO_ENTIDAD_ORDER[b.tipoEntidad] ?? 99;
+        if (oa !== ob) return oa - ob;
+        return a.nombCorreg.localeCompare(b.nombCorreg, "es", { sensitivity: "base" });
+      });
+    }
+    return list;
   }, [entidadesDisponibles, busqueda, filtroTipo]);
 
   const toggle = (nomb: string) => {

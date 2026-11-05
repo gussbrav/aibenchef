@@ -1666,9 +1666,15 @@ export async function listPeriodosDisponibles(opts: { ultimosN?: number } = {}):
   return safeQuery(
     "listPeriodosDisponibles",
     async () => {
+      // INTERSECT: solo períodos con datos en AMBAS MVs (balance + resultados).
+      // Evita que un período con solo datos parciales (ej. ER importado pero
+      // balance aún no) aparezca en el selector y cause "5/5 sin data en MVs".
       const rows = await db.execute<{ periodo: number }>(sql`
-        SELECT DISTINCT periodo
-        FROM marts.mv_eeff_resultados_ancho
+        SELECT periodo FROM (
+          SELECT DISTINCT periodo FROM marts.mv_eeff_balance_ancho
+          INTERSECT
+          SELECT DISTINCT periodo FROM marts.mv_eeff_resultados_ancho
+        ) sub
         ORDER BY periodo DESC
         LIMIT ${limit}
       `);

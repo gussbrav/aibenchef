@@ -206,16 +206,21 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   const entidadPropiaOverride = params.entidadPropia
     ?? (sinParams && !userDefaultCliente ? BCP_DEFAULT.entidadPropia : undefined);
 
-  // REGLA DE ORO V139: sin periodo en URL, arrancar en el ultimo mes con
-  // EEFF publicado (>=4/5 grupos regulados). Los topicos secundarios
-  // (castigos, tasas, geo, indicadores) que SBS publica con mas lag NO
-  // bloquean — sus campos quedan en "—" si faltan, pero no privan al
-  // usuario de ver los KPIs core del informe. Prioriza time-to-insight.
+  // REGLA DE ORO V139 (refinado): sin periodo en URL, usar el período más
+  // reciente que tiene datos en AMBAS MVs (balance + resultados). Esto evita
+  // que el informe abra en un período con EEFF solo parcialmente importado
+  // (ej. ER disponible pero balance aún no) y muestre "5/5 sin data en MVs".
+  // Se prefiere periodosDisponibles[0] (ya filtra por INTERSECT de ambas MVs)
+  // sobre f_ultimo_periodo_publicable() que solo consulta una fuente.
+  const periodosDisponiblesParaDefault = await cachedListPeriodos();
+
   let periodo: number;
   if (params.periodo) {
     periodo = Number.parseInt(params.periodo, 10);
   } else {
-    periodo = (await cachedUltimoPeriodo()) ?? 202004;
+    periodo = periodosDisponiblesParaDefault[0]
+      ?? (await cachedUltimoPeriodo())
+      ?? 202004;
   }
 
   let peerGroup = params.peerGroup
@@ -250,7 +255,7 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
   // 4 queries en paralelo — todas cacheadas (getInformeData con revalidate
   // 30min, auxiliares con 10-30min). En cache hit: ~100ms total. Cache miss:
   // paga getInformeData completo (~5s) pero solo el primer request.
-  const [data, periodosDisponibles, entidadesDisponibles, completenessStatus] =
+  const [data, entidadesDisponibles, completenessStatus] =
     await Promise.all([
       getInformeDataCached({
         clienteSlug,
@@ -264,10 +269,11 @@ export default async function InformeEjecutivoPage({ searchParams }: { searchPar
         maxPeers,
         maxHistoricoMeses,
       }),
-      cachedListPeriodos(),
       cachedListEntidades(),
       cachedCompletenessStatus(periodo),
     ]);
+  // periodosDisponibles ya fue obtenido antes para elegir el default period
+  const periodosDisponibles = periodosDisponiblesParaDefault;
 
   // Signal para banner: si el user esta con maxPeers y la vista renderizada
   // esta al tope del cap, mostramos la nota upgrade. Cubre tanto default (5
