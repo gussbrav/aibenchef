@@ -741,19 +741,19 @@ async function generarExcel(opts: {
         fn: ctx => { const s = mesIdx.get(ctx.ent)??[]; return carteraBruta12m(s, ctx.periodo); } },
 
       { type: "sep" },
-      { type: "data", grupo: "RENDIM.", label: "Ingresos por Créditos TTM (S/ Miles)", fmt: "miles",
+      { type: "data", grupo: "RENDIM.", label: "Ingresos por Créditos TTM (S/ Miles)", fmt: "miles", bold: true,
         fn: ctx => ctx.er ? n(ctx.er.cta_1_4) : null },
       { type: "data", grupo: "", label: "Rendimiento Cartera %  =  Ingresos / Cartera Prom", fmt: "pct", bold: true,
         fn: ctx => ctx.kpi?.get("pe_rendimiento_cartera") ?? null },
 
       { type: "sep" },
-      { type: "data", grupo: "FONDEO", label: "Gastos Financieros TTM (S/ Miles)", fmt: "miles",
+      { type: "data", grupo: "FONDEO", label: "Gastos Financieros TTM (S/ Miles)", fmt: "miles", bold: true,
         fn: ctx => ctx.er ? -nv(ctx.er.cta_2) : null },
       { type: "data", grupo: "", label: "Costo de Fondeo %  =  Gastos Fin. / Cartera Prom", fmt: "pct", bold: true,
         fn: ctx => ctx.kpi?.get("pe_costo_fondeo") ?? null },
 
       { type: "sep" },
-      { type: "data", grupo: "PROVISI.", label: "Provisiones TTM (S/ Miles)", fmt: "miles",
+      { type: "data", grupo: "PROVISI.", label: "Provisiones TTM (S/ Miles)", fmt: "miles", bold: true,
         fn: ctx => ctx.er ? -nv(ctx.er.cta_4) : null },
       { type: "data", grupo: "", label: "Costo Provisiones %  =  Prov. / Cartera Prom", fmt: "pct", bold: true,
         fn: ctx => ctx.kpi?.get("pe_costo_provisiones") ?? null },
