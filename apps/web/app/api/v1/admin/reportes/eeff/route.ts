@@ -537,6 +537,8 @@ async function generarExcel(opts: {
       { grupo: "PATRIM.", label: "Total Patrimonio",                                    bold: true,  fn: b => b ? n(b.cta_c) : null },
       { grupo: "CHECK",   label: "✓  Pasivo + Patrimonio − Activo  (debe ser 0)",      check: true,
         fn: b => b ? (nv(b.cta_b) + nv(b.cta_c) - nv(b.cta_a)) : null },
+      { grupo: "",        label: "   Gap %  =  Diferencia / Total Activo",             check: true, pct: true,
+        fn: b => b && nv(b.cta_a) !== 0 ? (nv(b.cta_b) + nv(b.cta_c) - nv(b.cta_a)) / nv(b.cta_a) : null },
     ];
 
     for (let di = 0; di < balDefs.length; di++) {
@@ -566,8 +568,15 @@ async function generarExcel(opts: {
           c.value = v; c.numFmt = def.pct ? '0.00"%"' : '#,##0';
           c.alignment = { horizontal: "right" };
           if (def.check && typeof v === "number") {
-            fillSolid(c, v === 0 ? C.verde : C.rojo);
-            c.font = { bold: true, size: 10, color: { argb: v === 0 ? C.verdeOsc : C.rojoOsc } };
+            const absV = Math.abs(v);
+            const bg = def.pct
+              ? (absV < 0.05 ? C.verde : absV < 1 ? C.amarillo : C.rojo)
+              : (v === 0 ? C.verde : C.rojo);
+            const fg = def.pct
+              ? (absV < 0.05 ? C.verdeOsc : absV < 1 ? "FF92400E" : C.rojoOsc)
+              : (v === 0 ? C.verdeOsc : C.rojoOsc);
+            fillSolid(c, bg);
+            c.font = { bold: true, size: 10, color: { argb: fg } };
           } else {
             fillSolid(c, bgBase);
             if (typeof v === "number" && v < 0) c.font = { size: 10, color: { argb: C.rojoMed } };
@@ -577,6 +586,14 @@ async function generarExcel(opts: {
       }
       r++;
     }
+
+    r++;
+    ws.mergeCells(r, 1, r, 2 + nCols);
+    const notaBal = ws.getRow(r).getCell(1);
+    notaBal.value = "CHECK · Verde = ecuación A = B + C cumplida · Amarillo = Gap <1% (redondeo aceptable) · Rojo = Gap ≥1%: revisar datos fuente. Causas frecuentes: (1) entidad COOPAC: datos autoreportados por la propia cooperativa — la SBS no valida ni certifica el archivo SC-003; (2) datos desactualizados: SBS republica el archivo con correcciones sin cambiar el nombre — re-importar si hay actualización disponible; (3) error de mapeo en importer: verificar que 'TOTAL PASIVO' esté presente en el Excel fuente. Acción: comparar cta_b en raw.eeff_observacion contra la fila 'TOTAL PASIVO' del archivo SC-003 de SBS para el mismo periodo.";
+    notaBal.font = { size: 9, italic: true, color: { argb: C.grisMed } };
+    notaBal.alignment = { wrapText: true };
+    ws.getRow(r).height = 48;
   }
 
   // ── ESTADO DE RESULTADOS DICIEMBRES ───────────────────────────────────────
