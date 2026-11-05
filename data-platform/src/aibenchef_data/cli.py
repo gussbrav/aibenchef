@@ -2227,12 +2227,19 @@ def import_monthly_castigos(path: str, batch_size: int) -> None:
 )
 @click.option("--batch-size", type=int, default=5_000, show_default=True)
 @click.option("--dry-run", is_flag=True, default=False)
+@click.option(
+    "--auto-refresh/--no-auto-refresh",
+    default=True,
+    show_default=True,
+    help="Recalcula MVs y KPIs (refresh-derived) automaticamente al terminar. Pasa --no-auto-refresh para omitir.",
+)
 def import_coopac_eeff(
     periodo: str | None,
     desde: str | None,
     hasta: str | None,
     batch_size: int,
     dry_run: bool,
+    auto_refresh: bool,
 ) -> None:
     """Importa EE.FF. de COOPAC descargados a raw.eeff_observacion.
 
@@ -2241,8 +2248,12 @@ def import_coopac_eeff(
       - Rango:  --desde 202101 --hasta 202610  (backfill historico)
 
     Procesa archivos en raw.archivos_descargados con grupo LIKE 'coopac_%'
-    y status='descargado'. Usa MonthlyCoopacEeffImporter (mapa de nombres fijo).
-    Ejecutar import refresh-derived despues para actualizar MVs.
+    y status='descargado'. Usa MonthlyCoopacEeffImporter con doble estrategia:
+    nombre (primario) + posicion (fallback). Logs de warning cuando SBS renombra
+    cuentas desconocidas.
+
+    Por defecto ejecuta refresh-derived al final para actualizar MVs y KPIs.
+    Usar --no-auto-refresh en backfills grandes y correr refresh al terminar.
 
     ROLLBACK:
         DELETE FROM raw.eeff_observacion WHERE tipo_entidad LIKE 'COOPAC_%';
@@ -2279,11 +2290,11 @@ def import_coopac_eeff(
 
     url = settings().database_url.replace("postgresql+asyncpg://", "postgresql://")
 
-    archivos: list[str] = []
+    archivos: list[tuple[str, int]] = []  # (path_local, periodo)
     with psycopg.connect(url, connect_timeout=10) as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT path_local
+            SELECT path_local, periodo
             FROM raw.archivos_descargados
             WHERE periodo = ANY(%s) AND status = 'descargado'
               AND grupo LIKE 'coopac_%%'
@@ -2291,7 +2302,7 @@ def import_coopac_eeff(
             """,
             (periodos_int,),
         )
-        archivos = [row[0] for row in cur.fetchall()]
+        archivos = [(row[0], row[1]) for row in cur.fetchall()]
 
     click.echo(f"# periodos={len(periodos_int)} archivos_coopac={len(archivos)}")
     if not archivos:
@@ -2299,8 +2310,8 @@ def import_coopac_eeff(
         return
 
     if dry_run:
-        for p in archivos:
-            click.echo(f"  [dry] {p}")
+        for p_str, _ in archivos:
+            click.echo(f"  [dry] {p_str}")
         return
 
     loading_module = importlib.import_module("aibenchef_data.domains.loading")
@@ -2309,6 +2320,7 @@ def import_coopac_eeff(
     grand_inserted = 0
     grand_ok = 0
     grand_fail = 0
+    periodos_importados: set[int] = set()
 
     async def _run() -> None:
         nonlocal grand_inserted, grand_ok, grand_fail
@@ -2316,7 +2328,7 @@ def import_coopac_eeff(
         try:
             async with connection() as conn:
                 importer = importer_cls(conn, batch_size=batch_size)
-                for i, p_str in enumerate(archivos, start=1):
+                for i, (p_str, p_periodo) in enumerate(archivos, start=1):
                     f = _P(p_str)
                     if not f.exists():
                         grand_fail += 1
@@ -2328,6 +2340,7 @@ def import_coopac_eeff(
                         status_str = f"ERR x{len(result.errors)}" if result.errors else "OK"
                         if not result.errors:
                             grand_ok += 1
+                            periodos_importados.add(p_periodo)
                         else:
                             grand_fail += 1
                         click.echo(
@@ -2344,6 +2357,24 @@ def import_coopac_eeff(
     click.echo(
         f"\n# TOTAL: {grand_ok} OK, {grand_fail} fallidos, {grand_inserted:,} filas insertadas"
     )
+
+    if auto_refresh and periodos_importados:
+        click.echo(f"\n# Auto-refresh MVs y KPIs para {len(periodos_importados)} periodo(s)...")
+        with psycopg.connect(url, connect_timeout=30) as _conn, _conn.cursor() as _cur:
+            for p in sorted(periodos_importados):
+                try:
+                    _cur.execute(
+                        "SELECT step_name, duration_ms, success "
+                        "FROM marts.refresh_all_derived_logged(%s, %s, %s)",
+                        (p, False, "cli:coopac-eeff"),
+                    )
+                    rows_refresh = _cur.fetchall()
+                    ok_steps = sum(1 for _, _, ok in rows_refresh if ok)
+                    click.echo(f"  periodo={p}: {ok_steps}/{len(rows_refresh)} pasos OK")
+                except Exception as exc:
+                    click.echo(f"  periodo={p}: refresh FAIL — {exc}")
+    elif auto_refresh:
+        click.echo("# Auto-refresh omitido: sin periodos importados exitosamente.")
 
 
 # Mapeo topico -> (importer_class_name, audit_topico_name).
