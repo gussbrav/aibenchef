@@ -32,6 +32,9 @@ from aibenchef_data.domains.loading.services.monthly_depositos_importer import (
 from aibenchef_data.domains.loading.services.monthly_depositos_importer import (
     _find_header_row as depositos_find_header,
 )
+from aibenchef_data.domains.loading.services.monthly_eeff_importer import (
+    _detect_layout as eeff_detect_layout,
+)
 from aibenchef_data.domains.parsing.services.xls_reader import XlsSheet
 
 
@@ -325,3 +328,91 @@ class TestCastigosFechaFilename:
     def test_filename_anio_fuera_rango(self):
         # 1990 esta fuera del rango 2000-2050
         assert castigos_fecha_filename(Path("/tmp/B-2369-en1990.xls")) is None
+
+
+# ===========================================================================
+# _detect_layout (monthly_eeff_importer) — entidades adyacentes sin separador
+# ===========================================================================
+
+
+class TestEeffDetectLayoutEntidadesAdyacentes:
+    """Regresion: cuando dos entidades son adyacentes sin columna separadora
+    en la fila de monedas (caso Norandino→Kori en COOPAC N2B desde SEP-2025),
+    el scanner sobre-escaneaba sobreescribiendo las columnas de la primera
+    entidad con las de la segunda, y dejando a la segunda sin procesar.
+    """
+
+    def _make_coopac_sheet(self) -> XlsSheet:
+        """Hoja BG con 3 entidades:
+          - Alfa  (cols 1-3, con separador None en col 4)
+          - Beta  (cols 5-7, con separador None en col 4)
+          - Gamma (cols 8-10, ADYACENTE a Beta — sin separador entre TOTAL(7) y MN(8))
+
+        En el layout real COOPAC N2B el nombre de entidad aparece en la misma
+        columna que su MN currency. Esta es la condicion que dispara el bug:
+        el scanner de monedas para Beta (col 5) continua a col 8 (MN de Gamma)
+        sobreescribiendo el dict y dejando a Gamma sin procesar.
+
+        Layout COOPAC:
+          row 0-4: titulos y fecha
+          row 5:   nombres de entidades
+          row 6:   MN/ME/TOTAL por entidad
+          row 7:   vacio
+          row 8+:  datos
+        """
+        return _sheet([
+            ["Esta publicacion..."],                            # row 0
+            ["Balance General por Cooperativas N2B"],          # row 1
+            ["2026-08-31", None, None],                        # row 2 — fecha
+            ["(En Miles de Soles)"],                           # row 3
+            [None],                                            # row 4
+            # row 5: nombre de entidad en la MISMA col que su MN (layout real)
+            [None, "Alfa", None, None, None, "Beta", None, None, "Gamma", None, None],
+            # row 6: Alfa(1-3) | sep None(4) | Beta(5-7) | Gamma(8-10) sin sep
+            [None, "MN", "ME", "TOTAL", None, "MN", "ME", "TOTAL", "MN", "ME", "TOTAL"],
+            [None],                                            # row 7 — vacio
+            # row 8: datos
+            [None, 100, 10, 110, None, 200, 20, 220, 300, 30, 330],
+        ])
+
+    def test_detecta_tres_entidades(self):
+        layout = eeff_detect_layout(self._make_coopac_sheet())
+        nombres = [e.nombre for e in layout.entidades]
+        assert "Alfa" in nombres
+        assert "Beta" in nombres
+        assert "Gamma" in nombres
+        assert len(nombres) == 3
+
+    def test_alfa_columnas_correctas(self):
+        layout = eeff_detect_layout(self._make_coopac_sheet())
+        alfa = next(e for e in layout.entidades if e.nombre == "Alfa")
+        assert alfa.monedas["MN"] == 1
+        assert alfa.monedas["ME"] == 2
+        assert alfa.monedas["TOTAL"] == 3
+
+    def test_beta_columnas_correctas(self):
+        """Beta tiene separador None antes (col 4) y Gamma adyacente despues."""
+        layout = eeff_detect_layout(self._make_coopac_sheet())
+        beta = next(e for e in layout.entidades if e.nombre == "Beta")
+        assert beta.monedas["MN"] == 5
+        assert beta.monedas["ME"] == 6
+        assert beta.monedas["TOTAL"] == 7
+
+    def test_gamma_columnas_correctas(self):
+        """Gamma esta adyacente a Beta (cols 8-10) sin separador entre ellas.
+        El bug causaba que Beta sobreescribiera sus monedas con las de Gamma
+        y dejara a Gamma sin procesar (nunca aparecia en layout.entidades)."""
+        layout = eeff_detect_layout(self._make_coopac_sheet())
+        gamma = next(e for e in layout.entidades if e.nombre == "Gamma")
+        assert gamma.monedas["MN"] == 8
+        assert gamma.monedas["ME"] == 9
+        assert gamma.monedas["TOTAL"] == 10
+
+    def test_beta_no_apunta_a_columnas_de_gamma(self):
+        layout = eeff_detect_layout(self._make_coopac_sheet())
+        beta = next(e for e in layout.entidades if e.nombre == "Beta")
+        assert beta.monedas["MN"] == 5, "Beta debe apuntar a su propia col MN(5), no a Gamma(8)"
+
+    def test_periodo_detectado(self):
+        layout = eeff_detect_layout(self._make_coopac_sheet())
+        assert layout.periodo_yyyymm == 202608

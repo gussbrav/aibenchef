@@ -765,6 +765,11 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
             if m and m.upper() in ("MN", "ME", "TOTAL"):
                 monedas[m.upper()] = scan
                 scan += 1
+                # Parar en cuanto tengamos las 3 monedas: evita que el scanner
+                # se pase a las columnas de la siguiente entidad cuando no hay
+                # columna separadora entre ambas (caso Norandino→Kori en N2B).
+                if {"MN", "ME", "TOTAL"} <= monedas.keys():
+                    break
             else:
                 break
         if len(monedas) >= 2 and nombre not in vistos:
@@ -774,7 +779,10 @@ def _detect_layout(sheet: XlsSheet) -> _Layout:
             nombre_norm_entity = re.sub(r"\s*\*+\s+.*$", "", nombre_norm_entity).strip()
             entidades.append(_EntidadInfo(nombre=nombre_norm_entity, monedas=monedas))
             vistos.add(nombre)
-            col = scan + 1
+            # scan apunta al primer col despues de la ultima moneda encontrada.
+            # Usar scan (no scan+1) para que el loop exterior empiece en la
+            # siguiente columna sin saltear entidades adyacentes sin separador.
+            col = scan
         else:
             col += 1
 
