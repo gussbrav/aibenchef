@@ -98,6 +98,11 @@ export default async function DashboardLayout({
                     label="Análisis"
                     items={[
                       {
+                        href: "/dashboard/estadisticas-rapidas",
+                        label: "Estadísticas Rápidas",
+                        description: "Cuadro comparativo de indicadores clave por entidad y subsistema: cartera, mora, cobertura, ROE, ROA y más",
+                      },
+                      {
                         href: "/dashboard/tableros",
                         label: "Tableros ejecutivos",
                         description: "Dashboards personalizados con KPIs, gráficos y tablas para presentar a directorio",
