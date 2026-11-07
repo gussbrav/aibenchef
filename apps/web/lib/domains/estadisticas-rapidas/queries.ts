@@ -52,6 +52,9 @@ export async function getPeriodosDisponibles(): Promise<PeriodoItem[]> {
  * en ese periodo).
  */
 export async function getEstadisticasSF(periodo: number): Promise<FilaSF[]> {
+  // Driver: mv_eeff_ratios (llega antes que indicadores_prudenciales).
+  // v_indicadores_ancho se usa como fuente preferida de ROE/ROA/mora/cobertura
+  // oficial SBS; si no tiene el periodo aun, cae al valor calculado desde EEFF.
   const rows = await db.execute<{
     nomb_correg: string;
     tipo_entidad: string;
@@ -66,34 +69,36 @@ export async function getEstadisticasSF(periodo: number): Promise<FilaSF[]> {
     fondeo_pct: string | null;
   }>(sql`
     SELECT
-      ind.nomb_correg,
-      ind.tipo_entidad,
-      res.cartera_bruta::text                      AS cartera_bruta,
-      dep.depositos_total::text                    AS depositos_total,
-      ind.mora_atrasados_sobre_directos::text      AS mora_pct,
-      ind.provisiones_sobre_atrasados::text        AS cobertura_pct,
-      cas.castigos_12m::text                       AS castigos_12m,
-      ind.roe_sbs::text                            AS roe_pct,
-      ind.roa_sbs::text                            AS roa_pct,
-      pe.pct_rendimiento::text                     AS rendimiento_pct,
-      pe.pct_costo_fondeo::text                    AS fondeo_pct
-    FROM marts.v_indicadores_ancho ind
-    LEFT JOIN marts.mv_cuadro_resumen_historica res
-           ON res.periodo    = ind.periodo
-          AND res.nomb_correg = ind.nomb_correg
+      er.nomb_correg,
+      er.tipo_entidad,
+      er.cartera_bruta::text                                           AS cartera_bruta,
+      dep.depositos_total::text                                        AS depositos_total,
+      COALESCE(ind.mora_atrasados_sobre_directos, er.ratio_mora)::text AS mora_pct,
+      COALESCE(ind.provisiones_sobre_atrasados,
+               er.ratio_cobertura_atrasados)::text                    AS cobertura_pct,
+      cas.castigos_12m::text                                           AS castigos_12m,
+      COALESCE(ind.roe_sbs, er.roe)::text                             AS roe_pct,
+      COALESCE(ind.roa_sbs, er.roa)::text                             AS roa_pct,
+      pe.pct_rendimiento::text                                         AS rendimiento_pct,
+      pe.pct_costo_fondeo::text                                        AS fondeo_pct
+    FROM marts.mv_eeff_ratios er
+    LEFT JOIN marts.v_indicadores_ancho ind
+           ON ind.periodo     = er.periodo
+          AND ind.nomb_correg  = er.nomb_correg
     LEFT JOIN marts.v_depositos_total_historica dep
-           ON dep.periodo    = ind.periodo
-          AND dep.nomb_correg = ind.nomb_correg
+           ON dep.periodo     = er.periodo
+          AND dep.nomb_correg  = er.nomb_correg
     LEFT JOIN marts.v_castigos_12m_historica cas
-           ON cas.periodo    = ind.periodo
-          AND cas.nomb_correg = ind.nomb_correg
+           ON cas.periodo     = er.periodo
+          AND cas.nomb_correg  = er.nomb_correg
     LEFT JOIN marts.v_punto_equilibrio_ancho pe
-           ON pe.periodo     = ind.periodo
-          AND pe.nomb_correg  = ind.nomb_correg
-          AND pe.moneda       = 'TOTAL'
-    WHERE ind.periodo = ${periodo}
-      AND ind.tipo_entidad IN ('BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES')
-    ORDER BY ind.tipo_entidad, res.cartera_bruta DESC NULLS LAST
+           ON pe.periodo      = er.periodo
+          AND pe.nomb_correg   = er.nomb_correg
+          AND pe.moneda        = 'TOTAL'
+    WHERE er.periodo    = ${periodo}
+      AND er.moneda     = 'TOTAL'
+      AND er.tipo_entidad IN ('BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES')
+    ORDER BY er.tipo_entidad, er.cartera_bruta DESC NULLS LAST
   `);
 
   return rows
