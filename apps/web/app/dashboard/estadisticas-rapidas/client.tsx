@@ -9,8 +9,8 @@ import type {
   PeriodoItem,
   SubsistemasSF,
   NivelCOOPAC,
-} from "@/lib/domains/estadisticas-rapidas";
-import { LABEL_NIVEL } from "@/lib/domains/estadisticas-rapidas";
+} from "@/lib/domains/estadisticas-rapidas/types";
+import { LABEL_NIVEL } from "@/lib/domains/estadisticas-rapidas/types";
 import {
   formatPct,
   formatNumberCompact,
