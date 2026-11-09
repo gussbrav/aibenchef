@@ -1,5 +1,6 @@
 export {
-  getPeriodosDisponibles,
+  getPeriodosDisponiblesSF,
+  getPeriodosDisponiblesCOOPAC,
   getEstadisticasSF,
   getEstadisticasCOOPAC,
 } from "./queries";

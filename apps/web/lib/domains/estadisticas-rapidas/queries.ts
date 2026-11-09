@@ -15,20 +15,34 @@ function labelPeriodo(periodo: number): string {
   return `${MESES_ES[mes - 1] ?? "?"} ${anio}`;
 }
 
-/**
- * Periodos disponibles para el selector.
- * Prioriza diciembre (cierres anuales). Devuelve últimos 24 meses únicos
- * presentes en ambos sistemas, ordenados desc.
- */
-export async function getPeriodosDisponibles(): Promise<PeriodoItem[]> {
+/** Periodos disponibles para SF (últimos 24 meses). */
+export async function getPeriodosDisponiblesSF(): Promise<PeriodoItem[]> {
   const rows = await db.execute<{ periodo: number }>(sql`
     SELECT DISTINCT periodo
       FROM marts.mv_eeff_ratios
      WHERE moneda = 'TOTAL'
-       AND tipo_entidad IN (
-         'BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES',
-         'COOPAC_N1','COOPAC_N2A','COOPAC_N2B','COOPAC_N3'
-       )
+       AND tipo_entidad IN ('BANCOS','FINANCIERAS','CMAC','CRAC','EDPYMES')
+     ORDER BY periodo DESC
+     LIMIT 24
+  `);
+  return rows.map((r) => ({
+    periodo: Number(r.periodo),
+    label: labelPeriodo(Number(r.periodo)),
+  }));
+}
+
+/**
+ * Periodos disponibles para COOPAC.
+ * SBS publica EEFF COOPAC con retraso variable por nivel (N1/N2A: trimestral,
+ * N2B/N3: mensual). El último periodo es el más reciente donde AL MENOS UN
+ * nivel tiene data.
+ */
+export async function getPeriodosDisponiblesCOOPAC(): Promise<PeriodoItem[]> {
+  const rows = await db.execute<{ periodo: number }>(sql`
+    SELECT DISTINCT periodo
+      FROM marts.mv_eeff_ratios
+     WHERE moneda = 'TOTAL'
+       AND tipo_entidad IN ('COOPAC_N1','COOPAC_N2A','COOPAC_N2B','COOPAC_N3')
      ORDER BY periodo DESC
      LIMIT 24
   `);

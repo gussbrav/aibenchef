@@ -24,9 +24,12 @@ import {
 type Props = {
   sf: FilaSF[];
   coopac: FilaCOOPAC[];
-  periodoActual: number;
-  periodoLabel: string;
-  periodos: PeriodoItem[];
+  periodoSF: number;
+  periodoLabelSF: string;
+  periodoCoopac: number;
+  periodoLabelCoopac: string;
+  periodosSF: PeriodoItem[];
+  periodosCoopac: PeriodoItem[];
 };
 
 // ============================================================================
@@ -370,15 +373,26 @@ const COOPAC_ORDER: NivelCOOPAC[] = ["COOPAC_N1", "COOPAC_N2A", "COOPAC_N2B", "C
 export function EstadisticasRapidasClient({
   sf,
   coopac,
-  periodoActual,
-  periodoLabel,
-  periodos,
+  periodoSF,
+  periodoLabelSF,
+  periodoCoopac,
+  periodoLabelCoopac,
+  periodosSF,
+  periodosCoopac,
 }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<"sf" | "coopac">("sf");
 
-  function handlePeriodoChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    router.push(`/dashboard/estadisticas-rapidas?periodo=${e.target.value}` as never);
+  function buildUrl(sfPeriodo: number, coopacPeriodo: number) {
+    return `/dashboard/estadisticas-rapidas?sf=${sfPeriodo}&coopac=${coopacPeriodo}` as never;
+  }
+
+  function handleSFPeriodoChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    router.push(buildUrl(Number(e.target.value), periodoCoopac));
+  }
+
+  function handleCoopacPeriodoChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    router.push(buildUrl(periodoSF, Number(e.target.value)));
   }
 
   // Agrupar SF por subsistema
@@ -401,6 +415,8 @@ export function EstadisticasRapidasClient({
     return map;
   }, [coopac]);
 
+  const periodoLabel = tab === "sf" ? periodoLabelSF : periodoLabelCoopac;
+
   return (
     <div className="max-w-[1400px] mx-auto px-4 pb-16">
       {/* Header */}
@@ -411,19 +427,30 @@ export function EstadisticasRapidasClient({
             Indicadores clave por entidad y subsistema — Cierre {periodoLabel}
           </p>
         </div>
+        {/* Selector de periodo contextual al tab activo */}
         <div className="flex items-center gap-3">
           <label className="text-xs text-slate-500 font-medium">Periodo</label>
-          <select
-            value={periodoActual}
-            onChange={handlePeriodoChange}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            {periodos.map((p) => (
-              <option key={p.periodo} value={p.periodo}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+          {tab === "sf" ? (
+            <select
+              value={periodoSF}
+              onChange={handleSFPeriodoChange}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {periodosSF.map((p) => (
+                <option key={p.periodo} value={p.periodo}>{p.label}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={periodoCoopac}
+              onChange={handleCoopacPeriodoChange}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {periodosCoopac.map((p) => (
+                <option key={p.periodo} value={p.periodo}>{p.label}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -455,7 +482,7 @@ export function EstadisticasRapidasClient({
       {tab === "sf" && (
         <div className="space-y-10">
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-xs text-amber-700">
-            Mora, Cobertura, ROE y ROA corresponden a los indicadores oficiales publicados por SBS (anualizados). Cartera, Depósitos y Castigos provienen de los EEFF de la SBS.
+            Mora y Cobertura: indicadores oficiales SBS cuando están disponibles, calculados desde EEFF como fallback. Cartera, Depósitos y Castigos provienen de los EEFF.
           </div>
           {SF_ORDER.map((tipo) => {
             const rows = sfPorSubsistema.get(tipo) ?? [];
@@ -484,7 +511,7 @@ export function EstadisticasRapidasClient({
       {tab === "coopac" && (
         <div className="space-y-10">
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-xs text-blue-700">
-            Ratios calculados desde EEFF publicados por SBS. ROE y ROA son acumulados YTD (para diciembre = 12 meses completos). Obligaciones con socios incluye depósitos a plazo y ahorros.
+            Ratios calculados desde EEFF publicados por SBS. Mora = cartera atrasada / cartera bruta. ROE y ROA son acumulados YTD (para diciembre = 12 meses completos). Obligaciones con socios incluye depósitos a plazo y ahorros.
           </div>
           {COOPAC_ORDER.map((nivel) => {
             const rows = coopacPorNivel.get(nivel) ?? [];

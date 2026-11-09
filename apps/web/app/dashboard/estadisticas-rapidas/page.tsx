@@ -6,7 +6,8 @@ import { auth } from "@/lib/auth";
 import { getUserPlan } from "@/lib/auth-helpers";
 import { isAdmin } from "@/lib/domains/users";
 import {
-  getPeriodosDisponibles,
+  getPeriodosDisponiblesSF,
+  getPeriodosDisponiblesCOOPAC,
   getEstadisticasSF,
   getEstadisticasCOOPAC,
 } from "@/lib/domains/estadisticas-rapidas";
@@ -20,7 +21,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ periodo?: string }>;
+type SearchParams = Promise<{
+  sf?: string;
+  coopac?: string;
+}>;
 
 export default async function EstadisticasRapidasPage({
   searchParams,
@@ -41,8 +45,12 @@ export default async function EstadisticasRapidasPage({
     if (plan === "free") redirect("/dashboard?upgrade=estadisticas-rapidas");
   }
 
-  const periodos = await getPeriodosDisponibles();
-  if (periodos.length === 0) {
+  const [periodosSF, periodosCoopac] = await Promise.all([
+    getPeriodosDisponiblesSF(),
+    getPeriodosDisponiblesCOOPAC(),
+  ]);
+
+  if (periodosSF.length === 0 && periodosCoopac.length === 0) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-12 text-center text-slate-500">
         No hay periodos disponibles aún.
@@ -50,28 +58,35 @@ export default async function EstadisticasRapidasPage({
     );
   }
 
-  // Periodo seleccionado: URL param → más reciente disponible
-  const periodoParam = params.periodo ? Number(params.periodo) : null;
-  const periodoActual =
-    periodoParam && periodos.some((p) => p.periodo === periodoParam)
-      ? periodoParam
-      : periodos[0].periodo;
+  // Periodo SF: URL param → más reciente disponible
+  const sfParam = params.sf ? Number(params.sf) : null;
+  const periodoSF =
+    sfParam && periodosSF.some((p) => p.periodo === sfParam)
+      ? sfParam
+      : (periodosSF[0]?.periodo ?? 0);
+
+  // Periodo COOPAC: URL param → más reciente disponible (independiente del SF)
+  const coopacParam = params.coopac ? Number(params.coopac) : null;
+  const periodoCoopac =
+    coopacParam && periodosCoopac.some((p) => p.periodo === coopacParam)
+      ? coopacParam
+      : (periodosCoopac[0]?.periodo ?? 0);
 
   const [sf, coopac] = await Promise.all([
-    getEstadisticasSF(periodoActual),
-    getEstadisticasCOOPAC(periodoActual),
+    periodoSF ? getEstadisticasSF(periodoSF) : Promise.resolve([]),
+    periodoCoopac ? getEstadisticasCOOPAC(periodoCoopac) : Promise.resolve([]),
   ]);
-
-  const periodoLabel =
-    periodos.find((p) => p.periodo === periodoActual)?.label ?? String(periodoActual);
 
   return (
     <EstadisticasRapidasClient
       sf={sf}
       coopac={coopac}
-      periodoActual={periodoActual}
-      periodoLabel={periodoLabel}
-      periodos={periodos}
+      periodoSF={periodoSF}
+      periodoLabelSF={periodosSF.find((p) => p.periodo === periodoSF)?.label ?? ""}
+      periodoCoopac={periodoCoopac}
+      periodoLabelCoopac={periodosCoopac.find((p) => p.periodo === periodoCoopac)?.label ?? ""}
+      periodosSF={periodosSF}
+      periodosCoopac={periodosCoopac}
     />
   );
 }
