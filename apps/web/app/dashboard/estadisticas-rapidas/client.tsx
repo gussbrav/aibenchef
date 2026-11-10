@@ -36,6 +36,14 @@ type Props = {
 // Helpers
 // ============================================================================
 
+const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+function labelPeriodo(periodo: number): string {
+  const anio = Math.floor(periodo / 100);
+  const mes = periodo % 100;
+  return `${MESES_ES[mes - 1] ?? "?"} ${anio}`;
+}
+
 type SortDir = "asc" | "desc";
 type SortState = { col: string; dir: SortDir };
 
@@ -415,8 +423,6 @@ export function EstadisticasRapidasClient({
     return map;
   }, [coopac]);
 
-  const periodoLabel = tab === "sf" ? periodoLabelSF : periodoLabelCoopac;
-
   return (
     <div className="max-w-[1400px] mx-auto px-4 pb-16">
       {/* Header */}
@@ -424,7 +430,10 @@ export function EstadisticasRapidasClient({
         <div>
           <h1 className="text-xl font-bold text-slate-900">Estadísticas Rápidas</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Indicadores clave por entidad y subsistema — Cierre {periodoLabel}
+            {tab === "sf"
+              ? <>Indicadores clave por entidad y subsistema — Cierre <strong>{periodoLabelSF}</strong></>
+              : <>Indicadores clave por nivel cooperativo — Último dato disponible por nivel</>
+            }
           </p>
         </div>
         {/* Selector de periodo contextual al tab activo */}
@@ -496,6 +505,9 @@ export function EstadisticasRapidasClient({
                   <span className="text-xs text-slate-400">
                     {rows.length} entidades
                   </span>
+                  <span className="text-xs font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                    Cierre {periodoLabelSF}
+                  </span>
                 </div>
                 <ResumenSF rows={rows} />
                 <div className="mt-3">
@@ -516,6 +528,7 @@ export function EstadisticasRapidasClient({
           {COOPAC_ORDER.map((nivel) => {
             const rows = coopacPorNivel.get(nivel) ?? [];
             if (rows.length === 0) return null;
+            const cierreLabel = rows[0] ? labelPeriodo(rows[0].periodo) : null;
             return (
               <section key={nivel}>
                 <div className="flex items-baseline gap-3 mb-1">
@@ -525,6 +538,11 @@ export function EstadisticasRapidasClient({
                   <span className="text-xs text-slate-400">
                     {rows.length} cooperativas
                   </span>
+                  {cierreLabel && (
+                    <span className="text-xs font-medium bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full">
+                      Cierre {cierreLabel}
+                    </span>
+                  )}
                 </div>
                 <ResumenCOOPAC rows={rows} />
                 <div className="mt-3">

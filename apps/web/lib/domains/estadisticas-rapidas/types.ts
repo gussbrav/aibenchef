@@ -28,6 +28,7 @@ export const LABEL_NIVEL: Record<NivelCOOPAC, string> = {
 
 /** Fila de estadísticas para una entidad del Sistema Financiero. */
 export type FilaSF = {
+  periodo: number;
   nomb_correg: string;
   tipo_entidad: SubsistemasSF;
   /** Cartera de créditos directa bruta (S/) */
@@ -52,6 +53,8 @@ export type FilaSF = {
 
 /** Fila de estadísticas para una entidad COOPAC. */
 export type FilaCOOPAC = {
+  /** Periodo de cierre de esta fila (puede variar por nivel). */
+  periodo: number;
   nomb_correg: string;
   tipo_entidad: NivelCOOPAC;
   /** Créditos directos brutos (S/) */

@@ -70,6 +70,7 @@ export async function getEstadisticasSF(periodo: number): Promise<FilaSF[]> {
   // v_indicadores_ancho se usa como fuente preferida de ROE/ROA/mora/cobertura
   // oficial SBS; si no tiene el periodo aun, cae al valor calculado desde EEFF.
   const rows = await db.execute<{
+    periodo: number;
     nomb_correg: string;
     tipo_entidad: string;
     cartera_bruta: string | null;
@@ -83,6 +84,7 @@ export async function getEstadisticasSF(periodo: number): Promise<FilaSF[]> {
     fondeo_pct: string | null;
   }>(sql`
     SELECT
+      er.periodo,
       er.nomb_correg,
       er.tipo_entidad,
       er.cartera_bruta::text                                           AS cartera_bruta,
@@ -116,12 +118,9 @@ export async function getEstadisticasSF(periodo: number): Promise<FilaSF[]> {
   `);
 
   return rows
-    .filter((r) =>
-      r.cartera_bruta != null ||
-      r.roe_pct != null ||
-      r.mora_pct != null
-    )
+    .filter((r) => r.cartera_bruta != null || r.roe_pct != null || r.mora_pct != null)
     .map((r) => ({
+      periodo: Number(r.periodo),
       nomb_correg: r.nomb_correg,
       tipo_entidad: r.tipo_entidad as FilaSF["tipo_entidad"],
       cartera_bruta: r.cartera_bruta != null ? Number(r.cartera_bruta) : null,
@@ -137,14 +136,17 @@ export async function getEstadisticasSF(periodo: number): Promise<FilaSF[]> {
 }
 
 /**
- * Estadísticas COOPAC para un periodo.
+ * Estadísticas COOPAC usando el ÚLTIMO periodo disponible por nivel ≤ periodoMax.
  *
- * Fuente: marts.mv_eeff_ratios (TOTAL moneda) + marts.v_punto_equilibrio_ancho.
- * Los ratios mora/cobertura/ROE/ROA se calculan desde EEFF (no desde
- * indicadores_prudenciales, que no cubre cooperativas).
+ * SBS publica EEFF COOPAC con retraso variable por nivel (N1/N2A: trimestral,
+ * N2B/N3: mensual). En lugar de filtrar por periodo exacto (que deja niveles
+ * vacíos), cada nivel trae su propio último dato disponible hasta periodoMax.
+ *
+ * El campo `periodo` en cada fila indica de cuándo es el dato.
  */
-export async function getEstadisticasCOOPAC(periodo: number): Promise<FilaCOOPAC[]> {
+export async function getEstadisticasCOOPAC(periodoMax: number): Promise<FilaCOOPAC[]> {
   const rows = await db.execute<{
+    periodo: number;
     nomb_correg: string;
     tipo_entidad: string;
     cartera_bruta: string | null;
@@ -157,28 +159,39 @@ export async function getEstadisticasCOOPAC(periodo: number): Promise<FilaCOOPAC
     roe: string | null;
     roa: string | null;
   }>(sql`
+    WITH ultimo_por_nivel AS (
+      SELECT tipo_entidad, MAX(periodo) AS ultimo_periodo
+        FROM marts.mv_eeff_ratios
+       WHERE moneda      = 'TOTAL'
+         AND tipo_entidad IN ('COOPAC_N1','COOPAC_N2A','COOPAC_N2B','COOPAC_N3')
+         AND periodo     <= ${periodoMax}
+       GROUP BY tipo_entidad
+    )
     SELECT
+      er.periodo,
       er.nomb_correg,
       er.tipo_entidad,
-      er.cartera_bruta::text        AS cartera_bruta,
-      er.depositos_sbs::text        AS depositos_sbs,
-      er.total_activo::text         AS total_activo,
-      er.patrimonio::text           AS patrimonio,
-      er.utilidad_neta::text        AS utilidad_neta,
-      er.ratio_mora::text           AS mora_pct,
+      er.cartera_bruta::text             AS cartera_bruta,
+      er.depositos_sbs::text             AS depositos_sbs,
+      er.total_activo::text              AS total_activo,
+      er.patrimonio::text                AS patrimonio,
+      er.utilidad_neta::text             AS utilidad_neta,
+      er.ratio_mora::text                AS mora_pct,
       er.ratio_cobertura_atrasados::text AS cobertura_pct,
-      er.roe::text                  AS roe,
-      er.roa::text                  AS roa
+      er.roe::text                       AS roe,
+      er.roa::text                       AS roa
     FROM marts.mv_eeff_ratios er
-    WHERE er.periodo     = ${periodo}
-      AND er.moneda      = 'TOTAL'
-      AND er.tipo_entidad IN ('COOPAC_N1','COOPAC_N2A','COOPAC_N2B','COOPAC_N3')
+    INNER JOIN ultimo_por_nivel u
+            ON u.tipo_entidad   = er.tipo_entidad
+           AND u.ultimo_periodo = er.periodo
+    WHERE er.moneda = 'TOTAL'
     ORDER BY er.tipo_entidad, er.cartera_bruta DESC NULLS LAST
   `);
 
   return rows
     .filter((r) => r.cartera_bruta != null || r.total_activo != null)
     .map((r) => ({
+      periodo: Number(r.periodo),
       nomb_correg: r.nomb_correg,
       tipo_entidad: r.tipo_entidad as FilaCOOPAC["tipo_entidad"],
       cartera_bruta: r.cartera_bruta != null ? Number(r.cartera_bruta) : null,
