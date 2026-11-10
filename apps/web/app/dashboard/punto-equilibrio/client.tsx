@@ -1424,12 +1424,16 @@ function HistoricoTable({
                     )}
                     title={esAnualizado ? "Valor anualizado (YTD × 12/M). Faltan datos del año anterior." : undefined}
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
+                    <div className="flex flex-col items-end gap-0">
+                      <div className="flex items-center gap-1">
+                        <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
+                        {label}
+                      </div>
                       {esAnualizado && (
-                        <span className="text-[10px] font-bold leading-none opacity-70">~</span>
+                        <span className="text-[9px] font-normal normal-case tracking-normal text-slate-700 group-hover:text-[#FFC000] opacity-80">
+                          aprox. anual.
+                        </span>
                       )}
-                      {label}
                     </div>
                   </th>
                 );
