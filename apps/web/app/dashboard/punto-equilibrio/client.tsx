@@ -1424,16 +1424,9 @@ function HistoricoTable({
                     )}
                     title={esAnualizado ? "Valor anualizado (YTD × 12/M). Faltan datos del año anterior." : undefined}
                   >
-                    <div className="flex flex-col items-end gap-0">
-                      <div className="flex items-center gap-1">
-                        <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
-                        {label}
-                      </div>
-                      {esAnualizado && (
-                        <span className="text-[9px] font-normal normal-case tracking-normal text-slate-700 group-hover:text-[#FFC000] opacity-80">
-                          aprox. anual.
-                        </span>
-                      )}
+                    <div className="flex items-center justify-end gap-1">
+                      <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
+                      {label}{esAnualizado && <sup className="text-[9px] font-bold">*</sup>}
                     </div>
                   </th>
                 );
@@ -1646,17 +1639,31 @@ function HistoricoTable({
             puntoEquilibrio: computedPuntoEq(p) as number,
           }));
 
+        const periodosAnualizados = data.filter((r) => r.esAnualizado && r.pctRendimiento != null);
+
         return (
-          <div className="px-4 py-4 border-t border-slate-200 bg-slate-50/50">
-            <ReportInsights
-              periodo={propiaRow.periodo}
-              seccion="punto_equilibrio"
-              clienteSlug={clienteSlug}
-              entidadPropia={entidad}
-              peerGroup={peerGroup}
-              contexto={{ entidades: entidadesCtx, tendenciaPropia }}
-            />
-          </div>
+          <>
+            {periodosAnualizados.length > 0 && (
+              <div className="px-4 pt-3 pb-1">
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  <span className="font-semibold">*</span>{" "}
+                  {periodosAnualizados.map((r) => r.periodoLabel).join(", ")}
+                  {": "}
+                  valor estimado con datos del año en curso, anualizados (YTD × 12/M). El cierre del año anterior aún no fue publicado por SBS/FENACREP.
+                </p>
+              </div>
+            )}
+            <div className="px-4 py-4 border-t border-slate-200 bg-slate-50/50">
+              <ReportInsights
+                periodo={propiaRow.periodo}
+                seccion="punto_equilibrio"
+                clienteSlug={clienteSlug}
+                entidadPropia={entidad}
+                peerGroup={peerGroup}
+                contexto={{ entidades: entidadesCtx, tendenciaPropia }}
+              />
+            </div>
+          </>
         );
       })()}
     </section>
