@@ -1382,7 +1382,9 @@ function HistoricoTable({
                 Componente
               </th>
               {effectiveCols.map((periodo) => {
-                const label = dataByPeriodo.get(periodo)?.periodoLabel ?? String(periodo);
+                const row = dataByPeriodo.get(periodo);
+                const label = row?.periodoLabel ?? String(periodo);
+                const esAnualizado = row?.esAnualizado === true;
                 const isDropTarget = dropTarget?.type === "col" && dropTarget.id === periodo;
                 const isDragging = draggedCol === periodo;
                 return (
@@ -1420,9 +1422,13 @@ function HistoricoTable({
                       isDragging && "opacity-40",
                       isDropTarget && "!bg-slate-900 text-[#FFC000] ring-1 ring-[#FFC000] ring-inset",
                     )}
+                    title={esAnualizado ? "Valor anualizado (YTD × 12/M). Faltan datos del año anterior." : undefined}
                   >
                     <div className="flex items-center justify-end gap-1">
                       <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
+                      {esAnualizado && (
+                        <span className="text-[10px] font-bold leading-none opacity-70">~</span>
+                      )}
                       {label}
                     </div>
                   </th>

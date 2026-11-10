@@ -19,6 +19,13 @@ export type PuntoEquilibrioRow = {
   periodo: number;
   /** Label legible: 'Dic 2024', 'Jun 2026', etc. */
   periodoLabel: string;
+  /**
+   * true cuando el periodo fue calculado con YTD anualizado (YTD × 12/M)
+   * en lugar del TTM exacto de 12 meses moviles. Ocurre cuando falta
+   * el diciembre anterior o el mismo mes del año previo.
+   * La UI muestra "~" como prefijo en la cabecera de columna.
+   */
+  esAnualizado: boolean;
   pctRendimiento: number | null;
   pctOtros: number | null;
   pctCostoFondeo: number | null;
@@ -59,7 +66,7 @@ export type PuntoEquilibrioComparativoRow = {
   entidad: string;
   color: string;
   esPropio: boolean;
-} & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel">;
+} & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel" | "esAnualizado">;
 
 /**
  * Serie temporal de una entidad — para el line chart comparativo.
@@ -71,6 +78,7 @@ export type PuntoEquilibrioSerie = {
   puntos: Array<{
     periodo: number;
     periodoLabel: string;
+    esAnualizado?: boolean;
     pctPuntoEq: number | null;
     pctMargenNeto: number | null;
     pctRendimiento: number | null;
@@ -202,6 +210,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
   // total padre). Cero function calls costosas (todo se hace en SQL agregado).
   const rows = await db.execute<{
     periodo: number;
+    es_anualizado: boolean | null;
     pct_rendimiento: number | null;
     pct_costo_fondeo: number | null;
     pct_provisiones: number | null;
@@ -333,12 +342,33 @@ export async function getPuntoEquilibrioHistorico(opts: {
       FROM ytd_cur c
       LEFT JOIN ytd_dic d ON d.target_periodo = c.periodo
       LEFT JOIN ytd_same s ON s.target_periodo = c.periodo
+    ),
+    -- Detecta si el periodo fue calculado con YTD anualizado (falta Dic_prev o mismo_mes_prev).
+    anualizado AS (
+      SELECT tgt.periodo,
+             NOT (
+               EXISTS (
+                 SELECT 1 FROM marts.mv_eeff_resultados_ancho r2
+                 WHERE LOWER(TRIM(r2.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+                   AND r2.moneda = ${moneda}
+                   AND r2.periodo = (tgt.periodo / 100 - 1) * 100 + 12
+               )
+               AND
+               EXISTS (
+                 SELECT 1 FROM marts.mv_eeff_resultados_ancho r3
+                 WHERE LOWER(TRIM(r3.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+                   AND r3.moneda = ${moneda}
+                   AND r3.periodo = tgt.periodo - 100
+               )
+             ) AS es_anualizado
+      FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
     )
     SELECT DISTINCT ON (v.periodo)
            v.periodo,
            v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
            v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto,
            v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec,
+           a.es_anualizado,
            -- Ratios Otros Ingresos: componentes / suma_neta.
            -- pctOtros = (cta_6 - cta_7 + cta_8 + cta_13) / cartera * 100
            -- Cada componente / suma_neta * pctOtros = componente_real_en_pct.
@@ -387,6 +417,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
            CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
     FROM marts.v_punto_equilibrio_ancho v
     LEFT JOIN ttm t ON t.periodo = v.periodo
+    LEFT JOIN anualizado a ON a.periodo = v.periodo
     WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
       AND v.moneda = ${moneda}
       AND v.periodo IN (${periodosClause})
@@ -419,6 +450,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
     return {
       periodo: p,
       periodoLabel: formatPeriodo(p),
+      esAnualizado: r?.es_anualizado === true,
       pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
       pctOtros,
       pctCostoFondeo,
