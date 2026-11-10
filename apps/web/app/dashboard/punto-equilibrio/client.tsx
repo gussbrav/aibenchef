@@ -3023,7 +3023,7 @@ function LineChartConBanda({
   series: PuntoEquilibrioSerie[];
   metrica: MetricaKey;
 }) {
-  // chartData con min, max, avg por periodo
+  // chartData con min, max, avg y conteo de entidades con data por periodo
   const chartData = useMemo(() => {
     const periodos = series[0]?.puntos.map((p) => ({ periodo: p.periodo, label: p.periodoLabel })) ?? [];
     return periodos.map(({ periodo, label }) => {
@@ -3041,6 +3041,9 @@ function LineChartConBanda({
         row.__max = Math.max(...valores);
         row.__avg = valores.reduce((a, b) => a + b, 0) / valores.length;
       }
+      // Cuántas entidades contribuyen al promedio de este periodo
+      row.__n = valores.length;
+      row.__total = series.length;
       return row;
     });
   }, [series, metrica]);
@@ -3072,16 +3075,56 @@ function LineChartConBanda({
               width={60}
             />
             <Tooltip
-              formatter={(v: number, name: string) => {
-                if (name.startsWith("__")) return ["", ""];
-                return [`${v.toFixed(2)}%`, name];
-              }}
-              labelStyle={{ fontWeight: 700, color: "#0f172a" }}
-              contentStyle={{
-                background: "#fff",
-                border: "1px solid #e2e8f0",
-                borderRadius: 6,
-                fontSize: 12,
+              content={(props) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { active, payload, label } = props as any;
+                if (!active || !payload?.length) return null;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const point = payload[0]?.payload as Record<string, any>;
+                const n: number = point.__n ?? series.length;
+                const total: number = point.__total ?? series.length;
+                const hasGap = n < total;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const entidades = (payload as any[]).filter((p: any) => !String(p.dataKey).startsWith("__"));
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const avgItem = (payload as any[]).find((p: any) => p.dataKey === "__avg");
+                return (
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs" style={{ minWidth: 220 }}>
+                    <p className="font-semibold text-slate-900 mb-2">{label}</p>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {entidades.map((item: any) => (
+                      <div key={item.dataKey} className="flex items-center justify-between gap-4 py-0.5">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                          <span className="text-slate-700 max-w-[140px] truncate">{item.name}</span>
+                        </span>
+                        <span className="font-mono text-slate-900">
+                          {item.value == null ? <span className="text-slate-400">—</span> : `${Number(item.value).toFixed(2)}%`}
+                        </span>
+                      </div>
+                    ))}
+                    {avgItem != null && (
+                      <div className="flex items-center justify-between gap-4 mt-2 pt-2 border-t border-slate-200">
+                        <span className="text-slate-500 italic flex items-center gap-1">
+                          Prom. grupo
+                          {hasGap ? (
+                            <span className="text-amber-600 font-semibold not-italic">({n}/{total})</span>
+                          ) : (
+                            <span className="text-slate-400 not-italic">({n})</span>
+                          )}
+                        </span>
+                        <span className="font-mono font-semibold text-slate-700">
+                          {avgItem.value == null ? "—" : `${Number(avgItem.value).toFixed(2)}%`}
+                        </span>
+                      </div>
+                    )}
+                    {hasGap && (
+                      <p className="mt-1.5 pt-1 border-t border-amber-100 text-amber-600 text-[10px]">
+                        {total - n} {total - n === 1 ? "entidad no reportó" : "entidades no reportaron"} a SBS este periodo
+                      </p>
+                    )}
+                  </div>
+                );
               }}
             />
             <Legend
@@ -3232,20 +3275,23 @@ function GapAnalysisTable({ series }: { series: PuntoEquilibrioSerie[] }) {
   }, [series]);
 
   const avg = useMemo(() => {
-    const collect = (key: "rendimiento" | "puntoEq" | "margen"): number[] => {
-      const out: number[] = [];
+    const collectWithN = (key: "rendimiento" | "puntoEq" | "margen") => {
+      const vals: number[] = [];
       for (const r of rows) {
         const v = r[key];
-        if (typeof v === "number") out.push(v);
+        if (typeof v === "number") vals.push(v);
       }
-      return out;
+      const mean = vals.length === 0 ? null : vals.reduce((a, b) => a + b, 0) / vals.length;
+      return { mean, n: vals.length };
     };
-    const mean = (arr: number[]): number | null =>
-      arr.length === 0 ? null : arr.reduce((a, b) => a + b, 0) / arr.length;
+    const r = collectWithN("rendimiento");
+    const pe = collectWithN("puntoEq");
+    const m = collectWithN("margen");
     return {
-      rendimiento: mean(collect("rendimiento")),
-      puntoEq: mean(collect("puntoEq")),
-      margen: mean(collect("margen")),
+      rendimiento: r.mean,  nRendimiento: r.n,
+      puntoEq: pe.mean,     nPuntoEq: pe.n,
+      margen: m.mean,       nMargen: m.n,
+      total: rows.length,
     };
   }, [rows]);
 
@@ -3309,18 +3355,33 @@ function GapAnalysisTable({ series }: { series: PuntoEquilibrioSerie[] }) {
             {/* Fila de promedio */}
             <tr className="border-t-2 border-slate-800 bg-slate-100">
               <td className="px-4 py-2 font-semibold text-slate-900 uppercase text-[10px] tracking-wider">
-                Promedio del grupo
+                <span>Promedio del grupo</span>
               </td>
-              <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
-                {fmtPct(avg.rendimiento)}
+              <td className="text-right px-3 py-2 font-bold text-slate-900">
+                <span className="font-mono tabular-nums">{fmtPct(avg.rendimiento)}</span>
+                {avg.nRendimiento < avg.total && (
+                  <span className="ml-1 text-[9px] text-amber-600 font-semibold">
+                    {avg.nRendimiento}/{avg.total}
+                  </span>
+                )}
               </td>
               <td />
-              <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
-                {fmtPct(avg.puntoEq)}
+              <td className="text-right px-3 py-2 font-bold text-slate-900">
+                <span className="font-mono tabular-nums">{fmtPct(avg.puntoEq)}</span>
+                {avg.nPuntoEq < avg.total && (
+                  <span className="ml-1 text-[9px] text-amber-600 font-semibold">
+                    {avg.nPuntoEq}/{avg.total}
+                  </span>
+                )}
               </td>
               <td />
-              <td className="text-right px-3 py-2 font-mono tabular-nums font-bold text-slate-900">
-                {fmtPct(avg.margen)}
+              <td className="text-right px-3 py-2 font-bold text-slate-900">
+                <span className="font-mono tabular-nums">{fmtPct(avg.margen)}</span>
+                {avg.nMargen < avg.total && (
+                  <span className="ml-1 text-[9px] text-amber-600 font-semibold">
+                    {avg.nMargen}/{avg.total}
+                  </span>
+                )}
               </td>
               <td />
             </tr>
