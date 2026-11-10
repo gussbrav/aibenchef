@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import {
   ArrowRight,
   Building2,
@@ -80,6 +81,7 @@ export function ContratarPlanModal({
   // sin metodo de pago; solo datos de contacto + brief opcional. El precio
   // se cierra en la conversacion posterior por WhatsApp.
   const esCotizacion = plan.precioAcordar === true;
+  const backdropProps = useModalClose(onClose);
 
   const [step, setStep] = useState<1 | 2>(1);
   const [tipoPersona, setTipoPersona] = useState<TipoPersona>(
@@ -182,7 +184,7 @@ Quedo pendiente de las instrucciones de pago.`;
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto"
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         role="dialog"

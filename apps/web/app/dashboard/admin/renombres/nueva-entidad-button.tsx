@@ -9,6 +9,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import {
   AlertCircle,
   Building2,
@@ -69,6 +70,7 @@ export function NuevaEntidadButton() {
 
 function NuevaEntidadModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const backdropProps = useModalClose(onClose);
   const [entidades, setEntidades] = useState<EntidadOpcion[] | null>(null);
   const [loadingList, setLoadingList] = useState(true);
 
@@ -154,7 +156,7 @@ function NuevaEntidadModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         className="bg-white w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] flex flex-col"

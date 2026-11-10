@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import {
   Check,
   CheckCircle2,
@@ -545,6 +546,7 @@ function ResetLinkModal({
   onClose: () => void;
 }) {
   const [copiado, setCopiado] = useState(false);
+  const backdropProps = useModalClose(onClose);
   const copiar = async () => {
     try {
       await navigator.clipboard.writeText(url);
@@ -557,7 +559,7 @@ function ResetLinkModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm"
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         className="bg-white rounded-xl shadow-xl p-6 w-full max-w-xl"

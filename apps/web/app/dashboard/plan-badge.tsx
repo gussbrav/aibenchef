@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
@@ -158,6 +159,7 @@ export function UpgradeModal({
   // dentro de un elemento de 56px de alto → el modal quedaba centrado
   // arriba del viewport y se salia del cuadro).
   const [mounted, setMounted] = useState(false);
+  const backdropProps = useModalClose(onClose);
   useEffect(() => {
     setMounted(true);
     // Bloquear scroll del body mientras el modal esta abierto.
@@ -179,7 +181,7 @@ export function UpgradeModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto"
-      onClick={onClose}
+      {...backdropProps}
       role="dialog"
       aria-modal="true"
       aria-labelledby="upgrade-modal-title"

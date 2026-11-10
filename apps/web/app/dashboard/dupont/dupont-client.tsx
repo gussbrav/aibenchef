@@ -35,6 +35,7 @@ import type { DupontData, DupontRow, DupontInsights } from "@/lib/domains/dupont
 import type { EntidadDisponible } from "@/lib/domains/informe";
 import { ColorPickerPopover } from "@/app/dashboard/informe/color-picker-popover";
 import { RenombresToggle } from "@/components/ui";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import {
   fmtPeriodoLabel as fmtPeriodoLabelShared,
   gapEnMeses as gapEnMesesShared,
@@ -876,6 +877,7 @@ function EntidadPicker({
   onToggle: (n: string) => void;
 }) {
   const [q, setQ] = useState("");
+  const backdropProps = useModalClose(onClose);
   const filtradas = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     if (!qLower) return disponibles;
@@ -896,7 +898,7 @@ function EntidadPicker({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[80vh] flex flex-col"

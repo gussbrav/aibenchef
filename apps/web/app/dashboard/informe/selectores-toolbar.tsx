@@ -15,6 +15,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { useMemo, useState, useTransition } from "react";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import { Calendar, Users, X, Search, Check, Crown, GripVertical } from "lucide-react";
 
 import type { EntidadDisponible } from "@/lib/domains/informe";
@@ -278,6 +279,7 @@ function PeerGroupEditor({
     () => new Map(coloresActuales),
   );
   const [colorPickerAbierto, setColorPickerAbierto] = useState<string | null>(null);
+  const backdropProps = useModalClose(onClose);
 
   const setColor = (nomb: string, hex: string) => {
     setColores((prev) => {
@@ -384,7 +386,7 @@ function PeerGroupEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" {...backdropProps}>
       <div
         className="bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}

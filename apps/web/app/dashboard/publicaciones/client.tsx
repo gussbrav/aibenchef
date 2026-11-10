@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import {
   ArrowLeft, Check, ChevronRight, Copy, FileText, Loader2, Plus, RefreshCw, Sparkles, Trash2, X,
 } from "lucide-react";
@@ -1023,6 +1024,7 @@ function EntidadesPickerModal({
 }) {
   const [sel, setSel] = useState(new Set(seleccionadas));
   const [search, setSearch] = useState("");
+  const backdropProps = useModalClose(onClose);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     // Excluimos la entidad propia — no tiene sentido "compararse consigo mismo"
@@ -1043,7 +1045,7 @@ function EntidadesPickerModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      {...backdropProps}
       role="dialog"
       aria-modal="true"
       aria-labelledby="ent-picker-title"

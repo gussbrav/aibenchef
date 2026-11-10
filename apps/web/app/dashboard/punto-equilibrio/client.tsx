@@ -28,6 +28,7 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils/cn";
+import { useModalClose } from "@/lib/utils/use-modal-close";
 import { EntidadFreshnessBadge, RenombresToggle } from "@/components/ui";
 import { computeMaxUltimoPeriodo } from "@/lib/utils/periodo-freshness";
 import { earliestPeriodoForWindow } from "@/lib/plans";
@@ -635,6 +636,7 @@ function PeerGroupModal({
   const [sel, setSel] = useState(new Set(seleccionados));
   const [search, setSearch] = useState("");
   const isSearching = search.trim() !== "";
+  const backdropProps = useModalClose(onClose);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -672,7 +674,7 @@ function PeerGroupModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         className="bg-white w-full max-w-2xl rounded-xl shadow-2xl max-h-[85vh] flex flex-col"
