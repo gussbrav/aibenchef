@@ -600,6 +600,27 @@ function SelectoresBar({
   );
 }
 
+// Helpers de agrupación para PeerGroupModal
+const PEER_GROUP_ORDER: Record<string, number> = {
+  BANCOS: 1, FINANCIERAS: 2, CMAC: 3, CRAC: 4, EDPYMES: 5,
+  BANCO_NACION: 6, OTRO: 7,
+  COOPAC_N3: 10, COOPAC_N2B: 11, COOPAC_N2A: 12, COOPAC_N1: 13,
+};
+const PEER_SF_LABELS: Record<string, string> = {
+  BANCOS: "Bancos", FINANCIERAS: "Financieras", CMAC: "Cajas Municipales",
+  CRAC: "Cajas Rurales", EDPYMES: "EDPYMES",
+};
+function peerSectionKey(te: string | null | undefined): string {
+  return !te || !te.startsWith("COOPAC_") ? "__SF__" : te;
+}
+function peerSectionLabel(key: string, firstTipo?: string | null): string {
+  if (key !== "__SF__") {
+    const nivel = key.replace("COOPAC_", "");
+    return `Cooperativas · Nivel ${nivel === "N2A" ? "2A" : nivel === "N2B" ? "2B" : nivel.replace("N", "")}`;
+  }
+  return firstTipo && PEER_SF_LABELS[firstTipo] ? PEER_SF_LABELS[firstTipo] : "Sistema Financiero";
+}
+
 function PeerGroupModal({
   disponibles,
   seleccionados,
@@ -613,19 +634,41 @@ function PeerGroupModal({
 }) {
   const [sel, setSel] = useState(new Set(seleccionados));
   const [search, setSearch] = useState("");
-  const filtered = disponibles.filter((e) =>
-    !search || e.nombCorreg.toLowerCase().includes(search.toLowerCase()),
-  );
+  const isSearching = search.trim() !== "";
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q) return disponibles.filter((e) => e.nombCorreg.toLowerCase().includes(q));
+    return [...disponibles].sort((a, b) => {
+      const ga = PEER_GROUP_ORDER[a.tipoEntidad ?? ""] ?? 8;
+      const gb = PEER_GROUP_ORDER[b.tipoEntidad ?? ""] ?? 8;
+      if (ga !== gb) return ga - gb;
+      return a.nombCorreg.localeCompare(b.nombCorreg, "es");
+    });
+  }, [disponibles, search]);
+
+  // Precalcula conteo por sección para los headers
+  const sectionCounts = useMemo(() => {
+    if (isSearching) return {} as Record<string, number>;
+    return filtered.reduce<Record<string, number>>((acc, e) => {
+      const k = peerSectionKey(e.tipoEntidad);
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [filtered, isSearching]);
+
   const maxUltimoPeriodo = useMemo(
     () => computeMaxUltimoPeriodo(disponibles),
     [disponibles],
   );
+
   const toggle = (n: string) => {
     const next = new Set(sel);
     if (next.has(n)) next.delete(n);
     else next.add(n);
     setSel(next);
   };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
@@ -657,35 +700,75 @@ function PeerGroupModal({
           />
           <p className="text-[11px] text-slate-500 mt-1.5">
             Seleccionadas: <strong>{sel.size}</strong> de {disponibles.length}
+            {isSearching && filtered.length !== disponibles.length && (
+              <span className="text-slate-400"> · {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}</span>
+            )}
           </p>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          {filtered.map((e) => (
-            <label
-              key={e.nombCorreg}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded cursor-pointer hover:bg-slate-50",
-                sel.has(e.nombCorreg) && "bg-brand-50",
-              )}
-            >
-              <input
-                type="checkbox"
-                checked={sel.has(e.nombCorreg)}
-                onChange={() => toggle(e.nombCorreg)}
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-slate-800 flex-1 flex items-center gap-2 min-w-0">
-                <span className="truncate">{e.nombCorreg}</span>
-                <EntidadFreshnessBadge
-                  ultimoPeriodo={e.ultimoPeriodo}
-                  maxDisponible={maxUltimoPeriodo}
-                />
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
-                {e.primerPeriodo} – {e.ultimoPeriodo}
-              </span>
-            </label>
-          ))}
+        <div className="flex-1 overflow-y-auto">
+          {filtered.map((e, idx) => {
+            const curKey = peerSectionKey(e.tipoEntidad);
+            const prevKey = idx > 0 ? peerSectionKey(filtered[idx - 1]?.tipoEntidad) : null;
+            const showHeader = !isSearching && curKey !== prevKey;
+            const isCoopacSection = curKey !== "__SF__";
+            const isCoopac = e.tipoEntidad?.startsWith("COOPAC_");
+
+            return (
+              <Fragment key={e.nombCorreg}>
+                {showHeader && (
+                  <div
+                    className={cn(
+                      "flex items-center justify-between px-4 py-1.5 sticky top-0",
+                      idx > 0 && "border-t",
+                      isCoopacSection
+                        ? "bg-teal-50/90 border-teal-100"
+                        : "bg-slate-50/90 border-slate-100",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-[10px] font-semibold uppercase tracking-wider",
+                        isCoopacSection ? "text-teal-600" : "text-slate-400",
+                      )}
+                    >
+                      {peerSectionLabel(curKey, e.tipoEntidad)}
+                    </span>
+                    <span className={cn("text-[10px]", isCoopacSection ? "text-teal-400" : "text-slate-400")}>
+                      {sectionCounts[curKey] ?? 0}
+                    </span>
+                  </div>
+                )}
+                <label
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-slate-50 transition-colors",
+                    sel.has(e.nombCorreg) && "bg-brand-50",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={sel.has(e.nombCorreg)}
+                    onChange={() => toggle(e.nombCorreg)}
+                    className="w-4 h-4 flex-shrink-0"
+                  />
+                  <span className="text-sm text-slate-800 flex-1 flex items-center gap-2 min-w-0">
+                    <span className="truncate">{e.nombCorreg}</span>
+                    {isSearching && isCoopac && e.tipoEntidad && (
+                      <span className="inline-flex items-center px-1.5 py-px text-[9px] font-bold rounded bg-teal-100 text-teal-700 tracking-wide flex-shrink-0">
+                        {e.tipoEntidad.replace("COOPAC_", "")}
+                      </span>
+                    )}
+                    <EntidadFreshnessBadge
+                      ultimoPeriodo={e.ultimoPeriodo}
+                      maxDisponible={maxUltimoPeriodo}
+                    />
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
+                    {e.primerPeriodo} – {e.ultimoPeriodo}
+                  </span>
+                </label>
+              </Fragment>
+            );
+          })}
         </div>
         <footer className="px-5 py-3 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
           <button
