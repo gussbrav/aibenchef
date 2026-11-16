@@ -64,3 +64,7 @@ NUL
 # Claude Code / local IDE runtime state
 .claude/scheduled_tasks.lock
 .claude/local/
+.claude/worktrees/
+
+# Scripts one-shot con credenciales (correr y borrar)
+apply_v*.py

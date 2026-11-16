@@ -22,8 +22,9 @@ export type PuntoEquilibrioRow = {
   /**
    * true cuando el periodo fue calculado con YTD anualizado (YTD × 12/M)
    * en lugar del TTM exacto de 12 meses moviles. Ocurre cuando falta
-   * el diciembre anterior o el mismo mes del año previo.
-   * La UI muestra "~" como prefijo en la cabecera de columna.
+   * el diciembre anterior o el mismo mes del año previo en la MV.
+   * La UI muestra asterisco en la cabecera + nota al pie listando los
+   * periodos afectados y la razon (dato pendiente de publicacion).
    */
   esAnualizado: boolean;
   pctRendimiento: number | null;
@@ -343,10 +344,13 @@ export async function getPuntoEquilibrioHistorico(opts: {
       LEFT JOIN ytd_dic d ON d.target_periodo = c.periodo
       LEFT JOIN ytd_same s ON s.target_periodo = c.periodo
     ),
-    -- Detecta si el periodo fue calculado con YTD anualizado (falta Dic_prev o mismo_mes_prev).
+    -- Detecta si el periodo fue estimado con YTD anualizado (YTD × 12/M) por
+    -- falta de Dic_prev o mismo_mes_prev en la MV. Se excluye diciembre: para
+    -- M=12, YTD×12/12 = YTD = año completo real, no es una estimacion.
     anualizado AS (
       SELECT tgt.periodo,
-             NOT (
+             (tgt.periodo % 100) != 12
+             AND NOT (
                EXISTS (
                  SELECT 1 FROM marts.mv_eeff_resultados_ancho r2
                  WHERE LOWER(TRIM(r2.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
