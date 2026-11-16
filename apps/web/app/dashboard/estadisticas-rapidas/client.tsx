@@ -592,15 +592,23 @@ export function EstadisticasRapidasClient({
                 ))}
               </select>
             </label>
-            <span className="text-xs font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
-              Cierre {periodoLabelCoopac}
-            </span>
+            {trayectoria[0] && (
+              <span className="text-xs font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                Cierre {labelPeriodo(trayectoria[0].periodo_actual)}
+                {trayectoria[0].periodo_actual !== periodoCoopac && (
+                  <span className="ml-1.5 text-blue-500/70 font-normal">
+                    (último disponible ≤ {periodoLabelCoopac})
+                  </span>
+                )}
+              </span>
+            )}
           </div>
 
           {trayectoria.length < 3 ? (
             <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
-              No hay suficientes entidades con datos en el periodo seleccionado
-              para construir la matriz ({trayectoria.length} disponibles, mínimo 3).
+              No hay suficientes entidades con datos para construir la matriz
+              ({trayectoria.length} disponibles, mínimo 3). Prueba cambiar de nivel
+              o selecciona un periodo más reciente.
             </div>
           ) : (
             <TrajectoryMatrix

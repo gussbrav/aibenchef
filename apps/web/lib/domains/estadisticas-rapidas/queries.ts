@@ -244,6 +244,12 @@ const COLUMNA_METRICA: Record<EjeMetrica, string> = {
  */
 export async function getTrayectoria(opts: {
   tipoEntidad: NivelCOOPAC | SubsistemasSF;
+  /**
+   * Periodo límite superior. El query usa el ÚLTIMO periodo disponible ≤
+   * periodoActual para el tipo_entidad (COOPAC N1/N2A trimestrales, N3 anual,
+   * SF mensual — frecuencias heterogéneas). Esto evita que el usuario vea
+   * "sin datos" por elegir un mes donde ese nivel no reporta.
+   */
   periodoActual: number;
   ejeX: EjeMetrica;
   ejeY: EjeMetrica;
@@ -252,14 +258,6 @@ export async function getTrayectoria(opts: {
   const ventana = opts.ventanaMeses ?? 12;
   const colX = COLUMNA_METRICA[opts.ejeX];
   const colY = COLUMNA_METRICA[opts.ejeY];
-
-  // Periodo nominal previo: YYYYMM menos ventana en meses.
-  const anio = Math.floor(opts.periodoActual / 100);
-  const mes = opts.periodoActual % 100;
-  const mesesTotales = anio * 12 + (mes - 1) - ventana; // base 0
-  const anioPrev = Math.floor(mesesTotales / 12);
-  const mesPrev = (mesesTotales % 12) + 1;
-  const periodoPrevNominal = anioPrev * 100 + mesPrev;
 
   const rows = await db.execute<{
     nomb_correg: string;
@@ -272,30 +270,56 @@ export async function getTrayectoria(opts: {
     periodo_actual: number;
     periodo_prev: number | null;
   }>(sql`
-    WITH actual AS (
-      SELECT nomb_correg,
-             tipo_entidad,
-             ${sql.raw(colX)}::numeric AS x_actual,
-             ${sql.raw(colY)}::numeric AS y_actual,
-             patrimonio::numeric       AS peso,
-             periodo                   AS periodo_actual
+    WITH ultimo AS (
+      -- Último periodo disponible ≤ periodoActual para este tipo_entidad.
+      -- Maneja COOPAC con frecuencia heterogénea sin requerir que el usuario
+      -- sepa cuándo reportó cada nivel.
+      SELECT MAX(periodo) AS periodo_efectivo
         FROM marts.mv_eeff_ratios
        WHERE moneda       = 'TOTAL'
          AND tipo_entidad = ${opts.tipoEntidad}
-         AND periodo      = ${opts.periodoActual}
+         AND periodo     <= ${opts.periodoActual}
          AND ${sql.raw(colX)} IS NOT NULL
          AND ${sql.raw(colY)} IS NOT NULL
     ),
-    -- Para cada entidad, el periodo más cercano ANTERIOR o igual al nominal
-    -- previo (cae al trimestral más próximo si el nominal no existe).
+    actual AS (
+      SELECT r.nomb_correg,
+             r.tipo_entidad,
+             ${sql.raw(`r.${colX}`)}::numeric AS x_actual,
+             ${sql.raw(`r.${colY}`)}::numeric AS y_actual,
+             r.patrimonio::numeric            AS peso,
+             r.periodo                        AS periodo_actual
+        FROM marts.mv_eeff_ratios r
+        CROSS JOIN ultimo u
+       WHERE r.moneda       = 'TOTAL'
+         AND r.tipo_entidad = ${opts.tipoEntidad}
+         AND r.periodo      = u.periodo_efectivo
+         AND ${sql.raw(`r.${colX}`)} IS NOT NULL
+         AND ${sql.raw(`r.${colY}`)} IS NOT NULL
+    ),
+    -- Periodo nominal previo = periodo_efectivo menos (ventanaMeses) calendario.
+    prev_target AS (
+      SELECT
+        (CASE
+          WHEN ((u.periodo_efectivo / 100) * 12 + (u.periodo_efectivo % 100) - 1 - ${ventana}) / 12
+               >= 0
+          THEN ((((u.periodo_efectivo / 100) * 12 + (u.periodo_efectivo % 100) - 1 - ${ventana}) / 12) * 100
+                + (((u.periodo_efectivo / 100) * 12 + (u.periodo_efectivo % 100) - 1 - ${ventana}) % 12) + 1)
+        END)                                AS periodo_prev_nominal,
+        u.periodo_efectivo                  AS periodo_efectivo
+      FROM ultimo u
+    ),
+    -- Para cada entidad, el periodo más cercano al prev_nominal, SIEMPRE
+    -- anterior al actual y dentro de una ventana razonable (12m hacia atrás
+    -- del nominal, para cubrir reporters anuales que puedan tener data más vieja).
     prev_candidatos AS (
       SELECT a.nomb_correg,
              r.periodo,
-             ${sql.raw(colX)}::numeric AS x_prev,
-             ${sql.raw(colY)}::numeric AS y_prev,
+             ${sql.raw(`r.${colX}`)}::numeric AS x_prev,
+             ${sql.raw(`r.${colY}`)}::numeric AS y_prev,
              ROW_NUMBER() OVER (
                PARTITION BY a.nomb_correg
-               ORDER BY ABS(r.periodo - ${periodoPrevNominal}) ASC
+               ORDER BY ABS(r.periodo - (SELECT periodo_prev_nominal FROM prev_target)) ASC
              ) AS rn
         FROM actual a
         JOIN marts.mv_eeff_ratios r
@@ -303,9 +327,9 @@ export async function getTrayectoria(opts: {
          AND r.moneda       = 'TOTAL'
          AND r.tipo_entidad = a.tipo_entidad
          AND r.periodo      < a.periodo_actual
-         AND r.periodo      >= ${opts.periodoActual - 100} -- limita a últimos 12m
-         AND ${sql.raw(colX)} IS NOT NULL
-         AND ${sql.raw(colY)} IS NOT NULL
+         AND r.periodo      >= a.periodo_actual - 200 -- hasta 2 años atrás
+         AND ${sql.raw(`r.${colX}`)} IS NOT NULL
+         AND ${sql.raw(`r.${colY}`)} IS NOT NULL
     ),
     prev AS (
       SELECT nomb_correg, periodo, x_prev, y_prev
