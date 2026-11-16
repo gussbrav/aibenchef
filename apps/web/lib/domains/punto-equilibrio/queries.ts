@@ -14,19 +14,33 @@ import { db } from "@/lib/infrastructure/db";
 
 export type Granularidad = "cierre" | "anual" | "semestral" | "trimestral" | "mensual";
 
+/**
+ * Tier de calidad del cálculo de Punto de Equilibrio para un periodo:
+ *   - exacto   : TTM completo con ambos prior-year periods + cartera_obs ≥ 2.
+ *   - estimado : YTD anualizado (YTD×12/M) por falta de prior-year, pero con
+ *                suficientes observaciones de balance (≥ 2).
+ *   - parcial  : cartera promedio basada en < 2 observaciones — el valor
+ *                puede estar distorsionado por una sola medición atípica.
+ *
+ * La UI usa el tier para decidir qué marca visual mostrar (sin asterisco,
+ * `*`, o `**` + warning) y qué entrar en la nota al pie de la tabla.
+ */
+export type CalidadPE = "exacto" | "estimado" | "parcial";
+
 export type PuntoEquilibrioRow = {
   /** YYYYMM. */
   periodo: number;
   /** Label legible: 'Dic 2024', 'Jun 2026', etc. */
   periodoLabel: string;
   /**
-   * true cuando el periodo fue calculado con YTD anualizado (YTD × 12/M)
-   * en lugar del TTM exacto de 12 meses moviles. Ocurre cuando falta
-   * el diciembre anterior o el mismo mes del año previo en la MV.
-   * La UI muestra asterisco en la cabecera + nota al pie listando los
-   * periodos afectados y la razon (dato pendiente de publicacion).
+   * Tier de calidad del cálculo. Derivado de marts.fact_pe_metadata:
+   *   metodo_calculo ('ttm_exacto' | 'ytd_anualizado') + cartera_obs.
+   * Diciembre con metodo 'ytd_anualizado' se trata como 'exacto' porque
+   * YTD×12/12 = YTD = año completo real (no es estimación).
    */
-  esAnualizado: boolean;
+  calidad: CalidadPE;
+  /** Observaciones de balance que entraron al promedio de cartera. */
+  carteraObs: number;
   pctRendimiento: number | null;
   pctOtros: number | null;
   pctCostoFondeo: number | null;
@@ -67,7 +81,7 @@ export type PuntoEquilibrioComparativoRow = {
   entidad: string;
   color: string;
   esPropio: boolean;
-} & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel" | "esAnualizado">;
+} & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel" | "calidad" | "carteraObs">;
 
 /**
  * Serie temporal de una entidad — para el line chart comparativo.
@@ -79,7 +93,8 @@ export type PuntoEquilibrioSerie = {
   puntos: Array<{
     periodo: number;
     periodoLabel: string;
-    esAnualizado?: boolean;
+    calidad?: CalidadPE;
+    carteraObs?: number;
     pctPuntoEq: number | null;
     pctMargenNeto: number | null;
     pctRendimiento: number | null;
@@ -211,7 +226,8 @@ export async function getPuntoEquilibrioHistorico(opts: {
   // total padre). Cero function calls costosas (todo se hace en SQL agregado).
   const rows = await db.execute<{
     periodo: number;
-    es_anualizado: boolean | null;
+    metodo_calculo: "ttm_exacto" | "ytd_anualizado" | null;
+    cartera_obs: number | null;
     pct_rendimiento: number | null;
     pct_costo_fondeo: number | null;
     pct_provisiones: number | null;
@@ -344,35 +360,26 @@ export async function getPuntoEquilibrioHistorico(opts: {
       LEFT JOIN ytd_dic d ON d.target_periodo = c.periodo
       LEFT JOIN ytd_same s ON s.target_periodo = c.periodo
     ),
-    -- Detecta si el periodo fue estimado con YTD anualizado (YTD × 12/M) por
-    -- falta de Dic_prev o mismo_mes_prev en la MV. Se excluye diciembre: para
-    -- M=12, YTD×12/12 = YTD = año completo real, no es una estimacion.
-    anualizado AS (
-      SELECT tgt.periodo,
-             (tgt.periodo % 100) != 12
-             AND NOT (
-               EXISTS (
-                 SELECT 1 FROM marts.mv_eeff_resultados_ancho r2
-                 WHERE LOWER(TRIM(r2.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
-                   AND r2.moneda = ${moneda}
-                   AND r2.periodo = (tgt.periodo / 100 - 1) * 100 + 12
-               )
-               AND
-               EXISTS (
-                 SELECT 1 FROM marts.mv_eeff_resultados_ancho r3
-                 WHERE LOWER(TRIM(r3.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
-                   AND r3.moneda = ${moneda}
-                   AND r3.periodo = tgt.periodo - 100
-               )
-             ) AS es_anualizado
-      FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
+    -- Metadata de calidad desde marts.fact_pe_metadata (V215).
+    -- Si hay varios aliases con metadata para el mismo periodo (consolidado),
+    -- preferimos la observacion con mas cartera_obs (mayor confianza) y
+    -- metodo 'ttm_exacto' sobre 'ytd_anualizado' si alguno existe.
+    meta AS (
+      SELECT DISTINCT ON (m.periodo) m.periodo, m.metodo_calculo, m.cartera_obs
+      FROM marts.fact_pe_metadata m
+      WHERE LOWER(TRIM(m.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
+        AND m.moneda = ${moneda}
+        AND m.periodo IN (${periodosClause})
+      ORDER BY m.periodo,
+               CASE m.metodo_calculo WHEN 'ttm_exacto' THEN 0 ELSE 1 END,
+               m.cartera_obs DESC
     )
     SELECT DISTINCT ON (v.periodo)
            v.periodo,
            v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
            v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto,
            v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec,
-           a.es_anualizado,
+           m.metodo_calculo, m.cartera_obs,
            -- Ratios Otros Ingresos: componentes / suma_neta.
            -- pctOtros = (cta_6 - cta_7 + cta_8 + cta_13) / cartera * 100
            -- Cada componente / suma_neta * pctOtros = componente_real_en_pct.
@@ -421,7 +428,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
            CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
     FROM marts.v_punto_equilibrio_ancho v
     LEFT JOIN ttm t ON t.periodo = v.periodo
-    LEFT JOIN anualizado a ON a.periodo = v.periodo
+    LEFT JOIN meta m ON m.periodo = v.periodo
     WHERE LOWER(TRIM(v.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
       AND v.moneda = ${moneda}
       AND v.periodo IN (${periodosClause})
@@ -451,10 +458,20 @@ export async function getPuntoEquilibrioHistorico(opts: {
       r?.ratio_directorio,
       pctGastosOp != null && pctDepreciacion != null ? pctGastosOp - pctDepreciacion : pctGastosOp,
     );
+    const carteraObs = Number(r?.cartera_obs ?? 0);
+    const esDiciembre = p % 100 === 12;
+    // Derivacion del tier:
+    //  - parcial  : cartera_obs < 2 (promedio basado en 1 sola medicion → poco confiable).
+    //  - estimado : metodo_calculo=ytd_anualizado Y periodo != dic (dic con ann_fallback = exacto: YTD=TTM).
+    //  - exacto   : el resto.
+    let calidad: CalidadPE = "exacto";
+    if (carteraObs < 2 && carteraObs > 0) calidad = "parcial";
+    else if (r?.metodo_calculo === "ytd_anualizado" && !esDiciembre) calidad = "estimado";
     return {
       periodo: p,
       periodoLabel: formatPeriodo(p),
-      esAnualizado: r?.es_anualizado === true,
+      calidad,
+      carteraObs,
       pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
       pctOtros,
       pctCostoFondeo,

@@ -1384,7 +1384,17 @@ function HistoricoTable({
               {effectiveCols.map((periodo) => {
                 const row = dataByPeriodo.get(periodo);
                 const label = row?.periodoLabel ?? String(periodo);
-                const esAnualizado = row?.esAnualizado === true;
+                const calidad = row?.calidad ?? "exacto";
+                const marca =
+                  calidad === "parcial" ? "**" :
+                  calidad === "estimado" ? "*" :
+                  null;
+                const titleText =
+                  calidad === "parcial"
+                    ? `Cartera basada en ${row?.carteraObs ?? 0} observación(es) — el valor puede estar distorsionado por una sola medición.`
+                    : calidad === "estimado"
+                    ? "Valor anualizado (YTD × 12/M). Faltan datos del año anterior."
+                    : undefined;
                 const isDropTarget = dropTarget?.type === "col" && dropTarget.id === periodo;
                 const isDragging = draggedCol === periodo;
                 return (
@@ -1422,11 +1432,16 @@ function HistoricoTable({
                       isDragging && "opacity-40",
                       isDropTarget && "!bg-slate-900 text-[#FFC000] ring-1 ring-[#FFC000] ring-inset",
                     )}
-                    title={esAnualizado ? "Valor anualizado (YTD × 12/M). Faltan datos del año anterior." : undefined}
+                    title={titleText}
                   >
                     <div className="flex items-center justify-end gap-1">
                       <GripVertical className="w-3 h-3 text-slate-700 group-hover:text-[#FFC000]" />
-                      {label}{esAnualizado && <sup className="text-[9px] font-bold">*</sup>}
+                      {label}
+                      {marca && (
+                        <sup className={cn("text-[9px] font-bold", calidad === "parcial" && "text-rose-700")}>
+                          {marca}
+                        </sup>
+                      )}
                     </div>
                   </th>
                 );
@@ -1639,18 +1654,29 @@ function HistoricoTable({
             puntoEquilibrio: computedPuntoEq(p) as number,
           }));
 
-        const periodosAnualizados = data.filter((r) => r.esAnualizado && r.pctRendimiento != null);
+        const periodosEstimados = data.filter((r) => r.calidad === "estimado" && r.pctRendimiento != null);
+        const periodosParciales = data.filter((r) => r.calidad === "parcial" && r.pctRendimiento != null);
 
         return (
           <>
-            {periodosAnualizados.length > 0 && (
-              <div className="px-4 pt-3 pb-1">
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  <span className="font-semibold">*</span>{" "}
-                  {periodosAnualizados.map((r) => r.periodoLabel).join(", ")}
-                  {": "}
-                  valor estimado con datos del año en curso, anualizados (YTD × 12/M). El cierre del año anterior aún no fue publicado por SBS/FENACREP.
-                </p>
+            {(periodosEstimados.length > 0 || periodosParciales.length > 0) && (
+              <div className="px-4 pt-3 pb-1 space-y-1">
+                {periodosEstimados.length > 0 && (
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    <span className="font-semibold">*</span>{" "}
+                    {periodosEstimados.map((r) => r.periodoLabel).join(", ")}
+                    {": "}
+                    valor estimado con datos del año en curso, anualizados (YTD × 12/M). El cierre del año anterior aún no fue publicado por SBS/FENACREP.
+                  </p>
+                )}
+                {periodosParciales.length > 0 && (
+                  <p className="text-[11px] text-rose-600/80 leading-relaxed">
+                    <span className="font-semibold">**</span>{" "}
+                    {periodosParciales.map((r) => r.periodoLabel).join(", ")}
+                    {": "}
+                    cartera promedio basada en una sola observación de balance — el valor puede estar distorsionado por una medición atípica.
+                  </p>
+                )}
               </div>
             )}
             <div className="px-4 py-4 border-t border-slate-200 bg-slate-50/50">
