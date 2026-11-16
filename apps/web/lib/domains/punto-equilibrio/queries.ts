@@ -27,6 +27,16 @@ export type Granularidad = "cierre" | "anual" | "semestral" | "trimestral" | "me
  */
 export type CalidadPE = "exacto" | "estimado" | "parcial";
 
+/**
+ * Ventana usada para el promedio de cartera (denominador):
+ *   - rolling_12m : 12 meses móviles (estándar para casos TTM exacto).
+ *   - ytd         : ENE–M del año actual (alineado al numerador anualizado).
+ *
+ * V216 introduce ventana='ytd' cuando el cálculo es anualizado y hay ≥2 obs
+ * en el periodo YTD — matcheo dimensional correcto entre numerador y denom.
+ */
+export type VentanaCartera = "rolling_12m" | "ytd";
+
 export type PuntoEquilibrioRow = {
   /** YYYYMM. */
   periodo: number;
@@ -41,6 +51,8 @@ export type PuntoEquilibrioRow = {
   calidad: CalidadPE;
   /** Observaciones de balance que entraron al promedio de cartera. */
   carteraObs: number;
+  /** Ventana usada para cartera_prom (dimensional alignment con numerador). */
+  ventanaCartera: VentanaCartera;
   pctRendimiento: number | null;
   pctOtros: number | null;
   pctCostoFondeo: number | null;
@@ -81,7 +93,7 @@ export type PuntoEquilibrioComparativoRow = {
   entidad: string;
   color: string;
   esPropio: boolean;
-} & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel" | "calidad" | "carteraObs">;
+} & Omit<PuntoEquilibrioRow, "periodo" | "periodoLabel" | "calidad" | "carteraObs" | "ventanaCartera">;
 
 /**
  * Serie temporal de una entidad — para el line chart comparativo.
@@ -95,6 +107,7 @@ export type PuntoEquilibrioSerie = {
     periodoLabel: string;
     calidad?: CalidadPE;
     carteraObs?: number;
+    ventanaCartera?: VentanaCartera;
     pctPuntoEq: number | null;
     pctMargenNeto: number | null;
     pctRendimiento: number | null;
@@ -228,6 +241,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
     periodo: number;
     metodo_calculo: "ttm_exacto" | "ytd_anualizado" | null;
     cartera_obs: number | null;
+    ventana_cartera: "rolling_12m" | "ytd" | null;
     pct_rendimiento: number | null;
     pct_costo_fondeo: number | null;
     pct_provisiones: number | null;
@@ -360,12 +374,12 @@ export async function getPuntoEquilibrioHistorico(opts: {
       LEFT JOIN ytd_dic d ON d.target_periodo = c.periodo
       LEFT JOIN ytd_same s ON s.target_periodo = c.periodo
     ),
-    -- Metadata de calidad desde marts.fact_pe_metadata (V215).
+    -- Metadata de calidad desde marts.fact_pe_metadata (V215+V216).
     -- Si hay varios aliases con metadata para el mismo periodo (consolidado),
     -- preferimos la observacion con mas cartera_obs (mayor confianza) y
     -- metodo 'ttm_exacto' sobre 'ytd_anualizado' si alguno existe.
     meta AS (
-      SELECT DISTINCT ON (m.periodo) m.periodo, m.metodo_calculo, m.cartera_obs
+      SELECT DISTINCT ON (m.periodo) m.periodo, m.metodo_calculo, m.cartera_obs, m.ventana_cartera
       FROM marts.fact_pe_metadata m
       WHERE LOWER(TRIM(m.nomb_correg)) IN (SELECT nombre_lower FROM aliases)
         AND m.moneda = ${moneda}
@@ -379,7 +393,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
            v.pct_rendimiento, v.pct_costo_fondeo, v.pct_provisiones,
            v.pct_gastos_op, v.pct_otros, v.pct_punto_eq, v.pct_margen_neto,
            v.pct_gastos_personal, v.pct_gastos_generales, v.pct_deprec,
-           m.metodo_calculo, m.cartera_obs,
+           m.metodo_calculo, m.cartera_obs, m.ventana_cartera,
            -- Ratios Otros Ingresos: componentes / suma_neta.
            -- pctOtros = (cta_6 - cta_7 + cta_8 + cta_13) / cartera * 100
            -- Cada componente / suma_neta * pctOtros = componente_real_en_pct.
@@ -459,6 +473,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
       pctGastosOp != null && pctDepreciacion != null ? pctGastosOp - pctDepreciacion : pctGastosOp,
     );
     const carteraObs = Number(r?.cartera_obs ?? 0);
+    const ventanaCartera: VentanaCartera = r?.ventana_cartera ?? "rolling_12m";
     const esDiciembre = p % 100 === 12;
     // Derivacion del tier:
     //  - parcial  : cartera_obs < 2 (promedio basado en 1 sola medicion → poco confiable).
@@ -472,6 +487,7 @@ export async function getPuntoEquilibrioHistorico(opts: {
       periodoLabel: formatPeriodo(p),
       calidad,
       carteraObs,
+      ventanaCartera,
       pctRendimiento: r?.pct_rendimiento == null ? null : Number(r.pct_rendimiento),
       pctOtros,
       pctCostoFondeo,

@@ -1389,12 +1389,15 @@ function HistoricoTable({
                   calidad === "parcial" ? "**" :
                   calidad === "estimado" ? "*" :
                   null;
+                const ventanaLabel =
+                  row?.ventanaCartera === "ytd" ? "cartera YTD (ene–mes)" :
+                  "cartera 12m móviles";
                 const titleText =
                   calidad === "parcial"
-                    ? `Cartera basada en ${row?.carteraObs ?? 0} observación(es) — el valor puede estar distorsionado por una sola medición.`
+                    ? `Cartera basada en ${row?.carteraObs ?? 0} observación(es) de balance — el valor puede estar distorsionado por una sola medición. Ventana: ${ventanaLabel}.`
                     : calidad === "estimado"
-                    ? "Valor anualizado (YTD × 12/M). Faltan datos del año anterior."
-                    : undefined;
+                    ? `Valor anualizado (YTD × 12/M) por falta de datos del año anterior. Denominador: ${ventanaLabel} (${row?.carteraObs ?? 0} obs).`
+                    : `TTM 12 meses móviles · Denominador: ${ventanaLabel} (${row?.carteraObs ?? 0} obs).`;
                 const isDropTarget = dropTarget?.type === "col" && dropTarget.id === periodo;
                 const isDragging = draggedCol === periodo;
                 return (
@@ -1656,6 +1659,8 @@ function HistoricoTable({
 
         const periodosEstimados = data.filter((r) => r.calidad === "estimado" && r.pctRendimiento != null);
         const periodosParciales = data.filter((r) => r.calidad === "parcial" && r.pctRendimiento != null);
+        const describirPeriodo = (r: (typeof data)[number]) =>
+          `${r.periodoLabel} (${r.ventanaCartera === "ytd" ? "cart. YTD" : "cart. 12m móv."}, ${r.carteraObs} obs)`;
 
         return (
           <>
@@ -1664,15 +1669,15 @@ function HistoricoTable({
                 {periodosEstimados.length > 0 && (
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     <span className="font-semibold">*</span>{" "}
-                    {periodosEstimados.map((r) => r.periodoLabel).join(", ")}
+                    {periodosEstimados.map(describirPeriodo).join(", ")}
                     {": "}
-                    valor estimado con datos del año en curso, anualizados (YTD × 12/M). El cierre del año anterior aún no fue publicado por SBS/FENACREP.
+                    ingresos anualizados (YTD × 12/M) sobre cartera promedio del mismo período — el cierre del año anterior no fue publicado aún por SBS/FENACREP.
                   </p>
                 )}
                 {periodosParciales.length > 0 && (
                   <p className="text-[11px] text-rose-600/80 leading-relaxed">
                     <span className="font-semibold">**</span>{" "}
-                    {periodosParciales.map((r) => r.periodoLabel).join(", ")}
+                    {periodosParciales.map(describirPeriodo).join(", ")}
                     {": "}
                     cartera promedio basada en una sola observación de balance — el valor puede estar distorsionado por una medición atípica.
                   </p>
