@@ -81,3 +81,47 @@ export type PeriodoItem = {
   periodo: number;
   label: string;
 };
+
+/**
+ * Posición de una entidad en la matriz de trayectoria:
+ *   - (x_actual, y_actual) : posición actual en los dos ejes elegidos.
+ *   - (x_prev, y_prev)     : posición al periodo de comparación (ventana atrás).
+ *   - peso                 : tamaño/importancia (patrimonio) para el radio del dot.
+ *
+ * Si la entidad no tenía datos en el periodo de comparación, x_prev/y_prev son
+ * NULL y se renderiza sólo el punto actual (sin flecha).
+ */
+export type TrayectoriaEntidad = {
+  nomb_correg: string;
+  tipo_entidad: NivelCOOPAC | SubsistemasSF;
+  x_actual: number;
+  y_actual: number;
+  x_prev: number | null;
+  y_prev: number | null;
+  peso: number | null;
+  /** Periodo de la medición actual (YYYYMM). */
+  periodo_actual: number;
+  /** Periodo de la medición previa (YYYYMM), o null si no hay comparación. */
+  periodo_prev: number | null;
+};
+
+/** Métricas disponibles para los ejes de la matriz. */
+export type EjeMetrica = "roe" | "roa" | "mora" | "cobertura";
+
+export const LABEL_EJE: Record<EjeMetrica, string> = {
+  roe: "ROE",
+  roa: "ROA",
+  mora: "Mora",
+  cobertura: "Cobertura",
+};
+
+/**
+ * Definición del eje: label + si el valor "alto" es bueno (invierte interpretación
+ * de cuadrantes). Para MORA, alto = malo; para ROE/ROA/COBERTURA, alto = bueno.
+ */
+export const EJE_ALTO_ES_BUENO: Record<EjeMetrica, boolean> = {
+  roe: true,
+  roa: true,
+  mora: false,
+  cobertura: true,
+};

@@ -2,7 +2,15 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/infrastructure/db";
-import type { FilaCOOPAC, FilaSF, PeriodoItem } from "./types";
+import type {
+  EjeMetrica,
+  FilaCOOPAC,
+  FilaSF,
+  NivelCOOPAC,
+  PeriodoItem,
+  SubsistemasSF,
+  TrayectoriaEntidad,
+} from "./types";
 
 const MESES_ES = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -204,4 +212,129 @@ export async function getEstadisticasCOOPAC(periodoMax: number): Promise<FilaCOO
       roe: r.roe != null ? Number(r.roe) : null,
       roa: r.roa != null ? Number(r.roa) : null,
     }));
+}
+
+// ============================================================================
+// Matriz de Trayectoria — posición actual + desplazamiento vs ventana previa
+// ============================================================================
+
+/**
+ * Mapeo de métricas → columnas SQL en marts.mv_eeff_ratios.
+ * Todas las columnas vienen como decimales 0-1 (ej: 0.0963 = 9.63%).
+ */
+const COLUMNA_METRICA: Record<EjeMetrica, string> = {
+  roe: "roe",
+  roa: "roa",
+  mora: "ratio_mora",
+  cobertura: "ratio_cobertura_atrasados",
+};
+
+/**
+ * Trayectoria de entidades en la matriz 2D (ejeX, ejeY) con comparación al
+ * periodo _ventanaMeses_ atrás. Se usa para visualización tipo scatter con
+ * flechas que muestran "de dónde vino cada entidad".
+ *
+ * Estrategia de periodo previo:
+ *   Intentamos (periodo - ventanaMeses) como mes calendario. Si la entidad no
+ *   tuvo reporte en ese periodo exacto (COOPAC trimestrales se saltan), caemos
+ *   al reporte más cercano ANTERIOR o igual a esa fecha, dentro del año móvil.
+ *
+ * Entidades sin x_actual o y_actual se excluyen (no tienen posición en el plano).
+ * Entidades sin medición previa salen con x_prev = y_prev = null → render sin flecha.
+ */
+export async function getTrayectoria(opts: {
+  tipoEntidad: NivelCOOPAC | SubsistemasSF;
+  periodoActual: number;
+  ejeX: EjeMetrica;
+  ejeY: EjeMetrica;
+  ventanaMeses?: number; // default 12
+}): Promise<TrayectoriaEntidad[]> {
+  const ventana = opts.ventanaMeses ?? 12;
+  const colX = COLUMNA_METRICA[opts.ejeX];
+  const colY = COLUMNA_METRICA[opts.ejeY];
+
+  // Periodo nominal previo: YYYYMM menos ventana en meses.
+  const anio = Math.floor(opts.periodoActual / 100);
+  const mes = opts.periodoActual % 100;
+  const mesesTotales = anio * 12 + (mes - 1) - ventana; // base 0
+  const anioPrev = Math.floor(mesesTotales / 12);
+  const mesPrev = (mesesTotales % 12) + 1;
+  const periodoPrevNominal = anioPrev * 100 + mesPrev;
+
+  const rows = await db.execute<{
+    nomb_correg: string;
+    tipo_entidad: string;
+    x_actual: string | null;
+    y_actual: string | null;
+    x_prev: string | null;
+    y_prev: string | null;
+    peso: string | null;
+    periodo_actual: number;
+    periodo_prev: number | null;
+  }>(sql`
+    WITH actual AS (
+      SELECT nomb_correg,
+             tipo_entidad,
+             ${sql.raw(colX)}::numeric AS x_actual,
+             ${sql.raw(colY)}::numeric AS y_actual,
+             patrimonio::numeric       AS peso,
+             periodo                   AS periodo_actual
+        FROM marts.mv_eeff_ratios
+       WHERE moneda       = 'TOTAL'
+         AND tipo_entidad = ${opts.tipoEntidad}
+         AND periodo      = ${opts.periodoActual}
+         AND ${sql.raw(colX)} IS NOT NULL
+         AND ${sql.raw(colY)} IS NOT NULL
+    ),
+    -- Para cada entidad, el periodo más cercano ANTERIOR o igual al nominal
+    -- previo (cae al trimestral más próximo si el nominal no existe).
+    prev_candidatos AS (
+      SELECT a.nomb_correg,
+             r.periodo,
+             ${sql.raw(colX)}::numeric AS x_prev,
+             ${sql.raw(colY)}::numeric AS y_prev,
+             ROW_NUMBER() OVER (
+               PARTITION BY a.nomb_correg
+               ORDER BY ABS(r.periodo - ${periodoPrevNominal}) ASC
+             ) AS rn
+        FROM actual a
+        JOIN marts.mv_eeff_ratios r
+          ON r.nomb_correg  = a.nomb_correg
+         AND r.moneda       = 'TOTAL'
+         AND r.tipo_entidad = a.tipo_entidad
+         AND r.periodo      < a.periodo_actual
+         AND r.periodo      >= ${opts.periodoActual - 100} -- limita a últimos 12m
+         AND ${sql.raw(colX)} IS NOT NULL
+         AND ${sql.raw(colY)} IS NOT NULL
+    ),
+    prev AS (
+      SELECT nomb_correg, periodo, x_prev, y_prev
+        FROM prev_candidatos
+       WHERE rn = 1
+    )
+    SELECT a.nomb_correg,
+           a.tipo_entidad,
+           a.x_actual::text       AS x_actual,
+           a.y_actual::text       AS y_actual,
+           p.x_prev::text         AS x_prev,
+           p.y_prev::text         AS y_prev,
+           a.peso::text           AS peso,
+           a.periodo_actual,
+           p.periodo              AS periodo_prev
+      FROM actual a
+      LEFT JOIN prev p USING (nomb_correg)
+      ORDER BY a.peso DESC NULLS LAST
+  `);
+
+  return rows.map((r) => ({
+    nomb_correg: r.nomb_correg,
+    tipo_entidad: r.tipo_entidad as NivelCOOPAC | SubsistemasSF,
+    x_actual: Number(r.x_actual),
+    y_actual: Number(r.y_actual),
+    x_prev: r.x_prev != null ? Number(r.x_prev) : null,
+    y_prev: r.y_prev != null ? Number(r.y_prev) : null,
+    peso: r.peso != null ? Number(r.peso) : null,
+    periodo_actual: Number(r.periodo_actual),
+    periodo_prev: r.periodo_prev != null ? Number(r.periodo_prev) : null,
+  }));
 }

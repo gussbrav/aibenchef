@@ -4,11 +4,13 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
+  EjeMetrica,
   FilaSF,
   FilaCOOPAC,
   PeriodoItem,
   SubsistemasSF,
   NivelCOOPAC,
+  TrayectoriaEntidad,
 } from "@/lib/domains/estadisticas-rapidas/types";
 import { LABEL_NIVEL } from "@/lib/domains/estadisticas-rapidas/types";
 import {
@@ -16,6 +18,7 @@ import {
   formatNumberCompact,
   tipoEntidadLabel,
 } from "@/app/dashboard/_lib/format";
+import { TrajectoryMatrix } from "./trajectory-matrix";
 
 // ============================================================================
 // Props
@@ -30,6 +33,12 @@ type Props = {
   periodoLabelCoopac: string;
   periodosSF: PeriodoItem[];
   periodosCoopac: PeriodoItem[];
+  // Matriz de Trayectoria
+  trayectoria: TrayectoriaEntidad[];
+  matrizNivel: NivelCOOPAC;
+  matrizEjeX: EjeMetrica;
+  matrizEjeY: EjeMetrica;
+  matrizVentana: number;
 };
 
 // ============================================================================
@@ -387,20 +396,50 @@ export function EstadisticasRapidasClient({
   periodoLabelCoopac,
   periodosSF,
   periodosCoopac,
+  trayectoria,
+  matrizNivel,
+  matrizEjeX,
+  matrizEjeY,
+  matrizVentana,
 }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"sf" | "coopac">("sf");
+  const [tab, setTab] = useState<"sf" | "coopac" | "matriz">("sf");
 
-  function buildUrl(sfPeriodo: number, coopacPeriodo: number) {
-    return `/dashboard/estadisticas-rapidas?sf=${sfPeriodo}&coopac=${coopacPeriodo}` as never;
+  // URL builder preserva TODOS los params (periodos + matriz) para no perder
+  // estado al cambiar un solo selector.
+  function buildUrl(overrides: Partial<{
+    sf: number; coopac: number;
+    mNivel: string; mX: string; mY: string; mVent: number;
+  }> = {}) {
+    const params = new URLSearchParams({
+      sf: String(overrides.sf ?? periodoSF),
+      coopac: String(overrides.coopac ?? periodoCoopac),
+      mNivel: overrides.mNivel ?? matrizNivel,
+      mX: overrides.mX ?? matrizEjeX,
+      mY: overrides.mY ?? matrizEjeY,
+      mVent: String(overrides.mVent ?? matrizVentana),
+    });
+    return `/dashboard/estadisticas-rapidas?${params.toString()}` as never;
   }
 
   function handleSFPeriodoChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    router.push(buildUrl(Number(e.target.value), periodoCoopac));
+    router.push(buildUrl({ sf: Number(e.target.value) }));
   }
 
   function handleCoopacPeriodoChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    router.push(buildUrl(periodoSF, Number(e.target.value)));
+    router.push(buildUrl({ coopac: Number(e.target.value) }));
+  }
+
+  function handleMatrizNivelChange(nivel: NivelCOOPAC) {
+    router.push(buildUrl({ mNivel: nivel }));
+  }
+
+  function handleMatrizEjeChange(eje: "x" | "y", metrica: EjeMetrica) {
+    router.push(buildUrl(eje === "x" ? { mX: metrica } : { mY: metrica }));
+  }
+
+  function handleMatrizVentanaChange(ventanaMeses: number) {
+    router.push(buildUrl({ mVent: ventanaMeses }));
   }
 
   // Agrupar SF por subsistema
@@ -485,6 +524,19 @@ export function EstadisticasRapidasClient({
         >
           COOPAC
         </button>
+        <button
+          onClick={() => setTab("matriz")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
+            tab === "matriz"
+              ? "border-brand-500 text-brand-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Matriz de Trayectoria
+          <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+            Beta
+          </span>
+        </button>
       </div>
 
       {/* Sistema Financiero */}
@@ -516,6 +568,50 @@ export function EstadisticasRapidasClient({
               </section>
             );
           })}
+        </div>
+      )}
+
+      {/* Matriz de Trayectoria */}
+      {tab === "matriz" && (
+        <div className="space-y-5">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600 leading-relaxed">
+            <div className="font-semibold text-slate-800 mb-1">Cómo leer la matriz</div>
+            Cada punto es una entidad posicionada en el plano de dos indicadores. La <strong>flecha</strong> muestra desde dónde venía hace {matrizVentana} meses — verde si mejoró, roja si empeoró. Los <strong>cuadrantes</strong> se dividen por la <em>mediana del sector</em> (no por cero absoluto), así ves quién está arriba o abajo del promedio real. El <strong>tamaño del punto</strong> es proporcional al patrimonio.
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="font-medium">Nivel:</span>
+              <select
+                value={matrizNivel}
+                onChange={(e) => handleMatrizNivelChange(e.target.value as NivelCOOPAC)}
+                className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {COOPAC_ORDER.map((n) => (
+                  <option key={n} value={n}>{LABEL_NIVEL[n]}</option>
+                ))}
+              </select>
+            </label>
+            <span className="text-xs font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+              Cierre {periodoLabelCoopac}
+            </span>
+          </div>
+
+          {trayectoria.length < 3 ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
+              No hay suficientes entidades con datos en el periodo seleccionado
+              para construir la matriz ({trayectoria.length} disponibles, mínimo 3).
+            </div>
+          ) : (
+            <TrajectoryMatrix
+              data={trayectoria}
+              ejeX={matrizEjeX}
+              ejeY={matrizEjeY}
+              ventanaMeses={matrizVentana}
+              onChangeEje={handleMatrizEjeChange}
+              onChangeVentana={handleMatrizVentanaChange}
+            />
+          )}
         </div>
       )}
 
