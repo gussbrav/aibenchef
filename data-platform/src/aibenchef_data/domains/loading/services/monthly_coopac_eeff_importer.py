@@ -651,9 +651,31 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
                     )
 
         if unresolved:
+            # Filtrar ruido típico que SBS mete en el XLS pero no es una cuenta:
+            # fechas ('2026-09-30 00:00:00'), notas al pie ('*La información...'),
+            # anotaciones ('(En Miles de Soles)', 'Tipo de Cambio Contable...').
+            # Si cambia SBS la convención, se agregan patrones aquí.
+            import re as _re
+            def _es_cuenta_real(nombre: str) -> bool:
+                n = nombre.strip()
+                if len(n) < 2 or len(n) > 150:
+                    return False
+                if n.startswith("*") or n.startswith("(") or n.startswith("#"):
+                    return False
+                if _re.match(r"^\d{4}-\d{2}-\d{2}", n):  # fecha YYYY-MM-DD
+                    return False
+                if "Tipo de Cambio Contable" in n:
+                    return False
+                if "información" in n.lower() and "incluye" in n.lower():
+                    return False
+                return True
+
+            unresolved_cuentas = [(o, n) for o, n in unresolved if _es_cuenta_real(n)]
+
             log.warning(
                 "coopac_eeff.filas_sin_match",
                 count=len(unresolved),
+                count_cuentas_reales=len(unresolved_cuentas),
                 muestra=unresolved[:10],
                 tipo_entidad=tipo_entidad,
                 tipo_estado=tipo_estado,
@@ -661,6 +683,53 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
                 source_file=source_file,
                 hint="Revisar si SBS renombró cuentas. Agregar en dw.cabecera_maestra si es cuenta nueva.",
             )
+
+            # Persistencia V219: dejar traza en admin.data_quality_checks para
+            # que el /dashboard/admin/data-quality muestre drift y el equipo
+            # pueda actuar antes de que los números del dashboard patinen.
+            # Convención: nomb_correg='__SHEET__' porque el chequeo es a nivel
+            # de sheet (no por entidad individual). status según severidad.
+            if unresolved_cuentas:
+                import json as _json
+                status = "critical" if len(unresolved_cuentas) > 5 else "warning"
+                payload = _json.dumps({
+                    "sheet": sheet.name,
+                    "source_file": source_file,
+                    "tipo_estado": tipo_estado,
+                    "tipo_entidad": tipo_entidad,
+                    "muestra": unresolved_cuentas[:20],
+                    "count_total": len(unresolved),
+                    "count_cuentas_reales": len(unresolved_cuentas),
+                })
+                try:
+                    async with self._conn.cursor() as _cur:
+                        await _cur.execute(
+                            """
+                            INSERT INTO admin.data_quality_checks
+                                (periodo, nomb_correg, check_type, status,
+                                 actual_value, payload)
+                            VALUES (%s, '__SHEET__', 'fila_sin_match_cabecera',
+                                    %s, %s, %s::jsonb)
+                            """,
+                            (
+                                layout.periodo_yyyymm,
+                                status,
+                                len(unresolved_cuentas),
+                                payload,
+                            ),
+                        )
+                    # Commit inmediato para que el DQ persista aunque el
+                    # importer rollbackee el batch de observaciones por un
+                    # error posterior en el mismo sheet.
+                    await self._conn.commit()
+                except Exception as _e:
+                    # No hacer fail el import por un bug de persistencia DQ.
+                    # El WARN structlog arriba ya dejó traza.
+                    log.error(
+                        "coopac_eeff.dq_persist_failed",
+                        error=str(_e),
+                        sheet=sheet.name,
+                    )
 
         # Dedup observaciones por (nomb_correg, moneda, codigo): conservar primera
         seen: set[tuple] = set()

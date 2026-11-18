@@ -101,7 +101,11 @@ export type AnomaliaReviewInput = {
 /* V2 Data Quality (issue #24)                                               */
 /* ──────────────────────────────────────────────────────────────────────── */
 
-export type DataQualityCheckType = "balance_contable" | "outlier_zscore" | "suma_subcuentas";
+export type DataQualityCheckType =
+  | "balance_contable"
+  | "outlier_zscore"
+  | "suma_subcuentas"
+  | "fila_sin_match_cabecera";
 
 /** Una fila de admin.data_quality_checks. */
 export type QualityCheckRow = {

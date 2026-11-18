@@ -122,7 +122,7 @@ async function setupSchema(url: string): Promise<void> {
         periodo INT NOT NULL,
         nomb_correg TEXT NOT NULL,
         check_type TEXT NOT NULL
-          CHECK (check_type IN ('balance_contable', 'outlier_zscore', 'suma_subcuentas')),
+          CHECK (check_type IN ('balance_contable', 'outlier_zscore', 'suma_subcuentas', 'fila_sin_match_cabecera')),
         cuenta_codigo TEXT,
         detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         carga_log_id BIGINT REFERENCES raw.carga_log(id) ON DELETE SET NULL,
