@@ -1,8 +1,20 @@
-"""Post-backfill COOPAC: refresh MVs + recompute PE para todos los periodos."""
+"""Post-backfill COOPAC: refresh MVs + recompute PE para todos los periodos.
+
+TCP keepalives obligatorios: refresh_all_marts(TRUE) puede tardar varios
+minutos sin tráfico; sin keepalives el NAT/firewall corta el socket y el
+cliente recibe "server closed the connection unexpectedly" aunque el
+servidor siga vivo. keepalives_idle=30s fuerza heartbeat TCP cada 30s.
+"""
 import psycopg2, sys, time
 sys.stdout.reconfigure(encoding="utf-8")
 DSN = "postgres://postgres:Azoramind_1234@panel.azoramind.com:5433/aibenchef?sslmode=disable"
-conn = psycopg2.connect(DSN)
+conn = psycopg2.connect(
+    DSN,
+    keepalives=1,
+    keepalives_idle=30,
+    keepalives_interval=10,
+    keepalives_count=5,
+)
 conn.autocommit = True
 cur = conn.cursor()
 
