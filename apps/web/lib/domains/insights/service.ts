@@ -154,10 +154,14 @@ export async function generateInsight(
     throw err;
   }
 
-  // Armar prompt context
+  // Armar prompt context. Para punto_equilibrio v4 enriquecemos server-side
+  // con indicadores oficiales SBS (mora, ROE) y montos absolutos — el client
+  // solo envia ratios, lo que hace que el LLM confunda "ratio bajo" con
+  // "recorte de costos" cuando en realidad el denominador (cartera) crecio.
   const periodoAnterior = calcularPeriodoAnterior(input.periodo);
+  const enrichedInput = await maybeEnrichContext(input);
   const promptCtx: PromptContext = {
-    ...input,
+    ...enrichedInput,
     periodoLabel: periodoLabel(input.periodo),
     periodoAnterior,
     periodoAnteriorLabel: periodoLabel(periodoAnterior),
@@ -326,6 +330,104 @@ function periodoLabel(periodo: number): string {
   const mes = periodo % 100;
   const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   return `${meses[mes - 1] ?? "?"} ${anio}`;
+}
+
+/**
+ * Enriquece el contexto con datos server-side cuando la seccion lo necesita.
+ * Hoy solo aplica a punto_equilibrio v4, que requiere:
+ *   - moraReal, roe: indicador oficial SBS por entidad en el periodo del cierre
+ *   - montosPropia: cartera bruta absoluta de la entidad propia en los
+ *     periodos de la tendencia (para que el LLM pueda afirmar movimiento
+ *     absoluto en vez de "recorto costos" por caida de ratio)
+ *
+ * Si la seccion no lo necesita o la query falla, devuelve el input intacto.
+ * Nunca rompe la generacion por un fallo de enriquecimiento — es best-effort.
+ */
+async function maybeEnrichContext(
+  input: GenerateInsightInput,
+): Promise<GenerateInsightInput> {
+  if (input.seccion !== "punto_equilibrio") return input;
+
+  try {
+    const existingContexto = input.contexto ?? {};
+    // No sobrescribir si el client ya envio los campos (ej. test o bypass).
+    const yaTieneMora = "moraReal" in existingContexto;
+    const yaTieneRoe = "roe" in existingContexto;
+    const yaTieneMontos = "montosPropia" in existingContexto;
+    if (yaTieneMora && yaTieneRoe && yaTieneMontos) return input;
+
+    const peerGroupConPropia = Array.from(
+      new Set([input.entidadPropia, ...input.peerGroup]),
+    );
+
+    const [indRows, montosRows] = await Promise.all([
+      !yaTieneMora || !yaTieneRoe
+        ? db.execute<{
+            nomb_correg: string;
+            mora: string | null;
+            roe: string | null;
+          }>(sql`
+            SELECT er.nomb_correg,
+                   COALESCE(ind.mora_atrasados_sobre_directos / 100.0,
+                            er.ratio_mora)::text AS mora,
+                   COALESCE(ind.roe_sbs / 100.0,
+                            er.roe)::text        AS roe
+              FROM marts.mv_eeff_ratios er
+              LEFT JOIN marts.v_indicadores_ancho ind
+                     ON ind.periodo    = er.periodo
+                    AND ind.nomb_correg = er.nomb_correg
+             WHERE er.periodo    = ${input.periodo}
+               AND er.moneda     = 'TOTAL'
+               AND er.nomb_correg = ANY(${peerGroupConPropia}::text[])
+          `)
+        : Promise.resolve([]),
+      !yaTieneMontos
+        ? db.execute<{
+            periodo: number;
+            cartera_mm: string | null;
+          }>(sql`
+            SELECT periodo,
+                   (cartera_bruta / 1000.0)::text AS cartera_mm
+              FROM marts.mv_eeff_ratios
+             WHERE nomb_correg = ${input.entidadPropia}
+               AND moneda      = 'TOTAL'
+               AND periodo    <= ${input.periodo}
+             ORDER BY periodo DESC
+             LIMIT 4
+          `)
+        : Promise.resolve([]),
+    ]);
+
+    const moraReal: Record<string, number | null> = {};
+    const roe: Record<string, number | null> = {};
+    for (const r of indRows) {
+      moraReal[r.nomb_correg] = r.mora != null ? Number(r.mora) : null;
+      roe[r.nomb_correg] = r.roe != null ? Number(r.roe) : null;
+    }
+
+    const montosPropia = montosRows
+      .filter((r) => r.cartera_mm != null)
+      .map((r) => ({
+        periodoLabel: periodoLabel(Number(r.periodo)),
+        carteraBrutaMM: Number(r.cartera_mm),
+      }))
+      // Al orden cronologico ascendente para alinear con tendenciaPropia
+      .reverse();
+
+    return {
+      ...input,
+      contexto: {
+        ...existingContexto,
+        ...(yaTieneMora ? {} : { moraReal }),
+        ...(yaTieneRoe ? {} : { roe }),
+        ...(yaTieneMontos ? {} : { montosPropia }),
+      },
+    };
+  } catch {
+    // best-effort: si falla la query, seguir con el contexto original.
+    // El prompt v4 degrada declarando que no tiene los datos.
+    return input;
+  }
 }
 
 function rowToInsight(r: Record<string, unknown>): ReportInsight {

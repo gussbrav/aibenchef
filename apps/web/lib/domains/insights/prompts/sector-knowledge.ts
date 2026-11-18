@@ -28,6 +28,23 @@ TIPOS DE ENTIDAD (por marco regulatorio):
   ROE 5-15%, Mora 5-9%, Ratio Capital 13-17%.
 - BANCA ESPECIALIZADA EN MICROFINANZAS: incluye Mibanco y Compartamos.
   Mora mas alta que Banca Multiple pero menor que otras microfinancieras.
+- COOPAC (Cooperativas de Ahorro y Credito): reguladas por SBS desde 2018.
+  Niveles SBS por tamaño de activos: N1 (mas pequeñas) → N2A → N2B → N3
+  (mas grandes). Metricas sectoriales promedio son poco representativas
+  por heterogeneidad extrema — hay COOPAC con <S/ 5MM activos y otras
+  con >S/ 500MM. Rango tipico muy amplio: ROE 3-20%, Mora 3-12%.
+  CONSIDERACION CRITICA: hay dos modelos de negocio radicalmente distintos
+  que NO se distinguen en la data regulatoria:
+  * COOPAC de vinculo cerrado (socios = empleados de una institucion
+    especifica, ej. SUNAT, ministerios, fuerzas armadas, empresa privada;
+    cobro por planilla): cartera cautiva, mora estructuralmente baja,
+    rendimiento estable pero no comparable con mercado abierto.
+  * COOPAC abierta al publico: compite por cliente, rendimiento mas alto,
+    mora comparable a CMAC/CRAC del mismo segmento.
+  Si el peer group mezcla una COOPAC cerrada con una abierta (o con
+  cualquier otro tipo de entidad), las comparaciones directas de
+  rendimiento, PE y margen NO son concluyentes — hay que advertirlo
+  explicitamente al usuario.
 
 TERMINOLOGIA DE CALIDAD DE CARTERA (jerarquia de peor a mejor):
 1. Cartera Atrasada = Vencida + En Cobranza Judicial (mora simple)

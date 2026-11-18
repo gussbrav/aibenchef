@@ -234,6 +234,17 @@ export function PuntoEquilibrioClient({
     }
   }, [searchParams]);
 
+  // Lookup entidad -> tipoEntidad (BANCOS, CMAC, COOPAC_N2B, etc). Pasa a
+  // los tabs para que el contexto del LLM declare el universo (solo coopac /
+  // solo SF / mixto) y evite comparaciones heterogeneas silenciosas.
+  const tipoPorEntidad = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        entidadesDisponibles.map((e) => [e.nombCorreg, e.tipoEntidad ?? ""]),
+      ),
+    [entidadesDisponibles],
+  );
+
   return (
     <div className="space-y-5 max-w-[1400px] mx-auto px-2">
       {planLimited && (
@@ -349,6 +360,7 @@ export function PuntoEquilibrioClient({
             clienteSlug={cliente.slug}
             entidadPropia={entidadActual}
             periodo={config.hastaPeriodo}
+            tipoPorEntidad={tipoPorEntidad}
           />
           {peerModalCierreOpen && (
             <PeerGroupModal
@@ -364,7 +376,7 @@ export function PuntoEquilibrioClient({
         </div>
       )}
       {tab === "historico" && config.granularidad !== "cierre" && (
-        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series.filter((s) => s.entidad !== entidadActual)} clienteSlug={cliente.slug} />
+        <HistoricoTable data={historico} entidad={entidadActual} granularidad={config.granularidad} peerSeries={series.filter((s) => s.entidad !== entidadActual)} clienteSlug={cliente.slug} tipoPorEntidad={tipoPorEntidad} />
       )}
       {tab === "comparativo" && (
         <ComparativoView
@@ -613,6 +625,21 @@ const PEER_SF_LABELS: Record<string, string> = {
 };
 function peerSectionKey(te: string | null | undefined): string {
   return !te || !te.startsWith("COOPAC_") ? "__SF__" : te;
+}
+
+// Clasifica el universo de un peer group segun los tipos regulatorios
+// presentes. Usado por los insights AI para que el prompt declare al usuario
+// si esta comparando dentro de COOPAC, dentro de Sistema Financiero o mixto.
+function computeUniversoTipo(
+  tipos: (string | null | undefined)[],
+): "solo_coopac" | "solo_sf" | "mixto" | "no_declarado" {
+  const conocidos = tipos.filter((t): t is string => !!t);
+  if (conocidos.length === 0) return "no_declarado";
+  const hayCoopac = conocidos.some((t) => t.startsWith("COOPAC_"));
+  const haySF = conocidos.some((t) => !t.startsWith("COOPAC_"));
+  if (hayCoopac && haySF) return "mixto";
+  if (hayCoopac) return "solo_coopac";
+  return "solo_sf";
 }
 function peerSectionLabel(key: string, firstTipo?: string | null): string {
   if (key !== "__SF__") {
@@ -988,13 +1015,14 @@ const LS_COL_ORDER = "pe-col-order-v1";
  * Ambos vienen pre-computados del backend sobre los componentes.
  */
 function HistoricoTable({
-  data, entidad, granularidad, peerSeries, clienteSlug,
+  data, entidad, granularidad, peerSeries, clienteSlug, tipoPorEntidad,
 }: {
   data: PuntoEquilibrioRow[];
   entidad: string;
   granularidad?: Granularidad;
   peerSeries?: PuntoEquilibrioSerie[];
   clienteSlug: string;
+  tipoPorEntidad?: Record<string, string>;
 }) {
   const [activeEntity, setActiveEntity] = useState<string>(entidad);
 
@@ -1641,6 +1669,16 @@ function HistoricoTable({
         const entidadesCtx = [propiaCtx, ...peerCtxs];
         const peerGroup = entidadesCtx.map((e) => e.entidad);
 
+        // v4 insight: declarar universo del benchmark y mapa de tipos por
+        // entidad. Sin esto el LLM compara coopac cerrada vs abierta (o
+        // coopac vs banco) sin advertencia.
+        const tipoPorEntidadCtx = tipoPorEntidad
+          ? Object.fromEntries(
+              entidadesCtx.map((e) => [e.entidad, tipoPorEntidad[e.entidad] ?? ""]),
+            )
+          : {};
+        const universoTipo = computeUniversoTipo(Object.values(tipoPorEntidadCtx));
+
         const tendenciaPropia = data
           .filter((p) =>
             p.pctRendimiento != null && p.pctMargenNeto != null &&
@@ -1691,7 +1729,12 @@ function HistoricoTable({
                 clienteSlug={clienteSlug}
                 entidadPropia={entidad}
                 peerGroup={peerGroup}
-                contexto={{ entidades: entidadesCtx, tendenciaPropia }}
+                contexto={{
+                  entidades: entidadesCtx,
+                  tendenciaPropia,
+                  universoTipo,
+                  tipoPorEntidad: tipoPorEntidadCtx,
+                }}
               />
             </div>
           </>
@@ -1778,11 +1821,13 @@ function TablaComparativaCierre({
   clienteSlug,
   entidadPropia,
   periodo,
+  tipoPorEntidad,
 }: {
   series: PuntoEquilibrioSerie[];
   clienteSlug: string;
   entidadPropia: string;
   periodo: number;
+  tipoPorEntidad?: Record<string, string>;
 }) {
   // Expand/collapse por row (persistido en localStorage con la MISMA key
   // que la tabla historica → si el user expande 'Gasto Financiero' en
@@ -2380,6 +2425,15 @@ function TablaComparativaCierre({
         if (entidadesCtx.length === 0) return null;
         const peerGroup = entidadesCtx.map((e) => e.entidad);
 
+        // v4 insight: declarar universo + tipos para evitar comparaciones
+        // heterogeneas silenciosas (coopac vs banco, cerrada vs abierta).
+        const tipoPorEntidadCtx = tipoPorEntidad
+          ? Object.fromEntries(
+              entidadesCtx.map((e) => [e.entidad, tipoPorEntidad[e.entidad] ?? ""]),
+            )
+          : {};
+        const universoTipo = computeUniversoTipo(Object.values(tipoPorEntidadCtx));
+
         // Tendencia historica de la ENTIDAD PROPIA: ultimos 4 puntos con
         // todos los componentes clave disponibles.
         const propiaS = effectiveSeries.find((s) => s.esPropio);
@@ -2410,7 +2464,12 @@ function TablaComparativaCierre({
               clienteSlug={clienteSlug}
               entidadPropia={entidadPropia}
               peerGroup={peerGroup}
-              contexto={{ entidades: entidadesCtx, tendenciaPropia }}
+              contexto={{
+                entidades: entidadesCtx,
+                tendenciaPropia,
+                universoTipo,
+                tipoPorEntidad: tipoPorEntidadCtx,
+              }}
             />
           </div>
         );
