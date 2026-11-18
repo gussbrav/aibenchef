@@ -3427,15 +3427,19 @@ def pipeline_post_import_check(
     help="Origen del run: cron | manual:<email> | cli:<user>.",
 )
 def pipeline_quality_check(periodo: str, triggered_by: str) -> None:
-    """Corre los 3 chequeos de data quality V2 y persiste en admin.data_quality_checks.
+    """Corre los 4 chequeos de data quality y persiste en admin.data_quality_checks.
 
-    Cierra el gap V2 (issue #24): valida coherencia SEMANTICA de los EEFF
-    despues del import, no solo coherencia estructural.
+    Cierra el gap V2 (issue #24) + V219 (gobernanza catalogo SBS): valida
+    coherencia SEMANTICA + ESTRUCTURAL de los EEFF despues del import.
 
     Checks:
-      1. balance_contable — Activos = Pasivos + Patrimonio (BANCOS + FIN)
-      2. outlier_zscore  — valor actual vs media+stddev 11m previos
-      3. suma_subcuentas — padre = SUM(hijos directos) (BANCOS + FIN)
+      1. balance_contable       — Activos = Pasivos + Patrimonio (BANCOS + FIN)
+      2. outlier_zscore         — valor actual vs media+stddev 11m previos
+      3. suma_subcuentas        — padre = SUM(hijos directos) (BANCOS + FIN)
+      4. fila_sin_match_cabecera (V219) — reporta filas del XLS que el parser
+         no logró mapear a dw.cabecera_maestra. Persistidas por el importer
+         al momento del scrape/import. Acá se SOLO REPORTAN (ya estan persistidas)
+         y el auto-resolve se encarga de limpiar las que ya no aplican.
 
     Cada resultado queda persistido con status (ok/warning/critical) y
     payload JSONB para inspeccion en /dashboard/admin/pipeline.
@@ -3535,6 +3539,56 @@ def pipeline_quality_check(periodo: str, triggered_by: str) -> None:
                             (p.to_int(), log.log_id, p.to_int()),
                         )
                         click.echo(f"  Check 3 (subcuentas):  {cur.rowcount} anomalías")
+
+                    # --- Check 4 (V219): fila_sin_match_cabecera ---
+                    # Este check NO ejecuta INSERT — el parser persiste al momento
+                    # del import (coopac_eeff.subitem_sin_match). Acá solo
+                    # reportamos las anomalías YA persistidas para el periodo,
+                    # distinguiendo por sheet/tipo_entidad. El auto-resolve
+                    # posterior se encarga de marcar las que ya no se reproducen.
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """
+                            SELECT
+                                payload->>'tipo_entidad' AS nivel,
+                                payload->>'sheet'        AS sheet,
+                                status,
+                                actual_value::int        AS cuentas_sin_match,
+                                payload->'muestra'       AS muestra
+                            FROM admin.data_quality_checks
+                            WHERE check_type='fila_sin_match_cabecera'
+                              AND periodo    = %s
+                              AND reviewed_at IS NULL
+                            ORDER BY status DESC, nivel, sheet
+                            """,
+                            (p.to_int(),),
+                        )
+                        rows = await cur.fetchall()
+                        if rows:
+                            click.echo(
+                                f"  Check 4 (nuevas cuentas en XLS): {len(rows)} sheet(s) "
+                                "con filas sin match en cabecera"
+                            )
+                            for nivel, sheet, st, n, muestra in rows:
+                                click.echo(
+                                    f"    [{st}] {nivel or '?':12s} {sheet or '?':12s} "
+                                    f"— {n} cuenta(s) desconocida(s)"
+                                )
+                            click.echo(
+                                "    Revisa payload->muestra en "
+                                "admin.data_quality_checks y decide:"
+                            )
+                            click.echo(
+                                "    (a) renombrar → UPDATE dw.cabecera_maestra SET nombre_fuente..."
+                            )
+                            click.echo(
+                                "    (b) cuenta nueva → INSERT INTO dw.cabecera_maestra (...)"
+                            )
+                        else:
+                            click.echo(
+                                "  Check 4 (nuevas cuentas en XLS): 0 drift — "
+                                "cabecera sincronizada ✓"
+                            )
 
                     # --- Auto-resolve de anomalias stale (issue #43) ---
                     # Cualquier check previo (carga_log_id != log_id actual) que ya no
