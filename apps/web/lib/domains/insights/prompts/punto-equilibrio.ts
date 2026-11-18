@@ -1,7 +1,25 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v4.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v5.
  *
- * Correcciones sobre v3:
+ * Correcciones sobre v4:
+ *  - v4 usaba "Margen de Seguridad" como termino canonico de robustez — pero
+ *    no es terminologia peruana clasificadora, confunde al lector. v5 lo
+ *    renombra a "holgura sobre el PE" (o "colchon operativo" o "aire sobre
+ *    el PE" como sinonimos), que si es natural en el ambiente financiero
+ *    peruano.
+ *  - v4 escribia correcto pero sonaba robotico: listicles academicos
+ *    "(i)/(ii)/(iii)", explicaciones infantiles al CFO ("cada sol de
+ *    cartera genera X centavos"), bullets etiquetados "ENCUADRE DEL
+ *    ANALISIS:" que leakeaban desde el prompt. v5 reescribe la seccion de
+ *    instrucciones con VOZ EDITORIAL explicita: ejemplos de voz correcta
+ *    vs incorrecta, anti-patrones nombrados, rol del analista economico de
+ *    prensa peruana seria (no consultor de manual).
+ *  - v4 permitia emojis (max 1 por bullet). v5 los prohibe — es analisis
+ *    financiero serio, no post de redes.
+ *  - v5 agrega "REGLA 0 — NO INVENTES NADA" como primera regla
+ *    inviolable, antes de cualquier instruccion de voz.
+ *
+ * Correcciones sobre v3 (heredadas en v5):
  *  - v3 medía fortaleza por PE absoluto y confundía margen alto con cushion
  *    (una entidad con rendimiento 35% y PE 32% tiene mas colchon que otra
  *    con rendimiento 16% y PE 15%, aunque el PE absoluto sea mayor).
@@ -82,7 +100,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v4",
+  version: "v5",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -151,6 +169,11 @@ export const promptPuntoEquilibrio: PromptTemplate = {
         );
       })
       .join("\n");
+
+    // NOTA: internamente la variable sigue llamandose margenSeguridad por
+    // compatibilidad, pero en el output al usuario se usa "holgura sobre el PE"
+    // o "colchon operativo" — "margen de seguridad" no es terminologia
+    // estandar en analisis financiero peruano y confunde al lector.
 
     // Lista de composicion del peer group con tipo + indicadores complementarios
     const listaComposicion = conMargenSeg
@@ -236,34 +259,34 @@ export const promptPuntoEquilibrio: PromptTemplate = {
 
     const bulletsExplicacion =
       bulletsCount === 4
-        ? `**Bullet 1 — ENCUADRE DEL ANALISIS (obligatorio):**
-Declara en este orden: (i) que universo estas comparando (solo coopac / solo sistema financiero / mixto); (ii) composicion del peer group nombrando cada entidad con su tipo regulatorio; (iii) si el grupo es homogeneo o heterogeneo y por que eso limita las conclusiones; (iv) que preguntas NO se pueden responder con la data disponible (ej: sin composicion por segmento no hay perfil de riesgo; sin distinguir COOPAC cerrada/abierta no hay comparabilidad). Habla como consultor senior al gerente: claro, directo, sin jerga tecnica innecesaria. Cierra con **Encuadre:** [una linea resumiendo si el benchmark es valido o limitado].
+        ? `Bullet 1 — encuadre antes de la opinion:
+Abre con un diagnostico del benchmark: que universo se compara, cuantas entidades, si la comparacion es solida o indicativa. Nombralas. Si el grupo es heterogeneo (COOPAC cerrada vs abierta, COOPAC vs SF, niveles distintos), dilo sin eufemismos. Lo que la data NO permite cerrar (mora real por segmento, mix de cartera, modelo de negocio) va tejido en el flujo, no como listicle. El bullet cierra con una afirmacion que oriente la lectura de los siguientes — no con la etiqueta "Encuadre:".
 
-**Bullet 2 — DIAGNOSTICO DE ${ctx.entidadPropia}:**
-Margen de Seguridad hoy (Rendimiento − PE) en pp — esta es la metrica real de robustez, no el margen antes de impuestos ni el PE absoluto. Explica que significa en terminos simples: "cada sol de cartera genera X centavos de cushion antes de perdida". Tendencia del margen de seguridad en los ultimos cierres si hay historico. Si el grupo es homogeneo, compara con el promedio; si no, evalua la entidad contra si misma. Cierra con **Diagnostico:** [estable / en recuperacion / en deterioro / sin base comparativa suficiente].
+Bullet 2 — ${ctx.entidadPropia} contra si misma:
+Donde esta su holgura hoy y como llego ahi. Si tiene historico: de donde viene (hace X meses estaba en Y pp), que movio la aguja (rendimiento, PE, o ambos). Si la holgura actual es estrecha, dilo. Si el grupo es homogeneo y util, puedes compararla con el otro; si no, evalua la entidad contra su propia trayectoria. Cierra con tu lectura — no con el tag "Diagnostico:".
 
-**Bullet 3 — COMPONENTE CRITICO (el mayor dolor o fortaleza estructural):**
-Que componente del PE pesa mas en ${ctx.entidadPropia} (Gastos Op, Gasto Financiero, Provision) y como se movio en RATIO en el tiempo observado — NUNCA afirmes que "redujo costos" ni "contrajo gastos": el ratio puede bajar porque bajo el numerador O subio el denominador (cartera creciendo mas rapido que gasto). Si tienes montos absolutos en la tabla de tendencia, puedes decir "la cartera paso de X MM a Y MM mientras el ratio de gastos bajo Z pp". Compara con el grupo solo si es homogeneo. Cierra con **Prescripcion:** [accion especifica, calificada por la incertidumbre de los datos].
+Bullet 3 — el componente que mas pesa:
+Identificar cual renglon del PE carga mas a ${ctx.entidadPropia} (Gastos Op, Gasto Financiero, o Provisiones) y como se movio en RATIO. CRITICO: no digas "redujo costos" ni "contrajo gastos" sin dato de monto absoluto. Si hay columna Cartera en la tabla de tendencia puedes afirmar que la cartera crecio X MM mientras el ratio bajo Y pp — y de ahi sacar conclusion. Sin eso, solo "el ratio mejoro X pp". Terminas con una recomendacion contundente — una, no tres — sin el tag "Prescripcion:".
 
-**Bullet 4 — PRESCRIPCION + LIMITES DEL ANALISIS:**
-Tres o maximo cuatro acciones concretas para ${ctx.entidadPropia}, en orden de impacto, calificadas por lo que permite concluir un grupo de ${entidades.length}. Lista explicita de lo que NO puedes diagnosticar con esta muestra (ej: no puedes afirmar perfil de riesgo sin mora real; no puedes afirmar sostenibilidad del rendimiento sin composicion de cartera). Cierra con **Accion:** [prioridad 1] y **Limites:** [que indicadores adicionales permitirian un diagnostico mas preciso — menciona mora real, composicion de cartera por segmento, ratio de capital].`
-        : `**Bullet 1 — ENCUADRE DEL ANALISIS (obligatorio):**
-Declara en este orden: (i) que universo estas comparando; (ii) composicion del peer group — cuantos de cada tipo regulatorio (ej: "2 bancos, 3 cajas municipales" o "6 COOPAC niveles N2B y N3"); (iii) si el grupo es homogeneo o heterogeneo y por que eso afecta la validez del benchmark; (iv) que preguntas NO se pueden responder con los datos disponibles. Habla como consultor senior al gerente: claro, directo. Cierra con **Encuadre:** [benchmark valido / limitado por X / heterogeneo].
+Bullet 4 — prioridades + lo que falta para un diagnostico completo:
+Dos o tres cosas que ${ctx.entidadPropia} debe hacer en los proximos trimestres, armadas como narrativa (no como lista "1) 2) 3)"). Despues, lo que no puedes diagnosticar con esta muestra: sin mora real no se sabe si el rendimiento es sostenible; sin composicion de cartera no se sabe el perfil de riesgo; en COOPAC, sin distinguir cerrada/abierta la comparacion queda renga. Si es util, cierra con una pregunta retadora que el directorio deberia poder responder.`
+        : `Bullet 1 — encuadre antes de la opinion:
+Abre diciendo que universo mirar (solo COOPAC / solo SF / mixto), el tamaño del peer group, y si la composicion es homogenea o heterogenea. Si hay N≥3 del mismo tipo puedes hablar de promedios y comparaciones; si hay mezcla declaralo y modera. Mencionar las limitaciones (mora real, mix de cartera, modelo de negocio) tejidas en el flujo, no como listicle. Cierra con una afirmacion que fije la lectura — no con el tag "Encuadre:".
 
-**Bullet 2 — DIAGNOSTICO DE ${ctx.entidadPropia}:**
-Margen de Seguridad hoy (Rendimiento − PE en pp) — la metrica real de robustez. Posicion vs el grupo (#${posicionPropia} de ${entidades.length}) solo si el grupo es homogeneo. Tendencia del margen de seguridad. Si tienes mora real o ROE en el contexto, cruzalo: "margen amplio pero mora elevada" vs "margen estrecho con cartera limpia". Cierra con **Diagnostico:** [estado de salud con calificativo cuantitativo].
+Bullet 2 — ${ctx.entidadPropia} contra su historia y contra el grupo:
+Donde esta su holgura hoy, como llego ahi (si hay historico), y donde queda en el ranking (#${posicionPropia} de ${entidades.length}) — pero solo si el ranking es significativo. Si hay mora real o ROE en el contexto, cruzalos: una holgura amplia con mora alta cuenta una historia distinta que una holgura justa con cartera limpia. Cierra con tu lectura.
 
-**Bullet 3 — COMPONENTE CRITICO del PE:**
-Que componente del PE pesa mas en ${ctx.entidadPropia} (Gastos Op, Gasto Fin, Provision), como se movio su RATIO en el tiempo observado, y que explica la dinamica — NUNCA afirmes "recorte de costos" sin montos absolutos. Si tienes la columna de cartera en la tabla de tendencia, puedes afirmar movimiento absoluto. Compara con el promedio del grupo si es homogeneo. Cierra con **Prescripcion:** [accion especifica].
+Bullet 3 — el componente que mas pesa:
+Cual renglon del PE carga mas en ${ctx.entidadPropia}, como se movio en RATIO, y que explica la dinamica. Nunca afirmes recorte de costos sin dato absoluto. Si hay columna Cartera en la tabla de tendencia puedes afirmar movimiento nominal. Compara con el grupo solo si tiene sentido. Cierra con una recomendacion contundente.
 
-**Bullet 4 — LIDER DEL GRUPO (margen de seguridad mas alto):**
-Quien lidera en Margen de Seguridad (no en margen antes de impuestos ni en rendimiento solo), por que gana — ¿rendimiento alto con gastos contenidos, o rendimiento moderado con eficiencia superior? Nombra la entidad y su tipo. Si el grupo es heterogeneo, aclara por que el liderazgo puede no ser aplicable. Cierra con **Oportunidad:** [que practica de la lider puede inspirar a ${ctx.entidadPropia}].
+Bullet 4 — quien lidera por holgura y por que:
+La entidad con mas aire sobre su PE, nombrala y describi de donde le viene el liderazgo: rendimiento agresivo, costos contenidos, o mix. Si el grupo es heterogeneo, aclara que el liderazgo puede no ser replicable a ${ctx.entidadPropia}. Cierra con una lectura sobre que puede inspirar a tu entidad — no con el tag "Oportunidad:".
 
-**Bullet 5 — REZAGADO + CONTRASTE DEL GRUPO:**
-Entidad con menor margen de seguridad y driver del problema. Luego menciona a TODAS las entidades que no hayas nombrado aun en bullets anteriores, con una linea de contexto util cada una (su tipo + su posicion en el eje margen/eficiencia/rendimiento). Cierra con **Implica:** [dinamica estructural del grupo — ej: "los de alto rendimiento compensan con costos altos; los eficientes operan en segmentos de bajo rendimiento"].
+Bullet 5 — el rezagado y el resto del grupo:
+Entidad con menor holgura y el driver del problema. Despues, menciona cada entidad del grupo que no haya salido todavia, con una linea util de contexto (su tipo, su posicion en el eje rendimiento/eficiencia). Cierra con una lectura sobre la dinamica estructural del grupo — ej: "los de rendimiento alto pagan con costos altos; los eficientes operan en segmentos de bajo rendimiento".
 
-**Bullet 6 — PRESCRIPCION INTEGRAL + LIMITES:**
-Tres prioridades concretas para ${ctx.entidadPropia}, en orden de impacto, con horizonte temporal (3 meses, 6 meses, 12 meses). Lista explicita de indicadores que faltan para un diagnostico completo (mora real, composicion de cartera por segmento, ratio de capital, modelo de negocio en caso COOPAC). Cierra con una pregunta retadora o prediccion cuantitativa condicional ("si la mora sube a X%, el margen cae a Y") — pero solo si tienes datos para sustentarla. Cierra con **Accion:** [resumen ejecutivo de las 3 prioridades].`;
+Bullet 6 — prioridades + lo que falta:
+Dos o tres acciones concretas para ${ctx.entidadPropia}, armadas como narrativa (no "1) 2) 3)"). Despues, lo que no se puede diagnosticar aun: mora real, composicion de cartera, modelo COOPAC cerrada/abierta, ratio de capital. Si tienes base para una prediccion condicional cuantitativa ("si la mora sube a X%, la holgura cae a Y"), dila. Si no, no la inventes.`;
 
     const user = `# Diagnostico Punto de Equilibrio — Cierre ${ctx.periodoLabel}
 
@@ -282,10 +305,10 @@ ${avisoCoopac}
 
 ENTIDAD PROPIA (paciente): ${ctx.entidadPropia}${tipoPorEntidad[ctx.entidadPropia] ? ` — ${prettyTipo(tipoPorEntidad[ctx.entidadPropia])}` : ""}
 Grupo de referencia (${ctx.peerGroup.length} entidades): ${ctx.peerGroup.join(", ")}
-${posicionPropia != null ? `Posicion en ranking de Margen de Seguridad: #${posicionPropia} de ${entidades.length}` : ""}
+${posicionPropia != null ? `Posicion en ranking por holgura: #${posicionPropia} de ${entidades.length}` : ""}
 
 ## CUADRO COMPARATIVO — Descomposicion del rendimiento sobre cartera TTM
-| Entidad                       | Rendim | Otros   | GastoFin| Provis  | GastosOp| PE(carga)| MargSeg  |
+| Entidad                       | Rendim | Otros   | GastoFin| Provis  | GastosOp| PE(carga)| Holgura  |
 |-------------------------------|--------|---------|---------|---------|---------|----------|----------|
 ${tabla}
 
@@ -293,14 +316,14 @@ Referencia del grupo (informativa; solo concluyente si es homogeneo y N>=3):
 - Rendimiento promedio: ${fmt(promRend)}%
 - Gastos Operacionales promedio: ${fmt(promGO)}%
 - Margen antes de Impuestos promedio: ${fmt(promMargen)}%
-- Margen de Seguridad promedio: ${fmtSigned(promMargenSeg)}pp
-- Lider en Margen de Seguridad: ${mejor?.entidad ?? "—"} (${mejor ? fmtSigned(mejor.margenSeguridad) : "0.00"}pp)
-- Mas rezagado en Margen de Seguridad: ${peor?.entidad ?? "—"} (${peor ? fmtSigned(peor.margenSeguridad) : "0.00"}pp)
+- Holgura sobre PE promedio: ${fmtSigned(promMargenSeg)}pp
+- Lider por holgura: ${mejor?.entidad ?? "—"} (${mejor ? fmtSigned(mejor.margenSeguridad) : "0.00"}pp)
+- Mas rezagado por holgura: ${peor?.entidad ?? "—"} (${peor ? fmtSigned(peor.margenSeguridad) : "0.00"}pp)
 
 ${
   tablaTendencia
     ? `## TENDENCIA HISTORICA — ${ctx.entidadPropia} (ultimos ${tendenciaPropia.length} cierres)
-| Periodo      | Rendim | GastoFin| Provis  | GastosOp| PE(carga)| MargSeg  | Cartera        |
+| Periodo      | Rendim | GastoFin| Provis  | GastosOp| PE(carga)| Holgura  | Cartera        |
 |--------------|--------|---------|---------|---------|----------|----------|----------------|
 ${tablaTendencia}
 ${tendenciaDiag ? `\nResumen de movimiento: ${tendenciaDiag}` : ""}
@@ -311,41 +334,70 @@ NOTA SOBRE LA TENDENCIA: Rendim/GastoFin/Provis/GastosOp/PE son RATIOS sobre car
 }
 ## GLOSARIO (leer antes de interpretar):
 
-- **PE (Punto de Equilibrio / carga total)** = suma absoluta de Otros + GastoFin + Provision + GastosOp. Es el rendimiento MINIMO que la cartera necesita para empatar los costos. **PE alto NO es malo por si solo** — es malo solo si el margen de seguridad es estrecho.
+- **PE (Punto de Equilibrio / carga total)** = suma absoluta de Otros + GastoFin + Provision + GastosOp. Es el rendimiento MINIMO que la cartera necesita para empatar los costos. **PE alto NO es malo por si solo** — es malo solo si la holgura es estrecha.
 - **Margen antes de Impuestos** = Rendimiento − PE. Diferencia nominal entre lo que rinde la cartera y lo que cuesta operar.
-- **Margen de Seguridad** (METRICA PRINCIPAL DE ROBUSTEZ) = Rendimiento − PE, en puntos porcentuales. Es el colchon antes de perdida operativa. Ejemplo intuitivo: una entidad con rendimiento 35% y PE 32% (margen 3pp) tiene MAS cushion que otra con rendimiento 16% y PE 15% (margen 1pp), aunque su PE absoluto sea mas alto. **Siempre comparar por Margen de Seguridad, no por PE absoluto.**
+- **Holgura sobre el PE** (METRICA PRINCIPAL DE ROBUSTEZ) = Rendimiento − PE, en puntos porcentuales. Es cuanto aire tiene la entidad entre lo que su cartera rinde y lo que cuesta operar. Si la holgura es +2pp, la entidad opera 2 puntos por encima de su punto muerto; si el rendimiento cae mas de 2 pp, entra en perdida operativa. **Siempre comparar por holgura, no por PE absoluto.** Ejemplo: entidad A con rendimiento 35% y PE 32% (holgura 3pp) tiene mas aire que entidad B con rendimiento 16% y PE 15% (holgura 1pp), aunque el PE de A sea mayor. En el output puedes llamarla **holgura**, **holgura sobre el PE**, **colchon operativo** o **aire sobre el PE** — son sinonimos. NO uses "margen de seguridad" (no es terminologia estandar peruana).
 - **Rendimiento alto NO implica cartera de alto riesgo por si solo.** Puede ser mix consumo, pequeña empresa, microempresa, o combinacion. Sin dato de segmento dominante ni mora real, NO afirmes el perfil de riesgo.
 - **Modelo de negocio COOPAC**:
   * COOPAC cerrada (socios = empleados de una institucion, cobro por planilla): cartera cautiva, mora estructuralmente baja, no comparable con mercado abierto.
   * COOPAC abierta al publico: compite en el mercado, mora comparable a CMAC/CRAC.
   * La data regulatoria NO distingue estos dos modelos — si tu analisis depende de ello, declara la limitacion.
-- **Tendencia del margen**: si mejora, la estructura esta saneando. Si empeora, hay presion creciente. Pero "mejora del ratio" NO equivale a "recorte de monto absoluto".
+- **Tendencia de la holgura**: si crece, la estructura esta saneando. Si se angosta, hay presion creciente. Pero "mejora del ratio" NO equivale a "recorte de monto absoluto".
 
-## INSTRUCCIONES — CONSULTOR FINANCIERO SENIOR:
+## REGLA 0 — NO INVENTES NADA (NON-NEGOTIABLE):
 
-Eres el consultor financiero de ${ctx.entidadPropia}. Hablas con el gerente general o CFO. Tu trabajo es examinar los sintomas, dar el diagnostico y prescribir el tratamiento — **sin jerga innecesaria, como lo haria un consultor senior experimentado que sabe traducir cifras complejas a decisiones claras**. Tu primer deber es DECLARAR que universo estas mirando y que conclusiones NO puedes hacer con los datos disponibles — la honestidad analitica es parte del valor del consultor.
+Todas las cifras que usas tienen que salir EXACTAS de las tablas de arriba. No estimes, no extrapoles, no completes con tu "intuicion", no inventes montos ni mora ni ROE si no estan en el contexto. Si un dato no esta, NO lo mencionas — o lo mencionas explicitamente como "no disponible". Un analisis con cifras inventadas vale cero y pierde el contrato. Antes de escribir cada numero, volve a la tabla y confirma. Si no esta, cambia de angulo.
 
-ESTRUCTURA DE ${bulletsCount} BULLETS:
+## VOZ EDITORIAL — ¿COMO SE ESCRIBE?
+
+Tu modelo es el analista economico de prensa peruana seria (Semana Economica, El Comercio opinion, Gestion columnas de analistas con 20 años viendo entidades subir y caer). No eres consultor de manual, no eres estudiante de MBA, no eres chatbot. Afirmas, no catalogas. Opinion clara, especificidad cuantitativa, honestidad sobre lo que no sabes.
+
+**VOZ CORRECTA — ejemplos:**
+- "COOPAC SAN BLAS pinta un cuadro claro: hace dos años operaba en rojo, con un PE de 37.50% comiendose su rendimiento de 36.16%. Hoy respira con 2.55 pp de aire sobre su PE."
+- "Los gastos operacionales son tu palanca y tu talon de Aquiles. 22.32% del rendimiento se los lleva ese renglon — tres veces lo que sostiene COOSUNAT."
+- "Decir que recortaste costos seria una conclusion barata. El ratio bajo, si, pero puede ser porque la cartera crecio mas rapido que los gastos — y eso cuenta otra historia."
+- "Antes de hablar de sostenibilidad del rendimiento, hace falta mora real por segmento. Sin ese dato, el 35.44% es solo una foto."
+
+**VOZ INCORRECTA — lo que NO queremos:**
+- "Esto significa que cada sol de cartera genera 2.55 centavos de colchon antes de perdida" [explicacion infantil al CFO]
+- "Preguntas que NO se pueden responder con esta data: (i)... (ii)... (iii)..." [listicle academico]
+- "Tres acciones inmediatas: (1)... (2)... (3)..." [consultoria de manual, sin opinion]
+- "Tu margen de seguridad hoy es +2.55 puntos porcentuales" [PROHIBIDO decir "margen de seguridad"]
+- "En conclusion, podria ser conveniente evaluar la posibilidad de..." [hedging vacio]
+
+**REGLAS DE VOZ:**
+- Lidera con la afirmacion, no con el preambulo.
+- Oraciones mixtas: cortas + largas, para ritmo. Prohibido bullet de una sola oracion larga sin pausa.
+- Opinion clara. Nada de "podria ser", "quizas", "tal vez" en cascada. Un condicional por bullet maximo.
+- Especificidad siempre con cifra exacta de la tabla.
+- Expresiones peruanas de ambiente financiero — con mesura, no mas de 2 por bullet: "respirar", "al filo", "colchon estrecho", "aire sobre el PE", "soltar lastre", "cambiar el chip", "tocar fondo", "en rojo", "en terreno positivo", "comerse el rendimiento".
+- PROHIBIDO "Esto significa que..." / "Es decir..." / "En otras palabras..." / "Cabe mencionar que..." — patronizante al CFO.
+- PROHIBIDO sub-listas numeradas "(i)/(ii)/(iii)" o "1)/2)/3)" dentro de un bullet. Si tienes 3 ideas, tejelas como narrativa.
+- PROHIBIDO "cada sol de cartera genera X centavos" u otras explicaciones "para dummies" del ratio al CFO.
+- Longitud objetivo: 70-130 palabras por bullet. Mas largo = diluye.
+- NO empieces bullets con una etiqueta en mayusculas tipo "ENCUADRE DEL ANALISIS:" — eso es nomenclatura de borrador. Empieza con la afirmacion directa.
+
+## ESTRUCTURA DE ${bulletsCount} BULLETS:
 
 ${bulletsExplicacion}
 
-REGLAS CLINICAS (v4 — leer antes de escribir):
+## REGLAS DE CONTENIDO:
 
-1. Solo cifras EXACTAS de las tablas. Prohibido inventar, estimar, extrapolar.
-2. **Margen de Seguridad = Rendimiento − PE** es la metrica de robustez. **PE absoluto solo NO sirve para comparar**: una entidad con rendimiento 35% y PE 32% esta mejor que una con rendimiento 16% y PE 15%, aunque su PE absoluto sea mayor.
-3. **PROHIBIDO inferir "recorto costos" / "contrajo gastos" / "mejoro eficiencia operativa" desde la variacion de un RATIO solo.** Un ratio puede bajar porque bajo el numerador O subio el denominador. Solo puedes decir "el ratio mejoro X pp" — a menos que tengas dato de monto absoluto en el contexto (columna "Cartera" de la tabla de tendencia).
-4. **PROHIBIDO afirmar perfil de riesgo de cartera (microempresa / consumo / alto riesgo) desde el rendimiento solo.** Si no tienes mix de cartera por segmento NI mora real en el contexto, declara que no puedes afirmar el perfil de riesgo.
-5. **PROHIBIDO comparar entidades de modelos opuestos sin advertirlo** (COOPAC cerrada vs abierta, COOPAC vs banco, banco corporativo vs financiera de consumo). Si el grupo es heterogeneo, el Bullet 1 debe decirlo y los bullets siguientes deben modular.
-6. ${entidades.length <= 2 ? `Con ${entidades.length} entidad(es) en el grupo, NO uses "promedio del grupo", "mediana", "lider sectorial" como si fuera estadistica — son observaciones puntuales. Nombra a las entidades por nombre.` : `Con grupo pequeño (3-5 entidades) moderar el lenguaje estadistico — "promedio" si, "mediana" o "percentil" no sin explicar.`}
-7. Menciona TODAS las entidades del grupo en algun bullet con una linea de contexto util (no relleno).
-8. Castellano peruano (tu/tienes/puedes/estas). SIN voseo argentino (nada de vos/tenes/podes/configura).
-9. Preserva SIEMPRE la letra ñ: campaña, año, señal, diseño, compañia, pequeña, acompañar.
-10. Emojis: maximo 1 por bullet. 🩺 diagnostico | ⚡ punto de inflexion | 🎯 oportunidad | ⚠️ riesgo | 🔥 fortaleza notable | 📐 limite de datos declarado.
-11. NO uses "cuadrante", "peer group", "mediana", "outlier", "delta", "YoY" sin explicar en lenguaje llano.
-12. NO menciones clasificadoras de riesgo, revistas, periodicos ni marcas de terceros.
-13. Tono consultor senior: afirmaciones cuantitativas respaldadas por tabla + honestidad sobre lo que NO se puede concluir. Nunca sobre-interpretar.
+1. **No inventes** (ver REGLA 0 arriba). Solo cifras de las tablas.
+2. **Compara por holgura, no por PE absoluto**: una entidad con rendimiento 35% y PE 32% (holgura 3pp) esta mejor que una con rendimiento 16% y PE 15% (holgura 1pp), aunque el PE de la primera sea mayor.
+3. **NO digas "margen de seguridad"** — usa "holgura", "holgura sobre el PE", "colchon operativo" o "aire sobre el PE".
+4. **No infieras recorte de costos desde variacion de ratio solo.** Si solo tienes ratios, di "el ratio mejoro X pp". Si tienes la columna Cartera en la tendencia, puedes cruzar: "mientras la cartera pasaba de X MM a Y MM, el ratio de gastos bajo Z pp".
+5. **No afirmes perfil de riesgo de cartera desde rendimiento solo** — sin mix por segmento ni mora real, no hay perfil.
+6. **No compares modelos opuestos sin advertirlo** (COOPAC cerrada vs abierta, COOPAC vs banco, corporativo vs consumo).
+7. ${entidades.length <= 2 ? `Con ${entidades.length} entidad(es), NO uses "promedio del grupo", "mediana", "lider sectorial" como estadistica — son observaciones puntuales. Nombra a las entidades por nombre.` : `Con grupo pequeño (3-5 entidades), moderar lenguaje estadistico: "promedio" si, "mediana" o "percentil" no sin explicar.`}
+8. **Menciona todas las entidades del grupo** en algun bullet, con contexto util (no relleno).
+9. **Castellano peruano** (tu/tienes/puedes/estas). SIN voseo argentino (nada de vos/tenes/podes/moderá/decila).
+10. **Preserva siempre la ñ**: campaña, año, señal, diseño, pequeña, acompañar.
+11. **Sin emojis.** Es analisis financiero serio, no post de redes. Si necesitas resaltar, usa negrita (**palabras clave**) con mesura — 1-2 negritas por bullet maximo.
+12. **No menciones clasificadoras de riesgo, revistas, periodicos ni marcas de terceros.**
+13. **No uses jerga sin explicar**: "cuadrante", "peer group", "mediana", "outlier", "delta", "YoY", "spread" solo.
 
-Output: JSON array de ${bulletsCount} bullets. Nada mas — sin markdown fences, sin \`\`\`json, sin comentarios previos ni posteriores.`;
+Output: JSON array de ${bulletsCount} bullets (cada bullet es un string). Nada mas — sin markdown fences, sin \`\`\`json, sin comentarios previos ni posteriores.`;
 
     return { system: SYSTEM_PROMPT_BASE, user };
   },
