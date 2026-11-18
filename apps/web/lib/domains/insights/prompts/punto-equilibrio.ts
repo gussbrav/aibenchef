@@ -1,7 +1,25 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v5.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v6.
  *
- * Correcciones sobre v4:
+ * Correcciones sobre v5:
+ *  - v5 sonaba defensivo al punto de parecer amateur: el LLM repetia 3-4
+ *    veces por analisis frases tipo "no puedes afirmar X / sin dato Y no
+ *    sabemos Z", lo que le da al cliente la sensacion de que el analista
+ *    no se preparo. v6 permite al LLM usar CONTEXTO PUBLICO sobre las
+ *    entidades (nombres indicativos tipo COOSUNAT = vinculo SUNAT por
+ *    planilla; patron de cifras que sugiere un segmento) como HIPOTESIS
+ *    PROFESIONAL, no invencion. Y consolida las limitaciones
+ *    metodologicas a UNA linea al cierre del Bullet 1, no dispersas por
+ *    todo el analisis.
+ *  - v6 reformula REGLA 0: no inventes CIFRAS (eso sigue inviolable),
+ *    pero si permite plantear hipotesis contextuales grounded en nombre
+ *    de entidad o patron visible — siempre marcadas como hipotesis.
+ *  - v6 cambia el tono de los "limites" de defensivo ("no puedo afirmar")
+ *    a propositivo ("convendria complementar con X para afinar"): la
+ *    misma informacion pero con lenguaje de consultor que sabe lo que
+ *    hace, no de becario que se cubre.
+ *
+ * Correcciones sobre v4 (heredadas en v6):
  *  - v4 usaba "Margen de Seguridad" como termino canonico de robustez — pero
  *    no es terminologia peruana clasificadora, confunde al lector. v5 lo
  *    renombra a "holgura sobre el PE" (o "colchon operativo" o "aire sobre
@@ -100,7 +118,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v5",
+  version: "v6",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -259,19 +277,19 @@ export const promptPuntoEquilibrio: PromptTemplate = {
 
     const bulletsExplicacion =
       bulletsCount === 4
-        ? `Bullet 1 — encuadre antes de la opinion:
-Abre con un diagnostico del benchmark: que universo se compara, cuantas entidades, si la comparacion es solida o indicativa. Nombralas. Si el grupo es heterogeneo (COOPAC cerrada vs abierta, COOPAC vs SF, niveles distintos), dilo sin eufemismos. Lo que la data NO permite cerrar (mora real por segmento, mix de cartera, modelo de negocio) va tejido en el flujo, no como listicle. El bullet cierra con una afirmacion que oriente la lectura de los siguientes — no con la etiqueta "Encuadre:".
+        ? `Bullet 1 — encuadre sustantivo del benchmark:
+Abre leyendo el grupo de peers con oficio: quienes son, de que tipo regulatorio y nivel, y que te permite inferir el nombre o el perfil visible de cada una sobre su modelo de negocio (vinculo cerrado por nombre institucional, alcance regional por nombre geografico, perfil de cartera que sugiere el patron de cifras). Si una de las entidades tiene nombre indicativo de una institucion publica, dilo con autoridad ("COOSUNAT opera un modelo de vinculo cerrado, por la naturaleza de su membresia"). Si el patron de cifras de ${ctx.entidadPropia} sugiere un segmento de cartera (ej: rendimiento alto con provisiones muy bajas sugiere consumo controlado, no microempresa de alto riesgo), plantea la hipotesis con criterio. Luego en UNA linea al final del bullet reconoce que para cerrar el diagnostico con rigor hace falta cruzar con mora real por segmento y composicion interna — pero solo una vez, no lo repitas en los siguientes bullets. Cierra con una lectura general que oriente lo que viene.
 
-Bullet 2 — ${ctx.entidadPropia} contra si misma:
-Donde esta su holgura hoy y como llego ahi. Si tiene historico: de donde viene (hace X meses estaba en Y pp), que movio la aguja (rendimiento, PE, o ambos). Si la holgura actual es estrecha, dilo. Si el grupo es homogeneo y util, puedes compararla con el otro; si no, evalua la entidad contra su propia trayectoria. Cierra con tu lectura — no con el tag "Diagnostico:".
+Bullet 2 — ${ctx.entidadPropia} contra su historia:
+Donde esta su holgura hoy, de donde viene, y que movio la aguja. Lee la tendencia como hace un editorialista: no describas la tabla fila por fila — identifica el quiebre (cuando paso de rojo a positivo, cuando se estanco, cuando acelero) y cuentalo. Si la holgura actual es estrecha dilo, si se consolido dilo. Cierra con tu diagnostico — una sola frase contundente.
 
 Bullet 3 — el componente que mas pesa:
-Identificar cual renglon del PE carga mas a ${ctx.entidadPropia} (Gastos Op, Gasto Financiero, o Provisiones) y como se movio en RATIO. CRITICO: no digas "redujo costos" ni "contrajo gastos" sin dato de monto absoluto. Si hay columna Cartera en la tabla de tendencia puedes afirmar que la cartera crecio X MM mientras el ratio bajo Y pp — y de ahi sacar conclusion. Sin eso, solo "el ratio mejoro X pp". Terminas con una recomendacion contundente — una, no tres — sin el tag "Prescripcion:".
+Cual renglon del PE carga mas a ${ctx.entidadPropia} y como se movio su ratio. REGLA: si no hay columna Cartera en la tabla de tendencia, di "el ratio mejoro X pp" — nunca "redujo costos" ni "contrajo gastos". Si sí hay columna Cartera, puedes cruzar movimiento absoluto con movimiento de ratio y sacar conclusion real. Compara con el otro peer solo si la comparacion aporta luz (ej: la diferencia enorme en ratio de gastos operacionales se explica razonablemente por diferencia de escala entre niveles COOPAC distintos, no solo por eficiencia). Cierra con una recomendacion contundente — una, no tres.
 
-Bullet 4 — prioridades + lo que falta para un diagnostico completo:
-Dos o tres cosas que ${ctx.entidadPropia} debe hacer en los proximos trimestres, armadas como narrativa (no como lista "1) 2) 3)"). Despues, lo que no puedes diagnosticar con esta muestra: sin mora real no se sabe si el rendimiento es sostenible; sin composicion de cartera no se sabe el perfil de riesgo; en COOPAC, sin distinguir cerrada/abierta la comparacion queda renga. Si es util, cierra con una pregunta retadora que el directorio deberia poder responder.`
-        : `Bullet 1 — encuadre antes de la opinion:
-Abre diciendo que universo mirar (solo COOPAC / solo SF / mixto), el tamaño del peer group, y si la composicion es homogenea o heterogenea. Si hay N≥3 del mismo tipo puedes hablar de promedios y comparaciones; si hay mezcla declaralo y modera. Mencionar las limitaciones (mora real, mix de cartera, modelo de negocio) tejidas en el flujo, no como listicle. Cierra con una afirmacion que fije la lectura — no con el tag "Encuadre:".
+Bullet 4 — prioridades para los proximos trimestres:
+Dos o tres cosas que ${ctx.entidadPropia} debe hacer, armadas como narrativa (nunca "1) 2) 3)"). Sé especifico: que proteger, que acelerar, que vigilar — con horizonte temporal razonable (6-12 meses). Si tienes base para una prediccion condicional cuantitativa ("si el rendimiento cae mas de 2.5 pp sin que baje el PE, la holgura vuelve a negativo"), dila. Cierra con una pregunta fuerte que el directorio deberia poder responder — una pregunta que ponga el dedo en el tema real. NO cierres repitiendo las limitaciones metodologicas — eso ya lo dijiste en el Bullet 1.`
+        : `Bullet 1 — encuadre sustantivo del benchmark:
+Abre leyendo el grupo con oficio: universo (solo COOPAC / solo SF / mixto), composicion por tipo y nivel, y lo que puedes inferir del nombre o perfil de cada peer significativo (vinculo cerrado por nombre institucional, alcance regional por nombre geografico, perfil de cartera que sugiere el patron de cifras). Si una entidad del grupo tiene nombre indicativo de modelo cerrado, dilo con autoridad. Si el patron de cifras de ${ctx.entidadPropia} sugiere un segmento de cartera (ej: rendimiento alto con provisiones muy bajas apunta a consumo con cobro recurrente, no a microempresa de alto riesgo), plantea la hipotesis con criterio — no como hecho pero si como lectura profesional. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica que queda abierta (cruzar con mora real por segmento y composicion interna) — solo UNA vez, no la repitas en los bullets siguientes. Cierra con una lectura general que oriente el analisis.
 
 Bullet 2 — ${ctx.entidadPropia} contra su historia y contra el grupo:
 Donde esta su holgura hoy, como llego ahi (si hay historico), y donde queda en el ranking (#${posicionPropia} de ${entidades.length}) — pero solo si el ranking es significativo. Si hay mora real o ROE en el contexto, cruzalos: una holgura amplia con mora alta cuenta una historia distinta que una holgura justa con cartera limpia. Cierra con tu lectura.
@@ -280,13 +298,13 @@ Bullet 3 — el componente que mas pesa:
 Cual renglon del PE carga mas en ${ctx.entidadPropia}, como se movio en RATIO, y que explica la dinamica. Nunca afirmes recorte de costos sin dato absoluto. Si hay columna Cartera en la tabla de tendencia puedes afirmar movimiento nominal. Compara con el grupo solo si tiene sentido. Cierra con una recomendacion contundente.
 
 Bullet 4 — quien lidera por holgura y por que:
-La entidad con mas aire sobre su PE, nombrala y describi de donde le viene el liderazgo: rendimiento agresivo, costos contenidos, o mix. Si el grupo es heterogeneo, aclara que el liderazgo puede no ser replicable a ${ctx.entidadPropia}. Cierra con una lectura sobre que puede inspirar a tu entidad — no con el tag "Oportunidad:".
+La entidad con mas aire sobre su PE, nombrala y describe de donde le viene el liderazgo: rendimiento agresivo, costos contenidos, o mix. Si la ventaja se explica razonablemente por diferencia de escala o modelo de negocio distinto a ${ctx.entidadPropia}, dilo y modera la aplicabilidad directa. Cierra con una lectura sobre que puede inspirar a tu entidad.
 
 Bullet 5 — el rezagado y el resto del grupo:
-Entidad con menor holgura y el driver del problema. Despues, menciona cada entidad del grupo que no haya salido todavia, con una linea util de contexto (su tipo, su posicion en el eje rendimiento/eficiencia). Cierra con una lectura sobre la dinamica estructural del grupo — ej: "los de rendimiento alto pagan con costos altos; los eficientes operan en segmentos de bajo rendimiento".
+Entidad con menor holgura y el driver del problema. Despues, menciona cada entidad del grupo que no haya salido todavia, con una linea util de contexto (su tipo regulatorio + lectura del perfil que permite el nombre o la cifra). Cierra con una lectura sobre la dinamica estructural del grupo — ej: "los de rendimiento alto pagan con costos altos; los eficientes operan en segmentos de bajo rendimiento".
 
-Bullet 6 — prioridades + lo que falta:
-Dos o tres acciones concretas para ${ctx.entidadPropia}, armadas como narrativa (no "1) 2) 3)"). Despues, lo que no se puede diagnosticar aun: mora real, composicion de cartera, modelo COOPAC cerrada/abierta, ratio de capital. Si tienes base para una prediccion condicional cuantitativa ("si la mora sube a X%, la holgura cae a Y"), dila. Si no, no la inventes.`;
+Bullet 6 — prioridades para los proximos trimestres:
+Dos o tres cosas que ${ctx.entidadPropia} debe hacer, armadas como narrativa (nunca "1) 2) 3)"). Se especifico: que proteger, que acelerar, que vigilar — con horizonte temporal razonable. Si tienes base para una prediccion condicional cuantitativa ("si la mora sube a X%, la holgura cae a Y"), dila. Cierra con una pregunta fuerte que el directorio deberia poder responder. NO cierres repitiendo las limitaciones metodologicas — eso ya fue en el Bullet 1.`;
 
     const user = `# Diagnostico Punto de Equilibrio — Cierre ${ctx.periodoLabel}
 
@@ -344,9 +362,24 @@ NOTA SOBRE LA TENDENCIA: Rendim/GastoFin/Provis/GastosOp/PE son RATIOS sobre car
   * La data regulatoria NO distingue estos dos modelos — si tu analisis depende de ello, declara la limitacion.
 - **Tendencia de la holgura**: si crece, la estructura esta saneando. Si se angosta, hay presion creciente. Pero "mejora del ratio" NO equivale a "recorte de monto absoluto".
 
-## REGLA 0 — NO INVENTES NADA (NON-NEGOTIABLE):
+## REGLA 0 — NO INVENTES CIFRAS NI HECHOS DUROS (NON-NEGOTIABLE):
 
-Todas las cifras que usas tienen que salir EXACTAS de las tablas de arriba. No estimes, no extrapoles, no completes con tu "intuicion", no inventes montos ni mora ni ROE si no estan en el contexto. Si un dato no esta, NO lo mencionas — o lo mencionas explicitamente como "no disponible". Un analisis con cifras inventadas vale cero y pierde el contrato. Antes de escribir cada numero, volve a la tabla y confirma. Si no esta, cambia de angulo.
+Todas las CIFRAS (porcentajes, montos, pp, MM S/, ratios, mora, ROE) tienen que salir EXACTAS de las tablas de arriba. Nunca estimes, extrapoles, completes con tu "intuicion" ni inventes numeros que no estan. Si un dato CUANTITATIVO no esta en el contexto, no lo cites. Un analisis con cifras inventadas vale cero y pierde el contrato.
+
+Lo mismo vale para hechos duros especificos de la entidad que no puedas inferir: no inventes año de fundacion, numero de sucursales, nombre del gerente, composicion accionaria, etc.
+
+## CONTEXTO PROFESIONAL PERMITIDO (y esperado):
+
+Un analista senior NO llega a un diagnostico diciendo "no sabemos quien es esta entidad". Se trae lo que SI puede saber antes de abrir la tabla. Lo mismo aqui:
+
+- **Nombres indicativos:** si el nombre de la COOPAC refiere a una institucion publica reconocida (SUNAT, SUNAFIL, Ministerio, Fuerzas Armadas, empresa estatal grande), es tipicamente de vinculo cerrado por planilla. Dilo como lectura profesional, no como hecho dogmatico. Ej: "COOSUNAT, por su nombre y membresia natural de trabajadores de SUNAT, opera un modelo de vinculo cerrado con cobro por planilla".
+- **Nombres geograficos:** una COOPAC con nombre de region/distrito/barrio sugiere alcance local. Ej: "SAN BLAS (barrio de Cusco) sugiere una COOPAC con base regional cusqueña, tipicamente con cartera concentrada en micro y consumo de la region".
+- **Patrones de cifras:** rendimiento 35% + provisiones 0.60% + mora baja es un perfil consistente con cartera de consumo con cobro recurrente (planilla o mercado abierto de bajo riesgo), NO con microempresa de alto riesgo. Dilo como HIPOTESIS a validar con la gerencia, no como hecho: "el patron de cifras es consistente con cartera predominantemente de consumo, hipotesis que el gerente puede validar con el mix interno".
+- **Nivel COOPAC SBS:** N1 son las mas pequeñas por tamaño de activos; N3 las mas grandes. Diferencia de nivel implica orden de magnitud distinto en escala y por tanto en economia operativa — puedes nombrarlo como marco.
+
+La regla: HIPOTESIS PROFESIONAL = decir "el patron es consistente con X, hipotesis a validar con el area interna". INVENCION = afirmar "la entidad presta 60% en microempresa" sin dato que lo sustente. La primera es lo que hace un analista senior; la segunda pierde el contrato.
+
+Donde NO llega el contexto publico razonable y el dato no esta en la tabla, escribe la limitacion UNA VEZ en el Bullet 1 como cierre breve y no la repitas en los demas bullets.
 
 ## VOZ EDITORIAL — ¿COMO SE ESCRIBE?
 
