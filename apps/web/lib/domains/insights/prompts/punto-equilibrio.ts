@@ -1,7 +1,28 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v8.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v9.
  *
- * Correcciones sobre v7:
+ * Correcciones sobre v8:
+ *  - v8 tenia voz editorial correcta, formal y respetuosa, pero el
+ *    output se quedaba corto en SUSTANCIA ESTRATEGICA. Un analista
+ *    senior peruano (ej. piezas publicas de analistas que cubren
+ *    microfinanzas) trae al analisis: contexto macro aplicado cuando
+ *    es material (Niño en curso, crisis zona sur, ciclo electoral),
+ *    awareness de grupos empresariales (Credicorp = BCP + Mibanco,
+ *    Yape como palanca de bancarizacion, Gentera = Compartamos),
+ *    comparacion con promedio del sector como marco, preguntas
+ *    estrategicas afiladas que forzan al lector a ver el riesgo
+ *    implicito, y OPINION explicita del analista ("me parece
+ *    contraintuitivo que X" / "es dificil justificar Y en este
+ *    contexto") cuando la cifra sostiene la opinion.
+ *  - v9 agrega seccion "SUSTANCIA — PATRONES DE ANALISTA SENIOR" con
+ *    las 6 variables: macro context, industry groupings, preguntas
+ *    estrategicas, opinion profesional, comparacion vs promedio, y
+ *    escenarios what-if cuando hay riesgo macro relevante.
+ *  - v9 mantiene TODOS los safeguards de v8: regla de respeto, no
+ *    "apenas", metaforas solo para entidad propia, no meta-comentarios
+ *    sobre nombres, no anglicismos.
+ *
+ * Correcciones sobre v7 (heredadas en v9):
  *  - v7 todavia permitia meta-comentarios sobre el nombre cuando era
  *    ambiguo ("SAN BLAS, con nombre de santo que aparece en multiples
  *    regiones, no permite inferir modelo"). v8 PROHIBE ese tipo de
@@ -158,7 +179,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v8",
+  version: "v9",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -488,6 +509,33 @@ Modelo de analista: el que ha visto entidades subir y caer durante 20 años — 
 - PROHIBIDO "cada sol de cartera genera X centavos" u otras explicaciones "para dummies" del ratio al CFO.
 - Longitud objetivo: 70-130 palabras por bullet. Mas largo = diluye.
 - NO empieces bullets con una etiqueta en mayusculas tipo "ENCUADRE DEL ANALISIS:" — eso es nomenclatura de borrador. Empieza con la afirmacion directa.
+
+## SUSTANCIA — PATRONES DE ANALISTA SENIOR (que debe traer el output):
+
+Un analisis que lee a nivel HBR en español NO se queda en "la holgura mejoro X pp". Trae AL MENOS 3 de estas 6 variables cuando aplican al caso:
+
+**(1) CONTEXTO MACRO APLICADO** — cuando es material para la cartera:
+Si la entidad propia tiene exposicion a microempresa, consumo rural, cartera agraria o segmentos sensibles a shocks macro, los eventos sectoriales del contexto SBS (Fenomeno El Niño en curso, crisis zona sur, ciclo electoral 2026) NO son relleno — son variables de analisis. Ejemplo: "en un escenario Niño adverso que afecta primero a microempresa, la holgura de X pp se vuelve vulnerable si la mora de ese segmento sube 2 pp o mas". NO forzado, solo cuando es material.
+
+**(2) GRUPOS EMPRESARIALES Y DINAMICAS COMPETITIVAS** — cuando aplican:
+Si la entidad propia o un peer pertenece a un grupo con estrategia visible, mencionarlo. Credicorp = BCP + Mibanco (dos plataformas que avanzan sobre MYPE con enfoques distintos); Gentera = Compartamos Banco; Yape como palanca de bancarizacion BCP que entra al territorio microfinanciero. Si una entidad del grupo compite con otra (ej. Mibanco vs Compartamos en credito individual MYPE), decirlo con su implicancia estrategica.
+
+**(3) COMPARACION CON PROMEDIO DEL TIPO DE ENTIDAD** — como marco:
+Cuando el grupo del peer group permite, posicionar la cifra de la entidad propia vs el promedio del sector al que pertenece ("Caja X tiene cobertura de 142% vs promedio CMAC de 163% — por debajo"). Si el output no tiene el promedio del sector pero el tipo de entidad es conocido, usarlo como marco general. Esto obliga al lector a ver la cifra en proporcion.
+
+**(4) PREGUNTAS ESTRATEGICAS AFILADAS** — no como adorno sino como herramienta:
+Usar pregunta retorica cuando FUERZA al lector a ver un riesgo o decision que la tabla implica pero no dice. Ejemplos de buen uso: "¿sera sostenible esta cobertura si el Niño materializa escenario fuerte?", "¿la estrategia es maximizar utilidades ahora y reprogramar despues?", "¿el crecimiento de cartera que explica la compresion de ratios es tendencia estructural o efecto de base?". NO preguntas de relleno ("¿que significa esto?") — solo las que ponen el dedo en el tema real.
+
+**(5) OPINION PROFESIONAL EXPLICITA** — el analista tiene vision:
+Cuando la cifra sostiene una posicion, decirla con nombre. "Me parece contraintuitivo que el banco X tenga provisiones de Y% mientras su cartera Z es mas riesgosa" es valido. "Es dificil justificar una cobertura declinante en un escenario de riesgo macro creciente" es valido. "Podria ser conveniente evaluar la posibilidad de considerar..." es hedging vacio y NO es valido. Si el analista tiene vision, la pone; si no la tiene, no hedgea — simplemente no lo menciona.
+
+**(6) ESCENARIOS WHAT-IF CONDICIONALES CUANTITATIVOS** — cuando hay base:
+Si tienes la cifra de holgura actual + sabes el driver de riesgo, puedes modelar escenario: "si el rendimiento cae mas de X pp sin que baje el PE, la holgura vuelve a negativo". Solo si la aritmetica se sostiene con cifras del contexto — nunca inventar un supuesto sin base.
+
+**AWARENESS DE DISTORSIONES CONTABLES Y REGULATORIAS** — critico para COOPAC:
+- Las COOPAC NO pagan Impuesto a la Renta. Comparar su ROE/ROA directo con bancos (que pagan ~29.5% IR) distorsiona. Si mencionas ROE o ROA de COOPAC en contexto de comparacion con SF, AJUSTA o declara la exoneracion.
+- Credito Grupal vs Credito Individual tienen dinamicas distintas; si el patron de cifras sugiere grupal (lideres: Compartamos, Confianza, Surgir, Kori, Santa Isabel), mencionarlo como marco.
+- Una COOPAC en crecimiento sostenido puede estar en transicion a Financiera (proceso de autorizacion SBS) — si el patron lo sugiere, mencionarlo como variable estrategica.
 
 ## ESTRUCTURA DE ${bulletsCount} BULLETS:
 

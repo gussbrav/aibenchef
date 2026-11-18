@@ -33,8 +33,19 @@ TIPOS DE ENTIDAD (por marco regulatorio):
   (mas grandes). Metricas sectoriales promedio son poco representativas
   por heterogeneidad extrema — hay COOPAC con <S/ 5MM activos y otras
   con >S/ 500MM. Rango tipico muy amplio: ROE 3-20%, Mora 3-12%.
-  CONSIDERACION CRITICA: hay dos modelos de negocio radicalmente distintos
-  que NO se distinguen en la data regulatoria:
+
+  CONSIDERACION CRITICA #1 — DISTORSION CONTABLE POR EXONERACION IR:
+  las COOPAC NO pagan Impuesto a la Renta (exoneradas), a diferencia
+  de bancos, financieras, cajas y edpymes que tributan ~29.5%. Esto
+  infla sistematicamente sus ROE y ROA en comparacion con el resto
+  del sistema financiero. Al comparar COOPAC vs SF en rentabilidad,
+  SIEMPRE advertirlo: "el ROE de la COOPAC X es Y%, pero no incluye
+  impuesto a la renta — ajustado al equivalente post-IR seria ~0.7*Y%,
+  nivel que si permite comparar con bancos". Nunca presentar ROE/ROA
+  COOPAC junto a SF sin esta nota.
+
+  CONSIDERACION CRITICA #2 — DOS MODELOS DE NEGOCIO que NO se distinguen
+  en la data regulatoria:
   * COOPAC de vinculo cerrado (socios = empleados de una institucion
     especifica, ej. SUNAT, ministerios, fuerzas armadas, empresa privada;
     cobro por planilla): cartera cautiva, mora estructuralmente baja,
@@ -45,6 +56,24 @@ TIPOS DE ENTIDAD (por marco regulatorio):
   cualquier otro tipo de entidad), las comparaciones directas de
   rendimiento, PE y margen NO son concluyentes — hay que advertirlo
   explicitamente al usuario.
+
+  CONSIDERACION #3 — MODELOS DE NEGOCIO ESPECIALIZADOS por producto:
+  algunas COOPAC/Financieras se especializan en Credito Grupal (modelo
+  que agrupa clientes para garantia mutua, tipico microfinanciero
+  rural/urbano popular). Lideres conocidos del Credito Grupal en Peru:
+  Compartamos Banco (700k+ clientes), Financiera Confianza, Financiera
+  Surgir, COOPAC Kori, COOPAC Santa Isabel. Si la entidad analizada
+  tiene perfil de cifras consistente con Credito Grupal (rendimiento
+  alto + mora moderada + cobertura muy alta), mencionarlo como marco
+  de analisis. Credito Individual vs Grupal tienen dinamicas distintas
+  — no comparar directo sin advertir.
+
+  CONSIDERACION #4 — TRANSICIONES REGULATORIAS: cuando una COOPAC crece
+  y quiere ampliar operaciones mas alla del universo cooperativo,
+  usualmente inicia proceso de conversion a Financiera via autorizacion
+  SBS. Ejemplo visible: la futura "Financiera Kori" en proceso. Si el
+  patron de cifras y crecimiento sugiere escalamiento hacia transicion,
+  mencionarlo como variable de analisis estrategico.
 
 TERMINOLOGIA DE CALIDAD DE CARTERA (jerarquia de peor a mejor):
 1. Cartera Atrasada = Vencida + En Cobranza Judicial (mora simple)
