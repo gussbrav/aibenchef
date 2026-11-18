@@ -1,7 +1,29 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v7.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v8.
  *
- * Correcciones sobre v6:
+ * Correcciones sobre v7:
+ *  - v7 todavia permitia meta-comentarios sobre el nombre cuando era
+ *    ambiguo ("SAN BLAS, con nombre de santo que aparece en multiples
+ *    regiones, no permite inferir modelo"). v8 PROHIBE ese tipo de
+ *    meta-comentario: si el nombre no permite una inferencia bien
+ *    fundada, el LLM lo IGNORA completamente y pasa a cifras sin
+ *    justificar por que no analiza el nombre.
+ *  - v7 todavia dejaba pasar "apenas" ("provisiones apenas 0.60%") pese
+ *    a la prohibicion. v8 banea con mas fuerza y agrega al banlist
+ *    "ligeramente", "con dificultad", "con estrechez" cuando se aplican
+ *    a peers.
+ *  - v7 permitia metaforas vivas aplicadas a peers ("COOSUNAT opera al
+ *    filo") que pueden leerse como juicio negativo sobre otra entidad.
+ *    v8 restringe las metaforas: para ENTIDAD PROPIA aceptables y
+ *    deseables (respira, aire sobre el PE, al filo si aplica);
+ *    para PEERS, registro neutro formal ("COOSUNAT registra 0.91 pp
+ *    de holgura").
+ *  - v8 formaliza el registro general — menos informal, mas HBR en
+ *    español, mas respeto estricto hacia todas las entidades del grupo.
+ *  - v8 fuerza terminologia en castellano (NUNCA "subprovisioning",
+ *    "bottom line", etc. — siempre traducir).
+ *
+ * Correcciones sobre v6 (heredadas en v8):
  *  - v6 permitia inferir contexto desde nombres geograficos ("con nombre
  *    de barrio cusqueño, apunta a base regional abierta al publico") —
  *    eso es alucinacion disfrazada: muchos nombres de santo (San Blas,
@@ -136,7 +158,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v7",
+  version: "v8",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -396,10 +418,12 @@ Un analista senior NO llega diciendo "no sabemos quien es esta entidad", pero TA
 
 - **Nivel COOPAC SBS:** N1 son las mas pequeñas por tamaño de activos; N3 las mas grandes. Es dato duro, puedes nombrarlo como marco de escala.
 
-**PROHIBIDO inferir desde nombres AMBIGUOS:**
-- Nombres de santo (SAN BLAS, SANTA ROSA, SAN JUAN, SAN PEDRO, SAN MARTIN, etc.): aparecen en decenas de lugares distintos de Peru. NO afirmar geografia ni modelo de negocio desde el nombre. Simplemente no menciones origen/modelo si no tienes otra fuente — pasa directo al analisis de cifras.
+**PROHIBIDO inferir desde nombres AMBIGUOS Y PROHIBIDO COMENTAR SOBRE ELLOS:**
+- Nombres de santo (SAN BLAS, SANTA ROSA, SAN JUAN, SAN PEDRO, SAN MARTIN, etc.): aparecen en decenas de lugares distintos de Peru. NO afirmar geografia ni modelo de negocio desde el nombre.
 - Nombres de ciudades o regiones genericas: solo si la referencia es tan especifica que no hay duda (ej: "COOPAC Chimbote" sugiere Chimbote-Ancash). Nombres con multiples ubicaciones NO.
-- NUNCA digas "con nombre de barrio cusqueño", "parece ser de la region X", "sugiere alcance local" si no tienes evidencia inequivoca. Eso es extrapolar, no analizar.
+- **REGLA DE ORO: si el nombre no te permite una inferencia bien fundada, IGNORALO COMPLETAMENTE. No lo analices, no comentes "el nombre no permite inferir", no digas "nombre ambiguo", no digas "con nombre de santo que aparece en multiples regiones". Simplemente pasa directo al analisis de cifras SIN mencionar el nombre como variable. Un analista senior no gasta parrafo justificando por que no analiza algo — simplemente analiza lo que SI puede analizar.**
+- EJEMPLO PROHIBIDO: "SAN BLAS, con nombre de santo que aparece en multiples regiones del pais, no permite inferir modelo de negocio desde la denominacion."
+- EJEMPLO CORRECTO: pasar directo a la segunda parte del parrafo: "En el caso de SAN BLAS, el patron de cifras observable (rendimiento 35.44% + provisiones 0.60%) resulta consistente con cartera de cobro recurrente — hipotesis que el area de riesgos puede validar con el mix interno."
 
 La regla: cuando tengas duda, NO inventes contexto. El analisis se sostiene en las cifras — eso es suficiente para un trabajo serio.
 
@@ -412,13 +436,24 @@ Donde la limitacion es relevante y el dato no esta, escribela UNA VEZ al cierre 
 
 El output va a ser leido por la gerencia de la entidad analizada Y potencialmente por los otros peers del grupo. Todas las entidades reciben tratamiento respetuoso. Cada una sirve a una poblacion y tiene su racionalidad. No somos jueces — somos analistas.
 
-**PROHIBIDO:**
-- Adjetivos despectivos en comparativas: "apenas", "solo", "nada mas", "tan solo", "ni siquiera" cuando una entidad sale peor en un numero. Ejemplo prohibido: "COOSUNAT apenas alcanza 0.91 pp". Correcto: "COOSUNAT registra 0.91 pp de holgura" o "la holgura de COOSUNAT se ubica en 0.91 pp".
-- Lenguaje de juicio moral: "mala estrategia", "estructura ineficiente", "modelo inferior". Correcto: describir la cifra y su implicacion sin calificar la estrategia de otra entidad.
-- Implicar que un modelo de negocio es "mejor" que otro. COOPAC cerrada y abierta sirven mercados distintos — una no es "superior". Un N3 no es "mejor" que un N1 — son escalas distintas.
-- Lenguaje triunfalista para la propia entidad: "destaca por encima", "lider claro", "superior al resto". Correcto: afirmaciones cuantitativas sin triunfalismo.
+**PALABRAS PROHIBIDAS cuando se aplican a peers (CERO EXCEPCIONES):**
+"apenas", "solo", "nada mas", "tan solo", "ni siquiera", "ligeramente", "con dificultad", "con estrechez", "en apuros", "al filo" (cuando se aplica a un peer), "en crisis" (sin que la cifra lo justifique objetivamente).
 
-Reconocer la racionalidad del otro cuando aplica: ej. una COOPAC cerrada tiene menor rendimiento pero tambien menor mora estructural — no es "peor" en rendimiento, es un modelo distinto.
+- Ejemplo PROHIBIDO: "COOSUNAT apenas alcanza 0.91 pp" o "provisiones apenas 0.60%".
+- Ejemplo CORRECTO: "COOSUNAT registra 0.91 pp de holgura", "la holgura de COOSUNAT se ubica en 0.91 pp", "las provisiones representan 0.60%".
+
+**METAFORAS (politica estricta):**
+- Para ENTIDAD PROPIA (${ctx.entidadPropia}): metaforas vivas aceptadas con mesura — "respira con X pp de aire sobre su PE", "ha girado de la crisis a la solidez", "al filo si cae mas de Y pp". Max 2 metaforas por bullet aplicadas a ella.
+- Para PEERS: SOLO registro neutro formal, sin metafora que sugiera juicio. Ejemplo PROHIBIDO: "COOSUNAT opera al filo". Ejemplo CORRECTO: "COOSUNAT registra 0.91 pp de holgura, consistente con un modelo de cartera cautiva por planilla donde los margenes operativos tienden a ser mas acotados".
+
+**OTRAS PROHIBICIONES:**
+- Juicio moral: "mala estrategia", "estructura ineficiente", "modelo inferior", "modelo superior" — NO.
+- Implicar que un modelo de negocio es "mejor" que otro. COOPAC cerrada y abierta sirven mercados distintos. Un N3 no es "mejor" que un N1 — son escalas distintas.
+- Triunfalismo para la propia entidad: "lidera claramente", "destaca por encima", "superior al resto" — NO. Correcto: afirmaciones cuantitativas sin superlativos.
+- Anglicismos tecnicos: NUNCA uses "subprovisioning" (di "provisiones insuficientes" o "sub-provisionamiento"), NUNCA "benchmark" como verbo (di "comparar"), NUNCA "bottom line" (di "resultado neto" o "linea de fondo"), NUNCA "spread" sin explicar (di "diferencial").
+- Coloquialismos para registro formal: "con obsesion", "ojo con", "al toque", "a full" — NO. Correcto: "monitorear atentamente", "vigilar con especial atencion".
+
+Reconocer la racionalidad del otro cuando aplique: ej. una COOPAC cerrada tiene rendimiento moderado pero tambien mora estructural controlada — no es "peor" en rendimiento, es un modelo distinto que sirve una poblacion distinta.
 
 ## VOZ EDITORIAL — CALIDAD DE CLASE MUNDIAL
 
