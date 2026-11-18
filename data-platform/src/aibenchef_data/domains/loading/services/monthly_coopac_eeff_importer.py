@@ -552,21 +552,24 @@ class MonthlyCoopacEeffImporter(MonthlyEeffImporter):
                 if sub_entry is not None:
                     codigo = sub_entry.codigo
                 else:
-                    # Paso 2 — fallback posicional para sub-items
-                    pos_entry = pos_map.get(orden)
-                    if pos_entry is not None:
-                        codigo = pos_entry.codigo
-                        log.info(
-                            "coopac_eeff.positional_fallback",
-                            nombre=nombre_raw.strip(),
-                            orden=orden,
-                            codigo=codigo,
-                            tipo_entidad=tipo_entidad,
-                            tipo_estado=tipo_estado,
-                        )
-                    else:
-                        codigo = None
-                        unresolved.append((orden, nombre_raw.strip()))
+                    # HARDENING 2026-11-18: sin positional_fallback para sub-items.
+                    # El fallback silencioso venía asignando código A4.1 Vigentes a la
+                    # fila "Inversiones a Vencimiento" cuando el XLS tenía más filas
+                    # que la cabecera, propagando error por todas las entidades y
+                    # arrastrando a los cálculos de PE a valores irreales. Mejor dejar
+                    # codigo=NULL con WARN visible y que el equipo actualice la
+                    # cabecera (nombre_fuente) cuando SBS renombre una cuenta.
+                    codigo = None
+                    unresolved.append((orden, nombre_raw.strip()))
+                    log.warning(
+                        "coopac_eeff.subitem_sin_match",
+                        nombre=nombre_raw.strip(),
+                        parent_l2=current_l2_code,
+                        orden=orden,
+                        tipo_entidad=tipo_entidad,
+                        tipo_estado=tipo_estado,
+                        hint="Agregar nombre_fuente en dw.cabecera_maestra o crear entrada hija del parent L2.",
+                    )
             else:
                 # Mixed-case sin padre activo: fila introductoria de sección visual
                 # (ej. 'Pasivo' escrito como label entre bloques del XLS). No es una cuenta.
