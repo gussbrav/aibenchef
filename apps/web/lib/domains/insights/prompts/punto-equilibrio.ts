@@ -1,7 +1,28 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v9.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v10.
  *
- * Correcciones sobre v8:
+ * Correcciones sobre v9:
+ *  - v9 inyectaba moraReal al contexto pero solo en la lista de
+ *    composicion al inicio; el LLM leia el cuadro comparativo como data
+ *    principal e ignoraba la mora. v10 ELEVA Mora y Cobertura de
+ *    atrasados a una seccion propia "CALIDAD DE CARTERA" justo despues
+ *    del cuadro comparativo, para que el LLM las use con prominencia.
+ *  - v9 permitia al LLM confundir costoProvision (gasto de provisiones
+ *    como % del rendimiento — operacional) con mora (cartera atrasada /
+ *    cartera bruta — calidad de cartera) o con cobertura (provisiones /
+ *    cartera atrasada). Son conceptos radicalmente distintos. v10
+ *    aclara en el glosario con ejemplos numericos.
+ *  - v9 permitia la afirmacion incorrecta "SBS no desglosa en este
+ *    formato" cuando la realidad es que SBS si publica (Anexo 5 circular
+ *    G-173) pero nuestros reportes no tienen el desglose cargado. v10
+ *    corrige el framing: "no esta cargado en nuestros reportes", no
+ *    "SBS no publica".
+ *  - v10 agrega enriquecimiento server-side de ratio_cobertura_atrasados
+ *    (provisiones / cartera atrasada) para que cuando se analice mora,
+ *    la cobertura este disponible — es la variable critica en contextos
+ *    de riesgo macro (Niño, etc).
+ *
+ * Correcciones sobre v8 (heredadas en v10):
  *  - v8 tenia voz editorial correcta, formal y respetuosa, pero el
  *    output se quedaba corto en SUSTANCIA ESTRATEGICA. Un analista
  *    senior peruano (ej. piezas publicas de analistas que cubren
@@ -179,7 +200,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v9",
+  version: "v10",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -187,6 +208,7 @@ export const promptPuntoEquilibrio: PromptTemplate = {
     const universoTipo = (ctx.contexto.universoTipo ?? "no_declarado") as UniversoTipo;
     const tipoPorEntidad = (ctx.contexto.tipoPorEntidad ?? {}) as Record<string, string>;
     const moraReal = (ctx.contexto.moraReal ?? {}) as Record<string, number | null>;
+    const coberturaAtrasados = (ctx.contexto.coberturaAtrasados ?? {}) as Record<string, number | null>;
     const roePorEntidad = (ctx.contexto.roe ?? {}) as Record<string, number | null>;
     const montosPropia = (ctx.contexto.montosPropia ?? []) as MontoPropia[];
 
@@ -339,7 +361,7 @@ export const promptPuntoEquilibrio: PromptTemplate = {
     const bulletsExplicacion =
       bulletsCount === 4
         ? `Bullet 1 — encuadre sustantivo del benchmark:
-Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: tipo regulatorio y nivel SBS de cada entidad (N1 vs N2A, etc.), lo que implica orden de magnitud distinto de escala. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Para nombres ambiguos (toponimos comunes, santos como "San Blas", nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de rendimiento + provisiones sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica que queda (cruzar con mora real por segmento y composicion interna) — solo una vez, no la repitas. Cierra con una lectura que oriente lo que viene.
+Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: tipo regulatorio y nivel SBS de cada entidad (N1 vs N2A, etc.), lo que implica orden de magnitud distinto de escala. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Para nombres ambiguos (toponimos comunes, santos como "San Blas", nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de rendimiento + provisiones sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica REAL — si tienes Mora global y Cobertura en la tabla CALIDAD DE CARTERA, la limitacion es el DESGLOSE POR SEGMENTO de la cartera (microempresa / consumo / hipotecario) que no esta cargado en este reporte. NO afirmes "SBS no publica estos datos" (los publica en Anexo 5 circular G-173) — di "no esta cargado en este reporte" o "falta el desglose por segmento". Si no tienes Mora/Cobertura en el contexto, declara ambas como limitaciones. Esto se dice solo una vez, no se repite. Cierra con una lectura que oriente lo que viene.
 
 Bullet 2 — ${ctx.entidadPropia} contra su historia:
 Donde esta su holgura hoy, de donde viene, y que movio la aguja. Lee la tendencia como hace un editorialista: no describas la tabla fila por fila — identifica el quiebre (cuando paso de rojo a positivo, cuando se estanco, cuando acelero) y cuentalo. Si la holgura actual es estrecha dilo, si se consolido dilo. Cierra con tu diagnostico — una sola frase contundente.
@@ -350,7 +372,7 @@ Cual renglon del PE carga mas a ${ctx.entidadPropia} y como se movio su ratio. R
 Bullet 4 — prioridades para los proximos trimestres:
 Dos o tres cosas que ${ctx.entidadPropia} debe hacer, armadas como narrativa (nunca "1) 2) 3)"). Sé especifico: que proteger, que acelerar, que vigilar — con horizonte temporal razonable (6-12 meses). Si tienes base para una prediccion condicional cuantitativa ("si el rendimiento cae mas de 2.5 pp sin que baje el PE, la holgura vuelve a negativo"), dila. Cierra con una pregunta fuerte que el directorio deberia poder responder — una pregunta que ponga el dedo en el tema real. NO cierres repitiendo las limitaciones metodologicas — eso ya lo dijiste en el Bullet 1.`
         : `Bullet 1 — encuadre sustantivo del benchmark:
-Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: universo (solo COOPAC / solo SF / mixto), composicion por tipo y nivel SBS. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Nombres ambiguos (toponimos comunes, santos como San Blas, nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de cifras de ${ctx.entidadPropia} sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica que queda (mora real por segmento, composicion interna) — solo una vez, no la repitas. Cierra con una lectura que oriente el analisis.
+Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: universo (solo COOPAC / solo SF / mixto), composicion por tipo y nivel SBS. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Nombres ambiguos (toponimos comunes, santos como San Blas, nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de cifras de ${ctx.entidadPropia} sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica REAL — si tienes Mora global y Cobertura en la tabla CALIDAD DE CARTERA, la limitacion es el DESGLOSE POR SEGMENTO de la cartera (microempresa / consumo / hipotecario) que no esta cargado en este reporte. NO afirmes que "SBS no publica estos datos" (los publica en Anexo 5 circular G-173) — di "no esta cargado en este reporte" o "falta el desglose por segmento". Si no tienes Mora/Cobertura en el contexto, declara ambas como limitaciones. Solo una vez, no se repite. Cierra con una lectura que oriente el analisis.
 
 Bullet 2 — ${ctx.entidadPropia} contra su historia y contra el grupo:
 Donde esta su holgura hoy, como llego ahi (si hay historico), y donde queda en el ranking (#${posicionPropia} de ${entidades.length}) — pero solo si el ranking es significativo. Si hay mora real o ROE en el contexto, cruzalos: una holgura amplia con mora alta cuenta una historia distinta que una holgura justa con cartera limpia. Cierra con tu lectura.
@@ -399,6 +421,42 @@ Referencia del grupo (informativa; solo concluyente si es homogeneo y N>=3):
 - Lider por holgura: ${mejor?.entidad ?? "—"} (${mejor ? fmtSigned(mejor.margenSeguridad) : "0.00"}pp)
 - Mas rezagado por holgura: ${peor?.entidad ?? "—"} (${peor ? fmtSigned(peor.margenSeguridad) : "0.00"}pp)
 
+${(() => {
+  // Seccion de calidad de cartera — SOLO si al menos una entidad tiene mora o cobertura
+  const filas = entidades
+    .map((e) => {
+      const mora = moraReal[e.entidad];
+      const cob = coberturaAtrasados[e.entidad];
+      const roe = roePorEntidad[e.entidad];
+      if (mora == null && cob == null && roe == null) return null;
+      const marca = e.entidad === ctx.entidadPropia ? " ← ENTIDAD PROPIA" : "";
+      const moraCell = mora != null ? `${fmt(mora).padStart(6)}%` : "    —  ";
+      const cobCell = cob != null ? `${fmt(cob).padStart(6)}%` : "    —  ";
+      const roeCell = roe != null ? `${fmt(roe).padStart(6)}%` : "    —  ";
+      return `| ${e.entidad.padEnd(28)} | ${moraCell} | ${cobCell} | ${roeCell} |${marca}`;
+    })
+    .filter((f): f is string => f !== null)
+    .join("\n");
+
+  if (!filas) {
+    return `## CALIDAD DE CARTERA — datos no disponibles en el periodo seleccionado
+Mora global de cartera atrasada, cobertura de provisiones y ROE no estan cargados para estas entidades en el periodo. Si aparece esta nota, menciona la limitacion brevemente en el Bullet 1 — pero NO afirmes que "SBS no publica estos datos" (los publica). Lo correcto es "estos indicadores no estan cargados en este reporte para el periodo seleccionado".
+`;
+  }
+
+  return `## CALIDAD DE CARTERA Y RENTABILIDAD (datos clave de contexto)
+| Entidad                       | Mora   | Cobertura | ROE    |
+|-------------------------------|--------|-----------|--------|
+${filas}
+
+INTERPRETACION:
+- **Mora** = cartera atrasada / cartera bruta. Es la proporcion de la cartera que no paga a tiempo. Rango SBS tipico: banca multiple 3-5%, microfinancieras 4-8%, cajas 6-10%, COOPAC heterogeneo 3-12%.
+- **Cobertura** = provisiones acumuladas / cartera atrasada. Mide si las provisiones alcanzan a cubrir la cartera en problemas. >100% = colchón adecuado; <100% = provisiones insuficientes (alerta de clasificadora). >200% = super provision defensiva. Promedio banca 185%, cajas 163%, financieras 162%.
+- **ROE**: rentabilidad sobre patrimonio promedio 12m. AVISO CRITICO: las COOPAC NO pagan Impuesto a la Renta (exoneradas), los bancos/financieras/cajas/edpymes si pagan ~29.5%. ROE de COOPAC vs SF NO es comparable directo — ajustar o declarar la distorsion.
+
+Usa estos indicadores en el analisis cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; no digas "no tenemos mora" si esta aqui.
+`;
+})()}
 ${
   tablaTendencia
     ? `## TENDENCIA HISTORICA — ${ctx.entidadPropia} (ultimos ${tendenciaPropia.length} cierres)
@@ -411,9 +469,21 @@ NOTA SOBRE LA TENDENCIA: Rendim/GastoFin/Provis/GastosOp/PE son RATIOS sobre car
 `
     : ""
 }
-## GLOSARIO (leer antes de interpretar):
+## GLOSARIO (leer antes de interpretar — tres conceptos facilmente confundidos):
 
-- **PE (Punto de Equilibrio / carga total)** = suma absoluta de Otros + GastoFin + Provision + GastosOp. Es el rendimiento MINIMO que la cartera necesita para empatar los costos. **PE alto NO es malo por si solo** — es malo solo si la holgura es estrecha.
+**CUIDADO CON ESTOS TRES CONCEPTOS DISTINTOS** (el LLM los confunde seguido):
+
+1. **Provision (columna "Provis" del cuadro comparativo)** = Gasto de provisiones como % del rendimiento de cartera. Es un indicador OPERACIONAL — cuanto del rendimiento se consume en provisiones. Ejemplo: 0.60% quiere decir que por cada S/100 de rendimiento, S/0.60 va a gasto de provisiones. NO es mora. NO es cobertura. Es gasto como % del rendimiento.
+
+2. **Mora (tabla "CALIDAD DE CARTERA")** = cartera atrasada / cartera bruta total. Es la proporcion de la cartera que no paga. Ejemplo: 4.20% quiere decir que 4.20% de la cartera esta atrasada. Rangos tipicos SBS: banca 3-5%, microfinancieras 4-8%, cajas 6-10%, COOPAC 3-12%.
+
+3. **Cobertura de atrasados (tabla "CALIDAD DE CARTERA")** = provisiones acumuladas / cartera atrasada. Mide si las provisiones alcanzan para cubrir la cartera en problemas. Ejemplo: 387% quiere decir que por cada S/1 de cartera atrasada, la entidad tiene S/3.87 en provisiones — super colchon defensivo. <100% = provisiones insuficientes (alerta). Promedios: banca 185%, cajas 163%, financieras 162%.
+
+**Nunca confundas Provis (operacional) con Mora (calidad) con Cobertura (colchon).** Son tres cosas distintas que se leen distinto.
+
+---
+
+- **PE (Punto de Equilibrio / carga total)** = suma absoluta de Otros + GastoFin + Provis + GastosOp. Es el rendimiento MINIMO que la cartera necesita para empatar los costos. **PE alto NO es malo por si solo** — es malo solo si la holgura es estrecha.
 - **Margen antes de Impuestos** = Rendimiento − PE. Diferencia nominal entre lo que rinde la cartera y lo que cuesta operar.
 - **Holgura sobre el PE** (METRICA PRINCIPAL DE ROBUSTEZ) = Rendimiento − PE, en puntos porcentuales. Es cuanto aire tiene la entidad entre lo que su cartera rinde y lo que cuesta operar. Si la holgura es +2pp, la entidad opera 2 puntos por encima de su punto muerto; si el rendimiento cae mas de 2 pp, entra en perdida operativa. **Siempre comparar por holgura, no por PE absoluto.** Ejemplo: entidad A con rendimiento 35% y PE 32% (holgura 3pp) tiene mas aire que entidad B con rendimiento 16% y PE 15% (holgura 1pp), aunque el PE de A sea mayor. En el output puedes llamarla **holgura**, **holgura sobre el PE**, **colchon operativo** o **aire sobre el PE** — son sinonimos. NO uses "margen de seguridad" (no es terminologia estandar peruana).
 - **Rendimiento alto NO implica cartera de alto riesgo por si solo.** Puede ser mix consumo, pequeña empresa, microempresa, o combinacion. Sin dato de segmento dominante ni mora real, NO afirmes el perfil de riesgo.

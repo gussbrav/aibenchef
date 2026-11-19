@@ -353,25 +353,29 @@ async function maybeEnrichContext(
     // No sobrescribir si el client ya envio los campos (ej. test o bypass).
     const yaTieneMora = "moraReal" in existingContexto;
     const yaTieneRoe = "roe" in existingContexto;
+    const yaTieneCobertura = "coberturaAtrasados" in existingContexto;
     const yaTieneMontos = "montosPropia" in existingContexto;
-    if (yaTieneMora && yaTieneRoe && yaTieneMontos) return input;
+    if (yaTieneMora && yaTieneRoe && yaTieneCobertura && yaTieneMontos) return input;
 
     const peerGroupConPropia = Array.from(
       new Set([input.entidadPropia, ...input.peerGroup]),
     );
 
     const [indRows, montosRows] = await Promise.all([
-      !yaTieneMora || !yaTieneRoe
+      !yaTieneMora || !yaTieneRoe || !yaTieneCobertura
         ? db.execute<{
             nomb_correg: string;
             mora: string | null;
             roe: string | null;
+            cobertura: string | null;
           }>(sql`
             SELECT er.nomb_correg,
                    COALESCE(ind.mora_atrasados_sobre_directos / 100.0,
-                            er.ratio_mora)::text AS mora,
+                            er.ratio_mora)::text          AS mora,
                    COALESCE(ind.roe_sbs / 100.0,
-                            er.roe)::text        AS roe
+                            er.roe)::text                 AS roe,
+                   COALESCE(ind.provisiones_sobre_atrasados / 100.0,
+                            er.ratio_cobertura_atrasados)::text AS cobertura
               FROM marts.mv_eeff_ratios er
               LEFT JOIN marts.v_indicadores_ancho ind
                      ON ind.periodo    = er.periodo
@@ -400,9 +404,11 @@ async function maybeEnrichContext(
 
     const moraReal: Record<string, number | null> = {};
     const roe: Record<string, number | null> = {};
+    const coberturaAtrasados: Record<string, number | null> = {};
     for (const r of indRows) {
       moraReal[r.nomb_correg] = r.mora != null ? Number(r.mora) : null;
       roe[r.nomb_correg] = r.roe != null ? Number(r.roe) : null;
+      coberturaAtrasados[r.nomb_correg] = r.cobertura != null ? Number(r.cobertura) : null;
     }
 
     const montosPropia = montosRows
@@ -420,6 +426,7 @@ async function maybeEnrichContext(
         ...existingContexto,
         ...(yaTieneMora ? {} : { moraReal }),
         ...(yaTieneRoe ? {} : { roe }),
+        ...(yaTieneCobertura ? {} : { coberturaAtrasados }),
         ...(yaTieneMontos ? {} : { montosPropia }),
       },
     };
