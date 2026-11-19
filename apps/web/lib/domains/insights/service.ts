@@ -386,97 +386,125 @@ async function maybeEnrichContext(
       : ["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES",
          "COOPAC_N1", "COOPAC_N2A", "COOPAC_N2B", "COOPAC_N3"];
 
-    const [indRows, montosRows, promedioRows] = await Promise.all([
-      !yaTieneMora || !yaTieneRoe || !yaTieneCobertura
-        ? db.execute<{
-            nomb_correg: string;
-            mora: string | null;
-            roe: string | null;
-            cobertura: string | null;
-            periodo_dato: number | null;
-          }>(sql`
-            -- Para cada entidad, tomar el ULTIMO periodo <= input.periodo
-            -- que tenga AL MENOS un indicador poblado. COOPAC se publica
-            -- con delay — si Sep 2026 no esta aun, cae a Jun 2026, etc.
-            SELECT DISTINCT ON (er.nomb_correg)
-                   er.nomb_correg,
-                   COALESCE(ind.mora_atrasados_sobre_directos / 100.0,
-                            er.ratio_mora)::text          AS mora,
-                   COALESCE(ind.roe_sbs / 100.0,
-                            er.roe)::text                 AS roe,
-                   COALESCE(ind.provisiones_sobre_atrasados / 100.0,
-                            er.ratio_cobertura_atrasados)::text AS cobertura,
-                   er.periodo                             AS periodo_dato
-              FROM marts.mv_eeff_ratios er
-              LEFT JOIN marts.v_indicadores_ancho ind
-                     ON ind.periodo    = er.periodo
-                    AND ind.nomb_correg = er.nomb_correg
-             WHERE er.periodo   <= ${input.periodo}
-               AND er.moneda     = 'TOTAL'
-               AND er.nomb_correg = ANY(${peerGroupConPropia}::text[])
-               AND (er.ratio_mora IS NOT NULL
-                    OR ind.mora_atrasados_sobre_directos IS NOT NULL
-                    OR er.roe IS NOT NULL
-                    OR ind.roe_sbs IS NOT NULL
-                    OR er.ratio_cobertura_atrasados IS NOT NULL
-                    OR ind.provisiones_sobre_atrasados IS NOT NULL)
-             ORDER BY er.nomb_correg, er.periodo DESC
-          `)
-        : Promise.resolve([]),
-      !yaTieneMontos
-        ? db.execute<{
-            periodo: number;
-            cartera_mm: string | null;
-          }>(sql`
-            SELECT periodo,
-                   (cartera_bruta / 1000.0)::text AS cartera_mm
-              FROM marts.mv_eeff_ratios
-             WHERE nomb_correg = ${input.entidadPropia}
-               AND moneda      = 'TOTAL'
-               AND periodo    <= ${input.periodo}
-             ORDER BY periodo DESC
-             LIMIT 4
-          `)
-        : Promise.resolve([]),
-      !yaTienePromedios
-        ? db.execute<{
-            tipo_entidad: string;
-            periodo: number;
-            n_entidades: number;
-            mora_prom: string | null;
-            cobertura_prom: string | null;
-            roe_prom: string | null;
-            roa_prom: string | null;
-          }>(sql`
-            -- Promedio simple (no ponderado) por tipo_entidad al ultimo
-            -- periodo disponible por tipo, replicando la logica del
-            -- dashboard /estadisticas-rapidas. Permite al LLM anclar
-            -- la comparacion de la entidad propia contra su universo.
-            WITH ultimo_por_tipo AS (
-              SELECT tipo_entidad, MAX(periodo) AS ultimo_periodo
-                FROM marts.mv_eeff_ratios
-               WHERE moneda = 'TOTAL'
-                 AND periodo <= ${input.periodo}
-                 AND tipo_entidad = ANY(${tiposParaPromedios}::text[])
-               GROUP BY tipo_entidad
-            )
-            SELECT
-              er.tipo_entidad,
-              er.periodo,
-              COUNT(*)::int                       AS n_entidades,
-              AVG(er.ratio_mora)::text            AS mora_prom,
-              AVG(er.ratio_cobertura_atrasados)::text AS cobertura_prom,
-              AVG(er.roe)::text                   AS roe_prom,
-              AVG(er.roa)::text                   AS roa_prom
+    // Cada query enrichment en su propio try/catch — si una falla, las otras
+    // siguen. Antes todo iba en un Promise.all comun con outer try/catch,
+    // asi que UN error tiraba TODO el enrichment (observado 2026-11-19:
+    // los insights v14 se generaban con contexto vacio de promedios/macro/
+    // perfiles porque alguna query fallaba y catcheaba todo).
+    const log = (msg: string, extra?: unknown): void => {
+      // eslint-disable-next-line no-console
+      console.log(`[insights.enrichment] ${msg}`, extra ?? "");
+    };
+    const warn = (msg: string, err: unknown): void => {
+      const detail = err instanceof Error ? `${err.message}` : String(err);
+      // eslint-disable-next-line no-console
+      console.warn(`[insights.enrichment] ${msg}: ${detail}`);
+    };
+
+    log(`start enrichment for ${input.entidadPropia}, periodo=${input.periodo}, peers=${peerGroupConPropia.length}`);
+
+    // --- Indicadores (mora/ROE/cobertura) ---
+    let indRows: Array<{
+      nomb_correg: string;
+      mora: string | null;
+      roe: string | null;
+      cobertura: string | null;
+      periodo_dato: number | null;
+    }> = [];
+    if (!yaTieneMora || !yaTieneRoe || !yaTieneCobertura) {
+      try {
+        indRows = await db.execute(sql`
+          SELECT DISTINCT ON (er.nomb_correg)
+                 er.nomb_correg,
+                 COALESCE(ind.mora_atrasados_sobre_directos / 100.0,
+                          er.ratio_mora)::text          AS mora,
+                 COALESCE(ind.roe_sbs / 100.0,
+                          er.roe)::text                 AS roe,
+                 COALESCE(ind.provisiones_sobre_atrasados / 100.0,
+                          er.ratio_cobertura_atrasados)::text AS cobertura,
+                 er.periodo                             AS periodo_dato
             FROM marts.mv_eeff_ratios er
-            INNER JOIN ultimo_por_tipo u
-                    ON u.tipo_entidad   = er.tipo_entidad
-                   AND u.ultimo_periodo = er.periodo
-            WHERE er.moneda = 'TOTAL'
-            GROUP BY er.tipo_entidad, er.periodo
-          `)
-        : Promise.resolve([]),
-    ]);
+            LEFT JOIN marts.v_indicadores_ancho ind
+                   ON ind.periodo    = er.periodo
+                  AND ind.nomb_correg = er.nomb_correg
+           WHERE er.periodo   <= ${input.periodo}
+             AND er.moneda     = 'TOTAL'
+             AND er.nomb_correg = ANY(${peerGroupConPropia}::text[])
+             AND (er.ratio_mora IS NOT NULL
+                  OR ind.mora_atrasados_sobre_directos IS NOT NULL
+                  OR er.roe IS NOT NULL
+                  OR ind.roe_sbs IS NOT NULL
+                  OR er.ratio_cobertura_atrasados IS NOT NULL
+                  OR ind.provisiones_sobre_atrasados IS NOT NULL)
+           ORDER BY er.nomb_correg, er.periodo DESC
+        `);
+        log(`  indicadores: ${indRows.length} entidades con mora/roe/cobertura`);
+      } catch (err) {
+        warn("indicadores query fallo", err);
+      }
+    }
+
+    // --- Montos absolutos cartera propia ---
+    let montosRows: Array<{ periodo: number; cartera_mm: string | null }> = [];
+    if (!yaTieneMontos) {
+      try {
+        montosRows = await db.execute(sql`
+          SELECT periodo,
+                 (cartera_bruta / 1000.0)::text AS cartera_mm
+            FROM marts.mv_eeff_ratios
+           WHERE nomb_correg = ${input.entidadPropia}
+             AND moneda      = 'TOTAL'
+             AND periodo    <= ${input.periodo}
+           ORDER BY periodo DESC
+           LIMIT 4
+        `);
+        log(`  montosPropia: ${montosRows.length} periodos`);
+      } catch (err) {
+        warn("montos query fallo", err);
+      }
+    }
+
+    // --- Promedios por tipo_entidad ---
+    let promedioRows: Array<{
+      tipo_entidad: string;
+      periodo: number;
+      n_entidades: number;
+      mora_prom: string | null;
+      cobertura_prom: string | null;
+      roe_prom: string | null;
+      roa_prom: string | null;
+    }> = [];
+    if (!yaTienePromedios) {
+      try {
+        promedioRows = await db.execute(sql`
+          WITH ultimo_por_tipo AS (
+            SELECT tipo_entidad, MAX(periodo) AS ultimo_periodo
+              FROM marts.mv_eeff_ratios
+             WHERE moneda = 'TOTAL'
+               AND periodo <= ${input.periodo}
+               AND tipo_entidad = ANY(${tiposParaPromedios}::text[])
+             GROUP BY tipo_entidad
+          )
+          SELECT
+            er.tipo_entidad,
+            er.periodo,
+            COUNT(*)::int                       AS n_entidades,
+            AVG(er.ratio_mora)::text            AS mora_prom,
+            AVG(er.ratio_cobertura_atrasados)::text AS cobertura_prom,
+            AVG(er.roe)::text                   AS roe_prom,
+            AVG(er.roa)::text                   AS roa_prom
+          FROM marts.mv_eeff_ratios er
+          INNER JOIN ultimo_por_tipo u
+                  ON u.tipo_entidad   = er.tipo_entidad
+                 AND u.ultimo_periodo = er.periodo
+          WHERE er.moneda = 'TOTAL'
+          GROUP BY er.tipo_entidad, er.periodo
+        `);
+        log(`  promedios: ${promedioRows.length} tipos de entidad`);
+      } catch (err) {
+        warn("promedios query fallo", err);
+      }
+    }
 
     const moraReal: Record<string, number | null> = {};
     const roe: Record<string, number | null> = {};
@@ -553,12 +581,9 @@ async function maybeEnrichContext(
           vigenteHasta: i.vigenteHasta,
           fuentes: i.fuentes,
         }));
+        log(`  macro: ${contextoMacro.length} items vigentes`);
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[insights.enrichment] getVigentes macro fallo — se continua sin contexto macro:",
-          err,
-        );
+        warn("getVigentes macro fallo", err);
       }
     }
 
@@ -585,6 +610,7 @@ async function maybeEnrichContext(
           nombCorreg,
           tipoEntidad: tipoPorEntidadInput[nombCorreg] ?? null,
         }));
+        log(`  perfiles: iniciando lookup/research de ${entidadesParaProfile.length} entidades...`);
         const perfiles = await ensureProfilesForEntities(entidadesParaProfile);
         for (const [nombCorreg, perfil] of perfiles.entries()) {
           perfilesEntidad[nombCorreg] = {
@@ -599,14 +625,15 @@ async function maybeEnrichContext(
             verifiedByHuman: perfil.verifiedByHuman,
           };
         }
+        log(`  perfiles: ${Object.keys(perfilesEntidad).length} obtenidos`);
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[insights.enrichment] ensureProfilesForEntities fallo — se continua sin perfiles:",
-          err,
-        );
+        warn("ensureProfilesForEntities fallo", err);
       }
     }
+
+    log(
+      `enrichment done: mora=${Object.keys(moraReal).length}, roe=${Object.keys(roe).length}, cob=${Object.keys(coberturaAtrasados).length}, montos=${montosPropia.length}, promedios=${Object.keys(promediosPorTipo).length}, macro=${contextoMacro.length}, perfiles=${Object.keys(perfilesEntidad).length}`,
+    );
 
     return {
       ...input,
@@ -622,9 +649,14 @@ async function maybeEnrichContext(
         periodoCalidad,
       },
     };
-  } catch {
-    // best-effort: si falla la query, seguir con el contexto original.
-    // El prompt v4 degrada declarando que no tiene los datos.
+  } catch (err) {
+    // best-effort: si falla algo inesperado, seguir con el contexto original.
+    // El prompt degrada declarando que no tiene los datos. Pero LOGUEAR el
+    // error para debug — antes 2026-11-19 el catch silencioso ocultaba por
+    // que los insights salian sin promedios/macro/perfiles.
+    const detail = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+    // eslint-disable-next-line no-console
+    console.error("[insights.enrichment] FATAL (contexto sin enrich):", detail);
     return input;
   }
 }

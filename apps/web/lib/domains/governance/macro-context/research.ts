@@ -35,6 +35,17 @@ export class MacroResearchError extends Error {
 
 const SYSTEM_PROMPT = `Eres un analista macroeconomico senior enfocado en el sistema financiero peruano. Tu trabajo es producir un snapshot estructurado del contexto macro VIGENTE que afecta las decisiones de credito y provisiones de las entidades financieras del Peru.
 
+**FUENTES OFICIALES OBLIGATORIAS — priorizar en este orden:**
+1. SBS (sbs.gob.pe) para circulares, normativa, estadisticas del sistema financiero
+2. BCR (bcrp.gob.pe) para tasa de referencia, inflacion, PBI
+3. INEI (inei.gob.pe) para indicadores macro oficiales
+4. MEF (gob.pe/mef) para politica fiscal, Reactiva, FAE, Impulso MyPeru
+5. INDECI o COEN (indeci.gob.pe) para emergencias climaticas, Niño, declaratorias
+6. ONPE / JNE (onpe.gob.pe, jne.gob.pe) para ciclo electoral
+7. Prensa financiera peruana seria (Gestion, Semana Economica, El Comercio opinion economica)
+
+Las fuentes sin dominio .gob.pe o sin autoridad financiera reconocida SE EVITAN. Un item sin al menos UNA fuente oficial verificable NO va al output — mejor devolver menos items pero todos solidos.
+
 Usa web_search para traer la data mas actualizada que puedas sobre:
 
 CATEGORIAS A INVESTIGAR:
@@ -51,7 +62,7 @@ PARA CADA ITEM RELEVANTE DEVUELVE UN OBJETO CON:
 - impacto: una oracion sobre que cartera/segmento se ve afectado (ej. "microempresa y agraria mas expuestas; COOPAC y Cajas con exposicion regional norte en mayor riesgo")
 - severidad: "alta" | "media" | "baja" | "informativo"
 - vigente_hasta: fecha ISO yyyy-mm-dd estimada hasta la que es relevante (si no se puede estimar, null)
-- fuentes: 1-3 URLs reales consultadas
+- fuentes: 1-3 URLs reales consultadas, al menos una de dominio oficial (.gob.pe o institucion financiera reconocida). URLs de verificacion — tienen que abrir en navegador y mostrar el dato citado.
 
 FORMATO DE SALIDA — JSON ESTRICTO:
 {
@@ -77,6 +88,19 @@ REGLAS INVIOLABLES:
 - Prioriza eventos de impacto REAL en decisiones de credito. Omite ruido politico sin consecuencia directa.
 - Entre 3 y 10 items total. Menos es mejor si no hay data verificada.
 - JSON puro, sin markdown fences, sin texto adicional.`;
+
+/**
+ * Strippear las citas <cite index="..."> que Anthropic web_search inserta
+ * en los textos. Las fuentes van por separado en el array `fuentes`.
+ */
+function stripCitations(s: string): string {
+  // Anthropic web_search puede devolver las citas con brackets angulares
+  // o con parentesis (observado en prod 2026-11-19). Matchear ambos.
+  return s
+    .replace(/[<(]\s*\/?\s*cite\b[^>)]*[>)]/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function parseResearchJson(text: string): MacroResearchItem[] {
   const cleaned = text
@@ -120,9 +144,9 @@ function parseResearchJson(text: string): MacroResearchItem[] {
 
       valid.push({
         categoria: categoria as MacroCategoria,
-        titulo: r.titulo.trim(),
-        resumen: r.resumen.trim(),
-        impacto: typeof r.impacto === "string" ? r.impacto.trim() : null,
+        titulo: stripCitations(r.titulo),
+        resumen: stripCitations(r.resumen),
+        impacto: typeof r.impacto === "string" ? stripCitations(r.impacto) : null,
         severidad: severidad as MacroSeveridad,
         vigente_hasta: typeof r.vigente_hasta === "string" ? r.vigente_hasta : null,
         fuentes,

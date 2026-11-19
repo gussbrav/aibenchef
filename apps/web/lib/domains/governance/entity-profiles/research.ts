@@ -109,6 +109,19 @@ REGLAS INVIOLABLES:
 - NUNCA incluir citas marca-registrada ni de clasificadoras.
 - JSON puro, sin markdown fences, sin texto adicional.`;
 
+/**
+ * Strippear las citas (cite index="..."> que Anthropic web_search inserta
+ * en los textos. Las fuentes van por separado en el array `fuentes`.
+ */
+function stripCitations(s: string): string {
+  // Anthropic web_search puede devolver las citas con brackets angulares
+  // o con parentesis (observado en prod 2026-11-19). Matchear ambos.
+  return s
+    .replace(/[<(]\s*\/?\s*cite\b[^>)]*[>)]/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parseResearchJson(text: string): EntityProfileResearchResult | null {
   const cleaned = text
     .trim()
@@ -119,8 +132,11 @@ function parseResearchJson(text: string): EntityProfileResearchResult | null {
   try {
     const parsed = JSON.parse(cleaned) as Record<string, unknown>;
 
-    const toStringOrNull = (v: unknown): string | null =>
-      typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+    const toStringOrNull = (v: unknown): string | null => {
+      if (typeof v !== "string") return null;
+      const cleaned = stripCitations(v);
+      return cleaned.length > 0 ? cleaned : null;
+    };
 
     const modelo = toStringOrNull(parsed.modelo_negocio);
     const modeloValido: ModeloNegocio | null =
