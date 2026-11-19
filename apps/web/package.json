@@ -23,7 +23,8 @@
     "reconcile-ratios": "tsx scripts/reconcile-ratios.ts",
     "reconcile-ratios:dry": "tsx scripts/reconcile-ratios.ts --dry-run",
     "reverify-sbs": "tsx scripts/reverify-sbs.ts",
-    "reverify-sbs:dry": "tsx scripts/reverify-sbs.ts --dry-run"
+    "reverify-sbs:dry": "tsx scripts/reverify-sbs.ts --dry-run",
+    "refresh-macro": "tsx scripts/refresh-macro-context.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

@@ -525,6 +525,43 @@ async function maybeEnrichContext(
       };
     }
 
+    // Macro context — items vigentes en gov.macro_context. Es un lookup
+    // barato (una tabla chica), no dispara research. El research vive en
+    // scripts/refresh-macro-context.ts y se ejecuta manual o cron.
+    let contextoMacro: Array<{
+      categoria: string;
+      titulo: string;
+      resumen: string;
+      impacto: string | null;
+      severidad: string;
+      vigenteHasta: string | null;
+      fuentes: string[];
+    }> = [];
+    const yaTieneMacro = "contextoMacro" in existingContexto;
+    if (!yaTieneMacro) {
+      try {
+        const { getVigentes } = await import(
+          "@/lib/domains/governance/macro-context"
+        );
+        const items = await getVigentes(15);
+        contextoMacro = items.map((i) => ({
+          categoria: i.categoria,
+          titulo: i.titulo,
+          resumen: i.resumen,
+          impacto: i.impacto,
+          severidad: i.severidad,
+          vigenteHasta: i.vigenteHasta,
+          fuentes: i.fuentes,
+        }));
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[insights.enrichment] getVigentes macro fallo — se continua sin contexto macro:",
+          err,
+        );
+      }
+    }
+
     // Entity profiles — lookup cache + research inline de las faltantes,
     // respetando rate limit global (ver governance/entity-profiles/). Best-
     // effort: si falla, el prompt degrada declarando la falta.
@@ -581,6 +618,7 @@ async function maybeEnrichContext(
         ...(yaTieneMontos ? {} : { montosPropia }),
         ...(yaTienePromedios ? {} : { promediosPorTipo }),
         ...(yaTienePerfiles ? {} : { perfilesEntidad }),
+        ...(yaTieneMacro ? {} : { contextoMacro }),
         periodoCalidad,
       },
     };

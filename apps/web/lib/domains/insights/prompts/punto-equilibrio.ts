@@ -1,5 +1,16 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v13.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v14.
+ *
+ * Nuevo en v14:
+ *  - Inyecta contextoMacro (lista de items vigentes en gov.macro_context)
+ *    como variable macro para el analisis. Reemplaza al bloque estatico
+ *    hardcodeado que dormia en sector-knowledge.ts con data real y
+ *    cuantitativa.
+ *  - El prompt usa Niño en curso, tasa BCR actual, circulares SBS recientes,
+ *    ciclo electoral, etc. — no como relleno sino como variable cuando el
+ *    bullet 4 (prioridades) lo requiere.
+ *
+ * Correcciones sobre v12 (heredadas en v14):
  *
  * Nuevo en v13:
  *  - Hasta v12 el LLM no sabia a quien le prestaba cada entidad, donde
@@ -247,7 +258,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v13",
+  version: "v14",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -283,6 +294,15 @@ export const promptPuntoEquilibrio: PromptTemplate = {
         verifiedByHuman: boolean;
       }
     >;
+    const contextoMacro = (ctx.contexto.contextoMacro ?? []) as Array<{
+      categoria: string;
+      titulo: string;
+      resumen: string;
+      impacto: string | null;
+      severidad: string;
+      vigenteHasta: string | null;
+      fuentes: string[];
+    }>;
     const montosPropia = (ctx.contexto.montosPropia ?? []) as MontoPropia[];
 
     // Ranking por MARGEN DE SEGURIDAD (rendimiento − PE), no por margen
@@ -752,6 +772,34 @@ Modelo de analista: el que ha visto entidades subir y caer durante 20 años — 
 - PROHIBIDO "cada sol de cartera genera X centavos" u otras explicaciones "para dummies" del ratio al CFO.
 - Longitud objetivo: 70-130 palabras por bullet. Mas largo = diluye.
 - NO empieces bullets con una etiqueta en mayusculas tipo "ENCUADRE DEL ANALISIS:" — eso es nomenclatura de borrador. Empieza con la afirmacion directa.
+
+${(() => {
+  if (contextoMacro.length === 0) return "";
+
+  const prettyCat = (c: string): string => {
+    if (c === "climatico") return "Clima";
+    if (c === "macro") return "Macro";
+    if (c === "politico") return "Politico";
+    if (c === "regulatorio") return "Regulatorio";
+    if (c === "sectorial") return "Sectorial";
+    return c;
+  };
+
+  const sev = (s: string): string => s.toUpperCase();
+
+  const lineas = contextoMacro.map((item) => {
+    const impacto = item.impacto ? ` — Impacto: ${item.impacto}` : "";
+    const vigencia = item.vigenteHasta ? ` [vigente a ${item.vigenteHasta}]` : "";
+    return `- [${sev(item.severidad)}] ${prettyCat(item.categoria)}${vigencia}: **${item.titulo}**. ${item.resumen}${impacto}`;
+  }).join("\n");
+
+  return `## CONTEXTO MACRO VIGENTE (no es relleno — usar cuando sea material al caso)
+
+${lineas}
+
+INSTRUCCION: estos items no son decorativos. Son variables reales que pueden afectar la decision de credito de ${ctx.entidadPropia}. USARLOS cuando la cartera o modelo de la entidad se cruza con el evento (ej. una COOPAC con cartera microempresa en region norte + Niño en emergencia = cruce material; una COOPAC cerrada SUNAT + ciclo electoral = cruce tenue). Si ningun item del contexto cruza con lo que haces, no los menciones. NO forzar relevancia.
+`;
+})()}
 
 ## SUSTANCIA — PATRONES DE ANALISTA SENIOR (que debe traer el output):
 
