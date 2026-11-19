@@ -85,17 +85,30 @@ PARA CADA CAMPO BUSCA EN:
 3. Tercera query: nombre + "facebook" o "web oficial" para traer la propia publicacion de la entidad
 
 **CAMPOS CRITICOS QUE NO PUEDEN QUEDAR VACIOS si hay cualquier fuente publica:**
-- **publico_objetivo**: lo que mas importa para el analisis. Busca explicitamente a QUE TIPO DE PERSONAS LES PRESTA. Ejemplos de valores correctos:
-  * "Trabajadores del sector publico (trabajador nombrado o contratados CAS) via descuento por planilla y convenios"
-  * "Trabajadores de SUNAT ampliado desde 2021 a otras entidades publicas"
-  * "Microempresa de Lima Sur, consumo publico general"
-  * "Afiliados a gremios de educadores regionales"
-  Si la pagina de Facebook / web / prensa menciona "prestamos para CAS", "prestamos para nombrados", "convenios con instituciones", "trabajadores de X institucion" — eso ES el publico_objetivo. No lo dejes como null si hay evidencia.
-- **modelo_negocio**: basado en publico_objetivo, deducir cerrada/abierta/mixta.
-  * Si presta solo a empleados de UNA institucion -> "cerrada"
-  * Si presta a publico general sin vinculo laboral -> "abierta"
-  * Si presta a trabajadores del sector publico GENERAL (CAS/nombrado de cualquier entidad, convenios con multiples instituciones) + consumo abierto -> "mixta"
-  * Solo "desconocido" si realmente no hay indicacion en ninguna fuente.
+
+- **publico_objetivo**: lo que mas importa para el analisis. INFIERE de los PRODUCTOS y CONDICIONES que la entidad ofrece, no busques literalmente "a quien presta" (muchas no lo escriben asi).
+
+  SEÑALES DE INFERENCIA → VALORES CORRECTOS:
+  * Ves "prestamos desde S/ 2,000 para trabajador nombrado / CAS" → "Trabajadores del sector publico (nombrado y CAS) via descuento por planilla y convenios"
+  * Ves "convenios con instituciones publicas" → "Trabajadores de instituciones publicas con convenio"
+  * Ves "cooperativa de trabajadores de SUNAT / MINSA / FFAA / Ministerio X" → "Trabajadores de [esa institucion] via cobro por planilla"
+  * Ves "depositos a plazo 12%" + "prestamos consumo" + "sin requisito de vinculo laboral" → "Publico general, enfasis en consumo"
+  * Ves "credito grupal" o "bancos comunales" → "Microempresa rural/urbana popular via metodologia grupal"
+
+  REGLA DE ORO: si el research encontro al menos UN producto con cliente objetivo (ej. "credito CAS"), EL PUBLICO_OBJETIVO ES ESE CLIENTE. No dejes null porque la frase exacta "publico objetivo" no aparece en la fuente — ese dato casi nunca esta escrito asi literal.
+
+- **modelo_negocio**: deduci de publico_objetivo:
+  * UNA sola institucion (ej. "solo empleados de SUNAT") → "cerrada"
+  * Publico general sin vinculo → "abierta"
+  * Trabajadores del sector publico GENERAL (CAS/nombrado de multiples entidades, convenios) → "mixta" (cautivos por planilla pero de varias instituciones) — aplica a la mayoria de COOPAC que atienden sector publico
+  * Combinacion de cautivos + abierto → "mixta"
+  * "desconocido" SOLO si realmente no hay ningun indicio en ninguna fuente. Si viste algun producto con cliente, "desconocido" es incorrecto.
+
+- **segmento_cartera_hipotesis**: lo mismo — inferir de productos. Ejemplos:
+  * "consumo con descuento planilla" (si presta a trabajadores publicos)
+  * "credito grupal rural" (si menciona credito grupal / bancos comunales)
+  * "microempresa urbana" (si menciona prestamos a bodegas, microempresarios)
+  * "consumo revolvente" (si menciona tarjetas / lineas revolventes)
 
 CAMPOS A EXTRAER (todos opcionales — null si no encuentras evidencia):
 - ubicacion: ciudad y departamento si lo encuentras (ej. "Arequipa, Peru"). Si tiene sucursales en multiples, "nacional" o la sede principal.
