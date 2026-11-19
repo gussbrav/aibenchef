@@ -469,6 +469,17 @@ async function maybeEnrichContext(
         `tipoPorEntidadKeys=${Object.keys(tipoPorEntidadInput).length}`,
     );
 
+    // Drizzle serializa arrays JS como "record" cuando se pasan como param con
+    // cast ::text[], generando "cannot cast type record to text[]". Workaround:
+    // construir el array literal via ARRAY[...]::text[] con sql.join (mismo
+    // patron que bulletsSql mas abajo).
+    const pgTextArray = (arr: readonly string[]) =>
+      arr.length === 0
+        ? sql`ARRAY[]::text[]`
+        : sql`ARRAY[${sql.join(arr.map((v) => sql`${v}`), sql`, `)}]::text[]`;
+    const peerGroupArr = pgTextArray(peerGroupConPropia);
+    const tiposPromediosArr = pgTextArray(tiposParaPromedios);
+
     // --- Indicadores (mora/ROE/cobertura) ---
     let indRows: Array<{
       nomb_correg: string;
@@ -495,7 +506,7 @@ async function maybeEnrichContext(
                   AND ind.nomb_correg = er.nomb_correg
            WHERE er.periodo   <= ${input.periodo}
              AND er.moneda     = 'TOTAL'
-             AND er.nomb_correg = ANY(${peerGroupConPropia}::text[])
+             AND er.nomb_correg = ANY(${peerGroupArr})
              AND (er.ratio_mora IS NOT NULL
                   OR ind.mora_atrasados_sobre_directos IS NOT NULL
                   OR er.roe IS NOT NULL
@@ -554,7 +565,7 @@ async function maybeEnrichContext(
               FROM marts.mv_eeff_ratios
              WHERE moneda = 'TOTAL'
                AND periodo <= ${input.periodo}
-               AND tipo_entidad = ANY(${tiposParaPromedios}::text[])
+               AND tipo_entidad = ANY(${tiposPromediosArr})
              GROUP BY tipo_entidad
           )
           SELECT

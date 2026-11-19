@@ -82,9 +82,12 @@ export async function getEntityProfilesBulk(
   nombCorregs: string[],
 ): Promise<Map<string, EntityProfile>> {
   if (nombCorregs.length === 0) return new Map();
+  // Drizzle serializa string[] como record; construimos ARRAY[...]::text[]
+  // explicito via sql.join.
+  const arrSql = sql`ARRAY[${sql.join(nombCorregs.map((v) => sql`${v}`), sql`, `)}]::text[]`;
   const rows = await db.execute<DbRow>(sql`
     SELECT * FROM gov.entity_profiles
-     WHERE nomb_correg = ANY(${nombCorregs}::text[])
+     WHERE nomb_correg = ANY(${arrSql})
   `);
   const map = new Map<string, EntityProfile>();
   for (const r of rows) {
@@ -171,12 +174,13 @@ export async function upsertEntityProfileFromResearch(params: {
  */
 export async function bumpUsage(nombCorregs: string[]): Promise<void> {
   if (nombCorregs.length === 0) return;
+  const arrSql = sql`ARRAY[${sql.join(nombCorregs.map((v) => sql`${v}`), sql`, `)}]::text[]`;
   try {
     await db.execute(sql`
       UPDATE gov.entity_profiles
          SET use_count    = use_count + 1,
              last_used_at = now()
-       WHERE nomb_correg = ANY(${nombCorregs}::text[])
+       WHERE nomb_correg = ANY(${arrSql})
     `);
   } catch {
     // best-effort
