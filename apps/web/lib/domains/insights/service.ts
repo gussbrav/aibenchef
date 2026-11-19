@@ -448,13 +448,26 @@ async function maybeEnrichContext(
       // eslint-disable-next-line no-console
       console.log(`[insights.enrichment] ${msg}`, extra ?? "");
     };
+    // Registrar errores en el contexto mismo — asi se persisten en
+    // contexto_json de admin.report_insights y se pueden auditar sin
+    // tener acceso a logs de container.
+    const enrichmentErrors: string[] = [];
     const warn = (msg: string, err: unknown): void => {
       const detail = err instanceof Error ? `${err.message}` : String(err);
       // eslint-disable-next-line no-console
       console.warn(`[insights.enrichment] ${msg}: ${detail}`);
+      enrichmentErrors.push(`${msg}: ${detail}`);
+    };
+    const enrichmentLog: string[] = [];
+    const logStep = (step: string, result: string): void => {
+      enrichmentLog.push(`${step}: ${result}`);
     };
 
-    log(`start enrichment for ${input.entidadPropia}, periodo=${input.periodo}, peers=${peerGroupConPropia.length}`);
+    log(
+      `start enrichment for ${input.entidadPropia}, periodo=${input.periodo}, ` +
+        `peers=${peerGroupConPropia.length}, tipos=[${tiposParaPromedios.join(",")}], ` +
+        `tipoPorEntidadKeys=${Object.keys(tipoPorEntidadInput).length}`,
+    );
 
     // --- Indicadores (mora/ROE/cobertura) ---
     let indRows: Array<{
@@ -492,9 +505,12 @@ async function maybeEnrichContext(
            ORDER BY er.nomb_correg, er.periodo DESC
         `);
         log(`  indicadores: ${indRows.length} entidades con mora/roe/cobertura`);
+        logStep("indicadores", `${indRows.length} rows`);
       } catch (err) {
         warn("indicadores query fallo", err);
       }
+    } else {
+      logStep("indicadores", "skipped (ya existia en contexto)");
     }
 
     // --- Montos absolutos cartera propia ---
@@ -512,9 +528,12 @@ async function maybeEnrichContext(
            LIMIT 4
         `);
         log(`  montosPropia: ${montosRows.length} periodos`);
+        logStep("montos", `${montosRows.length} rows`);
       } catch (err) {
         warn("montos query fallo", err);
       }
+    } else {
+      logStep("montos", "skipped (ya existia en contexto)");
     }
 
     // --- Promedios por tipo_entidad ---
@@ -554,9 +573,12 @@ async function maybeEnrichContext(
           GROUP BY er.tipo_entidad, er.periodo
         `);
         log(`  promedios: ${promedioRows.length} tipos de entidad`);
+        logStep("promedios", `${promedioRows.length} rows para tipos=[${tiposParaPromedios.join(",")}]`);
       } catch (err) {
         warn("promedios query fallo", err);
       }
+    } else {
+      logStep("promedios", "skipped (ya existia en contexto)");
     }
 
     const moraReal: Record<string, number | null> = {};
@@ -635,9 +657,12 @@ async function maybeEnrichContext(
           fuentes: i.fuentes,
         }));
         log(`  macro: ${contextoMacro.length} items vigentes`);
+        logStep("macro", `${contextoMacro.length} items vigentes`);
       } catch (err) {
         warn("getVigentes macro fallo", err);
       }
+    } else {
+      logStep("macro", "skipped (ya existia en contexto)");
     }
 
     // Entity profiles — lookup cache + research inline de las faltantes,
@@ -679,9 +704,12 @@ async function maybeEnrichContext(
           };
         }
         log(`  perfiles: ${Object.keys(perfilesEntidad).length} obtenidos`);
+        logStep("perfiles", `${Object.keys(perfilesEntidad).length} obtenidos de ${entidadesParaProfile.length} pedidos`);
       } catch (err) {
         warn("ensureProfilesForEntities fallo", err);
       }
+    } else {
+      logStep("perfiles", "skipped (ya existia en contexto)");
     }
 
     log(
@@ -700,6 +728,10 @@ async function maybeEnrichContext(
         ...(yaTienePerfiles ? {} : { perfilesEntidad }),
         ...(yaTieneMacro ? {} : { contextoMacro }),
         periodoCalidad,
+        // Audit trail — persiste en contexto_json para debugging sin acceso a container logs.
+        // Los campos empiezan con "_" para distinguirlos del contexto consumido por el prompt.
+        _enrichmentLog: enrichmentLog,
+        _enrichmentErrors: enrichmentErrors,
       },
     };
   } catch (err) {
