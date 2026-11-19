@@ -258,7 +258,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v22",
+  version: "v23",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -451,7 +451,7 @@ export const promptPuntoEquilibrio: PromptTemplate = {
 
     const avisoHeterogeneidad = hayHeterogeneidad
       ? `ADVERTENCIA DE HETEROGENEIDAD: el grupo mezcla tipos regulatorios distintos${hayCoopac && haySF ? " (COOPAC + Sistema Financiero)" : nivelesCoopacPresentes.length > 1 ? " (COOPAC de niveles distintos — tamaños muy distintos)" : ""}. Las comparaciones directas de rendimiento, PE y margen NO son concluyentes por si solas — tienes que declararlo en el Bullet 1 y moderar las conclusiones de los siguientes bullets.`
-      : `Grupo homogeneo en tipo regulatorio. Las comparaciones de ratios son mas interpretables, pero sigue vigente la regla de mix de cartera: sin dato de composicion por segmento (microempresa/consumo/hipotecario) no se puede afirmar perfil de riesgo.`;
+      : `Grupo homogeneo en tipo regulatorio. Las comparaciones de ratios son mas interpretables. Para afirmar perfil de riesgo de cartera, usa el PERFIL DE ENTIDAD (publico_objetivo, modelo_negocio, productos_principales) — si identifica un modelo monosegmento (consumo-convenio, planilla sector publico, etc.), NO hables de "desglose por segmento" porque no existe mix. Si el perfil no esta o indica cartera diversa real, puedes mencionar la limitacion UNA vez.`;
 
     const avisoMuestra =
       entidades.length <= 2
@@ -570,9 +570,12 @@ INTERPRETACION:
 
 **REGLA ESPECIFICA PARA COOPAC** (feedback explicito del usuario 2026-11-19):
 - NO ESPECULES sobre segmentos de cartera (microempresa / consumo / hipotecario) cuando la entidad es COOPAC — el dato no existe publicamente, hablar de "si tu cartera tiene exposicion a microempresa..." es RELLENO sin anclaje.
-- SI mencionas limitacion, hacelo UNA sola vez y en una linea: "el desglose por segmento no es publico para COOPAC — para proyecciones de mora por tipo, el area de riesgos interna de la entidad". Sin repetir ni ramificar.
-- NO uses frases condicionales tipo "si tu cartera tiene microempresa rural, un deterioro de 2 pp..." — eso es especulacion sin base.
+- **PROHIBIDO mencionar el desglose "microempresa/consumo/hipotecario" cuando el perfil de la entidad ya identifica un modelo monosegmento**. Si PERFILES DE ENTIDAD indica que la COOPAC es cerrada con vinculo a planilla (CAS, SUNAT, FFAA, salud, etc.), o que opera con convenios institucionales, el modelo YA es consumo-convenio de un solo producto — NO existe "mix de segmentos" que desglosar. Hablar de "el desglose por segmento no es publico" en ese caso es INSENSATO (no hay desglose porque no hay mix). Mencionar "microempresa/consumo/hipotecario" cuando la entidad no toca esos productos es ALUCINACION disfrazada de prudencia.
+- SI mencionas limitacion, es SOLO cuando el perfil no esta disponible O el perfil indica cartera diversa real (COOPAC abierta al publico general con varios productos). En ese caso, UNA sola linea: "el desglose por tipo de credito no es publico para COOPAC — el area de riesgos interna de la entidad lo tiene". Sin repetir ni ramificar.
+- NO uses frases condicionales tipo "si tu cartera tiene microempresa rural, un deterioro de 2 pp..." cuando el perfil ya descarta ese segmento — eso es especulacion sin base.
+- NO cierres bullets con "sin el desglose por segmento no puedes afirmarlo publicamente, pero el area de riesgos debe modelar escenarios por tipo" — si el modelo es monosegmento, no hay tipos que modelar.
 - Lo que SI puedes decir con la cifra en mano: "la mora global actual es X%, muy por debajo del promedio del tipo Y%" — esto es dato, no hipotesis.
+- Lo que SI puedes recomendar (sin especular sobre segmentos): monitorear concentracion por empleador/convenio, exposicion a un solo pagador, riesgo de recorte presupuestal del sector publico, estacionalidad de nomina — estos son riesgos REALES del modelo consumo-convenio, no especulacion sobre segmentos.
 
 Usa estos indicadores con prominencia cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; NO digas "no tenemos mora" si esta aqui.
 
