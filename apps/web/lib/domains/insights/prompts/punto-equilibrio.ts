@@ -1,7 +1,26 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v10.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v11.
  *
- * Correcciones sobre v9:
+ * Correcciones sobre v10:
+ *  - v10 afirmaba que "SBS publica mora por segmento en Anexo 5" para
+ *    justificar la limitacion. Error: SBS NO publica mora desagregada
+ *    por tipo de credito a nivel entidad. Lo que hace es publicar
+ *    mora GLOBAL por entidad en indicadores oficiales. El desglose por
+ *    segmento solo lo tiene la propia entidad internamente. v11 corrige
+ *    el framing: la limitacion correcta es que ese desglose no es
+ *    publico y solo lo tiene el area de riesgos de la entidad.
+ *  - v10 permitia "radicalmente", "brutal", "dramaticamente", "enorme"
+ *    como intensificadores. Son dramaticos para el registro HBR formal.
+ *    v11 los banea explicitamente ("operan en escalas distintas" en
+ *    lugar de "escalas radicalmente distintas").
+ *  - v10 fallaba con entidades que no tienen data en el periodo exacto
+ *    (COOPAC con delay de publicacion). v11 enrichment hace fallback al
+ *    ultimo periodo disponible <= input.periodo con data, y pasa el
+ *    periodo real del dato en periodoCalidad para que el prompt pueda
+ *    mencionar "mora a Jun 2026" si el dato viene de ahi en lugar de
+ *    Sep 2026.
+ *
+ * Correcciones sobre v9 (heredadas en v11):
  *  - v9 inyectaba moraReal al contexto pero solo en la lista de
  *    composicion al inicio; el LLM leia el cuadro comparativo como data
  *    principal e ignoraba la mora. v10 ELEVA Mora y Cobertura de
@@ -200,7 +219,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v10",
+  version: "v11",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -210,6 +229,7 @@ export const promptPuntoEquilibrio: PromptTemplate = {
     const moraReal = (ctx.contexto.moraReal ?? {}) as Record<string, number | null>;
     const coberturaAtrasados = (ctx.contexto.coberturaAtrasados ?? {}) as Record<string, number | null>;
     const roePorEntidad = (ctx.contexto.roe ?? {}) as Record<string, number | null>;
+    const periodoCalidad = (ctx.contexto.periodoCalidad ?? {}) as Record<string, string>;
     const montosPropia = (ctx.contexto.montosPropia ?? []) as MontoPropia[];
 
     // Ranking por MARGEN DE SEGURIDAD (rendimiento − PE), no por margen
@@ -361,7 +381,7 @@ export const promptPuntoEquilibrio: PromptTemplate = {
     const bulletsExplicacion =
       bulletsCount === 4
         ? `Bullet 1 — encuadre sustantivo del benchmark:
-Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: tipo regulatorio y nivel SBS de cada entidad (N1 vs N2A, etc.), lo que implica orden de magnitud distinto de escala. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Para nombres ambiguos (toponimos comunes, santos como "San Blas", nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de rendimiento + provisiones sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica REAL — si tienes Mora global y Cobertura en la tabla CALIDAD DE CARTERA, la limitacion es el DESGLOSE POR SEGMENTO de la cartera (microempresa / consumo / hipotecario) que no esta cargado en este reporte. NO afirmes "SBS no publica estos datos" (los publica en Anexo 5 circular G-173) — di "no esta cargado en este reporte" o "falta el desglose por segmento". Si no tienes Mora/Cobertura en el contexto, declara ambas como limitaciones. Esto se dice solo una vez, no se repite. Cierra con una lectura que oriente lo que viene.
+Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: tipo regulatorio y nivel SBS de cada entidad (N1 vs N2A, etc.), lo que implica orden de magnitud distinto de escala. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Para nombres ambiguos (toponimos comunes, santos como "San Blas", nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de rendimiento + provisiones sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica REAL. El framing correcto depende del tipo de entidad: (a) para COOPAC: el desglose de mora POR SEGMENTO (microempresa/consumo/hipotecario) NO es publico via SBS — solo la propia entidad lo tiene internamente. Esta limitacion es estructural, no tecnica. (b) para Sistema Financiero (bancos/financieras/cajas/edpymes): SBS SI publica el desglose por segmento en Anexo 5 — la limitacion es que "no esta cargado en este reporte". NO digas "SBS no publica" si son SF; NO digas "no esta cargado" si son COOPAC. Si Mora y Cobertura GLOBALES ya estan en la tabla CALIDAD DE CARTERA, usalas como ancla y no las menciones como faltantes. Solo una vez, no se repite. Cierra con una lectura que oriente lo que viene.
 
 Bullet 2 — ${ctx.entidadPropia} contra su historia:
 Donde esta su holgura hoy, de donde viene, y que movio la aguja. Lee la tendencia como hace un editorialista: no describas la tabla fila por fila — identifica el quiebre (cuando paso de rojo a positivo, cuando se estanco, cuando acelero) y cuentalo. Si la holgura actual es estrecha dilo, si se consolido dilo. Cierra con tu diagnostico — una sola frase contundente.
@@ -372,7 +392,7 @@ Cual renglon del PE carga mas a ${ctx.entidadPropia} y como se movio su ratio. R
 Bullet 4 — prioridades para los proximos trimestres:
 Dos o tres cosas que ${ctx.entidadPropia} debe hacer, armadas como narrativa (nunca "1) 2) 3)"). Sé especifico: que proteger, que acelerar, que vigilar — con horizonte temporal razonable (6-12 meses). Si tienes base para una prediccion condicional cuantitativa ("si el rendimiento cae mas de 2.5 pp sin que baje el PE, la holgura vuelve a negativo"), dila. Cierra con una pregunta fuerte que el directorio deberia poder responder — una pregunta que ponga el dedo en el tema real. NO cierres repitiendo las limitaciones metodologicas — eso ya lo dijiste en el Bullet 1.`
         : `Bullet 1 — encuadre sustantivo del benchmark:
-Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: universo (solo COOPAC / solo SF / mixto), composicion por tipo y nivel SBS. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Nombres ambiguos (toponimos comunes, santos como San Blas, nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de cifras de ${ctx.entidadPropia} sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica REAL — si tienes Mora global y Cobertura en la tabla CALIDAD DE CARTERA, la limitacion es el DESGLOSE POR SEGMENTO de la cartera (microempresa / consumo / hipotecario) que no esta cargado en este reporte. NO afirmes que "SBS no publica estos datos" (los publica en Anexo 5 circular G-173) — di "no esta cargado en este reporte" o "falta el desglose por segmento". Si no tienes Mora/Cobertura en el contexto, declara ambas como limitaciones. Solo una vez, no se repite. Cierra con una lectura que oriente el analisis.
+Abre leyendo el grupo con oficio. Lo que SI tienes como dato duro: universo (solo COOPAC / solo SF / mixto), composicion por tipo y nivel SBS. Lo que PUEDES plantear SOLO si el nombre es inequivocamente institucional (COOSUNAT, COOPMINSA, COOP FFAA, COOP MAGISTERIAL): el modelo de vinculo cerrado. Nombres ambiguos (toponimos comunes, santos como San Blas, nombres que aparecen en multiples lugares de Peru): NO inferir geografia ni modelo — pasa directo al analisis de cifras. Si el patron de cifras de ${ctx.entidadPropia} sugiere un segmento de cartera, plantea como hipotesis a validar. Al cierre del bullet, en UNA linea, reconoce la limitacion metodologica REAL. El framing correcto depende del tipo de entidad: (a) para COOPAC: el desglose de mora POR SEGMENTO (microempresa/consumo/hipotecario) NO es publico via SBS — solo la propia entidad lo tiene internamente. Limitacion estructural, no tecnica. (b) para Sistema Financiero: SBS SI publica el desglose por segmento en Anexo 5 — la limitacion es que "no esta cargado en este reporte". NO digas "SBS no publica" si son SF; NO digas "no esta cargado" si son COOPAC. Si Mora y Cobertura GLOBALES ya estan en la tabla CALIDAD DE CARTERA, usalas como ancla y no las menciones como faltantes. Solo una vez, no se repite. Cierra con una lectura que oriente el analisis.
 
 Bullet 2 — ${ctx.entidadPropia} contra su historia y contra el grupo:
 Donde esta su holgura hoy, como llego ahi (si hay historico), y donde queda en el ranking (#${posicionPropia} de ${entidades.length}) — pero solo si el ranking es significativo. Si hay mora real o ROE en el contexto, cruzalos: una holgura amplia con mora alta cuenta una historia distinta que una holgura justa con cartera limpia. Cierra con tu lectura.
@@ -433,14 +453,18 @@ ${(() => {
       const moraCell = mora != null ? `${fmt(mora).padStart(6)}%` : "    —  ";
       const cobCell = cob != null ? `${fmt(cob).padStart(6)}%` : "    —  ";
       const roeCell = roe != null ? `${fmt(roe).padStart(6)}%` : "    —  ";
-      return `| ${e.entidad.padEnd(28)} | ${moraCell} | ${cobCell} | ${roeCell} |${marca}`;
+      const periodoDato = periodoCalidad[e.entidad] ?? "";
+      const notaPeriodo = periodoDato && periodoDato !== ctx.periodoLabel
+        ? ` (dato a ${periodoDato})`
+        : "";
+      return `| ${e.entidad.padEnd(28)} | ${moraCell} | ${cobCell} | ${roeCell} |${notaPeriodo}${marca}`;
     })
     .filter((f): f is string => f !== null)
     .join("\n");
 
   if (!filas) {
-    return `## CALIDAD DE CARTERA — datos no disponibles en el periodo seleccionado
-Mora global de cartera atrasada, cobertura de provisiones y ROE no estan cargados para estas entidades en el periodo. Si aparece esta nota, menciona la limitacion brevemente en el Bullet 1 — pero NO afirmes que "SBS no publica estos datos" (los publica). Lo correcto es "estos indicadores no estan cargados en este reporte para el periodo seleccionado".
+    return `## CALIDAD DE CARTERA — datos no disponibles en el reporte
+Mora global, cobertura de provisiones y ROE no estan cargados para estas entidades en el periodo seleccionado (comun cuando COOPAC publican con delay). Si aparece esta nota, mencionala brevemente en el Bullet 1 como limitacion — pero cuida el framing: la mora y cobertura GLOBALES de entidad SI son publicas via SBS para todos los tipos; simplemente no estan cargadas en este reporte para este periodo. NO digas "SBS no publica".
 `;
   }
 
@@ -449,12 +473,18 @@ Mora global de cartera atrasada, cobertura de provisiones y ROE no estan cargado
 |-------------------------------|--------|-----------|--------|
 ${filas}
 
+Si aparece "(dato a MMM YYYY)" junto a una entidad, significa que el dato de calidad corresponde a un cierre anterior al periodo del analisis — COOPAC tipicamente se publican con delay respecto al Sistema Financiero. Cuando lo cites en el analisis, mencionalo ("mora al cierre de JUN 2026, ultimo disponible").
+
 INTERPRETACION:
-- **Mora** = cartera atrasada / cartera bruta. Es la proporcion de la cartera que no paga a tiempo. Rango SBS tipico: banca multiple 3-5%, microfinancieras 4-8%, cajas 6-10%, COOPAC heterogeneo 3-12%.
-- **Cobertura** = provisiones acumuladas / cartera atrasada. Mide si las provisiones alcanzan a cubrir la cartera en problemas. >100% = colchón adecuado; <100% = provisiones insuficientes (alerta de clasificadora). >200% = super provision defensiva. Promedio banca 185%, cajas 163%, financieras 162%.
+- **Mora** = cartera atrasada / cartera bruta. Proporcion de la cartera que no paga a tiempo. Rango SBS tipico: banca multiple 3-5%, microfinancieras 4-8%, cajas 6-10%, COOPAC heterogeneo 3-12%.
+- **Cobertura** = provisiones acumuladas / cartera atrasada. Mide si las provisiones alcanzan a cubrir la cartera en problemas. >100% = colchon adecuado; <100% = provisiones insuficientes (alerta); >200% = super provision defensiva. Promedios: banca 185%, cajas 163%, financieras 162%.
 - **ROE**: rentabilidad sobre patrimonio promedio 12m. AVISO CRITICO: las COOPAC NO pagan Impuesto a la Renta (exoneradas), los bancos/financieras/cajas/edpymes si pagan ~29.5%. ROE de COOPAC vs SF NO es comparable directo — ajustar o declarar la distorsion.
 
-Usa estos indicadores en el analisis cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; no digas "no tenemos mora" si esta aqui.
+**MORA POR SEGMENTO DE CARTERA** (microempresa, consumo, hipotecario, etc.):
+- Para Sistema Financiero (bancos, financieras, cajas, edpymes): SBS SI publica el desglose por tipo de credito via Anexo 5 — pero NO esta cargado en este reporte. Si la limitacion es relevante, el framing correcto es "no esta cargado en este reporte" (no "SBS no publica").
+- Para COOPAC: SBS NO publica el desglose por segmento por entidad. Solo la propia entidad lo tiene internamente. Framing correcto para COOPAC: "este desglose no es publico; solo el area de riesgos de la entidad lo tiene".
+
+Usa estos indicadores con prominencia cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; NO digas "no tenemos mora" si esta aqui.
 `;
 })()}
 ${
@@ -532,6 +562,14 @@ El output va a ser leido por la gerencia de la entidad analizada Y potencialment
 
 - Ejemplo PROHIBIDO: "COOSUNAT apenas alcanza 0.91 pp" o "provisiones apenas 0.60%".
 - Ejemplo CORRECTO: "COOSUNAT registra 0.91 pp de holgura", "la holgura de COOSUNAT se ubica en 0.91 pp", "las provisiones representan 0.60%".
+
+**INTENSIFICADORES EXCESIVOS PROHIBIDOS (en todo el output, no solo peers):**
+"radicalmente", "brutalmente", "dramaticamente", "enormemente", "extremadamente", "abismalmente", "sustancialmente" (como adverbio decorativo), "profundamente". Son dramaticos para registro HBR formal. Reemplazarlos por adverbios moderados o — mejor — por la cifra que respalda la intensidad.
+
+- PROHIBIDO: "operan en escalas radicalmente distintas"
+- CORRECTO: "operan en escalas distintas" o "operan en escalas de orden de magnitud diferente" o directamente la cifra: "operan en escalas distintas: SAN BLAS clasifica en Nivel 1 por activos, COOSUNAT en Nivel 2A"
+- PROHIBIDO: "los gastos operacionales bajaron dramaticamente"
+- CORRECTO: "los gastos operacionales bajaron 4.94 pp" (la cifra habla sola)
 
 **METAFORAS (politica estricta):**
 - Para ENTIDAD PROPIA (${ctx.entidadPropia}): metaforas vivas aceptadas con mesura — "respira con X pp de aire sobre su PE", "ha girado de la crisis a la solidez", "al filo si cae mas de Y pp". Max 2 metaforas por bullet aplicadas a ella.

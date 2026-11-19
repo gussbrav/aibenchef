@@ -368,21 +368,34 @@ async function maybeEnrichContext(
             mora: string | null;
             roe: string | null;
             cobertura: string | null;
+            periodo_dato: number | null;
           }>(sql`
-            SELECT er.nomb_correg,
+            -- Para cada entidad, tomar el ULTIMO periodo <= input.periodo
+            -- que tenga AL MENOS un indicador poblado. COOPAC se publica
+            -- con delay — si Sep 2026 no esta aun, cae a Jun 2026, etc.
+            SELECT DISTINCT ON (er.nomb_correg)
+                   er.nomb_correg,
                    COALESCE(ind.mora_atrasados_sobre_directos / 100.0,
                             er.ratio_mora)::text          AS mora,
                    COALESCE(ind.roe_sbs / 100.0,
                             er.roe)::text                 AS roe,
                    COALESCE(ind.provisiones_sobre_atrasados / 100.0,
-                            er.ratio_cobertura_atrasados)::text AS cobertura
+                            er.ratio_cobertura_atrasados)::text AS cobertura,
+                   er.periodo                             AS periodo_dato
               FROM marts.mv_eeff_ratios er
               LEFT JOIN marts.v_indicadores_ancho ind
                      ON ind.periodo    = er.periodo
                     AND ind.nomb_correg = er.nomb_correg
-             WHERE er.periodo    = ${input.periodo}
+             WHERE er.periodo   <= ${input.periodo}
                AND er.moneda     = 'TOTAL'
                AND er.nomb_correg = ANY(${peerGroupConPropia}::text[])
+               AND (er.ratio_mora IS NOT NULL
+                    OR ind.mora_atrasados_sobre_directos IS NOT NULL
+                    OR er.roe IS NOT NULL
+                    OR ind.roe_sbs IS NOT NULL
+                    OR er.ratio_cobertura_atrasados IS NOT NULL
+                    OR ind.provisiones_sobre_atrasados IS NOT NULL)
+             ORDER BY er.nomb_correg, er.periodo DESC
           `)
         : Promise.resolve([]),
       !yaTieneMontos
@@ -405,10 +418,16 @@ async function maybeEnrichContext(
     const moraReal: Record<string, number | null> = {};
     const roe: Record<string, number | null> = {};
     const coberturaAtrasados: Record<string, number | null> = {};
+    // Mapa entidad -> periodo del dato (puede ser < input.periodo si la
+    // entidad tiene delay de publicacion — comun en COOPAC).
+    const periodoCalidad: Record<string, string> = {};
     for (const r of indRows) {
       moraReal[r.nomb_correg] = r.mora != null ? Number(r.mora) : null;
       roe[r.nomb_correg] = r.roe != null ? Number(r.roe) : null;
       coberturaAtrasados[r.nomb_correg] = r.cobertura != null ? Number(r.cobertura) : null;
+      if (r.periodo_dato != null) {
+        periodoCalidad[r.nomb_correg] = periodoLabel(Number(r.periodo_dato));
+      }
     }
 
     const montosPropia = montosRows
@@ -428,6 +447,7 @@ async function maybeEnrichContext(
         ...(yaTieneRoe ? {} : { roe }),
         ...(yaTieneCobertura ? {} : { coberturaAtrasados }),
         ...(yaTieneMontos ? {} : { montosPropia }),
+        periodoCalidad,
       },
     };
   } catch {
