@@ -21,6 +21,25 @@ export async function GET(req: Request) {
   const limit = Math.min(100, parseInt(url.searchParams.get("limit") ?? "50", 10));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10));
 
-  const data = await listProfiles({ filter, limit, offset });
-  return NextResponse.json(data);
+  try {
+    const data = await listProfiles({ filter, limit, offset });
+    return NextResponse.json(data);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.error("[admin/entity-profiles] listProfiles failed:", msg);
+    // Si la tabla no existe → migration V220 no aplicada.
+    const isMissingTable = msg.includes("gov.entity_profiles") && msg.includes("does not exist");
+    return NextResponse.json(
+      {
+        rows: [],
+        total: 0,
+        error: msg,
+        hint: isMissingTable
+          ? "La tabla gov.entity_profiles no existe. La migration V220 no se aplico. Correr pnpm --filter web db:migrate o revisar logs del migrator ([migrator] en logs de EasyPanel)."
+          : undefined,
+      },
+      { status: 500 },
+    );
+  }
 }

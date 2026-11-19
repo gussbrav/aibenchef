@@ -50,8 +50,15 @@ export function EntityProfilesClient() {
     setError(null);
     try {
       const r = await fetch(`/api/v1/admin/entity-profiles?filter=${filter}&limit=100`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = (await r.json()) as ListResult;
+      const d = (await r.json().catch(() => ({}))) as ListResult & {
+        error?: string;
+        hint?: string;
+      };
+      if (!r.ok) {
+        const parts = [d.error ?? `HTTP ${r.status}`];
+        if (d.hint) parts.push(d.hint);
+        throw new Error(parts.join(" — "));
+      }
       setData(d);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
