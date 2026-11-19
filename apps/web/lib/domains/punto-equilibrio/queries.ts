@@ -424,17 +424,23 @@ export async function getPuntoEquilibrioHistorico(opts: {
            -- NULL → COALESCE=0 → ratio=0 → subs=0 en la UI (confuso).
            -- Fallback: si el detalle no esta reportado, asumir 100% en
            -- Provisiones para Creditos (4.2) que es lo estandar.
+           -- NOTA (fix 2026-11-19): el condicional usaba "> 0" lo que fallaba
+           -- en periodos con RECUPERO NETO (cta_4_ttm negativo porque reversas
+           -- mayor que gastos: el padre pct_provisiones sale POSITIVO). Esto
+           -- hacia que la subfila "Provisiones para Creditos" apareciera como
+           -- "—" aunque el padre tenia valor. Correccion: usar "!= 0" para
+           -- aceptar tambien TTMs negativos.
            CASE
-             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
                THEN t.cta_4_2_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm > 0
+             WHEN t.cta_4_ttm != 0
                THEN 1.0
              ELSE NULL
            END AS ratio_prov_credito,
            CASE
-             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
                THEN t.cta_4_1_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm > 0
+             WHEN t.cta_4_ttm != 0
                THEN 0.0
              ELSE NULL
            END AS ratio_prov_inversion,
@@ -782,16 +788,18 @@ export async function getPuntoEquilibrioSeries(opts: {
              THEN (t.cta_2_ttm - t.cta_2_1_ttm - t.cta_2_2_ttm - t.cta_2_4_ttm - t.cta_2_oblig_ttm) / t.cta_2_ttm
            END AS ratio_gf_otros,
            -- Ratios Costo Provision (con fallback si detalle no reportado)
+           -- Ver nota detallada del fix 2026-11-19 en getPuntoEquilibrioHistorico:
+           -- usar "!= 0" para aceptar TTMs negativos (recupero neto).
            CASE
-             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
                THEN t.cta_4_2_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm > 0 THEN 1.0
+             WHEN t.cta_4_ttm != 0 THEN 1.0
              ELSE NULL
            END AS ratio_prov_credito,
            CASE
-             WHEN t.cta_4_ttm > 0 AND (t.cta_4_1_ttm + t.cta_4_2_ttm) > 0
+             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
                THEN t.cta_4_1_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm > 0 THEN 0.0
+             WHEN t.cta_4_ttm != 0 THEN 0.0
              ELSE NULL
            END AS ratio_prov_inversion,
            CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
