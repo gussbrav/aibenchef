@@ -184,13 +184,18 @@ export async function generateInsight(
   const durationMs = Date.now() - t0;
 
   // Parsear output: debe ser JSON array de strings
-  const bullets = parseBulletsJson(result.text);
-  if (bullets.length === 0) {
+  const bulletsRaw = parseBulletsJson(result.text);
+  if (bulletsRaw.length === 0) {
     throw new InsightsError(
       `LLM devolvio output no parseable como JSON array. Raw: ${result.text.slice(0, 200)}`,
       "parse_error",
     );
   }
+  // Sanitizer post-generacion. El prompt v8+ prohibe palabras especificas
+  // ("radicalmente", "apenas", intensificadores excesivos) pero el LLM las
+  // ignora recurrentemente. Este filtro las elimina antes de cachear para
+  // garantizar el registro profesional sin importar que haga el modelo.
+  const bullets = bulletsRaw.map(sanitizeBullet);
 
   // Persistir en cache + usage
   const hash = peerGroupHash(input.peerGroup, input.entidadPropia);
@@ -271,6 +276,49 @@ export async function generateInsight(
  * Tolera desviaciones: markdown fences, whitespace, trailing commas y
  * truncados (si el LLM se corto a mitad de bullet, salvamos los completos).
  */
+/**
+ * Sanitizer post-generacion para bullets de insights. Elimina palabras
+ * prohibidas por las reglas del prompt (intensificadores dramaticos,
+ * adjetivos despectivos aplicados a peers) que el LLM igual cuela a
+ * pesar de las instrucciones. Garantia estructural del registro profesional.
+ *
+ * Patron: reemplazar "X distintas" por "distintas" (quitar adverbio),
+ * "apenas X.XX" por "X.XX" (quitar adverbio antes de cifra), etc.
+ */
+function sanitizeBullet(text: string): string {
+  let out = text;
+
+  // Intensificadores despectivos aplicados a peers o cifras:
+  // "apenas 0.91 pp" → "0.91 pp"
+  // "solo 6.73%"      → "6.73%"
+  out = out.replace(
+    /\b(apenas|solo|tan solo|ni siquiera|ligeramente)\s+((?:[+-]?\d|\$|S\/\s*\d))/gi,
+    "$2",
+  );
+
+  // Intensificadores dramaticos antes de adjetivos:
+  // "radicalmente distintas" → "distintas"
+  // "dramaticamente bajos"   → "bajos"
+  out = out.replace(
+    /\b(radicalmente|dramaticamente|dram[áa]ticamente|brutalmente|enormemente|extremadamente|abismalmente|profundamente)\s+/gi,
+    "",
+  );
+
+  // Metaforas aplicadas a peers consideradas negativas:
+  // "COOSUNAT opera al filo"    → "COOSUNAT opera cerca del limite"
+  out = out.replace(/\bopera al filo\b/gi, "opera cerca del limite");
+
+  // Coloquialismos para registro formal:
+  // "antes de tocar hueso" → "antes de comprometer cobertura operativa"
+  out = out.replace(/\bantes de tocar hueso\b/gi, "antes de comprometer cobertura operativa");
+  out = out.replace(/\bcon obsesion\b/gi, "con atencion especial");
+
+  // Colapsar espacios dobles y espacio antes de puntuacion generados por los replaces
+  out = out.replace(/\s+/g, " ").replace(/\s+([.,;:])/g, "$1").trim();
+
+  return out;
+}
+
 function parseBulletsJson(text: string): string[] {
   const cleaned = text
     .trim()
