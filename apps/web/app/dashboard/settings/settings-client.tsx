@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
+  CloudRain,
+  Database,
   History,
   Key,
   MailPlus,
@@ -24,6 +26,8 @@ import { InvitationsSection } from "./invitations-section";
 import { ProfileSection } from "./profile-section";
 import { SystemSettingsSection } from "./system-settings-section";
 import { UsersSection } from "./users-section";
+import { EntityProfilesClient } from "../admin/entity-profiles/entity-profiles-client";
+import { MacroContextClient } from "../admin/macro-context/macro-context-client";
 
 type Tab =
   | "perfil"
@@ -33,7 +37,9 @@ type Tab =
   | "invitaciones"
   | "sistema"
   | "auditoria"
-  | "debug";
+  | "debug"
+  | "perfiles-entidad"
+  | "contexto-macro";
 
 type Me = { id: string; role: "admin" | "usuario"; plan?: UserPlan };
 
@@ -65,6 +71,8 @@ export function SettingsClient() {
     { id: "perfil", label: "Mi perfil", icon: UserIcon },
     { id: "api-keys", label: "API keys", icon: Key, hidden: !apiAccessAllowed },
     { id: "ai", label: "Proveedores AI", icon: Sparkles, adminOnly: true },
+    { id: "perfiles-entidad", label: "Perfiles entidad", icon: Database, adminOnly: true },
+    { id: "contexto-macro", label: "Contexto macro", icon: CloudRain, adminOnly: true },
     { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
     { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
     { id: "sistema", label: "Sistema", icon: Sliders, adminOnly: true },
@@ -110,6 +118,8 @@ export function SettingsClient() {
         {tab === "perfil" && <ProfileSection />}
         {tab === "api-keys" && apiAccessAllowed && <ApiKeysSection />}
         {tab === "ai" && isAdmin && <AiProvidersSection />}
+        {tab === "perfiles-entidad" && isAdmin && <EntityProfilesClient />}
+        {tab === "contexto-macro" && isAdmin && <MacroContextClient />}
         {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
         {tab === "invitaciones" && isAdmin && <InvitationsSection />}
         {tab === "sistema" && isAdmin && <SystemSettingsSection />}
