@@ -318,10 +318,52 @@ function sanitizeBullet(text: string): string {
   out = out.replace(/\bantes de tocar hueso\b/gi, "antes de comprometer cobertura operativa");
   out = out.replace(/\bcon obsesion\b/gi, "con atencion especial");
 
+  // ERRORES LEXICOS: "morales" NUNCA se usa en analisis financiero —
+  // confusion del LLM entre adjetivo "morales" (etica) y plural de "mora"
+  // (indicador). En contexto financiero el reemplazo es seguro.
+  out = out.replace(/\bmorales\b/g, "moras");
+  out = out.replace(/\bMorales\b/g, "Moras");
+  out = out.replace(/\bMORALES\b/g, "MORAS");
+
+  // LIMITACIONES DEFENSIVAS SIN VALOR: eliminar oraciones completas que
+  // mencionen el "desglose por segmento" / "microempresa/consumo/hipotecario"
+  // como limitacion. El usuario (2026-11-19) pidio expresamente que NO
+  // aparezcan — no aportan valor cuando el modelo de la entidad es
+  // monosegmento (consumo-convenio CAS/SUNAT), y meten dudas innecesarias
+  // cuando no lo es (el area de riesgos ya sabe su propio mix). El prompt
+  // v23 lo prohibe pero el LLM lo cuela igual.
+  out = removeOffendingSentences(out);
+
   // Colapsar espacios dobles y espacio antes de puntuacion generados por los replaces
   out = out.replace(/\s+/g, " ").replace(/\s+([.,;:])/g, "$1").trim();
 
   return out;
+}
+
+/**
+ * Elimina oraciones completas que contengan frases defensivas prohibidas.
+ * Divide el texto en oraciones por ". " y elimina las que matcheen los
+ * patrones. Es intencionalmente agresivo — mejor perder una oracion
+ * defensiva que servir texto que no aporta valor.
+ */
+function removeOffendingSentences(text: string): string {
+  const PATRONES_PROHIBIDOS = [
+    /desglose\s+(de\s+mora|por\s+segmento|por\s+tipo\s+de\s+credito)/i,
+    /segmento\s+de\s+cartera.*(consumo|microempresa|hipotecario)/i,
+    /\(consumo\/microempresa\/hipotecario\)/i,
+    /\(microempresa\/consumo\/hipotecario\)/i,
+    /mix\s+por\s+segmento.*(no\s+es\s+publico|no\s+esta\s+cargado)/i,
+    /solo\s+la\s+propia\s+entidad\s+lo\s+tiene\s+internamente/i,
+    /con\s+esa\s+salvedad.*(cifras\s+globales|anclada?s?\s+en)/i,
+    /el\s+analisis\s+(que\s+sigue\s+)?se\s+ancla\s+en\s+cifras\s+globales/i,
+    /limitaci[oó]n\s+metodol[oó]gica\s+cr[ií]tica.*(desglose|segmento)/i,
+  ];
+
+  const oraciones = text.split(/(?<=[.!?])\s+/);
+  const filtradas = oraciones.filter(
+    (oracion) => !PATRONES_PROHIBIDOS.some((p) => p.test(oracion)),
+  );
+  return filtradas.join(" ");
 }
 
 function parseBulletsJson(text: string): string[] {

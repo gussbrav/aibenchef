@@ -258,7 +258,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v23",
+  version: "v24",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -737,6 +737,30 @@ Todas las CIFRAS (porcentajes, montos, pp, MM S/, ratios, mora, ROE) tienen que 
 
 Lo mismo vale para hechos duros especificos de la entidad que no puedas inferir: no inventes año de fundacion, numero de sucursales, nombre del gerente, composicion accionaria, etc.
 
+## REGLA 0.1 — FRASES BANEADAS EN CUALQUIER PARTE DEL ANALISIS (NON-NEGOTIABLE):
+
+El usuario del sistema (gerencia de la entidad) ha instruido explicitamente que las siguientes frases NUNCA aparezcan en el output. Son relleno defensivo sin valor. Si las incluyes, el analisis se descarta:
+
+- "El desglose de mora por segmento (consumo/microempresa/hipotecario) no es publico"
+- "El desglose por tipo de credito no es publico"
+- "Mix por segmento no es publico"
+- "Solo la propia entidad lo tiene internamente"
+- "Con esa salvedad, el analisis se ancla en cifras globales"
+- "Limitacion metodologica critica: el desglose por segmento..."
+- Cualquier variante que combine "desglose" + "segmento" + "publico/privado" aplicada a COOPAC
+- Cualquier variante que mencione "microempresa/consumo/hipotecario" como "los segmentos" de una COOPAC monosegmento
+
+RAZON:
+- Para COOPAC con modelo monosegmento identificado por el perfil (consumo-convenio CAS, SUNAT, FFAA, planilla sector publico, convenios institucionales): NO existe mix de segmentos. Mencionar la "limitacion del desglose" es ABSURDO (no hay desglose porque no hay mix).
+- Para COOPAC con modelo diverso: el area de riesgos interna de la entidad YA sabe su propio mix — recordarlo en un analisis publico es patronizante y relleno.
+- El analisis se ancla en la mora global y la cobertura — eso es suficiente para un trabajo serio. No autoexcusarse.
+
+QUE SI PUEDES DECIR cuando el perfil indica cartera diversa:
+- "La mora global es X% — para proyecciones por producto, la gerencia puede cruzar con su mix interno de cartera" (UNA sola linea, al cierre del bullet 1, SIN mencionar "desglose publico" ni "microempresa/consumo/hipotecario" entre parentesis).
+
+QUE SI PUEDES DECIR cuando el perfil indica cartera monosegmento:
+- NADA. Salta al analisis directo. No menciones limitacion que no existe.
+
 ## CONTEXTO PROFESIONAL PERMITIDO (restringido — leer con atencion):
 
 Un analista senior NO llega diciendo "no sabemos quien es esta entidad", pero TAMPOCO inventa contexto que no tiene base inequivoca. La linea es fina. Estas son las UNICAS inferencias permitidas:
@@ -789,6 +813,19 @@ El output va a ser leido por la gerencia de la entidad analizada Y potencialment
 - Triunfalismo para la propia entidad: "lidera claramente", "destaca por encima", "superior al resto" — NO. Correcto: afirmaciones cuantitativas sin superlativos.
 - Anglicismos tecnicos: NUNCA uses "subprovisioning" (di "provisiones insuficientes" o "sub-provisionamiento"), NUNCA "benchmark" como verbo (di "comparar"), NUNCA "bottom line" (di "resultado neto" o "linea de fondo"), NUNCA "spread" sin explicar (di "diferencial").
 - Coloquialismos para registro formal: "con obsesion", "ojo con", "al toque", "a full" — NO. Correcto: "monitorear atentamente", "vigilar con especial atencion".
+
+**TERMINOLOGIA FINANCIERA ESTRICTA (errores lexicos frecuentes del LLM):**
+- "mora" (indicador: cartera atrasada / cartera bruta) → **plural = "moras"**, NUNCA "morales". "Morales" es adjetivo (ej: "valores morales"); referido a cartera es ERROR GRAVE.
+  - PROHIBIDO: "sus morales estructuralmente bajas", "las morales del sector", "morales de X%".
+  - CORRECTO: "sus moras estructuralmente bajas", "las moras del sector", "una mora de X%".
+  - Si tienes que referirte a UNA sola entidad, usa singular: "la mora de SAN BLAS es 0.87%". Si son varias, "las moras de ambas se ubican debajo del promedio".
+- "provision" (gasto/cuenta por riesgo de credito) → plural = "provisiones", NUNCA "provisionales" (que significa "temporal/interino").
+- "cartera" → singular siempre que posible ("la cartera de X"). Plural solo si son carteras distinguibles (ej. "las carteras de consumo y microempresa").
+- "ratio" → plural "ratios" (anglicismo aceptado), NO "los ratio".
+- "holgura" → singular femenino. Plural "holguras" si comparas varias entidades.
+- "colchon" → singular masculino ("el colchon de X pp"). Plural "colchones".
+- "rendimiento" → singular siempre para una entidad. "Los rendimientos" si comparas.
+- "cobertura" → singular femenino. "Las coberturas" si comparas.
 
 Reconocer la racionalidad del otro cuando aplique: ej. una COOPAC cerrada tiene rendimiento moderado pero tambien mora estructural controlada — no es "peor" en rendimiento, es un modelo distinto que sirve una poblacion distinta.
 
