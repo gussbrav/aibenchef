@@ -910,11 +910,12 @@ const DEFAULT_ROW_ORDER: RowDef[] = [
     label: "Costo de Provisión",
     field: "pctProvisiones",
     variant: "sub",
-    info: "Provisiones por incobrabilidad de créditos y desvalorización de inversiones. Signo negativo — es un costo. Fuente SBS: cuenta 4 del Estado de Resultados.",
-    subrows: [
-      { key: "provCred", label: "Provisiones para Créditos", field: "pctProvCredito", ctaSbs: "cta 4.2" },
-      { key: "provInv", label: "Provisiones para Inversiones", field: "pctProvInversion", ctaSbs: "cta 4.1" },
-    ],
+    info: "Provisiones para créditos directos (cuenta 4 SBS, atómica desde 2013). Signo negativo = costo; signo positivo = recupero neto (reversas > gastos nuevos del periodo). La desvalorización de inversiones y las provisiones generales se reportan por separado en la cuenta 12 del Estado de Resultados.",
+    // Sin subrows: desde el cambio de plan de cuentas 2013-01, SBS reporta
+    // esta cuenta como concepto atómico. Las antiguas 4.1 (prov inversiones)
+    // y 4.2 (prov créditos) no existen más — la cuenta 4 actual ya es
+    // "Provisiones para Créditos Directos" y la desvalorización de
+    // inversiones se consolidó en la cuenta 12.
   },
   {
     key: "gastosOp",

@@ -84,9 +84,11 @@ export type PuntoEquilibrioRow = {
   pctGfAdeudos?: number | null;
   pctGfObligaciones?: number | null;
   pctGfOtrosFin?: number | null;
-  // Costo Provisión = Prov Créditos + Prov Inversiones
-  pctProvCredito?: number | null;
-  pctProvInversion?: number | null;
+  // Nota (2026-11-19): la cuenta 4 SBS es atomica desde 201301 — se llama
+  // "Provisiones para Creditos Directos" y NO tiene subcuentas (las antiguas
+  // 4.1/4.2 dejaron de reportarse). La desvalorizacion de inversiones se
+  // migro a la cuenta 12. Por eso no exponemos pctProvCredito/pctProvInversion
+  // como campos: no existirian en la fuente oficial actual.
 };
 
 export type PuntoEquilibrioComparativoRow = {
@@ -134,8 +136,6 @@ export type PuntoEquilibrioSerie = {
     pctGfAdeudos?: number | null;
     pctGfObligaciones?: number | null;
     pctGfOtrosFin?: number | null;
-    pctProvCredito?: number | null;
-    pctProvInversion?: number | null;
   }>;
 };
 
@@ -263,8 +263,6 @@ export async function getPuntoEquilibrioHistorico(opts: {
     ratio_gf_adeudos: number | null;
     ratio_gf_obligaciones: number | null;
     ratio_gf_otros: number | null;
-    ratio_prov_credito: number | null;
-    ratio_prov_inversion: number | null;
     ratio_directorio: number | null;
   }>(sql`
     WITH aliases AS (
@@ -295,8 +293,6 @@ export async function getPuntoEquilibrioHistorico(opts: {
              SUM(COALESCE(cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(cta_2_5, 0) + COALESCE(cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(cta_4, 0)) AS cta_4,
-             SUM(COALESCE(cta_4_1, 0)) AS cta_4_1,
-             SUM(COALESCE(cta_4_2, 0)) AS cta_4_2,
              SUM(COALESCE(cta_10, 0)) AS cta_10,
              SUM(COALESCE(cta_10_2, 0)) AS cta_10_2
       FROM marts.mv_eeff_resultados_ancho
@@ -318,8 +314,6 @@ export async function getPuntoEquilibrioHistorico(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1,
-             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
              SUM(COALESCE(r.cta_10, 0)) AS cta_10,
              SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
@@ -342,8 +336,6 @@ export async function getPuntoEquilibrioHistorico(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1,
-             SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
              SUM(COALESCE(r.cta_10, 0)) AS cta_10,
              SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM (SELECT unnest(ARRAY[${periodosClause}]::int[]) AS periodo) tgt
@@ -366,8 +358,6 @@ export async function getPuntoEquilibrioHistorico(opts: {
              (c.cta_2_4 + COALESCE(d.cta_2_4, 0) - COALESCE(s.cta_2_4, 0)) AS cta_2_4_ttm,
              (c.cta_2_oblig + COALESCE(d.cta_2_oblig, 0) - COALESCE(s.cta_2_oblig, 0)) AS cta_2_oblig_ttm,
              (c.cta_4 + COALESCE(d.cta_4, 0) - COALESCE(s.cta_4, 0)) AS cta_4_ttm,
-             (c.cta_4_1 + COALESCE(d.cta_4_1, 0) - COALESCE(s.cta_4_1, 0)) AS cta_4_1_ttm,
-             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm,
              (c.cta_10 + COALESCE(d.cta_10, 0) - COALESCE(s.cta_10, 0)) AS cta_10_ttm,
              (c.cta_10_2 + COALESCE(d.cta_10_2, 0) - COALESCE(s.cta_10_2, 0)) AS cta_10_2_ttm
       FROM ytd_cur c
@@ -418,32 +408,11 @@ export async function getPuntoEquilibrioHistorico(opts: {
            CASE WHEN t.cta_2_ttm > 0
              THEN (t.cta_2_ttm - t.cta_2_1_ttm - t.cta_2_2_ttm - t.cta_2_4_ttm - t.cta_2_oblig_ttm) / t.cta_2_ttm
            END AS ratio_gf_otros,
-           -- Ratios Costo Provision: sub / cta_4 total.
-           -- Muchas entidades (BCP, IMFs pequenas) reportan cta_4 TOTAL sin
-           -- desagregar en 4.1 / 4.2. En ese caso las sub-cuentas vienen
-           -- NULL → COALESCE=0 → ratio=0 → subs=0 en la UI (confuso).
-           -- Fallback: si el detalle no esta reportado, asumir 100% en
-           -- Provisiones para Creditos (4.2) que es lo estandar.
-           -- NOTA (fix 2026-11-19): el condicional usaba "> 0" lo que fallaba
-           -- en periodos con RECUPERO NETO (cta_4_ttm negativo porque reversas
-           -- mayor que gastos: el padre pct_provisiones sale POSITIVO). Esto
-           -- hacia que la subfila "Provisiones para Creditos" apareciera como
-           -- "—" aunque el padre tenia valor. Correccion: usar "!= 0" para
-           -- aceptar tambien TTMs negativos.
-           CASE
-             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
-               THEN t.cta_4_2_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm != 0
-               THEN 1.0
-             ELSE NULL
-           END AS ratio_prov_credito,
-           CASE
-             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
-               THEN t.cta_4_1_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm != 0
-               THEN 0.0
-             ELSE NULL
-           END AS ratio_prov_inversion,
+           -- NOTA (2026-11-19): antes se calculaban ratio_prov_credito y
+           -- ratio_prov_inversion sobre cta_4_1/4_2. SBS dejo de publicar
+           -- esas subcuentas en 201301 — la cuenta 4 actual es atomica
+           -- ("Provisiones para Creditos Directos"). Por eso no se exponen
+           -- subfilas de provisiones en la UI ni se calculan esos ratios.
            -- Directorio: cta_10_2 / cta_10_ttm (denominador = gastos personal+directorio total)
            CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
     FROM marts.v_punto_equilibrio_ancho v
@@ -522,8 +491,6 @@ export async function getPuntoEquilibrioHistorico(opts: {
       pctGfAdeudos: mult(r?.ratio_gf_adeudos, pctCostoFondeo),
       pctGfObligaciones: mult(r?.ratio_gf_obligaciones, pctCostoFondeo),
       pctGfOtrosFin: mult(r?.ratio_gf_otros, pctCostoFondeo),
-      pctProvCredito: mult(r?.ratio_prov_credito, pctProvisiones),
-      pctProvInversion: mult(r?.ratio_prov_inversion, pctProvisiones),
     };
   });
 }
@@ -660,8 +627,6 @@ export async function getPuntoEquilibrioSeries(opts: {
     ratio_gf_adeudos: number | null;
     ratio_gf_obligaciones: number | null;
     ratio_gf_otros: number | null;
-    ratio_prov_credito: number | null;
-    ratio_prov_inversion: number | null;
     ratio_directorio: number | null;
   }>(sql`
     WITH entidades_solicitadas AS (
@@ -694,7 +659,6 @@ export async function getPuntoEquilibrioSeries(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
              SUM(COALESCE(r.cta_10, 0)) AS cta_10, SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM aliases a
       JOIN marts.mv_eeff_resultados_ancho r
@@ -717,7 +681,6 @@ export async function getPuntoEquilibrioSeries(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
              SUM(COALESCE(r.cta_10, 0)) AS cta_10, SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM target tgt
       LEFT JOIN aliases a ON a.canonico = tgt.canonico
@@ -736,7 +699,6 @@ export async function getPuntoEquilibrioSeries(opts: {
              SUM(COALESCE(r.cta_2_4, 0)) AS cta_2_4,
              SUM(COALESCE(r.cta_2_5, 0) + COALESCE(r.cta_2_6, 0)) AS cta_2_oblig,
              SUM(COALESCE(r.cta_4, 0)) AS cta_4,
-             SUM(COALESCE(r.cta_4_1, 0)) AS cta_4_1, SUM(COALESCE(r.cta_4_2, 0)) AS cta_4_2,
              SUM(COALESCE(r.cta_10, 0)) AS cta_10, SUM(COALESCE(r.cta_10_2, 0)) AS cta_10_2
       FROM target tgt
       LEFT JOIN aliases a ON a.canonico = tgt.canonico
@@ -758,8 +720,6 @@ export async function getPuntoEquilibrioSeries(opts: {
              (c.cta_2_4 + COALESCE(d.cta_2_4, 0) - COALESCE(s.cta_2_4, 0)) AS cta_2_4_ttm,
              (c.cta_2_oblig + COALESCE(d.cta_2_oblig, 0) - COALESCE(s.cta_2_oblig, 0)) AS cta_2_oblig_ttm,
              (c.cta_4 + COALESCE(d.cta_4, 0) - COALESCE(s.cta_4, 0)) AS cta_4_ttm,
-             (c.cta_4_1 + COALESCE(d.cta_4_1, 0) - COALESCE(s.cta_4_1, 0)) AS cta_4_1_ttm,
-             (c.cta_4_2 + COALESCE(d.cta_4_2, 0) - COALESCE(s.cta_4_2, 0)) AS cta_4_2_ttm,
              (c.cta_10 + COALESCE(d.cta_10, 0) - COALESCE(s.cta_10, 0)) AS cta_10_ttm,
              (c.cta_10_2 + COALESCE(d.cta_10_2, 0) - COALESCE(s.cta_10_2, 0)) AS cta_10_2_ttm
       FROM ytd_cur c
@@ -787,21 +747,8 @@ export async function getPuntoEquilibrioSeries(opts: {
            CASE WHEN t.cta_2_ttm > 0
              THEN (t.cta_2_ttm - t.cta_2_1_ttm - t.cta_2_2_ttm - t.cta_2_4_ttm - t.cta_2_oblig_ttm) / t.cta_2_ttm
            END AS ratio_gf_otros,
-           -- Ratios Costo Provision (con fallback si detalle no reportado)
-           -- Ver nota detallada del fix 2026-11-19 en getPuntoEquilibrioHistorico:
-           -- usar "!= 0" para aceptar TTMs negativos (recupero neto).
-           CASE
-             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
-               THEN t.cta_4_2_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm != 0 THEN 1.0
-             ELSE NULL
-           END AS ratio_prov_credito,
-           CASE
-             WHEN t.cta_4_ttm != 0 AND (COALESCE(t.cta_4_1_ttm,0) + COALESCE(t.cta_4_2_ttm,0)) != 0
-               THEN t.cta_4_1_ttm / t.cta_4_ttm
-             WHEN t.cta_4_ttm != 0 THEN 0.0
-             ELSE NULL
-           END AS ratio_prov_inversion,
+           -- NOTA (2026-11-19): ver getPuntoEquilibrioHistorico — la cuenta 4
+           -- es atomica en SBS desde 201301, no hay desglose por subcuentas.
            CASE WHEN t.cta_10_ttm != 0 THEN t.cta_10_2_ttm / t.cta_10_ttm END AS ratio_directorio
     FROM aliases a
     JOIN marts.v_punto_equilibrio_ancho v
@@ -878,8 +825,6 @@ export async function getPuntoEquilibrioSeries(opts: {
           pctGfAdeudos: mult(r?.ratio_gf_adeudos, pctCostoFondeo),
           pctGfObligaciones: mult(r?.ratio_gf_obligaciones, pctCostoFondeo),
           pctGfOtrosFin: mult(r?.ratio_gf_otros, pctCostoFondeo),
-          pctProvCredito: mult(r?.ratio_prov_credito, pctProvisiones),
-          pctProvInversion: mult(r?.ratio_prov_inversion, pctProvisiones),
         };
       }),
     };
