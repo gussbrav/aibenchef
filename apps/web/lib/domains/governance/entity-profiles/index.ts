@@ -61,6 +61,20 @@ export async function ensureProfilesForEntities(
           nombCorreg: ent.nombCorreg,
           tipoEntidad: ent.tipoEntidad,
         });
+        // Calidad del research: critico que publico_objetivo + modelo_negocio
+        // vengan poblados. Si ambos vienen null/desconocido, es un research
+        // flojo — guardamos lo que hay pero el admin UI va a marcarlo como
+        // "incompleto" para que el usuario sepa que la proxima regeneracion
+        // del analisis no va a tener ese contexto y conviene editar manual.
+        const camposCriticosFaltantes =
+          !result.profile.publicoObjetivo &&
+          (!result.profile.modeloNegocio || result.profile.modeloNegocio === "desconocido");
+        if (camposCriticosFaltantes) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[entity-profiles] research incompleto para ${ent.nombCorreg}: publico_objetivo=null, modelo=${result.profile.modeloNegocio ?? "null"} — conviene edicion manual`,
+          );
+        }
         const saved = await upsertEntityProfileFromResearch({
           nombCorreg: ent.nombCorreg,
           tipoEntidad: ent.tipoEntidad,

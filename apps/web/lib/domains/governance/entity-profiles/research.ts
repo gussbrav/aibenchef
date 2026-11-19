@@ -286,13 +286,112 @@ Buscá en las fuentes publicas que corresponda y extrae los campos solo con evid
   const webSearchCost = webSearchQueries * RESEARCH_PRICING.webSearchPerQuery;
   const totalCost = inputCost + outputCost + webSearchCost;
 
+  // SEGUNDA PASADA DE INFERENCIA — si campos criticos vacios pero hay data
+  // suficiente (productos / notas), Claude Sonnet 4.5 a veces es demasiado
+  // conservador y no sintetiza. Segunda llamada SIN web_search, solo con
+  // los datos ya encontrados, forzando al modelo a inferir.
+  let finalProfile = profile;
+  let secondPassCost = 0;
+  let secondPassInputTokens = 0;
+  let secondPassOutputTokens = 0;
+  const camposCriticosVacios =
+    !profile.publicoObjetivo &&
+    (!profile.modeloNegocio || profile.modeloNegocio === "desconocido");
+  const hayDataParaInferir =
+    !!profile.productosPrincipales ||
+    !!profile.notas ||
+    !!profile.ubicacion ||
+    profile.fuentes.length > 0;
+
+  if (camposCriticosVacios && hayDataParaInferir) {
+    try {
+      const inferencePrompt = `Basado en los siguientes datos encontrados sobre la entidad financiera peruana ${params.nombCorreg}${tipoTxt}, infiere los campos publico_objetivo, modelo_negocio y segmento_cartera_hipotesis.
+
+DATOS ENCONTRADOS:
+- Ubicacion: ${profile.ubicacion ?? "null"}
+- Inicio operaciones: ${profile.inicioOperaciones ?? "null"}
+- Productos principales: ${profile.productosPrincipales ?? "null"}
+- Notas: ${profile.notas ?? "null"}
+- Fuentes consultadas: ${profile.fuentes.slice(0, 5).join(", ")}
+
+REGLAS DE INFERENCIA (aplicalas mecanicamente, no seas conservador):
+1. Si los productos mencionan "nombrado", "CAS", "convenio", "planilla", "sector publico" -> publico_objetivo = "Trabajadores del sector publico (nombrado y/o CAS) via descuento por planilla y convenios", modelo_negocio = "mixta", segmento_cartera_hipotesis = "consumo con descuento planilla a trabajadores publicos".
+2. Si el nombre contiene una institucion especifica (SUNAT, MINSA, FFAA, MINEDU, etc.) y los productos no sugieren apertura al publico -> publico_objetivo = "Trabajadores de [institucion] via cobro por planilla", modelo_negocio = "cerrada", segmento_cartera_hipotesis = "consumo cautivo por planilla".
+3. Si los productos mencionan "grupal", "banco comunal", "comunidad" -> publico_objetivo = "Microempresa rural/urbana popular via metodologia de credito grupal", modelo_negocio = "abierta" o "mixta", segmento_cartera_hipotesis = "credito grupal microempresa".
+4. Si los productos son generales (ahorros, prestamos personales) sin segmentacion clara -> publico_objetivo = "Publico general con enfasis en consumo y microempresa", modelo_negocio = "abierta".
+
+Si realmente no hay ninguna señal en los datos, devolve null — pero intenta primero mapear con las reglas arriba.
+
+Output: JSON con los 3 campos, nada mas. Ejemplo:
+{
+  "publico_objetivo": "...",
+  "modelo_negocio": "cerrada" | "abierta" | "mixta" | "desconocido",
+  "segmento_cartera_hipotesis": "..."
+}`;
+
+      const inferenceResponse = await client.messages.create({
+        model: RESEARCH_MODEL,
+        max_tokens: 500,
+        temperature: 0.1,
+        system:
+          "Eres un analista financiero peruano. Tu trabajo es sintetizar informacion encontrada sobre una entidad financiera en 3 campos especificos. Aplica las reglas de inferencia mecanicamente. NO seas conservador — si hay señales en los datos, usalas. Castellano peruano, sin voseo. Output: solo el JSON pedido.",
+        messages: [{ role: "user", content: inferencePrompt }],
+      });
+
+      const infText =
+        inferenceResponse.content
+          .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
+          .at(-1)?.text ?? "";
+      const infBlock = extractJsonBlock(infText);
+      try {
+        const infParsed = JSON.parse(infBlock) as {
+          publico_objetivo?: string | null;
+          modelo_negocio?: string | null;
+          segmento_cartera_hipotesis?: string | null;
+        };
+        const m = infParsed.modelo_negocio;
+        finalProfile = {
+          ...profile,
+          publicoObjetivo:
+            profile.publicoObjetivo ??
+            (typeof infParsed.publico_objetivo === "string"
+              ? stripCitations(infParsed.publico_objetivo)
+              : null),
+          modeloNegocio:
+            profile.modeloNegocio && profile.modeloNegocio !== "desconocido"
+              ? profile.modeloNegocio
+              : m === "cerrada" || m === "abierta" || m === "mixta" || m === "desconocido"
+                ? (m as ModeloNegocio)
+                : null,
+          segmentoCarteraHipotesis:
+            profile.segmentoCarteraHipotesis ??
+            (typeof infParsed.segmento_cartera_hipotesis === "string"
+              ? stripCitations(infParsed.segmento_cartera_hipotesis)
+              : null),
+        };
+        secondPassInputTokens = inferenceResponse.usage.input_tokens;
+        secondPassOutputTokens = inferenceResponse.usage.output_tokens;
+        secondPassCost =
+          (secondPassInputTokens / 1_000_000) * RESEARCH_PRICING.input +
+          (secondPassOutputTokens / 1_000_000) * RESEARCH_PRICING.output;
+      } catch {
+        // Si falla el parse de la segunda pasada, quedate con el primer resultado
+      }
+    } catch {
+      // best-effort — si la segunda pasada revienta, no afecta el flujo
+    }
+  }
+
   return {
-    profile,
+    profile: finalProfile,
     metadata: {
-      model: `${RESEARCH_MODEL} + web_search_20250305`,
-      costUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
-      inputTokens,
-      outputTokens,
+      model:
+        secondPassCost > 0
+          ? `${RESEARCH_MODEL} + web_search_20250305 + inference_pass`
+          : `${RESEARCH_MODEL} + web_search_20250305`,
+      costUsd: Math.round((totalCost + secondPassCost) * 1_000_000) / 1_000_000,
+      inputTokens: inputTokens + secondPassInputTokens,
+      outputTokens: outputTokens + secondPassOutputTokens,
       durationMs,
     },
   };

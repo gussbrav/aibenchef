@@ -89,11 +89,23 @@ export function EntityProfilesClient() {
   };
 
   const handleResearch = async (nombCorreg: string, tipoEntidad: string | null) => {
+    // Buscar el perfil actual para avisar si ya tuvo intentos fallidos
+    const perfilActual = data?.rows.find((p) => p.nombCorreg === nombCorreg);
+    const yaIntentos = perfilActual?.researchCount ?? 0;
+    const campoCriticoVacio =
+      !perfilActual?.publicoObjetivo ||
+      !perfilActual?.modeloNegocio ||
+      perfilActual.modeloNegocio === "desconocido";
+    const esIntentoRepetido = yaIntentos >= 1 && campoCriticoVacio;
+    const message = esIntentoRepetido
+      ? `Esta entidad ya tiene ${yaIntentos} research${yaIntentos > 1 ? "es" : ""} previo${yaIntentos > 1 ? "s" : ""} que no pudieron completar público objetivo o modelo de negocio. Otro research cuesta ~$0.10-0.15 y probablemente devuelva lo mismo. RECOMENDACIÓN: cerrá este modal y usá el ícono de lápiz (🖊) para editar manualmente — 0 costo y queda validado al instante. Solo continuá si tenés razones para creer que el research va a traer algo distinto esta vez.`
+      : "Esto consume ~$0.10-0.15 de la API de Claude y sobrescribe el perfil actual con el resultado nuevo. Los campos editados manualmente que ya tengas se preservan solo si el research devuelve null para ellos.";
     const ok = await confirm({
-      title: `Reinvestigar ${nombCorreg}`,
-      message: "Esto consume ~$0.10 de la API de Claude y sobrescribe el perfil actual con el resultado nuevo. Los campos editados manualmente que ya tengas se preservan solo si el research devuelve null para ellos.",
-      confirmLabel: "Reinvestigar",
-      cancelLabel: "Cancelar",
+      title: esIntentoRepetido ? `⚠ Reinvestigar ${nombCorreg} (no recomendado)` : `Reinvestigar ${nombCorreg}`,
+      message,
+      confirmLabel: esIntentoRepetido ? "Entiendo el riesgo, continuar" : "Reinvestigar",
+      cancelLabel: esIntentoRepetido ? "Mejor edito manual" : "Cancelar",
+      destructive: esIntentoRepetido,
     });
     if (!ok) return;
     setActioning(nombCorreg);
