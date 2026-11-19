@@ -222,7 +222,12 @@ export async function generateInsight(
       ${bulletsSql},
       ${result.model}::text,
       ${template.version}::text,
-      ${JSON.stringify(input.contexto)}::jsonb,
+      -- IMPORTANTE: guardar el contexto ENRIQUECIDO (el que efectivamente
+      -- recibio el LLM), no el input original. Antes guardaba input.contexto
+      -- y eso dejaba los campos de enrichment (perfiles, macro, promedios,
+      -- mora, montos) como invisibles en auditoria aunque el LLM los haya
+      -- usado. Fix 2026-11-19.
+      ${JSON.stringify(enrichedInput.contexto)}::jsonb,
       ${result.usage.inputTokens}::int,
       ${result.usage.outputTokens}::int,
       ${result.usage.costUsd}::numeric,
