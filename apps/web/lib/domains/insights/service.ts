@@ -356,7 +356,17 @@ async function maybeEnrichContext(
     const yaTieneCobertura = "coberturaAtrasados" in existingContexto;
     const yaTieneMontos = "montosPropia" in existingContexto;
     const yaTienePromedios = "promediosPorTipo" in existingContexto;
-    if (yaTieneMora && yaTieneRoe && yaTieneCobertura && yaTieneMontos && yaTienePromedios) return input;
+    const yaTienePerfiles = "perfilesEntidad" in existingContexto;
+    if (
+      yaTieneMora &&
+      yaTieneRoe &&
+      yaTieneCobertura &&
+      yaTieneMontos &&
+      yaTienePromedios &&
+      yaTienePerfiles
+    ) {
+      return input;
+    }
 
     const peerGroupConPropia = Array.from(
       new Set([input.entidadPropia, ...input.peerGroup]),
@@ -515,6 +525,52 @@ async function maybeEnrichContext(
       };
     }
 
+    // Entity profiles — lookup cache + research inline de las faltantes,
+    // respetando rate limit global (ver governance/entity-profiles/). Best-
+    // effort: si falla, el prompt degrada declarando la falta.
+    let perfilesEntidad: Record<string, {
+      ubicacion: string | null;
+      inicioOperaciones: string | null;
+      publicoObjetivo: string | null;
+      modeloNegocio: string | null;
+      segmentoCarteraHipotesis: string | null;
+      productosPrincipales: string | null;
+      notas: string | null;
+      fuentes: string[];
+      verifiedByHuman: boolean;
+    }> = {};
+    if (!yaTienePerfiles) {
+      try {
+        const { ensureProfilesForEntities } = await import(
+          "@/lib/domains/governance/entity-profiles"
+        );
+        const entidadesParaProfile = peerGroupConPropia.map((nombCorreg) => ({
+          nombCorreg,
+          tipoEntidad: tipoPorEntidadInput[nombCorreg] ?? null,
+        }));
+        const perfiles = await ensureProfilesForEntities(entidadesParaProfile);
+        for (const [nombCorreg, perfil] of perfiles.entries()) {
+          perfilesEntidad[nombCorreg] = {
+            ubicacion: perfil.ubicacion,
+            inicioOperaciones: perfil.inicioOperaciones,
+            publicoObjetivo: perfil.publicoObjetivo,
+            modeloNegocio: perfil.modeloNegocio,
+            segmentoCarteraHipotesis: perfil.segmentoCarteraHipotesis,
+            productosPrincipales: perfil.productosPrincipales,
+            notas: perfil.notas,
+            fuentes: perfil.fuentes,
+            verifiedByHuman: perfil.verifiedByHuman,
+          };
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[insights.enrichment] ensureProfilesForEntities fallo — se continua sin perfiles:",
+          err,
+        );
+      }
+    }
+
     return {
       ...input,
       contexto: {
@@ -524,6 +580,7 @@ async function maybeEnrichContext(
         ...(yaTieneCobertura ? {} : { coberturaAtrasados }),
         ...(yaTieneMontos ? {} : { montosPropia }),
         ...(yaTienePromedios ? {} : { promediosPorTipo }),
+        ...(yaTienePerfiles ? {} : { perfilesEntidad }),
         periodoCalidad,
       },
     };

@@ -1,7 +1,21 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v12.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v13.
  *
- * Correcciones sobre v11:
+ * Nuevo en v13:
+ *  - Hasta v12 el LLM no sabia a quien le prestaba cada entidad, donde
+ *    estaba, ni su modelo real de negocio. Inventaba o se disculpaba.
+ *  - v13 agrega campo `perfilesEntidad` al contexto, poblado via research
+ *    automatico (Claude + web_search) persistido en gov.entity_profiles.
+ *    Fuente: facebook / SBS / UniversidadPeru / prensa financiera. El
+ *    LLM usa el perfil con autoridad cuando esta validado, o con el
+ *    calificador "segun informacion publica consultada" cuando no.
+ *  - Nueva seccion "PERFILES DE ENTIDAD" despues de PROMEDIOS DEL
+ *    UNIVERSO, con ubicacion, publico objetivo real, modelo de negocio
+ *    e hipotesis de segmento por entidad.
+ *  - Bullet 1 ahora usa el perfil para encuadrar el analisis con oficio
+ *    verdadero, no con especulacion.
+ *
+ * Correcciones sobre v11 (heredadas en v13):
  *  - v11 ya traia Mora/Cobertura/ROE por entidad, pero sin anclaje contra
  *    el universo del tipo. El LLM cita 0.87% de mora sin contexto de que
  *    el promedio Nivel 1 es 22.83% — ahi esta la historia real. v12
@@ -233,7 +247,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v12",
+  version: "v13",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -253,6 +267,20 @@ export const promptPuntoEquilibrio: PromptTemplate = {
         coberturaProm: number | null;
         roeProm: number | null;
         roaProm: number | null;
+      }
+    >;
+    const perfilesEntidad = (ctx.contexto.perfilesEntidad ?? {}) as Record<
+      string,
+      {
+        ubicacion: string | null;
+        inicioOperaciones: string | null;
+        publicoObjetivo: string | null;
+        modeloNegocio: string | null;
+        segmentoCarteraHipotesis: string | null;
+        productosPrincipales: string | null;
+        notas: string | null;
+        fuentes: string[];
+        verifiedByHuman: boolean;
       }
     >;
     const montosPropia = (ctx.contexto.montosPropia ?? []) as MontoPropia[];
@@ -550,6 +578,48 @@ Estos promedios (simple, no ponderado) vienen directo de la vista oficial que al
 ${filas}
 
 INSTRUCCION CRITICA: cuando cites una cifra de ${ctx.entidadPropia}, SI el promedio de su tipo esta en esta tabla, anclala contra el promedio. Ejemplo bien hecho: "SAN BLAS tiene mora de 0.87%, 26x menor que el promedio Nivel 1 (22.83%)" — eso es contexto real. Sin este anclaje, el 0.87% es solo una foto suelta y la comparacion contra un peer unico no permite ver que la entidad es outlier positiva en su universo.
+`;
+})()}
+${(() => {
+  const nombres = entidades.map((e) => e.entidad);
+  const perfilesDisponibles = nombres.filter((n) => perfilesEntidad[n]);
+  if (perfilesDisponibles.length === 0) return "";
+
+  const bloquesPerfiles = perfilesDisponibles
+    .map((nombre) => {
+      const p = perfilesEntidad[nombre];
+      const estadoFicha = p.verifiedByHuman
+        ? "validada por admin — usar con autoridad"
+        : "preliminar — investigacion automatica, usar con calificador \"segun informacion publica consultada\"";
+      const campos: string[] = [];
+      if (p.ubicacion) campos.push(`  - Ubicacion: ${p.ubicacion}`);
+      if (p.inicioOperaciones) campos.push(`  - Inicio operaciones: ${p.inicioOperaciones}`);
+      if (p.publicoObjetivo) campos.push(`  - Publico objetivo: ${p.publicoObjetivo}`);
+      if (p.modeloNegocio) campos.push(`  - Modelo de negocio: ${p.modeloNegocio}`);
+      if (p.segmentoCarteraHipotesis) campos.push(`  - Segmento de cartera (hipotesis): ${p.segmentoCarteraHipotesis}`);
+      if (p.productosPrincipales) campos.push(`  - Productos principales: ${p.productosPrincipales}`);
+      if (p.notas) campos.push(`  - Notas: ${p.notas}`);
+      if (p.fuentes.length > 0) campos.push(`  - Fuentes: ${p.fuentes.slice(0, 3).join(", ")}`);
+      const marca = nombre === ctx.entidadPropia ? " ← ENTIDAD PROPIA" : "";
+      return `**${nombre}${marca}** [${estadoFicha}]
+${campos.join("\n")}`;
+    })
+    .join("\n\n");
+
+  const perfilPropioExiste = !!perfilesEntidad[ctx.entidadPropia];
+
+  return `## PERFILES DE ENTIDAD (contexto factual de cada jugador)
+
+Las fichas de perfil vienen de research automatico sobre fuentes publicas (Facebook oficial, SBS, UniversidadPeru, prensa financiera). Las marcadas como "validada por admin" fueron revisadas y aprobadas; las marcadas como "preliminar" son investigacion automatica no verificada humanamente — se pueden citar con el calificador "segun informacion publica consultada".
+
+${bloquesPerfiles}
+
+INSTRUCCION DE USO (critica — reemplaza la regla anti-extrapolacion anterior para estas entidades):
+- **Perfil validado**: usa los datos con autoridad y naturalidad. "COOPAC SAN BLAS, con base en Arequipa y foco en trabajadores del sector publico via convenios y creditos planilla, opera un modelo semi-cerrado comparable en logica al de COOSUNAT".
+- **Perfil preliminar**: usa los datos con calificador honesto. "Segun informacion publica consultada, COOPAC SAN BLAS opera desde Arequipa con enfoque en trabajadores publicos (CAS/nombrado y convenios) — un perfil consistente con las cifras observadas de rendimiento y provisiones bajas".
+- Si el perfil contradice una hipotesis que ibas a plantear por patron de cifras, PREVALECE el perfil (es evidencia; la hipotesis era especulacion).
+- Si el perfil tiene un campo null, no lo menciones ni lo trates como limitacion — simplemente no hables de ese aspecto.
+${perfilPropioExiste ? "" : "- Para ${ctx.entidadPropia} no se obtuvo perfil factual; usa las cifras como ancla principal y las hipotesis de patron solo si el modelo lo necesita."}
 `;
 })()}
 ${
