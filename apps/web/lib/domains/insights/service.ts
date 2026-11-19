@@ -355,13 +355,28 @@ async function maybeEnrichContext(
     const yaTieneRoe = "roe" in existingContexto;
     const yaTieneCobertura = "coberturaAtrasados" in existingContexto;
     const yaTieneMontos = "montosPropia" in existingContexto;
-    if (yaTieneMora && yaTieneRoe && yaTieneCobertura && yaTieneMontos) return input;
+    const yaTienePromedios = "promediosPorTipo" in existingContexto;
+    if (yaTieneMora && yaTieneRoe && yaTieneCobertura && yaTieneMontos && yaTienePromedios) return input;
 
     const peerGroupConPropia = Array.from(
       new Set([input.entidadPropia, ...input.peerGroup]),
     );
 
-    const [indRows, montosRows] = await Promise.all([
+    // Tipos presentes en el peer group — sale del lookup que inyecta el
+    // cliente. Se usa para traer promedios por tipo_entidad (CMAC, COOPAC_N1,
+    // etc) para que el LLM pueda anclar la comparacion contra el universo
+    // real del tipo. Fallback: si el client no envio tipoPorEntidad,
+    // intentamos todos los tipos conocidos.
+    const tipoPorEntidadInput = (existingContexto.tipoPorEntidad ?? {}) as Record<string, string>;
+    const tiposPresentes = Array.from(
+      new Set(Object.values(tipoPorEntidadInput).filter((t) => !!t && t !== "")),
+    );
+    const tiposParaPromedios = tiposPresentes.length > 0
+      ? tiposPresentes
+      : ["BANCOS", "FINANCIERAS", "CMAC", "CRAC", "EDPYMES",
+         "COOPAC_N1", "COOPAC_N2A", "COOPAC_N2B", "COOPAC_N3"];
+
+    const [indRows, montosRows, promedioRows] = await Promise.all([
       !yaTieneMora || !yaTieneRoe || !yaTieneCobertura
         ? db.execute<{
             nomb_correg: string;
@@ -413,6 +428,44 @@ async function maybeEnrichContext(
              LIMIT 4
           `)
         : Promise.resolve([]),
+      !yaTienePromedios
+        ? db.execute<{
+            tipo_entidad: string;
+            periodo: number;
+            n_entidades: number;
+            mora_prom: string | null;
+            cobertura_prom: string | null;
+            roe_prom: string | null;
+            roa_prom: string | null;
+          }>(sql`
+            -- Promedio simple (no ponderado) por tipo_entidad al ultimo
+            -- periodo disponible por tipo, replicando la logica del
+            -- dashboard /estadisticas-rapidas. Permite al LLM anclar
+            -- la comparacion de la entidad propia contra su universo.
+            WITH ultimo_por_tipo AS (
+              SELECT tipo_entidad, MAX(periodo) AS ultimo_periodo
+                FROM marts.mv_eeff_ratios
+               WHERE moneda = 'TOTAL'
+                 AND periodo <= ${input.periodo}
+                 AND tipo_entidad = ANY(${tiposParaPromedios}::text[])
+               GROUP BY tipo_entidad
+            )
+            SELECT
+              er.tipo_entidad,
+              er.periodo,
+              COUNT(*)::int                       AS n_entidades,
+              AVG(er.ratio_mora)::text            AS mora_prom,
+              AVG(er.ratio_cobertura_atrasados)::text AS cobertura_prom,
+              AVG(er.roe)::text                   AS roe_prom,
+              AVG(er.roa)::text                   AS roa_prom
+            FROM marts.mv_eeff_ratios er
+            INNER JOIN ultimo_por_tipo u
+                    ON u.tipo_entidad   = er.tipo_entidad
+                   AND u.ultimo_periodo = er.periodo
+            WHERE er.moneda = 'TOTAL'
+            GROUP BY er.tipo_entidad, er.periodo
+          `)
+        : Promise.resolve([]),
     ]);
 
     const moraReal: Record<string, number | null> = {};
@@ -439,6 +492,29 @@ async function maybeEnrichContext(
       // Al orden cronologico ascendente para alinear con tendenciaPropia
       .reverse();
 
+    // Promedios por tipo_entidad (para anclaje contra universo)
+    const promediosPorTipo: Record<
+      string,
+      {
+        periodoLabel: string;
+        nEntidades: number;
+        moraProm: number | null;
+        coberturaProm: number | null;
+        roeProm: number | null;
+        roaProm: number | null;
+      }
+    > = {};
+    for (const r of promedioRows) {
+      promediosPorTipo[r.tipo_entidad] = {
+        periodoLabel: periodoLabel(Number(r.periodo)),
+        nEntidades: Number(r.n_entidades),
+        moraProm: r.mora_prom != null ? Number(r.mora_prom) : null,
+        coberturaProm: r.cobertura_prom != null ? Number(r.cobertura_prom) : null,
+        roeProm: r.roe_prom != null ? Number(r.roe_prom) : null,
+        roaProm: r.roa_prom != null ? Number(r.roa_prom) : null,
+      };
+    }
+
     return {
       ...input,
       contexto: {
@@ -447,6 +523,7 @@ async function maybeEnrichContext(
         ...(yaTieneRoe ? {} : { roe }),
         ...(yaTieneCobertura ? {} : { coberturaAtrasados }),
         ...(yaTieneMontos ? {} : { montosPropia }),
+        ...(yaTienePromedios ? {} : { promediosPorTipo }),
         periodoCalidad,
       },
     };

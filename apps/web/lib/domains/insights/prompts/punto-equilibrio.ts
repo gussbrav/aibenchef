@@ -1,7 +1,21 @@
 /**
- * Prompt template para "Doctor Financiero — Punto de Equilibrio" v11.
+ * Prompt template para "Doctor Financiero — Punto de Equilibrio" v12.
  *
- * Correcciones sobre v10:
+ * Correcciones sobre v11:
+ *  - v11 ya traia Mora/Cobertura/ROE por entidad, pero sin anclaje contra
+ *    el universo del tipo. El LLM cita 0.87% de mora sin contexto de que
+ *    el promedio Nivel 1 es 22.83% — ahi esta la historia real. v12
+ *    inyecta `promediosPorTipo` con Mora/Cobertura/ROE/ROA promedio por
+ *    tipo_entidad (BANCOS, CMAC, COOPAC_N1, etc.) al ultimo periodo
+ *    disponible por tipo. Misma logica que /estadisticas-rapidas.
+ *  - Prompt agrega seccion "PROMEDIOS DEL UNIVERSO POR TIPO" y bulletsExplicacion
+ *    instruye al LLM a anclar la comparacion de la entidad propia contra
+ *    su tipo (no solo contra los peers del grupo, que pueden ser pocos).
+ *    Ejemplo deseado: "COOPAC SAN BLAS tiene mora de 0.87%, 26x menor
+ *    que el promedio Nivel 1 (22.83%), y ROE +19.37% en un segmento donde
+ *    el promedio es negativo (-1.98%) — una outlier positiva en su nivel".
+ *
+ * Correcciones sobre v10 (heredadas en v12):
  *  - v10 afirmaba que "SBS publica mora por segmento en Anexo 5" para
  *    justificar la limitacion. Error: SBS NO publica mora desagregada
  *    por tipo de credito a nivel entidad. Lo que hace es publicar
@@ -219,7 +233,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v11",
+  version: "v12",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -230,6 +244,17 @@ export const promptPuntoEquilibrio: PromptTemplate = {
     const coberturaAtrasados = (ctx.contexto.coberturaAtrasados ?? {}) as Record<string, number | null>;
     const roePorEntidad = (ctx.contexto.roe ?? {}) as Record<string, number | null>;
     const periodoCalidad = (ctx.contexto.periodoCalidad ?? {}) as Record<string, string>;
+    const promediosPorTipo = (ctx.contexto.promediosPorTipo ?? {}) as Record<
+      string,
+      {
+        periodoLabel: string;
+        nEntidades: number;
+        moraProm: number | null;
+        coberturaProm: number | null;
+        roeProm: number | null;
+        roaProm: number | null;
+      }
+    >;
     const montosPropia = (ctx.contexto.montosPropia ?? []) as MontoPropia[];
 
     // Ranking por MARGEN DE SEGURIDAD (rendimiento − PE), no por margen
@@ -487,6 +512,46 @@ INTERPRETACION:
 Usa estos indicadores con prominencia cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; NO digas "no tenemos mora" si esta aqui.
 `;
 })()}
+${(() => {
+  // Promedios por tipo_entidad — mismo calculo que /estadisticas-rapidas.
+  // Permite al LLM anclar la comparacion contra el universo del tipo.
+  const tiposEntradas = Object.entries(promediosPorTipo);
+  if (tiposEntradas.length === 0) return "";
+
+  const prettyTipoLargo = (t: string): string => {
+    if (t === "BANCOS") return "Bancos";
+    if (t === "FINANCIERAS") return "Financieras";
+    if (t === "CMAC") return "Cajas Municipales (CMAC)";
+    if (t === "CRAC") return "Cajas Rurales (CRAC)";
+    if (t === "EDPYMES") return "EDPYMES";
+    if (t === "COOPAC_N1") return "COOPAC Nivel 1";
+    if (t === "COOPAC_N2A") return "COOPAC Nivel 2A";
+    if (t === "COOPAC_N2B") return "COOPAC Nivel 2B";
+    if (t === "COOPAC_N3") return "COOPAC Nivel 3";
+    return t;
+  };
+
+  const filas = tiposEntradas
+    .map(([tipo, p]) => {
+      const moraCell = p.moraProm != null ? `${fmt(p.moraProm).padStart(6)}%` : "    —  ";
+      const cobCell = p.coberturaProm != null ? `${fmt(p.coberturaProm).padStart(6)}%` : "    —  ";
+      const roeCell = p.roeProm != null ? `${fmtSigned(p.roeProm).padStart(7)}%` : "    —   ";
+      const roaCell = p.roaProm != null ? `${fmtSigned(p.roaProm).padStart(7)}%` : "    —   ";
+      return `| ${prettyTipoLargo(tipo).padEnd(26)} | ${String(p.nEntidades).padStart(5)} | ${moraCell} | ${cobCell} | ${roeCell} | ${roaCell} | ${p.periodoLabel.padEnd(10)} |`;
+    })
+    .join("\n");
+
+  return `## PROMEDIOS DEL UNIVERSO POR TIPO DE ENTIDAD
+
+Estos promedios (simple, no ponderado) vienen directo de la vista oficial que alimenta el dashboard /estadisticas-rapidas. Son la referencia contra la que debe medirse ${ctx.entidadPropia} — no solo contra los pocos peers del grupo elegido.
+
+| Tipo                       | N     | MoraP  | CobP   |   ROEP   |   ROAP   | Periodo    |
+|----------------------------|-------|--------|--------|----------|----------|------------|
+${filas}
+
+INSTRUCCION CRITICA: cuando cites una cifra de ${ctx.entidadPropia}, SI el promedio de su tipo esta en esta tabla, anclala contra el promedio. Ejemplo bien hecho: "SAN BLAS tiene mora de 0.87%, 26x menor que el promedio Nivel 1 (22.83%)" — eso es contexto real. Sin este anclaje, el 0.87% es solo una foto suelta y la comparacion contra un peer unico no permite ver que la entidad es outlier positiva en su universo.
+`;
+})()}
 ${
   tablaTendencia
     ? `## TENDENCIA HISTORICA — ${ctx.entidadPropia} (ultimos ${tendenciaPropia.length} cierres)
@@ -629,7 +694,7 @@ Si la entidad propia tiene exposicion a microempresa, consumo rural, cartera agr
 Si la entidad propia o un peer pertenece a un grupo con estrategia visible, mencionarlo. Credicorp = BCP + Mibanco (dos plataformas que avanzan sobre MYPE con enfoques distintos); Gentera = Compartamos Banco; Yape como palanca de bancarizacion BCP que entra al territorio microfinanciero. Si una entidad del grupo compite con otra (ej. Mibanco vs Compartamos en credito individual MYPE), decirlo con su implicancia estrategica.
 
 **(3) COMPARACION CON PROMEDIO DEL TIPO DE ENTIDAD** — como marco:
-Cuando el grupo del peer group permite, posicionar la cifra de la entidad propia vs el promedio del sector al que pertenece ("Caja X tiene cobertura de 142% vs promedio CMAC de 163% — por debajo"). Si el output no tiene el promedio del sector pero el tipo de entidad es conocido, usarlo como marco general. Esto obliga al lector a ver la cifra en proporcion.
+Si la tabla "PROMEDIOS DEL UNIVERSO POR TIPO DE ENTIDAD" esta en el contexto, USALA — es el anclaje principal del analisis. La comparacion contra uno o dos peers del grupo elegido es anecdotica; la comparacion contra el promedio del tipo (65 cooperativas Nivel 1, por ejemplo) es la que revela si la entidad es outlier positiva/negativa en su universo. Ejemplo bien ejecutado: "SAN BLAS tiene mora de 0.87%, 26x menor que el promedio Nivel 1 (22.83%) — en el top del segmento por calidad de cartera". Si la cifra de la entidad esta cerca del promedio del tipo, dilo igual: "SAN BLAS tiene mora de 0.87%, en linea con el promedio Nivel 1 de 0.9%". Si el promedio NO esta en el contexto (tipo desconocido o data faltante), usar lo que tengas del peer group como alternativa, pero mencionar la limitacion.
 
 **(4) PREGUNTAS ESTRATEGICAS AFILADAS** — no como adorno sino como herramienta:
 Usar pregunta retorica cuando FUERZA al lector a ver un riesgo o decision que la tabla implica pero no dice. Ejemplos de buen uso: "¿sera sostenible esta cobertura si el Niño materializa escenario fuerte?", "¿la estrategia es maximizar utilidades ahora y reprogramar despues?", "¿el crecimiento de cartera que explica la compresion de ratios es tendencia estructural o efecto de base?". NO preguntas de relleno ("¿que significa esto?") — solo las que ponen el dedo en el tema real.
