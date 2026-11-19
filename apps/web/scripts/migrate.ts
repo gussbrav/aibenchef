@@ -83,15 +83,19 @@ async function main(): Promise<void> {
     await ensureMigrationsTable(sql);
     const applied = await appliedVersions(sql);
     const migrations = listMigrations(MIGRATIONS_DIR);
-    log(`found ${migrations.length} migrations; ${applied.size} already applied`);
-    for (const { version, path } of migrations) {
-      if (applied.has(version)) {
-        log(`skip ${version} (already applied)`);
-        continue;
-      }
+    const pending = migrations.filter((m) => !applied.has(m.version));
+    log(`found ${migrations.length} migrations; ${applied.size} already applied; ${pending.length} pending`);
+    if (pending.length === 0) {
+      log("done (nothing to apply)");
+      return;
+    }
+    // Solo loguear las que se aplican — no las que se saltean. Con 200+ migrations
+    // aplicadas, imprimir cada skip es ~200 lineas de ruido por cada deploy.
+    log(`pending versions: ${pending.map((p) => p.version).join(", ")}`);
+    for (const { version, path } of pending) {
       await applyMigration(sql, version, path);
     }
-    log("done");
+    log(`done (applied ${pending.length})`);
   } finally {
     await sql.end({ timeout: 5 });
   }
