@@ -7,12 +7,14 @@ import {
   History,
   Key,
   MailPlus,
+  Menu,
   Settings,
   Sliders,
   Sparkles,
   User as UserIcon,
   Users as UsersIcon,
   Wrench,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
@@ -41,11 +43,25 @@ type Tab =
   | "perfiles-entidad"
   | "contexto-macro";
 
+type NavItem = {
+  id: Tab;
+  label: string;
+  icon: typeof UserIcon;
+  adminOnly?: boolean;
+  hidden?: boolean;
+};
+
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+
 type Me = { id: string; role: "admin" | "usuario"; plan?: UserPlan };
 
 export function SettingsClient() {
   const [tab, setTab] = useState<Tab>("perfil");
   const [me, setMe] = useState<Me | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/v1/me")
@@ -57,80 +73,205 @@ export function SettingsClient() {
   }, []);
 
   const isAdmin = me?.role === "admin";
-  // V168: API keys visible solo si el plan tiene apiAccess=true (o admin).
   const apiAccessAllowed =
     isAdmin || (me?.plan ? PLAN_LIMITS[me.plan].apiAccess : false);
 
-  const tabs: Array<{
-    id: Tab;
-    label: string;
-    icon: typeof UserIcon;
-    adminOnly?: boolean;
-    hidden?: boolean;
-  }> = [
-    { id: "perfil", label: "Mi perfil", icon: UserIcon },
-    { id: "api-keys", label: "API keys", icon: Key, hidden: !apiAccessAllowed },
-    { id: "ai", label: "Proveedores AI", icon: Sparkles, adminOnly: true },
-    { id: "perfiles-entidad", label: "Perfiles entidad", icon: Database, adminOnly: true },
-    { id: "contexto-macro", label: "Contexto macro", icon: CloudRain, adminOnly: true },
-    { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
-    { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
-    { id: "sistema", label: "Sistema", icon: Sliders, adminOnly: true },
-    { id: "auditoria", label: "Auditoria", icon: History, adminOnly: true },
-    { id: "debug", label: "Diagnostico", icon: Wrench, adminOnly: true },
+  // Sidebar agrupado — escala bien a 10+ items sin saturar.
+  const groups: NavGroup[] = [
+    {
+      label: "Mi cuenta",
+      items: [
+        { id: "perfil", label: "Mi perfil", icon: UserIcon },
+        { id: "api-keys", label: "API keys", icon: Key, hidden: !apiAccessAllowed },
+      ],
+    },
+    {
+      label: "IA y contexto",
+      items: [
+        { id: "ai", label: "Proveedores AI", icon: Sparkles, adminOnly: true },
+        { id: "perfiles-entidad", label: "Perfiles entidad", icon: Database, adminOnly: true },
+        { id: "contexto-macro", label: "Contexto macro", icon: CloudRain, adminOnly: true },
+      ],
+    },
+    {
+      label: "Equipo",
+      items: [
+        { id: "usuarios", label: "Usuarios", icon: UsersIcon, adminOnly: true },
+        { id: "invitaciones", label: "Invitaciones", icon: MailPlus, adminOnly: true },
+      ],
+    },
+    {
+      label: "Sistema",
+      items: [
+        { id: "sistema", label: "Preferencias", icon: Sliders, adminOnly: true },
+        { id: "auditoria", label: "Auditoría", icon: History, adminOnly: true },
+        { id: "debug", label: "Diagnóstico", icon: Wrench, adminOnly: true },
+      ],
+    },
   ];
 
+  // Encuentra la label del tab activo (para mostrar en header mobile)
+  const activeItem = groups
+    .flatMap((g) => g.items)
+    .find((i) => i.id === tab);
+
+  const handleSelect = (id: Tab) => {
+    setTab(id);
+    setMobileOpen(false);
+  };
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
           <Settings className="w-6 h-6 text-slate-600" />
-          Configuracion
+          Configuración
         </h1>
       </header>
 
-      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
-        {tabs.map((t) => {
-          if (t.adminOnly && !isAdmin) return null;
-          if (t.hidden) return null;
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "px-4 h-10 text-sm font-medium inline-flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap",
-                active
-                  ? "border-brand-600 text-slate-900"
-                  : "border-transparent text-slate-600 hover:text-slate-900",
-              )}
-            >
-              <Icon className="w-4 h-4" />
-              {t.label}
-            </button>
-          );
-        })}
+      {/* Mobile: botón para abrir sidebar */}
+      <div className="md:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          className="w-full flex items-center justify-between px-4 h-11 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-900"
+        >
+          <span className="inline-flex items-center gap-2">
+            {activeItem && <activeItem.icon className="w-4 h-4 text-slate-600" />}
+            {activeItem?.label ?? "Secciones"}
+          </span>
+          <Menu className="w-4 h-4 text-slate-500" />
+        </button>
       </div>
 
-      <div>
-        {tab === "perfil" && <ProfileSection />}
-        {tab === "api-keys" && apiAccessAllowed && <ApiKeysSection />}
-        {tab === "ai" && isAdmin && <AiProvidersSection />}
-        {tab === "perfiles-entidad" && isAdmin && <EntityProfilesClient />}
-        {tab === "contexto-macro" && isAdmin && <MacroContextClient />}
-        {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
-        {tab === "invitaciones" && isAdmin && <InvitationsSection />}
-        {tab === "sistema" && isAdmin && <SystemSettingsSection />}
-        {tab === "auditoria" && isAdmin && <AuditSection />}
-        {tab === "debug" && isAdmin && <DebugSection />}
-        {tab !== "perfil" && tab !== "api-keys" && !isAdmin && (
-          <div className="p-6 bg-slate-50 border border-slate-200 rounded text-sm text-slate-600 text-center">
-            Esta seccion es solo para administradores.
-          </div>
-        )}
+      <div className="flex gap-6">
+        {/* Sidebar desktop */}
+        <aside className="hidden md:block w-56 flex-shrink-0">
+          <nav className="space-y-6 sticky top-6">
+            {groups.map((g) => {
+              const visibleItems = g.items.filter((it) => {
+                if (it.hidden) return false;
+                if (it.adminOnly && !isAdmin) return false;
+                return true;
+              });
+              if (visibleItems.length === 0) return null;
+              return (
+                <div key={g.label}>
+                  <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {g.label}
+                  </div>
+                  <ul className="space-y-0.5">
+                    {visibleItems.map((it) => {
+                      const Icon = it.icon;
+                      const active = tab === it.id;
+                      return (
+                        <li key={it.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleSelect(it.id)}
+                            className={cn(
+                              "w-full flex items-center gap-2.5 px-3 h-9 text-sm font-medium rounded-md transition-colors",
+                              active
+                                ? "bg-brand-50 text-brand-700"
+                                : "text-slate-700 hover:bg-slate-100",
+                            )}
+                          >
+                            <Icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate text-left">{it.label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+          </nav>
+        </aside>
+
+        {/* Contenido */}
+        <main className="flex-1 min-w-0">
+          {tab === "perfil" && <ProfileSection />}
+          {tab === "api-keys" && apiAccessAllowed && <ApiKeysSection />}
+          {tab === "ai" && isAdmin && <AiProvidersSection />}
+          {tab === "perfiles-entidad" && isAdmin && <EntityProfilesClient />}
+          {tab === "contexto-macro" && isAdmin && <MacroContextClient />}
+          {tab === "usuarios" && isAdmin && me && <UsersSection currentUserId={me.id} />}
+          {tab === "invitaciones" && isAdmin && <InvitationsSection />}
+          {tab === "sistema" && isAdmin && <SystemSettingsSection />}
+          {tab === "auditoria" && isAdmin && <AuditSection />}
+          {tab === "debug" && isAdmin && <DebugSection />}
+          {tab !== "perfil" && tab !== "api-keys" && !isAdmin && (
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded text-sm text-slate-600 text-center">
+              Esta sección es solo para administradores.
+            </div>
+          )}
+        </main>
       </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/40"
+          onClick={() => setMobileOpen(false)}
+        >
+          <div
+            className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-xl overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 h-12 border-b border-slate-200">
+              <span className="font-semibold text-slate-900">Secciones</span>
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="p-1 hover:bg-slate-100 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <nav className="p-3 space-y-5">
+              {groups.map((g) => {
+                const visibleItems = g.items.filter((it) => {
+                  if (it.hidden) return false;
+                  if (it.adminOnly && !isAdmin) return false;
+                  return true;
+                });
+                if (visibleItems.length === 0) return null;
+                return (
+                  <div key={g.label}>
+                    <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {g.label}
+                    </div>
+                    <ul className="space-y-0.5">
+                      {visibleItems.map((it) => {
+                        const Icon = it.icon;
+                        const active = tab === it.id;
+                        return (
+                          <li key={it.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleSelect(it.id)}
+                              className={cn(
+                                "w-full flex items-center gap-2.5 px-3 h-10 text-sm font-medium rounded-md transition-colors",
+                                active
+                                  ? "bg-brand-50 text-brand-700"
+                                  : "text-slate-700 hover:bg-slate-100",
+                              )}
+                            >
+                              <Icon className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate text-left">{it.label}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
