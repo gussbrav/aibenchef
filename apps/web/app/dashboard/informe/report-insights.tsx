@@ -168,10 +168,7 @@ export function ReportInsights({
       )}
 
       {state.kind === "generating" && (
-        <div className="flex items-center gap-2 text-xs text-slate-600 py-2">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-700" />
-          Generando analisis... (~2-3 segundos)
-        </div>
+        <GeneratingIndicator />
       )}
 
       {state.kind === "ready" && (
@@ -211,6 +208,46 @@ export function ReportInsights({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Indicador de carga con mensaje progresivo. Refleja el proceso real del
+ * backend: enrichment rapido (<5s) → macro + indicadores (hasta 15s) →
+ * research de entidades nuevas via web_search (30-60s la primera vez).
+ *
+ * Alternativa anterior era un fijo "~2-3 segundos" que engañaba cuando el
+ * analisis incluia entidades no investigadas previamente.
+ */
+function GeneratingIndicator() {
+  const [stage, setStage] = useState<0 | 1 | 2 | 3>(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (elapsed < 5) setStage(0);
+    else if (elapsed < 15) setStage(1);
+    else if (elapsed < 30) setStage(2);
+    else setStage(3);
+  }, [elapsed]);
+
+  const messages: Record<0 | 1 | 2 | 3, string> = {
+    0: "Preparando contexto de análisis…",
+    1: "Cruzando indicadores y contexto macro vigente…",
+    2: "Investigando entidades (primera vez: ~30-60s, siguientes: instantáneo)…",
+    3: "Casi listo — investigando última entidad…",
+  };
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-600 py-2">
+      <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-700 flex-shrink-0" />
+      <span>{messages[stage]}</span>
+      <span className="text-slate-400 tabular-nums ml-auto">{elapsed}s</span>
     </div>
   );
 }

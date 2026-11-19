@@ -75,6 +75,15 @@ TIPOS DE ENTIDAD (por marco regulatorio):
   patron de cifras y crecimiento sugiere escalamiento hacia transicion,
   mencionarlo como variable de analisis estrategico.
 
+  CONSIDERACION #5 — TERMINOLOGIA DE FONDEO (precision regulatoria Ley
+  29523): las COOPAC captan ahorros y depositos a plazo SOLO de SUS
+  SOCIOS, no del publico general. Cuando hables de la base de fondeo
+  de una COOPAC, usar "socios depositantes", "socios ahorristas" o
+  "obligaciones con socios" — NUNCA "depositantes del publico" o
+  "clientes depositantes" (esos terminos son para bancos/financieras/
+  cajas que SI captan del publico). Para Sistema Financiero: terminologia
+  normal ("depositantes", "ahorristas", "clientes") OK.
+
 TERMINOLOGIA DE CALIDAD DE CARTERA (jerarquia de peor a mejor):
 1. Cartera Atrasada = Vencida + En Cobranza Judicial (mora simple)
 2. Cartera de Alto Riesgo (CAR) = Atrasada + Refinanciada
