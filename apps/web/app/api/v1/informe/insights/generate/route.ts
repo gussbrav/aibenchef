@@ -34,6 +34,11 @@ import {
 } from "@/lib/domains/insights";
 
 export const dynamic = "force-dynamic";
+// Research de perfiles (web_search) + two-pass inference + generacion LLM
+// puede tardar 40-80s en entidades nuevas. Default Next.js es 10s en vercel,
+// pero self-hosted (Node runtime) lo respeta para el graceful shutdown.
+// El proxy Traefik de EasyPanel esta configurado a 120s via upstream timeout.
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {

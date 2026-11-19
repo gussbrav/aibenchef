@@ -101,6 +101,20 @@ export function ReportInsights({
           contexto: JSON.parse(contextoKey),
         }),
       });
+      // El endpoint puede retornar HTML si el proxy hace timeout (504), el
+      // server tira un crash (502) o la ruta no existe (404). En esos casos
+      // res.json() explota con "Unexpected token '<'" ocultando el status.
+      // Chequeamos content-type antes de parsear.
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        let diagnostico = `HTTP ${res.status}`;
+        if (res.status === 504) diagnostico = "El analisis tardo mas de lo permitido (504). Reintenta en unos segundos.";
+        else if (res.status === 502) diagnostico = "El servidor no respondio (502). Reintenta en unos segundos.";
+        else if (res.status === 404) diagnostico = "El endpoint no esta disponible (404). Revisa que el deploy este aplicado.";
+        else if (res.status >= 500) diagnostico = `Error del servidor (${res.status}). Reintenta o revisa los logs.`;
+        setState({ kind: "error", message: diagnostico, canRetry: true });
+        return;
+      }
       const json = await res.json();
       if (!res.ok) {
         const msg = json?.error?.message ?? json?.error ?? `HTTP ${res.status}`;
