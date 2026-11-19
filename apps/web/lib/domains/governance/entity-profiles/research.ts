@@ -44,7 +44,7 @@ const RESEARCH_PRICING = {
  * Max web searches por research. Mantener bajo para controlar costo —
  * 5 busquedas alcanzan de sobra para una ficha de entidad financiera.
  */
-const MAX_WEB_SEARCH_QUERIES = 5;
+const MAX_WEB_SEARCH_QUERIES = 8;
 
 /**
  * Error del research service. Causa que el enrichment degrade gracefully
@@ -71,12 +71,31 @@ const SYSTEM_PROMPT = `Eres un investigador financiero senior especializado en e
 Tu trabajo es extraer una ficha de perfil FACTUAL sobre una entidad especifica usando web search. No inventes nada — si no encuentras evidencia de un campo, dejalo en null.
 
 PARA CADA CAMPO BUSCA EN:
-- Facebook oficial de la entidad
-- Sitio web propio si existe
-- Portal SBS (sbs.gob.pe) para datos regulatorios
-- UniversidadPeru.com para fichas empresariales
+- Facebook oficial de la entidad (facebook.com/<nombreEntidad>)
+- Sitio web propio si existe (dominio tipo cacsanblas.com.pe, coosunat.org.pe, etc.)
+- Portal SBS (sbs.gob.pe) para datos regulatorios y Registro SBS COOPAC
+- UniversidadPeru.com — tiene fichas empresariales de la mayoria de COOPAC con direccion, RUC, fecha inicio
+- Facturalo.pe / SUNAT para verificar RUC y estado tributario
 - Prensa financiera peruana (Gestion, Semana Economica, El Comercio)
 - Ley 29523 (COOPAC) y relacionadas para modelo de negocio
+
+**ESTRATEGIA DE BUSQUEDA — hacer AL MENOS 3 queries distintas** para no quedarte con la primera fuente:
+1. Primera query: nombre exacto de la entidad + "COOPAC" o "cooperativa"
+2. Segunda query: nombre + "clientes" o "prestamos" o "a quien presta"
+3. Tercera query: nombre + "facebook" o "web oficial" para traer la propia publicacion de la entidad
+
+**CAMPOS CRITICOS QUE NO PUEDEN QUEDAR VACIOS si hay cualquier fuente publica:**
+- **publico_objetivo**: lo que mas importa para el analisis. Busca explicitamente a QUE TIPO DE PERSONAS LES PRESTA. Ejemplos de valores correctos:
+  * "Trabajadores del sector publico (trabajador nombrado o contratados CAS) via descuento por planilla y convenios"
+  * "Trabajadores de SUNAT ampliado desde 2021 a otras entidades publicas"
+  * "Microempresa de Lima Sur, consumo publico general"
+  * "Afiliados a gremios de educadores regionales"
+  Si la pagina de Facebook / web / prensa menciona "prestamos para CAS", "prestamos para nombrados", "convenios con instituciones", "trabajadores de X institucion" — eso ES el publico_objetivo. No lo dejes como null si hay evidencia.
+- **modelo_negocio**: basado en publico_objetivo, deducir cerrada/abierta/mixta.
+  * Si presta solo a empleados de UNA institucion -> "cerrada"
+  * Si presta a publico general sin vinculo laboral -> "abierta"
+  * Si presta a trabajadores del sector publico GENERAL (CAS/nombrado de cualquier entidad, convenios con multiples instituciones) + consumo abierto -> "mixta"
+  * Solo "desconocido" si realmente no hay indicacion en ninguna fuente.
 
 CAMPOS A EXTRAER (todos opcionales — null si no encuentras evidencia):
 - ubicacion: ciudad y departamento si lo encuentras (ej. "Arequipa, Peru"). Si tiene sucursales en multiples, "nacional" o la sede principal.
