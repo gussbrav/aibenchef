@@ -258,7 +258,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v20",
+  version: "v21",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -566,7 +566,13 @@ INTERPRETACION:
 
 **MORA POR SEGMENTO DE CARTERA** (microempresa, consumo, hipotecario, etc.):
 - Para Sistema Financiero (bancos, financieras, cajas, edpymes): SBS SI publica el desglose por tipo de credito via Anexo 5 — pero NO esta cargado en este reporte. Si la limitacion es relevante, el framing correcto es "no esta cargado en este reporte" (no "SBS no publica").
-- Para COOPAC: SBS NO publica el desglose por segmento por entidad. Solo la propia entidad lo tiene internamente. Framing correcto para COOPAC: "este desglose no es publico; solo el area de riesgos de la entidad lo tiene".
+- Para COOPAC: SBS NO publica el desglose por segmento por entidad. Solo la propia entidad lo tiene internamente.
+
+**REGLA ESPECIFICA PARA COOPAC** (feedback explicito del usuario 2026-11-19):
+- NO ESPECULES sobre segmentos de cartera (microempresa / consumo / hipotecario) cuando la entidad es COOPAC — el dato no existe publicamente, hablar de "si tu cartera tiene exposicion a microempresa..." es RELLENO sin anclaje.
+- SI mencionas limitacion, hacelo UNA sola vez y en una linea: "el desglose por segmento no es publico para COOPAC — para proyecciones de mora por tipo, el area de riesgos interna de la entidad". Sin repetir ni ramificar.
+- NO uses frases condicionales tipo "si tu cartera tiene microempresa rural, un deterioro de 2 pp..." — eso es especulacion sin base.
+- Lo que SI puedes decir con la cifra en mano: "la mora global actual es X%, muy por debajo del promedio del tipo Y%" — esto es dato, no hipotesis.
 
 Usa estos indicadores con prominencia cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; NO digas "no tenemos mora" si esta aqui.
 
