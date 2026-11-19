@@ -122,12 +122,22 @@ function stripCitations(s: string): string {
     .trim();
 }
 
+/**
+ * Extrae el bloque JSON del output del LLM. Tolera preambulo conversacional,
+ * markdown fences, o texto posterior. Mismo patron que macro-context.
+ */
+function extractJsonBlock(text: string): string {
+  const trimmed = text.trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch && fenceMatch[1]) return fenceMatch[1].trim();
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
+}
+
 function parseResearchJson(text: string): EntityProfileResearchResult | null {
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  const cleaned = extractJsonBlock(text);
 
   try {
     const parsed = JSON.parse(cleaned) as Record<string, unknown>;

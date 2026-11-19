@@ -87,7 +87,7 @@ REGLAS INVIOLABLES:
 - NUNCA citar clasificadoras de riesgo por nombre.
 - Prioriza eventos de impacto REAL en decisiones de credito. Omite ruido politico sin consecuencia directa.
 - Entre 3 y 10 items total. Menos es mejor si no hay data verificada.
-- JSON puro, sin markdown fences, sin texto adicional.`;
+- **OUTPUT: SOLO el objeto JSON, empezando con { y terminando con }.** Nada de preambulo ("Basandome en...", "Te entrego..."), nada de epilogo, nada de markdown fences (sin \`\`\`json), nada de comentarios. El primer caracter del output es { y el ultimo es }.`;
 
 /**
  * Strippear las citas <cite index="..."> que Anthropic web_search inserta
@@ -102,12 +102,28 @@ function stripCitations(s: string): string {
     .trim();
 }
 
+/**
+ * Extrae el bloque JSON del output del LLM. Tolera:
+ *   - Preambulo conversacional ("Basandome en la investigacion...")
+ *   - Markdown fences ```json ... ```
+ *   - Texto posterior al JSON
+ * Estrategia: buscar el bloque entre fences; si no hay fences, extraer
+ * desde el primer '{' hasta el ultimo '}' matcheado.
+ */
+function extractJsonBlock(text: string): string {
+  const trimmed = text.trim();
+  // Intento 1: markdown fence explicito ```json ... ```
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch && fenceMatch[1]) return fenceMatch[1].trim();
+  // Intento 2: desde el primer '{' hasta el ultimo '}'
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
+}
+
 function parseResearchJson(text: string): MacroResearchItem[] {
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  const cleaned = extractJsonBlock(text);
 
   try {
     const parsed = JSON.parse(cleaned) as { items?: unknown };
