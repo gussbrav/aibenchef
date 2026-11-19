@@ -164,94 +164,110 @@ export function EntityProfilesClient() {
         </div>
       )}
 
-      {/* Tabla */}
+      {/* Tabla — layout compacto, sin scroll horizontal. Acciones siempre visibles. */}
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+        <table className="w-full text-sm table-fixed">
+          <colgroup>
+            <col className="w-[22%]" />
+            <col className="w-[14%]" />
+            <col />
+            <col className="w-[11%]" />
+            <col className="w-[13%]" />
+            <col className="w-[110px]" />
+          </colgroup>
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-600">
+            <tr>
+              <th className="text-left px-3 py-2 font-semibold">Entidad</th>
+              <th className="text-left px-3 py-2 font-semibold">Ubicación</th>
+              <th className="text-left px-3 py-2 font-semibold">Público objetivo</th>
+              <th className="text-left px-3 py-2 font-semibold">Modelo</th>
+              <th className="text-right px-3 py-2 font-semibold">Usos · Costo</th>
+              <th className="text-right px-3 py-2 font-semibold">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
               <tr>
-                <th className="text-left px-3 py-2">Entidad</th>
-                <th className="text-left px-3 py-2">Ubicación</th>
-                <th className="text-left px-3 py-2">Público objetivo</th>
-                <th className="text-left px-3 py-2">Modelo</th>
-                <th className="text-right px-3 py-2">Usos</th>
-                <th className="text-right px-3 py-2">Costo</th>
-                <th className="text-center px-3 py-2">Estado</th>
-                <th className="text-right px-3 py-2">Acciones</th>
+                <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
+                  Cargando…
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
-                    Cargando…
-                  </td>
-                </tr>
-              )}
-              {!loading && (data?.rows.length ?? 0) === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
-                    No hay perfiles para este filtro.
-                  </td>
-                </tr>
-              )}
-              {data?.rows.map((p) => (
-                <tr key={p.nombCorreg} className="border-t border-slate-100">
-                  <td className="px-3 py-2 font-medium">{p.nombCorreg}</td>
-                  <td className="px-3 py-2 text-slate-700">{p.ubicacion ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-700 max-w-xs truncate" title={p.publicoObjetivo ?? ""}>
-                    {p.publicoObjetivo ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-slate-700">{p.modeloNegocio ?? "—"}</td>
-                  <td className="px-3 py-2 text-right text-slate-500">{p.useCount}</td>
-                  <td className="px-3 py-2 text-right text-slate-500">
-                    ${p.researchCostUsd.toFixed(4)}
-                  </td>
-                  <td className="px-3 py-2 text-center">
+            )}
+            {!loading && (data?.rows.length ?? 0) === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
+                  No hay perfiles para este filtro.
+                </td>
+              </tr>
+            )}
+            {data?.rows.map((p) => (
+              <tr key={p.nombCorreg} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                <td className="px-3 py-2.5 align-top">
+                  <div className="font-medium text-slate-900 truncate" title={p.nombCorreg}>
+                    {p.nombCorreg}
+                  </div>
+                  <div className="mt-0.5">
                     {p.verifiedByHuman ? (
-                      <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">
                         Validado
                       </span>
                     ) : (
-                      <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
                         Preliminar
                       </span>
                     )}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  </div>
+                </td>
+                <td className="px-3 py-2.5 align-top text-slate-700 truncate" title={p.ubicacion ?? ""}>
+                  {p.ubicacion ?? "—"}
+                </td>
+                <td className="px-3 py-2.5 align-top text-slate-700 truncate" title={p.publicoObjetivo ?? ""}>
+                  {p.publicoObjetivo ?? <span className="text-slate-400">— sin research</span>}
+                </td>
+                <td className="px-3 py-2.5 align-top">
+                  {p.modeloNegocio ? (
+                    <span className="text-xs text-slate-700 capitalize">{p.modeloNegocio}</span>
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 align-top text-right">
+                  <div className="text-slate-700 tabular-nums">{p.useCount} usos</div>
+                  <div className="text-[11px] text-slate-500 tabular-nums">${p.researchCostUsd.toFixed(4)}</div>
+                </td>
+                <td className="px-3 py-2.5 align-top text-right">
+                  <div className="flex items-center justify-end gap-0.5">
+                    <button
+                      onClick={() => setEditing(p)}
+                      className="p-1.5 rounded hover:bg-slate-200 text-slate-600 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    {!p.verifiedByHuman && (
                       <button
-                        onClick={() => setEditing(p)}
-                        className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                        title="Editar"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      {!p.verifiedByHuman && (
-                        <button
-                          onClick={() => void handleVerify(p.nombCorreg)}
-                          disabled={actioning === p.nombCorreg}
-                          className="p-1.5 rounded hover:bg-emerald-50 text-emerald-700 disabled:opacity-40"
-                          title="Marcar como validado"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => void handleResearch(p.nombCorreg, p.tipoEntidad)}
+                        onClick={() => void handleVerify(p.nombCorreg)}
                         disabled={actioning === p.nombCorreg}
-                        className="p-1.5 rounded hover:bg-blue-50 text-blue-700 disabled:opacity-40"
-                        title="Reinvestigar"
+                        className="p-1.5 rounded hover:bg-emerald-100 text-emerald-700 disabled:opacity-40 transition-colors"
+                        title="Marcar como validado"
                       >
-                        <RefreshCw className={`h-3.5 w-3.5 ${actioning === p.nombCorreg ? "animate-spin" : ""}`} />
+                        <Check className="h-3.5 w-3.5" />
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                    <button
+                      onClick={() => void handleResearch(p.nombCorreg, p.tipoEntidad)}
+                      disabled={actioning === p.nombCorreg}
+                      className="p-1.5 rounded hover:bg-blue-100 text-blue-700 disabled:opacity-40 transition-colors"
+                      title="Reinvestigar (~$0.10)"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${actioning === p.nombCorreg ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {editing && (
