@@ -681,6 +681,7 @@ async function maybeEnrichContext(
     // effort: si falla, el prompt degrada declarando la falta.
     let perfilesEntidad: Record<string, {
       ubicacion: string | null;
+      region: string | null;
       inicioOperaciones: string | null;
       publicoObjetivo: string | null;
       modeloNegocio: string | null;
@@ -704,6 +705,7 @@ async function maybeEnrichContext(
         for (const [nombCorreg, perfil] of perfiles.entries()) {
           perfilesEntidad[nombCorreg] = {
             ubicacion: perfil.ubicacion,
+            region: perfil.region,
             inicioOperaciones: perfil.inicioOperaciones,
             publicoObjetivo: perfil.publicoObjetivo,
             modeloNegocio: perfil.modeloNegocio,
@@ -723,8 +725,81 @@ async function maybeEnrichContext(
       logStep("perfiles", "skipped (ya existia en contexto)");
     }
 
+    // --- Promedios REGIONALES (filtrados por region + tipo_entidad) ---
+    // Solo si la entidad propia tiene region conocida (del perfil). Permite
+    // al LLM comparar contra pares regionales en vez de contra todo el
+    // universo nacional — mas apples-to-apples.
+    const propioPerfil = perfilesEntidad[input.entidadPropia];
+    const regionPropia = propioPerfil?.region ?? null;
+    const tipoPropio = tipoPorEntidadInput[input.entidadPropia] ?? null;
+    let promediosPorRegion: {
+      region: string;
+      tipoEntidad: string;
+      periodoLabel: string;
+      nEntidades: number;
+      moraProm: number | null;
+      coberturaProm: number | null;
+      roeProm: number | null;
+      roaProm: number | null;
+    } | null = null;
+    if (regionPropia && regionPropia !== "nacional" && tipoPropio) {
+      try {
+        const regRows = await db.execute<{
+          periodo: number;
+          n: number;
+          mora_prom: string | null;
+          cob_prom: string | null;
+          roe_prom: string | null;
+          roa_prom: string | null;
+        }>(sql`
+          WITH ult AS (
+            SELECT MAX(er.periodo) AS p
+              FROM marts.mv_eeff_ratios er
+              INNER JOIN gov.entity_profiles gp ON gp.nomb_correg = er.nomb_correg
+             WHERE er.moneda = 'TOTAL'
+               AND er.periodo <= ${input.periodo}
+               AND er.tipo_entidad = ${tipoPropio}
+               AND gp.region = ${regionPropia}
+          )
+          SELECT er.periodo,
+                 COUNT(*)::int AS n,
+                 AVG(er.ratio_mora)::text AS mora_prom,
+                 AVG(er.ratio_cobertura_atrasados)::text AS cob_prom,
+                 AVG(er.roe)::text AS roe_prom,
+                 AVG(er.roa)::text AS roa_prom
+            FROM marts.mv_eeff_ratios er
+            INNER JOIN gov.entity_profiles gp ON gp.nomb_correg = er.nomb_correg
+            INNER JOIN ult ON ult.p = er.periodo
+           WHERE er.moneda = 'TOTAL'
+             AND er.tipo_entidad = ${tipoPropio}
+             AND gp.region = ${regionPropia}
+           GROUP BY er.periodo
+        `);
+        const r = regRows[0];
+        if (r && Number(r.n) >= 3) {
+          promediosPorRegion = {
+            region: regionPropia,
+            tipoEntidad: tipoPropio,
+            periodoLabel: periodoLabel(Number(r.periodo)),
+            nEntidades: Number(r.n),
+            moraProm: r.mora_prom != null ? Number(r.mora_prom) : null,
+            coberturaProm: r.cob_prom != null ? Number(r.cob_prom) : null,
+            roeProm: r.roe_prom != null ? Number(r.roe_prom) : null,
+            roaProm: r.roa_prom != null ? Number(r.roa_prom) : null,
+          };
+          logStep("promediosRegion", `${r.n} entidades ${tipoPropio} en ${regionPropia}`);
+        } else {
+          logStep("promediosRegion", `muestra chica (${r?.n ?? 0}) para ${tipoPropio} en ${regionPropia} — se omite`);
+        }
+      } catch (err) {
+        warn("promediosRegion query fallo", err);
+      }
+    } else {
+      logStep("promediosRegion", `skipped (region propia=${regionPropia}, tipo=${tipoPropio})`);
+    }
+
     log(
-      `enrichment done: mora=${Object.keys(moraReal).length}, roe=${Object.keys(roe).length}, cob=${Object.keys(coberturaAtrasados).length}, montos=${montosPropia.length}, promedios=${Object.keys(promediosPorTipo).length}, macro=${contextoMacro.length}, perfiles=${Object.keys(perfilesEntidad).length}`,
+      `enrichment done: mora=${Object.keys(moraReal).length}, roe=${Object.keys(roe).length}, cob=${Object.keys(coberturaAtrasados).length}, montos=${montosPropia.length}, promedios=${Object.keys(promediosPorTipo).length}, macro=${contextoMacro.length}, perfiles=${Object.keys(perfilesEntidad).length}, region=${promediosPorRegion ? "sí" : "no"}`,
     );
 
     return {
@@ -738,6 +813,7 @@ async function maybeEnrichContext(
         ...(yaTienePromedios ? {} : { promediosPorTipo }),
         ...(yaTienePerfiles ? {} : { perfilesEntidad }),
         ...(yaTieneMacro ? {} : { contextoMacro }),
+        ...(promediosPorRegion ? { promediosPorRegion } : {}),
         periodoCalidad,
         // Audit trail — persiste en contexto_json para debugging sin acceso a container logs.
         // Los campos empiezan con "_" para distinguirlos del contexto consumido por el prompt.

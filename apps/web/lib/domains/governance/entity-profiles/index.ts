@@ -65,6 +65,7 @@ export async function ensureProfilesForEntities(
           nombCorreg: ent.nombCorreg,
           tipoEntidad: ent.tipoEntidad,
           ubicacion: result.profile.ubicacion,
+          region: result.profile.region,
           inicioOperaciones: result.profile.inicioOperaciones,
           rucSunat: result.profile.rucSunat,
           publicoObjetivo: result.profile.publicoObjetivo,

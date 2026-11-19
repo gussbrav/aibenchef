@@ -36,6 +36,7 @@ export async function POST(
       nombCorreg: decoded,
       tipoEntidad,
       ubicacion: result.profile.ubicacion,
+      region: result.profile.region,
       inicioOperaciones: result.profile.inicioOperaciones,
       rucSunat: result.profile.rucSunat,
       publicoObjetivo: result.profile.publicoObjetivo,

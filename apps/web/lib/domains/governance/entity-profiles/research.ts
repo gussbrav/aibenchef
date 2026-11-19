@@ -80,6 +80,7 @@ PARA CADA CAMPO BUSCA EN:
 
 CAMPOS A EXTRAER (todos opcionales — null si no encuentras evidencia):
 - ubicacion: ciudad y departamento si lo encuentras (ej. "Arequipa, Peru"). Si tiene sucursales en multiples, "nacional" o la sede principal.
+- region: departamento normalizado (solo el nombre del departamento peruano: "Arequipa", "Lima", "Cusco", "La Libertad", "Piura", "Puno", "Junin", "Ancash", etc). Si opera en mas de 3 departamentos o es banca multiple sin foco regional, usar "nacional". Diferente de ubicacion que puede tener ciudad y pais — este es solo el depto, estandarizado.
 - inicio_operaciones: año o año-mes (ej. "2018-12" o "1995"). Preferir fuente SBS o RUC.
 - ruc_sunat: 11 digitos
 - publico_objetivo: a quien le prestan de verdad. Ejemplos de valores buenos: "Trabajadores publicos (CAS, nombrado) + convenios", "Microempresa Lima Sur", "Afiliados del gremio X", "Publico general con enfasis en consumo". Si es una COOPAC con nombre institucional (ej. COOSUNAT = SUNAT), dilo. Si es una COOPAC generica sin vinculacion obvia, "publico general" o "comunidad local".
@@ -92,6 +93,7 @@ CAMPOS A EXTRAER (todos opcionales — null si no encuentras evidencia):
 FORMATO DE SALIDA — JSON ESTRICTO:
 {
   "ubicacion": string | null,
+  "region": string | null,
   "inicio_operaciones": string | null,
   "ruc_sunat": string | null,
   "publico_objetivo": string | null,
@@ -161,6 +163,7 @@ function parseResearchJson(text: string): EntityProfileResearchResult | null {
 
     return {
       ubicacion: toStringOrNull(parsed.ubicacion),
+      region: toStringOrNull(parsed.region),
       inicioOperaciones: toStringOrNull(parsed.inicio_operaciones),
       rucSunat: toStringOrNull(parsed.ruc_sunat),
       publicoObjetivo: toStringOrNull(parsed.publico_objetivo),

@@ -16,6 +16,8 @@ export interface EntityProfile {
   nombCorreg: string;
   tipoEntidad: string | null;
   ubicacion: string | null;
+  /** Departamento normalizado (Arequipa, Lima, Cusco, etc.) o "nacional" */
+  region: string | null;
   inicioOperaciones: string | null;
   rucSunat: string | null;
   publicoObjetivo: string | null;
@@ -48,6 +50,7 @@ export interface EntityProfile {
  */
 export interface EntityProfileResearchResult {
   ubicacion: string | null;
+  region: string | null;
   inicioOperaciones: string | null;
   rucSunat: string | null;
   publicoObjetivo: string | null;

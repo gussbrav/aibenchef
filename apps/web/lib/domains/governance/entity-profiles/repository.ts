@@ -15,6 +15,7 @@ type DbRow = {
   nomb_correg: string;
   tipo_entidad: string | null;
   ubicacion: string | null;
+  region: string | null;
   inicio_operaciones: string | null;
   ruc_sunat: string | null;
   publico_objetivo: string | null;
@@ -41,6 +42,7 @@ function rowToProfile(r: DbRow): EntityProfile {
     nombCorreg: r.nomb_correg,
     tipoEntidad: r.tipo_entidad,
     ubicacion: r.ubicacion,
+    region: r.region,
     inicioOperaciones: r.inicio_operaciones,
     rucSunat: r.ruc_sunat,
     publicoObjetivo: r.publico_objetivo,
@@ -105,6 +107,7 @@ export async function upsertEntityProfileFromResearch(params: {
   nombCorreg: string;
   tipoEntidad: string | null;
   ubicacion: string | null;
+  region: string | null;
   inicioOperaciones: string | null;
   rucSunat: string | null;
   publicoObjetivo: string | null;
@@ -123,7 +126,7 @@ export async function upsertEntityProfileFromResearch(params: {
 
   const rows = await db.execute<DbRow>(sql`
     INSERT INTO gov.entity_profiles (
-      nomb_correg, tipo_entidad, ubicacion, inicio_operaciones, ruc_sunat,
+      nomb_correg, tipo_entidad, ubicacion, region, inicio_operaciones, ruc_sunat,
       publico_objetivo, modelo_negocio, segmento_cartera_hipotesis,
       productos_principales, notas, fuentes,
       research_at, research_model, research_cost_usd, research_count
@@ -131,6 +134,7 @@ export async function upsertEntityProfileFromResearch(params: {
       ${params.nombCorreg}::text,
       ${params.tipoEntidad}::text,
       ${params.ubicacion}::text,
+      ${params.region}::text,
       ${params.inicioOperaciones}::text,
       ${params.rucSunat}::text,
       ${params.publicoObjetivo}::text,
@@ -147,6 +151,7 @@ export async function upsertEntityProfileFromResearch(params: {
     ON CONFLICT (nomb_correg) DO UPDATE SET
       tipo_entidad                = COALESCE(EXCLUDED.tipo_entidad, gov.entity_profiles.tipo_entidad),
       ubicacion                   = COALESCE(EXCLUDED.ubicacion, gov.entity_profiles.ubicacion),
+      region                      = COALESCE(EXCLUDED.region, gov.entity_profiles.region),
       inicio_operaciones          = COALESCE(EXCLUDED.inicio_operaciones, gov.entity_profiles.inicio_operaciones),
       ruc_sunat                   = COALESCE(EXCLUDED.ruc_sunat, gov.entity_profiles.ruc_sunat),
       publico_objetivo            = COALESCE(EXCLUDED.publico_objetivo, gov.entity_profiles.publico_objetivo),

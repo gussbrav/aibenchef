@@ -258,7 +258,7 @@ type MontoPropia = {
 type UniversoTipo = "solo_coopac" | "solo_sf" | "mixto" | "no_declarado";
 
 export const promptPuntoEquilibrio: PromptTemplate = {
-  version: "v19",
+  version: "v20",
   seccion: "punto_equilibrio",
   build(ctx: PromptContext): { system: string; user: string } {
     const entidades = (ctx.contexto.entidades ?? []) as PERow[];
@@ -280,10 +280,21 @@ export const promptPuntoEquilibrio: PromptTemplate = {
         roaProm: number | null;
       }
     >;
+    const promediosPorRegion = (ctx.contexto.promediosPorRegion ?? null) as {
+      region: string;
+      tipoEntidad: string;
+      periodoLabel: string;
+      nEntidades: number;
+      moraProm: number | null;
+      coberturaProm: number | null;
+      roeProm: number | null;
+      roaProm: number | null;
+    } | null;
     const perfilesEntidad = (ctx.contexto.perfilesEntidad ?? {}) as Record<
       string,
       {
         ubicacion: string | null;
+        region: string | null;
         inicioOperaciones: string | null;
         publicoObjetivo: string | null;
         modeloNegocio: string | null;
@@ -558,6 +569,17 @@ INTERPRETACION:
 - Para COOPAC: SBS NO publica el desglose por segmento por entidad. Solo la propia entidad lo tiene internamente. Framing correcto para COOPAC: "este desglose no es publico; solo el area de riesgos de la entidad lo tiene".
 
 Usa estos indicadores con prominencia cuando esten disponibles. Si Mora o Cobertura estan en la tabla, cita el valor concreto; NO digas "no tenemos mora" si esta aqui.
+
+**USO OBLIGATORIO DE COBERTURA** (no es dato de relleno):
+- Si la Cobertura de la entidad propia esta > 150%, es un **colchon defensivo relevante** que DEBE mencionarse en el bullet de riesgos/prioridades — reduce la vulnerabilidad frente a shocks de mora.
+- Ejemplo correcto: "la cobertura de 222% le da margen para absorber ~2 pp adicionales de mora sin comprometer solvencia — relevante en escenario Niño adverso".
+- Si la Cobertura de la entidad propia esta < 100%, es una **alerta** que DEBE mencionarse — provisiones insuficientes.
+- En el analisis de prioridades (bullet final), cruzar Cobertura con el escenario macro cuando aplique.
+
+**USO OBLIGATORIO DEL COSTO DE FONDEO**:
+- Si hay un item macro sobre tasa BCR o politica monetaria en CONTEXTO MACRO VIGENTE, cruzarlo con el ratio GastoFin de la entidad en el cuadro comparativo.
+- Ejemplo: "con GastoFin en 9.80% del rendimiento y BCR en 4.50% con tendencia alcista, un alza de 50 bps en la tasa de referencia podria subir el costo de fondeo 0.3-0.5 pp, comprimiendo tu holgura actual".
+- Esto da cuantificacion al riesgo macro — no deja el Niño o BCR como adornos.
 `;
 })()}
 ${(() => {
@@ -601,6 +623,27 @@ INSTRUCCION CRITICA: cuando cites una cifra de ${ctx.entidadPropia}, SI el prome
 `;
 })()}
 ${(() => {
+  if (!promediosPorRegion) return "";
+  const p = promediosPorRegion;
+  const fmtPct = (v: number | null) => v != null ? `${(v * 100).toFixed(2)}%` : "—";
+  const fmtSgn = (v: number | null) => v != null ? `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}%` : "—";
+  return `## PROMEDIOS REGIONALES — ${p.region} (mismo tipo que ${ctx.entidadPropia})
+
+Este es un filtro MAS ESTRECHO que el promedio del tipo nacional: compara ${ctx.entidadPropia} contra sus pares REGIONALES del mismo nivel regulatorio — mas apples-to-apples porque comparten mercado geografico y ecosistema competitivo local.
+
+- Region: **${p.region}**
+- Tipo: ${p.tipoEntidad}
+- N entidades en region+tipo: ${p.nEntidades}
+- Periodo del dato: ${p.periodoLabel}
+- Mora promedio regional: ${fmtPct(p.moraProm)}
+- Cobertura promedio regional: ${fmtPct(p.coberturaProm)}
+- ROE promedio regional: ${fmtSgn(p.roeProm)}
+- ROA promedio regional: ${fmtSgn(p.roaProm)}
+
+INSTRUCCION: USA este anclaje regional con PRIORIDAD sobre el promedio nacional cuando este disponible. Es mas relevante competitivamente. Ejemplo bien hecho: "SAN BLAS tiene mora de 0.87%, muy por debajo del promedio de las ${p.nEntidades} ${p.tipoEntidad.replace("_", " Nivel ")} de ${p.region} (${fmtPct(p.moraProm)}) — lidera su segmento regional". No reemplaza el promedio nacional sino que lo complementa.
+`;
+})()}
+${(() => {
   const nombres = entidades.map((e) => e.entidad);
   const perfilesDisponibles = nombres.filter((n) => perfilesEntidad[n]);
   if (perfilesDisponibles.length === 0) return "";
@@ -613,6 +656,7 @@ ${(() => {
         : "preliminar — investigacion automatica, usar con calificador \"segun informacion publica consultada\"";
       const campos: string[] = [];
       if (p.ubicacion) campos.push(`  - Ubicacion: ${p.ubicacion}`);
+      if (p.region) campos.push(`  - Region: ${p.region}`);
       if (p.inicioOperaciones) campos.push(`  - Inicio operaciones: ${p.inicioOperaciones}`);
       if (p.publicoObjetivo) campos.push(`  - Publico objetivo: ${p.publicoObjetivo}`);
       if (p.modeloNegocio) campos.push(`  - Modelo de negocio: ${p.modeloNegocio}`);
