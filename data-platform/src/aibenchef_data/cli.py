@@ -2363,10 +2363,16 @@ def import_coopac_eeff(
         with psycopg.connect(url, connect_timeout=30) as _conn, _conn.cursor() as _cur:
             for p in sorted(periodos_importados):
                 try:
+                    # concurrent=True: REFRESH MATERIALIZED VIEW CONCURRENTLY
+                    # permite lecturas en paralelo durante el refresh. Sin esto,
+                    # el refresh toma AccessExclusiveLock y bloquea TODOS los
+                    # dashboards (DuPont, informe, PE) durante los ~10-15 min
+                    # que tarda. Cambio 2026-11-20 tras diagnosticar
+                    # "Datos insuficientes" en DuPont durante la ingesta.
                     _cur.execute(
                         "SELECT step_name, duration_ms, success "
                         "FROM marts.refresh_all_derived_logged(%s, %s, %s)",
-                        (p, False, "cli:coopac-eeff"),
+                        (p, True, "cli:coopac-eeff"),
                     )
                     rows_refresh = _cur.fetchall()
                     ok_steps = sum(1 for _, _, ok in rows_refresh if ok)
