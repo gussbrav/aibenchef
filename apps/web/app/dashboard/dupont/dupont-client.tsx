@@ -1062,7 +1062,11 @@ function SeccionDupont({
         status={narrativaIA.state.status}
         usarIA={usarIA}
         insightsAllowed={insightsAllowed}
-        onGenerate={narrativaIA.generate}
+        // Solo la primera seccion (ROE) muestra el boton. El click dispara
+        // UNA sola llamada al LLM que devuelve las 4 secciones a la vez.
+        // En las otras 3 secciones el boton duplicaba la UI y confundia al
+        // user ("¿tengo que apretarlo en cada una?"). Fix UX 2026-11-20.
+        onGenerate={numero === 1 ? narrativaIA.generate : undefined}
       />
 
       {/* Charts FULL WIDTH — principal arriba, subs abajo en grid mas denso */}
@@ -1179,15 +1183,17 @@ function NarrativaBanner({
                 onGenerate();
               }
             }}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-violet-600 text-white hover:bg-violet-700 cursor-pointer transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium bg-violet-600 text-white hover:bg-violet-700 cursor-pointer transition-colors"
             title={
               status === "fallback"
-                ? "Reintentar análisis con IA"
-                : "Genera un análisis enriquecido con IA (consume crédito del plan)"
+                ? "Reintentar análisis con IA para las 4 secciones"
+                : "Genera un análisis enriquecido con IA para las 4 secciones del DuPont (1 llamada, consume crédito del plan)"
             }
           >
-            <Wand2 className="w-2.5 h-2.5" />
-            {status === "fallback" ? "Reintentar con IA" : "Analizar con IA"}
+            <Wand2 className="w-3 h-3" />
+            {status === "fallback"
+              ? "Reintentar análisis con IA"
+              : "Analizar las 4 secciones con IA"}
           </span>
         )}
         {usarIA && (
