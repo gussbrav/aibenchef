@@ -372,8 +372,9 @@ export function DupontClient({
           <h1 className="text-3xl font-bold mb-2">Análisis DuPont</h1>
           <p className="text-sm opacity-90 max-w-3xl">
             Descomposición jerárquica del ROE en factores multiplicativos y aditivos.
-            Todos los ratios están anualizados (últimos 12 meses) y normalizados sobre
-            el activo promedio del período — excepto ROE (patrimonio) y Apalancamiento (adimensional).
+            Los ratios son anualizados (últimos 12 meses) sobre activo promedio del
+            período. ROE se calcula sobre patrimonio promedio; Apalancamiento es un
+            múltiplo (activo ÷ patrimonio).
           </p>
         </div>
       </header>
@@ -1011,7 +1012,7 @@ function SeccionDupont({
   subIndicadores: IndicadorDef[];
   data: DupontData;
   rowsIndex: Map<string, DupontRow>;
-  narrativaIA: NarrativaState;
+  narrativaIA: NarrativaControl;
   insightsAllowed?: boolean;
 }) {
   // Fallback deterministico — se usa si:
@@ -1030,8 +1031,8 @@ function SeccionDupont({
     [titulo, indicadorPrincipal, subIndicadores, data, rowsIndex],
   );
 
-  const bulletsIA = narrativaIA.data?.[seccionKey] ?? [];
-  const usarIA = narrativaIA.status === "ok" && bulletsIA.length > 0;
+  const bulletsIA = narrativaIA.state.data?.[seccionKey] ?? [];
+  const usarIA = narrativaIA.state.status === "ok" && bulletsIA.length > 0;
   const narrativa = usarIA ? bulletsIA : narrativaFallback;
 
   return (
@@ -1058,9 +1059,10 @@ function SeccionDupont({
           pide. */}
       <NarrativaBanner
         narrativa={narrativa}
-        status={narrativaIA.status}
+        status={narrativaIA.state.status}
         usarIA={usarIA}
         insightsAllowed={insightsAllowed}
+        onGenerate={narrativaIA.generate}
       />
 
       {/* Charts FULL WIDTH — principal arriba, subs abajo en grid mas denso */}
@@ -1117,12 +1119,15 @@ function NarrativaBanner({
   status,
   usarIA,
   insightsAllowed = true,
+  onGenerate,
 }: {
   narrativa: string[];
-  status: "loading" | "ok" | "fallback";
+  status: "idle" | "loading" | "ok" | "fallback";
   usarIA: boolean;
   /** V167: false en plan Free — mostrar chip "Sube a Pro para insights IA". */
   insightsAllowed?: boolean;
+  /** Dispara la generacion del analisis IA. Solo se usa cuando status === "idle". */
+  onGenerate?: () => void;
 }) {
   // Estado open persistente. Default true (mostrar la primera vez).
   const [open, setOpen] = useState<boolean>(() => {
@@ -1157,6 +1162,32 @@ function NarrativaBanner({
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-600">
             <Loader2 className="w-2.5 h-2.5 animate-spin" />
             Generando…
+          </span>
+        )}
+        {(status === "idle" || status === "fallback") && insightsAllowed && onGenerate && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onGenerate();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onGenerate();
+              }
+            }}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-violet-600 text-white hover:bg-violet-700 cursor-pointer transition-colors"
+            title={
+              status === "fallback"
+                ? "Reintentar análisis con IA"
+                : "Genera un análisis enriquecido con IA (consume crédito del plan)"
+            }
+          >
+            <Wand2 className="w-2.5 h-2.5" />
+            {status === "fallback" ? "Reintentar con IA" : "Analizar con IA"}
           </span>
         )}
         {usarIA && (
@@ -1377,9 +1408,14 @@ type NarrativaBullets = {
 };
 
 type NarrativaState = {
-  status: "loading" | "ok" | "fallback";
+  status: "idle" | "loading" | "ok" | "fallback";
   data: NarrativaBullets | null;
   model: string | null;
+};
+
+type NarrativaControl = {
+  state: NarrativaState;
+  generate: () => void;
 };
 
 function useNarrativaIA(
@@ -1387,15 +1423,16 @@ function useNarrativaIA(
   initialInsights: DupontInsights | null,
   initialModel: string | null,
   enabled: boolean = true,
-): NarrativaState {
+): NarrativaControl {
   // Si el server ya nos paso initialInsights (cache DB hit en SSR), el
   // estado inicial es "ok" → cero flash de "Generando..." al montar.
-  // Si viene null (cache miss), estado inicial es "loading" y el useEffect
-  // dispara el fetch client-side.
+  // Si viene null (cache miss), estado inicial es "idle" — el user tiene
+  // que clickear "Generar análisis" para disparar el fetch (cambio UX
+  // 2026-11-20: evita gastar LLM cuando el user solo quiere ver el chart).
   const [state, setState] = useState<NarrativaState>(() =>
     initialInsights
       ? { status: "ok", data: initialInsights, model: initialModel }
-      : { status: "loading", data: null, model: null },
+      : { status: "idle", data: null, model: null },
   );
 
   // Hash de la data para detectar cambios reales (nueva combinacion de
@@ -1415,57 +1452,72 @@ function useNarrativaIA(
   // sabemos que esta en cache.
   const initialKeyRef = useRef<string | null>(initialInsights ? dataKey : null);
 
-  useEffect(() => {
-    // V167: si el plan no incluye insights AI, dejamos estado "fallback"
-    // y no gastamos LLM ni exponemos el panel de bullets.
+  // Ref cancelable para que generate() pueda cortar el fetch previo si el
+  // user cambia la seleccion mientras uno esta en vuelo.
+  const cancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+
+  const generate = useCallback(() => {
     if (!enabled) {
       setState({ status: "fallback", data: null, model: null });
       return;
     }
-    // Skip: si el server nos dio initialInsights Y el data actual matchea
-    // el data del SSR, no re-fetch. La primera navegacion post-mount es
-    // instant con SSR data.
-    if (initialKeyRef.current === dataKey) {
-      // Ya lo tenemos del server, no hacer nada
-      return;
-    }
-    // A partir de aca, el user cambio la data (nuevo peer group / periodos)
-    // → fetch fresh. Limpiamos el initialKey para que futuros re-mounts
-    // con el mismo dataKey (mismo cambio) no salteen.
-    initialKeyRef.current = null;
+    // Cancelar fetch anterior si habia uno
+    cancelRef.current.cancelled = true;
+    const token = { cancelled: false };
+    cancelRef.current = token;
 
-    let cancelled = false;
-    setState((s) => ({ ...s, status: "loading" }));
+    setState({ status: "loading", data: null, model: null });
 
-    (async () => {
+    void (async () => {
       try {
         const r = await fetch("/api/v1/dupont/insights", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ data }),
         });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (token.cancelled) return;
+        const contentType = r.headers.get("content-type") ?? "";
+        if (!r.ok || !contentType.includes("application/json")) {
+          // 504/502/404 vienen como HTML; evitamos crash de res.json()
+          setState({ status: "fallback", data: null, model: null });
+          return;
+        }
         const json = await r.json();
+        if (token.cancelled) return;
         const nar = json?.data?.narrativa as NarrativaBullets | null | undefined;
-        if (cancelled) return;
         if (!nar) {
           setState({ status: "fallback", data: null, model: json?.data?.model ?? null });
         } else {
           setState({ status: "ok", data: nar, model: json?.data?.model ?? null });
         }
       } catch {
-        if (cancelled) return;
+        if (token.cancelled) return;
         setState({ status: "fallback", data: null, model: null });
       }
     })();
+  }, [data, enabled]);
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    // V167: si el plan no incluye insights AI, estado "fallback" y afuera.
+    if (!enabled) {
+      setState({ status: "fallback", data: null, model: null });
+      return;
+    }
+    // Skip: si el server nos dio initialInsights Y el data actual matchea
+    // el data del SSR, no tocamos nada — la narrativa ya esta visible.
+    if (initialKeyRef.current === dataKey) {
+      return;
+    }
+    // Cambio en la seleccion (nuevos peers/periodos). Cancelamos fetch
+    // pendiente si lo hay y volvemos a "idle" — el user decide cuando
+    // volver a pagar un analisis con el boton. Cambio UX 2026-11-20.
+    initialKeyRef.current = null;
+    cancelRef.current.cancelled = true;
+    setState({ status: "idle", data: null, model: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataKey, enabled]);
 
-  return state;
+  return { state, generate };
 }
 
 // ============================================================================
