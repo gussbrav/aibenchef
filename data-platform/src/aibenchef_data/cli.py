@@ -427,6 +427,7 @@ def db_refresh_mvs(concurrently: bool) -> None:
         "marts.mv_castigos_resumen",
         # Indicadores prudenciales
         "marts.mv_indicadores_prudenciales",
+        "marts.mv_indicadores_ancho",
         # Personal
         "marts.mv_personal_resumen",
         # Clientes
