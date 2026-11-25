@@ -30,6 +30,11 @@ const schema = z.object({
   // App
   NEXT_PUBLIC_APP_URL: z.string().url(),
 
+  // Shared-secret para que el worker Python invalide tags de cache Next.js
+  // tras REFRESH de MVs. Si no esta configurada, el endpoint rechaza todo
+  // (fail-closed) y la cache del informe sigue el TTL de 4h hasta expirar.
+  REVALIDATE_SECRET: z.string().min(32).optional(),
+
   // OAuth (opcionales hasta que configures las credenciales)
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),

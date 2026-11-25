@@ -76,6 +76,48 @@ def _resolve_migrations_dir() -> Path:
     raise click.ClickException(msg)
 
 
+def _revalidate_web_cache(tags: list[str]) -> None:
+    """Invalida tags de Next.js (unstable_cache) tras un REFRESH de MVs.
+
+    Sin esto, el /dashboard/informe sigue sirviendo el snapshot cacheado
+    hasta expirar el TTL (4h) aunque la DB ya tenga data nueva.
+
+    Requiere env vars:
+      - AIBENCHEF_WEB_URL (o NEXT_PUBLIC_APP_URL como fallback)
+      - REVALIDATE_SECRET (shared con el endpoint /api/v1/admin/revalidate)
+
+    Si cualquiera falta, es no-op silencioso (dev/CI no necesitan).
+    Errores de red/HTTP se loggean a stdout pero NO se propagan — el
+    REFRESH de DB ya fue exitoso y no queremos romper el pipeline por
+    un fallo de cache.
+    """
+    import os
+
+    url = os.environ.get("AIBENCHEF_WEB_URL") or os.environ.get("NEXT_PUBLIC_APP_URL")
+    secret = os.environ.get("REVALIDATE_SECRET")
+    if not url or not secret:
+        return
+
+    try:
+        import httpx
+
+        resp = httpx.post(
+            url.rstrip("/") + "/api/v1/admin/revalidate",
+            json={"tags": tags},
+            headers={"x-revalidate-secret": secret},
+            timeout=10.0,
+        )
+        if resp.status_code == 200:
+            click.echo(f"  cache Next.js invalidado: {', '.join(tags)}")
+        else:
+            click.echo(
+                f"  revalidate HTTP {resp.status_code} — ignorando "
+                f"(body: {resp.text[:120]})"
+            )
+    except Exception as exc:
+        click.echo(f"  revalidate error: {exc} — ignorando")
+
+
 @main.group("storage")
 def storage_grp() -> None:
     """Comandos de gestion del storage local (archivos .xls descargados)."""
@@ -2380,6 +2422,7 @@ def import_coopac_eeff(
                     click.echo(f"  periodo={p}: {ok_steps}/{len(rows_refresh)} pasos OK")
                 except Exception as exc:
                     click.echo(f"  periodo={p}: refresh FAIL — {exc}")
+        _revalidate_web_cache(["informe", "periodos", "entidades"])
     elif auto_refresh:
         click.echo("# Auto-refresh omitido: sin periodos importados exitosamente.")
 
@@ -3177,6 +3220,7 @@ def pipeline_refresh_marts(concurrent: bool) -> None:
             click.echo(f"  [{status}] {mv:<48} {duration_ms:>8} ms  {error}")
     click.echo("")
     click.echo(f"# TOTAL: {total} MVs procesadas — OK={ok}, FAIL={fail}")
+    _revalidate_web_cache(["informe", "periodos", "entidades"])
 
 
 @pipeline_grp.command("refresh-derived")
@@ -3260,6 +3304,7 @@ def pipeline_refresh_derived(periodo: str | None, concurrent: bool, triggered_by
             click.echo(f"  [{status}] {step:<40} {duration_ms:>8} ms  {detail}")
     click.echo("")
     click.echo(f"# TOTAL: pasos OK={grand_ok}, FAIL={grand_fail}")
+    _revalidate_web_cache(["informe", "periodos", "entidades"])
 
 
 @pipeline_grp.command("post-import-check")

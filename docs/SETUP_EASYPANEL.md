@@ -94,8 +94,14 @@ Dentro del proyecto `aibenchef` -> **"+"** -> **App**.
   BETTER_AUTH_SECRET=<openssl rand -hex 64>
   BETTER_AUTH_URL=https://aibenchef.azoramind.com
   NEXT_PUBLIC_APP_URL=https://aibenchef.azoramind.com
+  REVALIDATE_SECRET=<openssl rand -hex 32>
   ```
   (Las variables Google OAuth y Stripe las agregamos despues cuando integremos esos providers.)
+
+  `REVALIDATE_SECRET` habilita POST /api/v1/admin/revalidate para que el
+  worker Python invalide la cache de Next.js post-REFRESH de MVs. Debe
+  coincidir con la env var del mismo nombre en el worker `aibenchef-data`.
+  Sin ella, el /informe sigue el TTL de 4h tras cada ingesta.
 
 - **Puerto interno:** `3000`
 - **Dominios:**
